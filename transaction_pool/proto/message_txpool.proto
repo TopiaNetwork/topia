@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "transactionpool";
+option (gogoproto.stable_marshaler_all) = true;
+
+import "gogo.proto";
+
+message TxPoolMessage {
+  enum TxPoolMessageType {
+    Unknown = 0;
+    Tx = 1;
+  }
+  TxPoolMessageType MsgType = 1  [(gogoproto.jsontag) = "msgType"];
+  bytes Data = 2  [(gogoproto.jsontag) = "data"];
+}
+
+message TxMessage{
+
+}

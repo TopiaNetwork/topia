@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "consensus";
+option (gogoproto.stable_marshaler_all) = true;
+
+import "gogo.proto";
+
+message ConsensusMessage {
+  enum ConsensusMessageType {
+    Unknown = 0;
+    Propose = 1;
+    Vote    = 2;
+  }
+  ConsensusMessageType MsgType = 1  [(gogoproto.jsontag) = "msgType"];
+  bytes Data = 2  [(gogoproto.jsontag) = "data"];
+}
+
+message ProposeMessage{
+
+}
+
+message VoteMessage{
+
+}

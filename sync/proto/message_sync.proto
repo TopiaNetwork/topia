@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "sync";
+option (gogoproto.stable_marshaler_all) = true;
+
+import "gogo.proto";
+import "common/types/proto/block.proto";
+
+message SyncMessage {
+  enum SyncMessageType {
+      Unknown = 0;
+      BlockRequest = 1;
+      BlockResponse = 2;
+      StatusRequest = 3;
+      StatusResponse = 4;
+  };
+
+  SyncMessageType MsgType  = 1  [(gogoproto.jsontag) = "msgType"];
+  bytes Data = 2  [(gogoproto.jsontag) = "data"];
+}
+
+message BlockRequest {
+  uint64 Height = 1  [(gogoproto.jsontag) = "height"];
+}
+
+message BlockResponse {
+  uint64 Height = 1  [(gogoproto.jsontag) = "height"];
+  enum RespCode {
+    OK     = 0;
+    NOBLOCK = 1;
+  }
+  RespCode Code = 2  [(gogoproto.jsontag) = "code"];
+  Block block = 3  [(gogoproto.jsontag) = "block"];
+}
+
+message StatusRequest {
+
+}
+
+message StatusResponse {
+  uint64 HeightHighest = 1  [(gogoproto.jsontag) = "heightHighest"];
+  uint64 HeightLowest = 2  [(gogoproto.jsontag) = "heightLowest"];
+}

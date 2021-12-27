@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "types";
+option (gogoproto.stable_marshaler_all) = true;
+
+import "gogo.proto";
+
+//protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.  --gofast_out=. ./block.proto
+
+message BlockHead {
+  bytes  ChainID = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version = 2  [(gogoproto.jsontag) = "version"];
+  bytes  TimeStamp = 3  [(gogoproto.jsontag) = "timeStamp"];
+  bytes  LastBlockID = 4  [(gogoproto.jsontag) = "lastBlockID"];
+  bytes  DataHash = 5  [(gogoproto.jsontag) = "dataHash"];
+}
+
+message BlockData {
+  repeated bytes txs = 1  [(gogoproto.jsontag) = "txs"];
+}
+
+message Block {
+  BlockHead Head = 1  [(gogoproto.jsontag) = "head"];
+  BlockData Data = 2  [(gogoproto.jsontag) = "data"];
+}

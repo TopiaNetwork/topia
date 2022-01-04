@@ -1,5 +1,7 @@
 package transaction
 
+type TxID string
+
 type TransactionType byte
 
 const (

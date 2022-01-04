@@ -1,17 +1,18 @@
 package state
 
 import (
-	"github.com/TopiaNetwork/topia/common/types"
 	"path/filepath"
 
+	"github.com/TopiaNetwork/topia/common/types"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	"github.com/TopiaNetwork/topia/transaction"
 )
 
 type TxState struct {
 	BlockNum types.BlockNum
-	TxID     types.TxID
+	TxID     transaction.TxID
 }
 
 type VersionedValue struct {

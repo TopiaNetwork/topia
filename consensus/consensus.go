@@ -1,13 +1,29 @@
 package consensus
 
 import (
+	"context"
+	"github.com/TopiaNetwork/topia/ledger"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	"github.com/TopiaNetwork/topia/network"
+	tpnet "github.com/TopiaNetwork/topia/network"
 )
+
+const (
+	MOD_NAME      = "consensus"
+	CONSENSUS_VER = uint32(1)
+)
+
+type RoundInfo struct {
+	Epoch        uint64
+	LastRoundNum uint64
+	CurRoundNum  uint64
+	Proof        *ConsensusProof
+}
 
 type Consensus interface {
 	VerifyBlock(*tptypes.Block) error
@@ -18,7 +34,7 @@ type Consensus interface {
 
 	UpdateHandler(handler ConsensusHandler)
 
-	Start(*actor.ActorSystem, network.Network) error
+	Start(*actor.ActorSystem) error
 
 	Stop()
 }
@@ -28,15 +44,29 @@ type consensus struct {
 	level     tplogcmm.LogLevel
 	handler   ConsensusHandler
 	marshaler codec.Marshaler
+	network   tpnet.Network
+	proposer  *consensusProposer
+	voter     *consensusVoter
 }
 
-func NewConsensus(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) Consensus {
-	consLog := tplog.CreateModuleLogger(level, "consensus", log)
+func NewConsensus(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType, network tpnet.Network, ledger ledger.Ledger) Consensus {
+	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
+	marshaler := codec.CreateMarshaler(codecType)
+	roundCh := make(chan *RoundInfo)
+	proposeMsgChan := make(chan *ProposeMessage)
+	deliver := newMessageDeliver(log, DeliverStrategy_All, network, marshaler)
+
+	proposer := NewConsensusProposer(log, roundCh, deliver, ledger, marshaler)
+	voter := newConsensusVoter(log, proposeMsgChan, deliver)
+
 	return &consensus{
 		log:       consLog,
 		level:     level,
-		handler:   NewConsensusHandler(log),
+		handler:   NewConsensusHandler(log, roundCh, proposeMsgChan, 2, ledger, marshaler),
 		marshaler: codec.CreateMarshaler(codecType),
+		network:   network,
+		proposer:  proposer,
+		voter:     voter,
 	}
 }
 
@@ -56,14 +86,19 @@ func (cons *consensus) ProcessVote(msg *VoteMessage) error {
 	return cons.handler.ProcessVote(msg)
 }
 
-func (cons *consensus) Start(sysActor *actor.ActorSystem, network network.Network) error {
+func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
 	actorPID, err := CreateConsensusActor(cons.level, cons.log, sysActor, cons)
 	if err != nil {
 		cons.log.Panicf("CreateConsensusActor error: %v", err)
 		return err
 	}
 
-	network.RegisterModule("consensus", actorPID, cons.marshaler)
+	cons.network.RegisterModule(MOD_NAME, actorPID, cons.marshaler)
+
+	ctx := context.Background()
+
+	cons.proposer.start(ctx)
+	cons.voter.start(ctx)
 
 	return nil
 }

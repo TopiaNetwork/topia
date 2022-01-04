@@ -10,18 +10,42 @@ import "gogo.proto";
 //protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.  --gofast_out=. ./block.proto
 
 message BlockHead {
-  bytes  ChainID = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version = 2  [(gogoproto.jsontag) = "version"];
-  bytes  TimeStamp = 3  [(gogoproto.jsontag) = "timeStamp"];
-  bytes  LastBlockID = 4  [(gogoproto.jsontag) = "lastBlockID"];
-  bytes  DataHash = 5  [(gogoproto.jsontag) = "dataHash"];
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Height           = 3  [(gogoproto.jsontag) = "height"];
+  uint64 Epoch            = 4  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round            = 5  [(gogoproto.jsontag) = "round"];
+  bytes  ParentBlockHash  = 6  [(gogoproto.jsontag) = "parentBlockHash"];
+  bytes  ProposeSignature = 7  [(gogoproto.jsontag) = "parentBlockHash"];
+  bytes  VoteAggSignature = 8  [(gogoproto.jsontag) = "parentBlockHash"];
+  bytes  ResultHash       = 9  [(gogoproto.jsontag) = "resultHash"];
+  uint32 TxCount          = 10 [(gogoproto.jsontag) = "txCount"];
+  bytes  TxHashRoot       = 11 [(gogoproto.jsontag) = "txHashRoot"];
+  uint64 TimeStamp        = 12 [(gogoproto.jsontag) = "timeStamp"];
+  bytes  DataHash         = 13 [(gogoproto.jsontag) = "dataHash"];
+  bytes  Reserved         = 14 [(gogoproto.jsontag) = "reserved"];
 }
 
 message BlockData {
-  repeated bytes txs = 1  [(gogoproto.jsontag) = "txs"];
+  uint32 Version     = 1  [(gogoproto.jsontag) = "version"];
+  repeated bytes txs = 2  [(gogoproto.jsontag) = "txs"];
 }
 
 message Block {
   BlockHead Head = 1  [(gogoproto.jsontag) = "head"];
   BlockData Data = 2  [(gogoproto.jsontag) = "data"];
+}
+
+message BlockResult {
+  uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
+  bytes  PrevBlockResult   = 2  [(gogoproto.jsontag) = "prevBlockResult"];
+  bytes  BlockHash         = 3  [(gogoproto.jsontag) = "blockHash"];
+  bytes  TxResultHashRoot  = 4  [(gogoproto.jsontag) = "txResultHashRoot"];
+  enum ResultStatus {
+    OK = 0;
+    Err = 1;
+  }
+  ResultStatus Status    = 5  [(gogoproto.jsontag) = "status"];
+  bytes ErrMsg           = 6  [(gogoproto.jsontag) = "errMsg"];
+  bytes Reserved         = 7  [(gogoproto.jsontag) = "reserved"];
 }

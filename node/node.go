@@ -16,7 +16,7 @@ import (
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	"github.com/TopiaNetwork/topia/network"
+	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/sync"
 	transactionpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
@@ -27,7 +27,7 @@ type Node struct {
 	sysActor  *actor.ActorSystem
 	handler   NodeHandler
 	marshaler codec.Marshaler
-	network   network.Network
+	network   tpnet.Network
 	ledger    ledger.Ledger
 	consensus consensus.Consensus
 	txPool    transactionpool.TransactionPool
@@ -47,9 +47,9 @@ func NewNode(endPoint string, seed string) *Node {
 
 	sysActor := actor.NewActorSystem()
 
-	network := network.NewNetwork(ctx, mainLog, sysActor, endPoint, seed)
+	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed)
 	ledger := ledger.NewLedger(chainRootPath, "topia", mainLog, backend.BackendType_Badger)
-	cons := consensus.NewConsensus(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
+	cons := consensus.NewConsensus(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, ledger)
 	txPool := transactionpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 
@@ -99,7 +99,7 @@ func (n *Node) Start() {
 	n.network.RegisterModule("node", actorPID, n.marshaler)
 
 	n.network.Start()
-	n.consensus.Start(n.sysActor, n.network)
+	n.consensus.Start(n.sysActor)
 	n.txPool.Start(n.sysActor, n.network)
 	n.syncer.Start(n.sysActor, n.network)
 

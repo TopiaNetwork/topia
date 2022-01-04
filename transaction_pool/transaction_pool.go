@@ -1,29 +1,29 @@
 package transactionpool
 
 import (
-	"github.com/TopiaNetwork/topia/codec"
-	tptypes "github.com/TopiaNetwork/topia/common/types"
 	"sync"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
+	"github.com/TopiaNetwork/topia/codec"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/transaction"
 )
 
 type TxKey string
 
 type TransactionPool interface {
-	AddTx(tx tptypes.Transaction) error
+	AddTx(tx transaction.Transaction) error
 
 	RemoveTxByKey(key TxKey) error
 
 	Reset() error
 
-	UpdateTx(tx tptypes.Transaction) error
+	UpdateTx(tx transaction.Transaction) error
 
-	Pending() ([]tptypes.Transaction, error)
+	Pending() ([]transaction.Transaction, error)
 
 	Size() int
 
@@ -49,7 +49,7 @@ func NewTransactionPool(level tplogcmm.LogLevel, log tplog.Logger, codecType cod
 	}
 }
 
-func (pool *transactionPool) AddTx(tx tptypes.Transaction) error {
+func (pool *transactionPool) AddTx(tx transaction.Transaction) error {
 	panic("implement me")
 }
 
@@ -61,11 +61,11 @@ func (pool *transactionPool) Reset() error {
 	panic("implement me")
 }
 
-func (pool *transactionPool) UpdateTx(tx tptypes.Transaction) error {
+func (pool *transactionPool) UpdateTx(tx transaction.Transaction) error {
 	panic("implement me")
 }
 
-func (pool *transactionPool) Pending() ([]tptypes.Transaction, error) {
+func (pool *transactionPool) Pending() ([]transaction.Transaction, error) {
 	panic("implement me")
 }
 

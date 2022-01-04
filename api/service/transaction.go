@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	tptypes "github.com/TopiaNetwork/topia/common/types"
+
 	"github.com/TopiaNetwork/topia/transaction"
 )
 
@@ -13,6 +13,6 @@ func (tx *Transaction) SendTransaction(ctx context.Context, tran *transaction.Tr
 	panic("implement me")
 }
 
-func (tx *Transaction) TransactionByID(ctx context.Context, txHash tptypes.TxID) (*transaction.Transaction, error) {
+func (tx *Transaction) TransactionByID(ctx context.Context, txHash transaction.TxID) (*transaction.Transaction, error) {
 	panic("implement me")
 }

@@ -1,27 +1,42 @@
 package ledger
 
 import (
-	"github.com/TopiaNetwork/topia/common/types"
+	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"path/filepath"
 
+	tptypes "github.com/TopiaNetwork/topia/common/types"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	"github.com/TopiaNetwork/topia/ledger/block"
 	"github.com/TopiaNetwork/topia/ledger/history"
 	"github.com/TopiaNetwork/topia/ledger/state"
 	tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/transaction"
 )
 
 type LedgerID string
 
 type Ledger interface {
-	GetBlockByNumber(blockNum types.BlockNum) (*types.Block, error)
+	ChainID() tpcmm.ChainID
 
-	GetBlocksIterator(startBlockNum types.BlockNum) (tplgtypes.ResultsIterator, error)
+	GetLatestBlock() (*tptypes.Block, error)
 
-	TxIDExists(txID types.TxID) (bool, error)
+	SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error
 
-	GetTransactionByID(txID types.TxID) (*types.Transaction, error)
+	Commit() error
+
+	ClearBlockMiddleResult(round uint64) error
+
+	GetAllConsensusNodes() ([]string, error)
+
+	GetBlockByNumber(blockNum tptypes.BlockNum) (*types.Block, error)
+
+	GetBlocksIterator(startBlockNum tptypes.BlockNum) (tplgtypes.ResultsIterator, error)
+
+	TxIDExists(txID transaction.TxID) (bool, error)
+
+	GetTransactionByID(txID transaction.TxID) (*transaction.Transaction, error)
 
 	GetBlockByHash(blockHash []byte) (*types.Block, error)
 
@@ -48,22 +63,52 @@ func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backe
 	}
 }
 
-func (l *ledger) GetBlockByNumber(blockNum types.BlockNum) (*types.Block, error) {
+func (l *ledger) ChainID() tpcmm.ChainID {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (l *ledger) GetBlocksIterator(startBlockNum types.BlockNum) (tplgtypes.ResultsIterator, error) {
+func (l *ledger) GetLatestBlock() (*tptypes.Block, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (l *ledger) TxIDExists(txID types.TxID) (bool, error) {
+func (l *ledger) SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (l *ledger) GetTransactionByID(txID types.TxID) (*types.Transaction, error) {
+func (l *ledger) Commit() error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *ledger) ClearBlockMiddleResult(round uint64) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *ledger) GetAllConsensusNodes() ([]string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *ledger) GetBlockByNumber(blockNum tptypes.BlockNum) (*types.Block, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *ledger) GetBlocksIterator(startBlockNum tptypes.BlockNum) (tplgtypes.ResultsIterator, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *ledger) TxIDExists(txID transaction.TxID) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *ledger) GetTransactionByID(txID transaction.TxID) (*transaction.Transaction, error) {
 	//TODO implement me
 	panic("implement me")
 }

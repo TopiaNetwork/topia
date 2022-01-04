@@ -23,40 +23,43 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-type ConsensusMessage_ConsensusMessageType int32
+type ConsensusMessage_Type int32
 
 const (
-	ConsensusMessage_Unknown ConsensusMessage_ConsensusMessageType = 0
-	ConsensusMessage_Propose ConsensusMessage_ConsensusMessageType = 1
-	ConsensusMessage_Vote    ConsensusMessage_ConsensusMessageType = 2
+	ConsensusMessage_Unknown ConsensusMessage_Type = 0
+	ConsensusMessage_Propose ConsensusMessage_Type = 1
+	ConsensusMessage_Vote    ConsensusMessage_Type = 2
+	ConsensusMessage_Commit  ConsensusMessage_Type = 3
 )
 
-var ConsensusMessage_ConsensusMessageType_name = map[int32]string{
+var ConsensusMessage_Type_name = map[int32]string{
 	0: "Unknown",
 	1: "Propose",
 	2: "Vote",
+	3: "Commit",
 }
 
-var ConsensusMessage_ConsensusMessageType_value = map[string]int32{
+var ConsensusMessage_Type_value = map[string]int32{
 	"Unknown": 0,
 	"Propose": 1,
 	"Vote":    2,
+	"Commit":  3,
 }
 
-func (x ConsensusMessage_ConsensusMessageType) String() string {
-	return proto.EnumName(ConsensusMessage_ConsensusMessageType_name, int32(x))
+func (x ConsensusMessage_Type) String() string {
+	return proto.EnumName(ConsensusMessage_Type_name, int32(x))
 }
 
-func (ConsensusMessage_ConsensusMessageType) EnumDescriptor() ([]byte, []int) {
+func (ConsensusMessage_Type) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_3d1eb6dc904811c3, []int{0, 0}
 }
 
 type ConsensusMessage struct {
-	MsgType ConsensusMessage_ConsensusMessageType `protobuf:"varint,1,opt,name=MsgType,proto3,enum=proto.ConsensusMessage_ConsensusMessageType" json:"msgType"`
-	Data    []byte                                `protobuf:"bytes,2,opt,name=Data,proto3" json:"data"`
-	XXX_NoUnkeyedLiteral struct{}                              `json:"-"`
-	XXX_unrecognized     []byte                                `json:"-"`
-	XXX_sizecache        int32                                 `json:"-"`
+	MsgType ConsensusMessage_Type `protobuf:"varint,1,opt,name=MsgType,proto3,enum=proto.ConsensusMessage_Type" json:"msgType"`
+	Data    []byte                `protobuf:"bytes,2,opt,name=Data,proto3" json:"data"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
 }
 
 func (m *ConsensusMessage) Reset()         { *m = ConsensusMessage{} }
@@ -88,7 +91,7 @@ func (m *ConsensusMessage) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ConsensusMessage proto.InternalMessageInfo
 
-func (m *ConsensusMessage) GetMsgType() ConsensusMessage_ConsensusMessageType {
+func (m *ConsensusMessage) GetMsgType() ConsensusMessage_Type {
 	if m != nil {
 		return m.MsgType
 	}
@@ -103,6 +106,14 @@ func (m *ConsensusMessage) GetData() []byte {
 }
 
 type ProposeMessage struct {
+	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
+	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
+	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Proof                []byte   `protobuf:"bytes,5,opt,name=Proof,proto3" json:"proof"`
+	Signature            []byte   `protobuf:"bytes,6,opt,name=Signature,proto3" json:"signature"`
+	PubKey               []byte   `protobuf:"bytes,7,opt,name=PubKey,proto3" json:"pubKey"`
+	Block                []byte   `protobuf:"bytes,8,opt,name=Block,proto3" json:"block"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -137,7 +148,72 @@ func (m *ProposeMessage) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ProposeMessage proto.InternalMessageInfo
 
+func (m *ProposeMessage) GetChainID() []byte {
+	if m != nil {
+		return m.ChainID
+	}
+	return nil
+}
+
+func (m *ProposeMessage) GetVersion() uint32 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
+func (m *ProposeMessage) GetEpoch() uint64 {
+	if m != nil {
+		return m.Epoch
+	}
+	return 0
+}
+
+func (m *ProposeMessage) GetRound() uint64 {
+	if m != nil {
+		return m.Round
+	}
+	return 0
+}
+
+func (m *ProposeMessage) GetProof() []byte {
+	if m != nil {
+		return m.Proof
+	}
+	return nil
+}
+
+func (m *ProposeMessage) GetSignature() []byte {
+	if m != nil {
+		return m.Signature
+	}
+	return nil
+}
+
+func (m *ProposeMessage) GetPubKey() []byte {
+	if m != nil {
+		return m.PubKey
+	}
+	return nil
+}
+
+func (m *ProposeMessage) GetBlock() []byte {
+	if m != nil {
+		return m.Block
+	}
+	return nil
+}
+
 type VoteMessage struct {
+	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
+	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
+	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Proof                []byte   `protobuf:"bytes,5,opt,name=Proof,proto3" json:"proof"`
+	ProposeHash          []byte   `protobuf:"bytes,6,opt,name=ProposeHash,proto3" json:"proposeHash"`
+	Signature            []byte   `protobuf:"bytes,7,opt,name=Signature,proto3" json:"signature"`
+	PubKey               []byte   `protobuf:"bytes,8,opt,name=PubKey,proto3" json:"pubKey"`
+	Block                []byte   `protobuf:"bytes,9,opt,name=Block,proto3" json:"block"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -172,32 +248,282 @@ func (m *VoteMessage) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_VoteMessage proto.InternalMessageInfo
 
+func (m *VoteMessage) GetChainID() []byte {
+	if m != nil {
+		return m.ChainID
+	}
+	return nil
+}
+
+func (m *VoteMessage) GetVersion() uint32 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
+func (m *VoteMessage) GetEpoch() uint64 {
+	if m != nil {
+		return m.Epoch
+	}
+	return 0
+}
+
+func (m *VoteMessage) GetRound() uint64 {
+	if m != nil {
+		return m.Round
+	}
+	return 0
+}
+
+func (m *VoteMessage) GetProof() []byte {
+	if m != nil {
+		return m.Proof
+	}
+	return nil
+}
+
+func (m *VoteMessage) GetProposeHash() []byte {
+	if m != nil {
+		return m.ProposeHash
+	}
+	return nil
+}
+
+func (m *VoteMessage) GetSignature() []byte {
+	if m != nil {
+		return m.Signature
+	}
+	return nil
+}
+
+func (m *VoteMessage) GetPubKey() []byte {
+	if m != nil {
+		return m.PubKey
+	}
+	return nil
+}
+
+func (m *VoteMessage) GetBlock() []byte {
+	if m != nil {
+		return m.Block
+	}
+	return nil
+}
+
+type CommitMessage struct {
+	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
+	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
+	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Proof                []byte   `protobuf:"bytes,5,opt,name=Proof,proto3" json:"proof"`
+	VoteHash             []byte   `protobuf:"bytes,6,opt,name=VoteHash,proto3" json:"voteHash"`
+	BlockHash            []byte   `protobuf:"bytes,7,opt,name=BlockHash,proto3" json:"blockHash"`
+	Signature            []byte   `protobuf:"bytes,8,opt,name=Signature,proto3" json:"signature"`
+	PubKey               []byte   `protobuf:"bytes,9,opt,name=PubKey,proto3" json:"pubKey"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *CommitMessage) Reset()         { *m = CommitMessage{} }
+func (m *CommitMessage) String() string { return proto.CompactTextString(m) }
+func (*CommitMessage) ProtoMessage()    {}
+func (*CommitMessage) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3d1eb6dc904811c3, []int{3}
+}
+func (m *CommitMessage) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CommitMessage) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *CommitMessage) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommitMessage.Merge(m, src)
+}
+func (m *CommitMessage) XXX_Size() int {
+	return m.Size()
+}
+func (m *CommitMessage) XXX_DiscardUnknown() {
+	xxx_messageInfo_CommitMessage.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_CommitMessage proto.InternalMessageInfo
+
+func (m *CommitMessage) GetChainID() []byte {
+	if m != nil {
+		return m.ChainID
+	}
+	return nil
+}
+
+func (m *CommitMessage) GetVersion() uint32 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
+func (m *CommitMessage) GetEpoch() uint64 {
+	if m != nil {
+		return m.Epoch
+	}
+	return 0
+}
+
+func (m *CommitMessage) GetRound() uint64 {
+	if m != nil {
+		return m.Round
+	}
+	return 0
+}
+
+func (m *CommitMessage) GetProof() []byte {
+	if m != nil {
+		return m.Proof
+	}
+	return nil
+}
+
+func (m *CommitMessage) GetVoteHash() []byte {
+	if m != nil {
+		return m.VoteHash
+	}
+	return nil
+}
+
+func (m *CommitMessage) GetBlockHash() []byte {
+	if m != nil {
+		return m.BlockHash
+	}
+	return nil
+}
+
+func (m *CommitMessage) GetSignature() []byte {
+	if m != nil {
+		return m.Signature
+	}
+	return nil
+}
+
+func (m *CommitMessage) GetPubKey() []byte {
+	if m != nil {
+		return m.PubKey
+	}
+	return nil
+}
+
+type ConsensusProof struct {
+	ParentBlockHash      []byte   `protobuf:"bytes,1,opt,name=ParentBlockHash,proto3" json:"parentBlockHash"`
+	Height               uint64   `protobuf:"varint,2,opt,name=Height,proto3" json:"height"`
+	AggSign              []byte   `protobuf:"bytes,3,opt,name=AggSign,proto3" json:"aggSign"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ConsensusProof) Reset()         { *m = ConsensusProof{} }
+func (m *ConsensusProof) String() string { return proto.CompactTextString(m) }
+func (*ConsensusProof) ProtoMessage()    {}
+func (*ConsensusProof) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3d1eb6dc904811c3, []int{4}
+}
+func (m *ConsensusProof) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ConsensusProof) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *ConsensusProof) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ConsensusProof.Merge(m, src)
+}
+func (m *ConsensusProof) XXX_Size() int {
+	return m.Size()
+}
+func (m *ConsensusProof) XXX_DiscardUnknown() {
+	xxx_messageInfo_ConsensusProof.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ConsensusProof proto.InternalMessageInfo
+
+func (m *ConsensusProof) GetParentBlockHash() []byte {
+	if m != nil {
+		return m.ParentBlockHash
+	}
+	return nil
+}
+
+func (m *ConsensusProof) GetHeight() uint64 {
+	if m != nil {
+		return m.Height
+	}
+	return 0
+}
+
+func (m *ConsensusProof) GetAggSign() []byte {
+	if m != nil {
+		return m.AggSign
+	}
+	return nil
+}
+
 func init() {
-	proto.RegisterEnum("proto.ConsensusMessage_ConsensusMessageType", ConsensusMessage_ConsensusMessageType_name, ConsensusMessage_ConsensusMessageType_value)
+	proto.RegisterEnum("proto.ConsensusMessage_Type", ConsensusMessage_Type_name, ConsensusMessage_Type_value)
 	proto.RegisterType((*ConsensusMessage)(nil), "proto.ConsensusMessage")
 	proto.RegisterType((*ProposeMessage)(nil), "proto.ProposeMessage")
 	proto.RegisterType((*VoteMessage)(nil), "proto.VoteMessage")
+	proto.RegisterType((*CommitMessage)(nil), "proto.CommitMessage")
+	proto.RegisterType((*ConsensusProof)(nil), "proto.ConsensusProof")
 }
 
 func init() { proto.RegisterFile("message_cons.proto", fileDescriptor_3d1eb6dc904811c3) }
 
 var fileDescriptor_3d1eb6dc904811c3 = []byte{
-	// 230 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0xca, 0x4d, 0x2d, 0x2e,
-	0x4e, 0x4c, 0x4f, 0x8d, 0x4f, 0xce, 0xcf, 0x2b, 0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62,
-	0x05, 0x53, 0x52, 0x5c, 0xe9, 0xf9, 0xe9, 0xf9, 0x10, 0x21, 0xa5, 0x83, 0x8c, 0x5c, 0x02, 0xce,
-	0xf9, 0x79, 0xc5, 0xa9, 0x79, 0xc5, 0xa5, 0xc5, 0xbe, 0x10, 0x2d, 0x42, 0xc1, 0x5c, 0xec, 0xbe,
-	0xc5, 0xe9, 0x21, 0x95, 0x05, 0xa9, 0x12, 0x8c, 0x0a, 0x8c, 0x1a, 0x7c, 0x46, 0x3a, 0x10, 0xd5,
-	0x7a, 0xe8, 0x2a, 0x31, 0x04, 0x40, 0x7a, 0x9c, 0xb8, 0x5f, 0xdd, 0x93, 0x67, 0xcf, 0x85, 0x18,
-	0x10, 0x04, 0x33, 0x49, 0x48, 0x86, 0x8b, 0xc5, 0x25, 0xb1, 0x24, 0x51, 0x82, 0x49, 0x81, 0x51,
-	0x83, 0xc7, 0x89, 0xe3, 0xd5, 0x3d, 0x79, 0x96, 0x94, 0xc4, 0x92, 0xc4, 0x20, 0xb0, 0xa8, 0x92,
-	0x15, 0x97, 0x08, 0x36, 0xb3, 0x84, 0xb8, 0xb9, 0xd8, 0x43, 0xf3, 0xb2, 0xf3, 0xf2, 0xcb, 0xf3,
-	0x04, 0x18, 0x40, 0x9c, 0x80, 0xa2, 0xfc, 0x82, 0xfc, 0xe2, 0x54, 0x01, 0x46, 0x21, 0x0e, 0x2e,
-	0x96, 0xb0, 0xfc, 0x92, 0x54, 0x01, 0x26, 0x25, 0x01, 0x2e, 0x3e, 0xa8, 0x30, 0x54, 0xa7, 0x12,
-	0x2f, 0x17, 0x37, 0x48, 0x0e, 0xca, 0x75, 0x92, 0x3f, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39,
-	0xc6, 0x1b, 0x8f, 0xe4, 0x18, 0x1f, 0x3c, 0x92, 0x63, 0x9c, 0xf1, 0x58, 0x8e, 0x21, 0x8a, 0x33,
-	0x19, 0x66, 0x61, 0x12, 0x1b, 0xd8, 0x7b, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xd7, 0xa6,
-	0xcb, 0x34, 0x35, 0x01, 0x00, 0x00,
+	// 542 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x94, 0xcf, 0x8b, 0xd3, 0x40,
+	0x1c, 0xc5, 0x77, 0xba, 0x69, 0x93, 0x7c, 0xbb, 0xfd, 0x41, 0xbc, 0x04, 0x59, 0x3a, 0x25, 0x20,
+	0x14, 0x84, 0x82, 0x0a, 0xde, 0x3c, 0xd8, 0xae, 0xb0, 0x22, 0x0b, 0x65, 0xd4, 0x3d, 0x78, 0x91,
+	0x69, 0x76, 0x4c, 0xc2, 0xda, 0x99, 0x90, 0x49, 0x57, 0xf6, 0x3f, 0x11, 0xff, 0x07, 0x4f, 0xfe,
+	0x13, 0x1e, 0x3d, 0x7a, 0x0a, 0xd2, 0xbd, 0x48, 0xfe, 0x0a, 0x99, 0x99, 0x64, 0xd3, 0x2e, 0x2c,
+	0xee, 0x75, 0x4f, 0xa5, 0x9f, 0xf7, 0x86, 0x79, 0x79, 0x2f, 0x04, 0xbc, 0x15, 0x93, 0x92, 0x46,
+	0xec, 0x63, 0x28, 0xb8, 0x9c, 0xa6, 0x99, 0xc8, 0x85, 0xd7, 0xd6, 0x3f, 0x0f, 0x21, 0x12, 0x91,
+	0x30, 0x28, 0xf8, 0x8e, 0x60, 0x38, 0x17, 0x5c, 0x32, 0x2e, 0xd7, 0xf2, 0xc4, 0x1c, 0xf1, 0xe6,
+	0x60, 0x9f, 0xc8, 0xe8, 0xdd, 0x65, 0xca, 0x7c, 0x34, 0x46, 0x93, 0xfe, 0xd3, 0x43, 0xe3, 0x9e,
+	0xde, 0x74, 0x4e, 0x95, 0x67, 0xd6, 0x2d, 0x0b, 0x6c, 0xaf, 0xcc, 0x01, 0x52, 0x9f, 0xf4, 0x0e,
+	0xc1, 0x3a, 0xa2, 0x39, 0xf5, 0x5b, 0x63, 0x34, 0x39, 0x98, 0x39, 0x65, 0x81, 0xad, 0x33, 0x9a,
+	0x53, 0xa2, 0x69, 0xf0, 0x1c, 0x2c, 0xed, 0xea, 0x82, 0xfd, 0x9e, 0x9f, 0x73, 0xf1, 0x85, 0x0f,
+	0xf7, 0xd4, 0x9f, 0x45, 0x26, 0x52, 0x21, 0xd9, 0x10, 0x79, 0x0e, 0x58, 0xa7, 0x22, 0x67, 0xc3,
+	0x96, 0x07, 0xd0, 0x99, 0x8b, 0xd5, 0x2a, 0xc9, 0x87, 0xfb, 0xc1, 0x8f, 0x16, 0xf4, 0x2b, 0x4f,
+	0x9d, 0xf6, 0x11, 0xd8, 0xf3, 0x98, 0x26, 0xfc, 0xf5, 0x91, 0x4e, 0x7b, 0x60, 0xf2, 0x84, 0x06,
+	0x91, 0x5a, 0x53, 0xb6, 0x53, 0x96, 0xc9, 0x44, 0x70, 0x1d, 0xa9, 0x67, 0x6c, 0x17, 0x06, 0x91,
+	0x5a, 0xf3, 0x30, 0xb4, 0x5f, 0xa5, 0x22, 0x8c, 0xfd, 0xfd, 0x31, 0x9a, 0x58, 0x33, 0xb7, 0x2c,
+	0x70, 0x9b, 0x29, 0x40, 0x0c, 0x57, 0x06, 0x22, 0xd6, 0xfc, 0xcc, 0xb7, 0x1a, 0x43, 0xa6, 0x00,
+	0x31, 0x5c, 0x19, 0x16, 0x99, 0x10, 0x9f, 0xfc, 0xb6, 0x4e, 0xa3, 0x0d, 0xa9, 0x02, 0xc4, 0x70,
+	0xef, 0x31, 0xb8, 0x6f, 0x93, 0x88, 0xd3, 0x7c, 0x9d, 0x31, 0xbf, 0xa3, 0x4d, 0xbd, 0xb2, 0xc0,
+	0xae, 0xac, 0x21, 0x69, 0x74, 0x2f, 0x80, 0xce, 0x62, 0xbd, 0x7c, 0xc3, 0x2e, 0x7d, 0x5b, 0x3b,
+	0xa1, 0x2c, 0x70, 0x27, 0xd5, 0x84, 0x54, 0x8a, 0xba, 0x71, 0xf6, 0x59, 0x84, 0xe7, 0xbe, 0xd3,
+	0xdc, 0xb8, 0x54, 0x80, 0x18, 0x1e, 0x5c, 0xb5, 0xa0, 0xab, 0xca, 0xbc, 0xb7, 0x95, 0x3d, 0x81,
+	0x6e, 0xb5, 0xfa, 0x31, 0x95, 0x71, 0x55, 0xda, 0xa0, 0x2c, 0x70, 0x37, 0x6d, 0x30, 0xd9, 0xf6,
+	0xec, 0xb6, 0x6c, 0xdf, 0xb9, 0x65, 0xe7, 0xff, 0x2d, 0xbb, 0xb7, 0xb4, 0xfc, 0xb7, 0x05, 0x3d,
+	0xf3, 0xa2, 0xde, 0xdb, 0x9e, 0x27, 0xe0, 0xa8, 0xf7, 0x64, 0xab, 0xe4, 0x83, 0xb2, 0xc0, 0xce,
+	0x45, 0xc5, 0xc8, 0xb5, 0xaa, 0xea, 0xd5, 0x4f, 0xad, 0xad, 0x5b, 0xf5, 0x2e, 0x6b, 0x48, 0x1a,
+	0x7d, 0x77, 0x0b, 0xe7, 0xce, 0x5b, 0xb8, 0xb7, 0x6d, 0x11, 0x7c, 0x43, 0xd0, 0xbf, 0xfe, 0x18,
+	0x99, 0xe8, 0x2f, 0x60, 0xb0, 0xa0, 0x19, 0xe3, 0x79, 0x13, 0xcb, 0x74, 0xfe, 0xa0, 0x2c, 0xf0,
+	0x20, 0xdd, 0x95, 0xc8, 0x4d, 0xaf, 0xba, 0xf5, 0x98, 0x25, 0x51, 0x9c, 0xeb, 0x09, 0x2c, 0x73,
+	0x6b, 0xac, 0x09, 0xa9, 0x14, 0xb5, 0xd3, 0xcb, 0x28, 0x52, 0x49, 0xf5, 0x04, 0xd5, 0x9c, 0xd4,
+	0x20, 0x52, 0x6b, 0x33, 0xfc, 0x73, 0x33, 0x42, 0xbf, 0x36, 0x23, 0xf4, 0x7b, 0x33, 0x42, 0x7f,
+	0x36, 0x23, 0xf4, 0xf5, 0x6a, 0xb4, 0xf7, 0xc1, 0x0d, 0xeb, 0xbc, 0xcb, 0x8e, 0xfe, 0x9a, 0x3e,
+	0xfb, 0x17, 0x00, 0x00, 0xff, 0xff, 0x8f, 0xb5, 0x86, 0xe3, 0xa4, 0x05, 0x00, 0x00,
 }
 
 func (m *ConsensusMessage) Marshal() (dAtA []byte, err error) {
@@ -263,6 +589,56 @@ func (m *ProposeMessage) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
+	if len(m.Block) > 0 {
+		i -= len(m.Block)
+		copy(dAtA[i:], m.Block)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Block)))
+		i--
+		dAtA[i] = 0x42
+	}
+	if len(m.PubKey) > 0 {
+		i -= len(m.PubKey)
+		copy(dAtA[i:], m.PubKey)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.PubKey)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.Signature) > 0 {
+		i -= len(m.Signature)
+		copy(dAtA[i:], m.Signature)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Signature)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Proof) > 0 {
+		i -= len(m.Proof)
+		copy(dAtA[i:], m.Proof)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Proof)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.Round != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Round))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Epoch != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Epoch))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Version != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Version))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.ChainID) > 0 {
+		i -= len(m.ChainID)
+		copy(dAtA[i:], m.ChainID)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.ChainID)))
+		i--
+		dAtA[i] = 0xa
+	}
 	return len(dAtA) - i, nil
 }
 
@@ -289,6 +665,193 @@ func (m *VoteMessage) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.XXX_unrecognized != nil {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Block) > 0 {
+		i -= len(m.Block)
+		copy(dAtA[i:], m.Block)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Block)))
+		i--
+		dAtA[i] = 0x4a
+	}
+	if len(m.PubKey) > 0 {
+		i -= len(m.PubKey)
+		copy(dAtA[i:], m.PubKey)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.PubKey)))
+		i--
+		dAtA[i] = 0x42
+	}
+	if len(m.Signature) > 0 {
+		i -= len(m.Signature)
+		copy(dAtA[i:], m.Signature)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Signature)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.ProposeHash) > 0 {
+		i -= len(m.ProposeHash)
+		copy(dAtA[i:], m.ProposeHash)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.ProposeHash)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Proof) > 0 {
+		i -= len(m.Proof)
+		copy(dAtA[i:], m.Proof)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Proof)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.Round != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Round))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Epoch != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Epoch))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Version != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Version))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.ChainID) > 0 {
+		i -= len(m.ChainID)
+		copy(dAtA[i:], m.ChainID)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.ChainID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *CommitMessage) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *CommitMessage) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CommitMessage) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.PubKey) > 0 {
+		i -= len(m.PubKey)
+		copy(dAtA[i:], m.PubKey)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.PubKey)))
+		i--
+		dAtA[i] = 0x4a
+	}
+	if len(m.Signature) > 0 {
+		i -= len(m.Signature)
+		copy(dAtA[i:], m.Signature)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Signature)))
+		i--
+		dAtA[i] = 0x42
+	}
+	if len(m.BlockHash) > 0 {
+		i -= len(m.BlockHash)
+		copy(dAtA[i:], m.BlockHash)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.BlockHash)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.VoteHash) > 0 {
+		i -= len(m.VoteHash)
+		copy(dAtA[i:], m.VoteHash)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.VoteHash)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Proof) > 0 {
+		i -= len(m.Proof)
+		copy(dAtA[i:], m.Proof)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Proof)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.Round != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Round))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Epoch != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Epoch))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Version != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Version))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.ChainID) > 0 {
+		i -= len(m.ChainID)
+		copy(dAtA[i:], m.ChainID)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.ChainID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ConsensusProof) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ConsensusProof) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ConsensusProof) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.AggSign) > 0 {
+		i -= len(m.AggSign)
+		copy(dAtA[i:], m.AggSign)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.AggSign)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.Height != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Height))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.ParentBlockHash) > 0 {
+		i -= len(m.ParentBlockHash)
+		copy(dAtA[i:], m.ParentBlockHash)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.ParentBlockHash)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -329,6 +892,35 @@ func (m *ProposeMessage) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.ChainID)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if m.Version != 0 {
+		n += 1 + sovMessageCons(uint64(m.Version))
+	}
+	if m.Epoch != 0 {
+		n += 1 + sovMessageCons(uint64(m.Epoch))
+	}
+	if m.Round != 0 {
+		n += 1 + sovMessageCons(uint64(m.Round))
+	}
+	l = len(m.Proof)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.Signature)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.PubKey)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.Block)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -341,6 +933,107 @@ func (m *VoteMessage) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.ChainID)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if m.Version != 0 {
+		n += 1 + sovMessageCons(uint64(m.Version))
+	}
+	if m.Epoch != 0 {
+		n += 1 + sovMessageCons(uint64(m.Epoch))
+	}
+	if m.Round != 0 {
+		n += 1 + sovMessageCons(uint64(m.Round))
+	}
+	l = len(m.Proof)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.ProposeHash)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.Signature)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.PubKey)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.Block)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *CommitMessage) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ChainID)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if m.Version != 0 {
+		n += 1 + sovMessageCons(uint64(m.Version))
+	}
+	if m.Epoch != 0 {
+		n += 1 + sovMessageCons(uint64(m.Epoch))
+	}
+	if m.Round != 0 {
+		n += 1 + sovMessageCons(uint64(m.Round))
+	}
+	l = len(m.Proof)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.VoteHash)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.BlockHash)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.Signature)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.PubKey)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ConsensusProof) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ParentBlockHash)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if m.Height != 0 {
+		n += 1 + sovMessageCons(uint64(m.Height))
+	}
+	l = len(m.AggSign)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -396,7 +1089,7 @@ func (m *ConsensusMessage) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.MsgType |= ConsensusMessage_ConsensusMessageType(b&0x7F) << shift
+				m.MsgType |= ConsensusMessage_Type(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -486,6 +1179,233 @@ func (m *ProposeMessage) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: ProposeMessage: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChainID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChainID = append(m.ChainID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ChainID == nil {
+				m.ChainID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Round", wireType)
+			}
+			m.Round = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Round |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Proof", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Proof = append(m.Proof[:0], dAtA[iNdEx:postIndex]...)
+			if m.Proof == nil {
+				m.Proof = []byte{}
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Signature", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Signature = append(m.Signature[:0], dAtA[iNdEx:postIndex]...)
+			if m.Signature == nil {
+				m.Signature = []byte{}
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PubKey", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PubKey = append(m.PubKey[:0], dAtA[iNdEx:postIndex]...)
+			if m.PubKey == nil {
+				m.PubKey = []byte{}
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Block", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Block = append(m.Block[:0], dAtA[iNdEx:postIndex]...)
+			if m.Block == nil {
+				m.Block = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipMessageCons(dAtA[iNdEx:])
@@ -537,6 +1457,717 @@ func (m *VoteMessage) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: VoteMessage: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChainID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChainID = append(m.ChainID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ChainID == nil {
+				m.ChainID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Round", wireType)
+			}
+			m.Round = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Round |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Proof", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Proof = append(m.Proof[:0], dAtA[iNdEx:postIndex]...)
+			if m.Proof == nil {
+				m.Proof = []byte{}
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ProposeHash", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ProposeHash = append(m.ProposeHash[:0], dAtA[iNdEx:postIndex]...)
+			if m.ProposeHash == nil {
+				m.ProposeHash = []byte{}
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Signature", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Signature = append(m.Signature[:0], dAtA[iNdEx:postIndex]...)
+			if m.Signature == nil {
+				m.Signature = []byte{}
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PubKey", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PubKey = append(m.PubKey[:0], dAtA[iNdEx:postIndex]...)
+			if m.PubKey == nil {
+				m.PubKey = []byte{}
+			}
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Block", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Block = append(m.Block[:0], dAtA[iNdEx:postIndex]...)
+			if m.Block == nil {
+				m.Block = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageCons(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *CommitMessage) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageCons
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CommitMessage: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CommitMessage: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChainID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChainID = append(m.ChainID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ChainID == nil {
+				m.ChainID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Round", wireType)
+			}
+			m.Round = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Round |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Proof", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Proof = append(m.Proof[:0], dAtA[iNdEx:postIndex]...)
+			if m.Proof == nil {
+				m.Proof = []byte{}
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VoteHash", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.VoteHash = append(m.VoteHash[:0], dAtA[iNdEx:postIndex]...)
+			if m.VoteHash == nil {
+				m.VoteHash = []byte{}
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BlockHash", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BlockHash = append(m.BlockHash[:0], dAtA[iNdEx:postIndex]...)
+			if m.BlockHash == nil {
+				m.BlockHash = []byte{}
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Signature", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Signature = append(m.Signature[:0], dAtA[iNdEx:postIndex]...)
+			if m.Signature == nil {
+				m.Signature = []byte{}
+			}
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PubKey", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PubKey = append(m.PubKey[:0], dAtA[iNdEx:postIndex]...)
+			if m.PubKey == nil {
+				m.PubKey = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageCons(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ConsensusProof) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageCons
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ConsensusProof: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ConsensusProof: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ParentBlockHash", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ParentBlockHash = append(m.ParentBlockHash[:0], dAtA[iNdEx:postIndex]...)
+			if m.ParentBlockHash == nil {
+				m.ParentBlockHash = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Height", wireType)
+			}
+			m.Height = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Height |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AggSign", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AggSign = append(m.AggSign[:0], dAtA[iNdEx:postIndex]...)
+			if m.AggSign == nil {
+				m.AggSign = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipMessageCons(dAtA[iNdEx:])

@@ -8,19 +8,55 @@ option (gogoproto.stable_marshaler_all) = true;
 import "gogo.proto";
 
 message ConsensusMessage {
-  enum ConsensusMessageType {
+  enum Type {
     Unknown = 0;
     Propose = 1;
     Vote    = 2;
+    Commit  = 3;
   }
-  ConsensusMessageType MsgType = 1  [(gogoproto.jsontag) = "msgType"];
+  Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
   bytes Data = 2  [(gogoproto.jsontag) = "data"];
 }
 
-message ProposeMessage{
-
+message ProposeMessage {
+  bytes  ChainID  = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version  = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch    = 3  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round    = 4  [(gogoproto.jsontag) = "round"];
+  bytes Proof     = 5  [(gogoproto.jsontag) = "proof"];
+  bytes Signature = 6  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey    = 7  [(gogoproto.jsontag) = "pubKey"];
+  bytes Block     = 8  [(gogoproto.jsontag) = "block"];
 }
 
-message VoteMessage{
-
+message VoteMessage {
+  bytes  ChainID    = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version    = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch      = 3  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round      = 4  [(gogoproto.jsontag) = "round"];
+  bytes Proof       = 5  [(gogoproto.jsontag) = "proof"];
+  bytes ProposeHash = 6  [(gogoproto.jsontag) = "proposeHash"];
+  bytes Signature   = 7  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey      = 8  [(gogoproto.jsontag) = "pubKey"];
+  bytes Block       = 9  [(gogoproto.jsontag) = "block"];
 }
+
+message CommitMessage {
+  bytes  ChainID    = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version    = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch      = 3  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round      = 4  [(gogoproto.jsontag) = "round"];
+  bytes Proof       = 5  [(gogoproto.jsontag) = "proof"];
+  bytes VoteHash    = 6  [(gogoproto.jsontag) = "voteHash"];
+  bytes BlockHash   = 7  [(gogoproto.jsontag) = "blockHash"];
+  bytes Signature   = 8  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey      = 9  [(gogoproto.jsontag) = "pubKey"];
+}
+
+message ConsensusProof {
+  bytes  ParentBlockHash = 1  [(gogoproto.jsontag) = "parentBlockHash"];
+  uint64 Height          = 2  [(gogoproto.jsontag) = "height"];
+  bytes  AggSign         = 3  [(gogoproto.jsontag) = "aggSign"];
+}
+
+

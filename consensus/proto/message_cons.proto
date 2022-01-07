@@ -13,6 +13,9 @@ message ConsensusMessage {
     Propose = 1;
     Vote    = 2;
     Commit  = 3;
+    PartPubKey = 4;
+    DKGDeal = 5;
+    DKGDealResp = 6;
   }
   Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
   bytes Data = 2  [(gogoproto.jsontag) = "data"];
@@ -57,6 +60,33 @@ message ConsensusProof {
   bytes  ParentBlockHash = 1  [(gogoproto.jsontag) = "parentBlockHash"];
   uint64 Height          = 2  [(gogoproto.jsontag) = "height"];
   bytes  AggSign         = 3  [(gogoproto.jsontag) = "aggSign"];
+}
+
+message DKGPartPubKeyMessage {
+  bytes  ChainID   = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version   = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch     = 3  [(gogoproto.jsontag) = "epoch"];
+  bytes Signature  = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey     = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes PartPubKey = 6  [(gogoproto.jsontag) = "partPubKey"];
+}
+
+message DKGDealMessage {
+  bytes  ChainID  = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version  = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch    = 3  [(gogoproto.jsontag) = "epoch"];
+  bytes Signature = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey    = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes DealData  = 6  [(gogoproto.jsontag) = "dealData"];
+}
+
+message DKGDealRespMessage {
+  bytes  ChainID  = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version  = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch    = 3  [(gogoproto.jsontag) = "epoch"];
+  bytes Signature = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey    = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes RespData  = 6  [(gogoproto.jsontag) = "respData"];
 }
 
 

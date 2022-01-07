@@ -47,6 +47,7 @@ type consensus struct {
 	network   tpnet.Network
 	proposer  *consensusProposer
 	voter     *consensusVoter
+	dkgEx     *dkgExchange
 }
 
 func NewConsensus(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType, network tpnet.Network, ledger ledger.Ledger) Consensus {
@@ -54,19 +55,24 @@ func NewConsensus(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.Cod
 	marshaler := codec.CreateMarshaler(codecType)
 	roundCh := make(chan *RoundInfo)
 	proposeMsgChan := make(chan *ProposeMessage)
+	partPubKey := make(chan *DKGPartPubKeyMessage)
+	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
+	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 	deliver := newMessageDeliver(log, DeliverStrategy_All, network, marshaler)
 
 	proposer := NewConsensusProposer(log, roundCh, deliver, ledger, marshaler)
 	voter := newConsensusVoter(log, proposeMsgChan, deliver)
+	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, deliver, ledger)
 
 	return &consensus{
 		log:       consLog,
 		level:     level,
-		handler:   NewConsensusHandler(log, roundCh, proposeMsgChan, 2, ledger, marshaler),
+		handler:   NewConsensusHandler(log, roundCh, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler),
 		marshaler: codec.CreateMarshaler(codecType),
 		network:   network,
 		proposer:  proposer,
 		voter:     voter,
+		dkgEx:     dkgEx,
 	}
 }
 
@@ -86,6 +92,18 @@ func (cons *consensus) ProcessVote(msg *VoteMessage) error {
 	return cons.handler.ProcessVote(msg)
 }
 
+func (cons *consensus) ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error {
+	return cons.handler.ProcessDKGPartPubKey(msg)
+}
+
+func (cons *consensus) ProcessDKGDeal(msg *DKGDealMessage) error {
+	return cons.handler.ProcessDKGDeal(msg)
+}
+
+func (cons *consensus) ProcessDKGDealResp(msg *DKGDealRespMessage) error {
+	return cons.handler.ProcessDKGDealResp(msg)
+}
+
 func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
 	actorPID, err := CreateConsensusActor(cons.level, cons.log, sysActor, cons)
 	if err != nil {
@@ -99,6 +117,7 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
 
 	cons.proposer.start(ctx)
 	cons.voter.start(ctx)
+	cons.dkgEx.startLoop(ctx)
 
 	return nil
 }
@@ -116,7 +135,7 @@ func (cons *consensus) dispatch(context actor.Context, data []byte) {
 		var msg ProposeMessage
 		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
 		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %d err %v", consMsg.MsgType, err)
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
 			return
 		}
 		cons.ProcessPropose(&msg)
@@ -124,10 +143,26 @@ func (cons *consensus) dispatch(context actor.Context, data []byte) {
 		var msg VoteMessage
 		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
 		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %d err %v", consMsg.MsgType, err)
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
 			return
 		}
 		cons.ProcessVote(&msg)
+	case ConsensusMessage_DKGDeal:
+		var msg DKGDealMessage
+		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+		if err != nil {
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+			return
+		}
+		cons.ProcessDKGDeal(&msg)
+	case ConsensusMessage_DKGDealResp:
+		var msg DKGDealRespMessage
+		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+		if err != nil {
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+			return
+		}
+		cons.ProcessDKGDealResp(&msg)
 	default:
 		cons.log.Errorf("Consensus receive invalid msg %d", consMsg.MsgType)
 		return
@@ -135,5 +170,6 @@ func (cons *consensus) dispatch(context actor.Context, data []byte) {
 }
 
 func (cons *consensus) Stop() {
-	panic("implement me")
+	cons.dkgEx.stop()
+	cons.log.Info("Consensus exit")
 }

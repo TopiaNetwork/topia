@@ -12,22 +12,42 @@ type ConsensusHandler interface {
 	ProcessPropose(msg *ProposeMessage) error
 
 	ProcessVote(msg *VoteMessage) error
+
+	ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error
+
+	ProcessDKGDeal(msg *DKGDealMessage) error
+
+	ProcessDKGDealResp(msg *DKGDealRespMessage) error
 }
 
 type consensusHandler struct {
 	log            tplog.Logger
 	roundCh        chan *RoundInfo
 	proposeMsgChan chan *ProposeMessage
+	partPubKey     chan *DKGPartPubKeyMessage
+	dealMsgCh      chan *DKGDealMessage
+	dealRespMsgCh  chan *DKGDealRespMessage
 	voteCollector  *consensusVoteCollector
 	deliver        *messageDeliver
 	csState        ConsensusStore
 	marshaler      codec.Marshaler
 }
 
-func NewConsensusHandler(log tplog.Logger, roundCh chan *RoundInfo, proposeMsgChan chan *ProposeMessage, threshold uint64, csState ConsensusStore, marshaler codec.Marshaler) *consensusHandler {
+func NewConsensusHandler(log tplog.Logger,
+	roundCh chan *RoundInfo,
+	proposeMsgChan chan *ProposeMessage,
+	partPubKey chan *DKGPartPubKeyMessage,
+	dealMsgCh chan *DKGDealMessage,
+	dealRespMsgCh chan *DKGDealRespMessage,
+	csState ConsensusStore,
+	marshaler codec.Marshaler) *consensusHandler {
 	return &consensusHandler{
 		log:            log,
+		roundCh:        roundCh,
 		proposeMsgChan: proposeMsgChan,
+		partPubKey:     partPubKey,
+		dealMsgCh:      dealMsgCh,
+		dealRespMsgCh:  dealRespMsgCh,
 		voteCollector:  newConsensusVoteCollector(log),
 		csState:        csState,
 		marshaler:      marshaler,
@@ -46,6 +66,7 @@ func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {
 	}
 
 	handler.proposeMsgChan <- msg
+
 	return nil
 }
 
@@ -88,6 +109,24 @@ func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
 
 		handler.roundCh <- roundInfo
 	}
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error {
+	handler.partPubKey <- msg
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessDKGDeal(msg *DKGDealMessage) error {
+	handler.dealMsgCh <- msg
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) error {
+	handler.dealRespMsgCh <- msg
 
 	return nil
 }

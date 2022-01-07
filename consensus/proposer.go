@@ -31,23 +31,25 @@ func NewConsensusProposer(log tplog.Logger, roundCh chan *RoundInfo, deliver *me
 }
 
 func (p *consensusProposer) start(ctx context.Context) {
-	for {
-		select {
-		case roundInfo := <-p.roundCh:
-			p.lastRoundNum = roundInfo.LastRoundNum
-			proposeBlock, err := p.produceProposeBlock(roundInfo)
-			if err != nil {
-				p.log.Errorf("Produce propose block error: new round=%d, err=%v", roundInfo.CurRoundNum, err)
-				continue
+	go func() {
+		for {
+			select {
+			case roundInfo := <-p.roundCh:
+				p.lastRoundNum = roundInfo.LastRoundNum
+				proposeBlock, err := p.produceProposeBlock(roundInfo)
+				if err != nil {
+					p.log.Errorf("Produce propose block error: new round=%d, err=%v", roundInfo.CurRoundNum, err)
+					continue
+				}
+				if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
+					p.log.Errorf("Consensus deliver propose message err: %v", err)
+				}
+			case <-ctx.Done():
+				p.log.Info("Consensus proposer exit")
+				return
 			}
-			if err = p.deliver.deliverProposeMesage(ctx, proposeBlock); err != nil {
-				p.log.Errorf("Consensus deliver propose message err: %v", err)
-			}
-		case <-ctx.Done():
-			p.log.Info("Consensus proposer exit")
-			return
 		}
-	}
+	}()
 }
 
 func (p *consensusProposer) createBlock(roundInfo *RoundInfo) (*tptypes.Block, error) {

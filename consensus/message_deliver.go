@@ -38,7 +38,7 @@ func (md *messageDeliver) getAllConsensusNodes() ([]string, error) {
 	return nil, nil
 }
 
-func (md *messageDeliver) deliverProposeMesage(ctx context.Context, msg *ProposeMessage) error {
+func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("ProposeMessage marshal err: %v", err)
@@ -68,7 +68,7 @@ func (md *messageDeliver) getNextLeader() (string, error) {
 	return "", nil
 }
 
-func (md *messageDeliver) deliverVoteMesage(ctx context.Context, msg *VoteMessage) error {
+func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage) error {
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("ProposeMessage marshal err: %v", err)
@@ -85,6 +85,84 @@ func (md *messageDeliver) deliverVoteMesage(ctx context.Context, msg *VoteMessag
 	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send vote message to network failed: err=%v", err)
+	}
+
+	return err
+}
+
+func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *DKGPartPubKeyMessage) error {
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("DKGPartPubKeyMessage marshal err: %v", err)
+		return err
+	}
+
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDs, err := md.getAllConsensusNodes()
+		if err != nil {
+			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			return err
+		}
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send DKG deal message to network failed: err=%v", err)
+	}
+
+	return err
+}
+
+func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, msg *DKGDealMessage) error {
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("DKGDealMessage marshal err: %v", err)
+		return err
+	}
+
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDs, err := md.getAllConsensusNodes()
+		if err != nil {
+			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			return err
+		}
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send DKG deal message to network failed: err=%v", err)
+	}
+
+	return err
+}
+
+func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error {
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("DKGDealRespMessage marshal err: %v", err)
+		return err
+	}
+
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDs, err := md.getAllConsensusNodes()
+		if err != nil {
+			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			return err
+		}
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send DKG deal response message to network failed: err=%v", err)
 	}
 
 	return err

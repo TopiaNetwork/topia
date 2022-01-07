@@ -20,22 +20,24 @@ func newConsensusVoter(log tplog.Logger, proposeMsgChan chan *ProposeMessage, de
 }
 
 func (v *consensusVoter) start(ctx context.Context) {
-	for {
-		select {
-		case propMsg := <-v.proposeMsgChan:
-			voteMsg, err := v.produceVoteMsg(propMsg)
-			if err != nil {
-				v.log.Errorf("Can't produce vote msg: err=%v", err)
-				continue
+	go func() {
+		for {
+			select {
+			case propMsg := <-v.proposeMsgChan:
+				voteMsg, err := v.produceVoteMsg(propMsg)
+				if err != nil {
+					v.log.Errorf("Can't produce vote msg: err=%v", err)
+					continue
+				}
+				if err = v.deliver.deliverVoteMessage(ctx, voteMsg); err != nil {
+					v.log.Errorf("Consensus deliver vote message err: %v", err)
+				}
+			case <-ctx.Done():
+				v.log.Info("Consensus voter exit")
+				return
 			}
-			if err = v.deliver.deliverVoteMesage(ctx, voteMsg); err != nil {
-				v.log.Errorf("Consensus deliver vote message err: %v", err)
-			}
-		case <-ctx.Done():
-			v.log.Info("Consensus voter exit")
-			return
 		}
-	}
+	}()
 }
 
 func (v *consensusVoter) produceVoteMsg(msg *ProposeMessage) (*VoteMessage, error) {

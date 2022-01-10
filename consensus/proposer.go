@@ -2,8 +2,8 @@ package consensus
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/codec"
 
+	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -13,13 +13,13 @@ type consensusProposer struct {
 	log          tplog.Logger
 	lastRoundNum uint64
 	roundCh      chan *RoundInfo
-	deliver      *messageDeliver
-	csState      ConsensusStore
+	deliver      messageDeliverI
+	csState      consensusStore
 	marshaler    codec.Marshaler
 	hasher       tpcmm.Hasher
 }
 
-func NewConsensusProposer(log tplog.Logger, roundCh chan *RoundInfo, deliver *messageDeliver, csState ConsensusStore, marshaler codec.Marshaler) *consensusProposer {
+func newConsensusProposer(log tplog.Logger, roundCh chan *RoundInfo, deliver messageDeliverI, csState consensusStore, marshaler codec.Marshaler) *consensusProposer {
 	return &consensusProposer{
 		log:       log,
 		roundCh:   roundCh,

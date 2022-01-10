@@ -5,7 +5,7 @@ import (
 	tptypes "github.com/TopiaNetwork/topia/common/types"
 )
 
-type ConsensusStore interface {
+type consensusStore interface {
 	ChainID() tpcmm.ChainID
 	GetLatestBlock() (*tptypes.Block, error)
 	SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error

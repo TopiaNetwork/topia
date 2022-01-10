@@ -2,12 +2,12 @@ package consensus
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/ledger"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
+	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
@@ -55,12 +55,12 @@ func NewConsensus(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.Cod
 	marshaler := codec.CreateMarshaler(codecType)
 	roundCh := make(chan *RoundInfo)
 	proposeMsgChan := make(chan *ProposeMessage)
-	partPubKey := make(chan *DKGPartPubKeyMessage)
+	partPubKey := make(chan *DKGPartPubKeyMessage, PartPubKeyChannel_Size)
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 	deliver := newMessageDeliver(log, DeliverStrategy_All, network, marshaler)
 
-	proposer := NewConsensusProposer(log, roundCh, deliver, ledger, marshaler)
+	proposer := newConsensusProposer(log, roundCh, deliver, ledger, marshaler)
 	voter := newConsensusVoter(log, proposeMsgChan, deliver)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, deliver, ledger)
 

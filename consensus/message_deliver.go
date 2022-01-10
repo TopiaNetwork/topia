@@ -18,6 +18,14 @@ const (
 	DeliverStrategy_Specifically
 )
 
+type messageDeliverI interface {
+	deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error
+	deliverVoteMessage(ctx context.Context, msg *VoteMessage) error
+	deliverDKGPartPubKeyMessage(ctx context.Context, msg *DKGPartPubKeyMessage) error
+	deliverDKGDealMessage(ctx context.Context, pubKey string, msg *DKGDealMessage) error
+	deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error
+}
+
 type messageDeliver struct {
 	log       tplog.Logger
 	strategy  DeliverStrategy
@@ -116,7 +124,11 @@ func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *
 	return err
 }
 
-func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, msg *DKGDealMessage) error {
+func (md *messageDeliver) getPeerByDKGPubKey(dkgPubKey string) (string, error) {
+	return "", nil
+}
+
+func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, pubKey string, msg *DKGDealMessage) error {
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("DKGDealMessage marshal err: %v", err)
@@ -125,12 +137,12 @@ func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, msg *DKGDea
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := md.getAllConsensusNodes()
+		peerID, err := md.getPeerByDKGPubKey(pubKey)
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err
 		}
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerID)
 	}
 
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)

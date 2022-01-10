@@ -3,26 +3,28 @@ package consensus
 import (
 	"context"
 
-	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	dkg "github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
 	vss "github.com/TopiaNetwork/kyber/v3/share/vss/pedersen"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
 const (
+	PartPubKeyChannel_Size  = 150
 	DealMSGChannel_Size     = 150
 	DealRespMsgChannel_Size = 150
 )
 
 type dkgExchange struct {
+	index         int
 	log           tplog.Logger
 	startCh       chan uint64
 	stopCh        chan struct{}
+	finished      chan bool
 	partPubKey    chan *DKGPartPubKeyMessage
 	dealMsgCh     chan *DKGDealMessage
 	dealRespMsgCh chan *DKGDealRespMessage
-	deliver       *messageDeliver
-	csState       ConsensusStore
+	deliver       messageDeliverI
+	csState       consensusStore
 	dkgCrypt      *DKGCrypt
 }
 
@@ -30,12 +32,13 @@ func newDKGExchange(log tplog.Logger,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
-	deliver *messageDeliver,
-	csState ConsensusStore) *dkgExchange {
+	deliver messageDeliverI,
+	csState consensusStore) *dkgExchange {
 	return &dkgExchange{
 		log:           log,
 		startCh:       make(chan uint64),
 		stopCh:        make(chan struct{}),
+		finished:      make(chan bool),
 		partPubKey:    partPubKey,
 		dealMsgCh:     dealMsgCh,
 		dealRespMsgCh: dealRespMsgCh,
@@ -56,14 +59,12 @@ func (ex *dkgExchange) stop() {
 	ex.stopCh <- struct{}{}
 }
 
-func (ex *dkgExchange) startLoop(ctx context.Context) {
+func (ex *dkgExchange) startNewEpochLoop(ctx context.Context) {
 	go func() {
-		ex.log.Info("Start DKG exchange loop")
-		defer ex.log.Info("End DKG exchange loop")
 		for {
 			select {
 			case epoch := <-ex.startCh:
-				ex.log.Info("DKG exchange start")
+				ex.log.Infof("DKG exchange start %d", ex.index)
 				if ex.dkgCrypt == nil {
 					ex.log.Panicf("dkgCrypt nil at present: epoch=%d")
 				}
@@ -72,66 +73,47 @@ func (ex *dkgExchange) startLoop(ctx context.Context) {
 					ex.log.Panicf("dkgCrypt invalid expected epoch=%d, got epoch =%d", epoch, ex.dkgCrypt.epoch)
 				}
 
-				initPubKeyBytes, err := ex.dkgCrypt.initPartPubKeys[0].MarshalBinary()
+				deals, err := ex.dkgCrypt.getDeals()
 				if err != nil {
-					ex.log.Panicf("Can't marshal pub key %v epoch=%d: err=%v", ex.dkgCrypt.initPartPubKeys[0], epoch, err)
+					ex.log.Panicf("Can't get deals epoch %d: %v", ex.dkgCrypt.epoch, err)
 				}
 
-				partPubKeyMsg := &DKGPartPubKeyMessage{
-					ChainID:    []byte(ex.csState.ChainID()),
-					Version:    CONSENSUS_VER,
-					Epoch:      ex.dkgCrypt.epoch,
-					PartPubKey: initPubKeyBytes,
-				}
-				err = ex.deliver.deliverDKGPartPubKeyMessage(ctx, partPubKeyMsg)
-				if err != nil {
-					ex.log.Panicf("Can't deliver DKG part pub key msg deal epoch %d: %v", ex.dkgCrypt.epoch, err)
-				}
-			case partPubKey := <-ex.partPubKey:
-				pubKey, err := bn256.UnmarshalBinaryPG2(partPubKey.PartPubKey)
-				if err != nil {
-					ex.log.Panicf("Can't unmarshal part pub key epoch %d: %v", ex.dkgCrypt.epoch, err)
-				}
-
-				ok, err := ex.dkgCrypt.addInitPubKey(pubKey)
-				if err != nil {
-					ex.log.Panicf("Can't add initial pub key epoch %d: %v", ex.dkgCrypt.epoch, err)
-				}
-				if !ok {
-					continue
-				} else {
-					err := ex.dkgCrypt.createGenerator()
+				for i, deal := range deals {
+					dealBytes, err := deal.MarshalMsg(nil)
 					if err != nil {
-						ex.log.Panicf("Can't create generator epoch %d: %v", ex.dkgCrypt.epoch, err)
 					}
 
-					deals, err := ex.dkgCrypt.getDeals()
+					dealMsg := &DKGDealMessage{
+						ChainID:  []byte(ex.csState.ChainID()),
+						Version:  CONSENSUS_VER,
+						Epoch:    ex.dkgCrypt.epoch,
+						DealData: dealBytes,
+					}
+					pubKey := ex.dkgCrypt.pubKey(i)
+					ex.log.Infof("Send deal %d to other participant %s", i, pubKey)
+
+					err = ex.deliver.deliverDKGDealMessage(ctx, pubKey, dealMsg)
 					if err != nil {
-						ex.log.Panicf("Can't get deals epoch %d: %v", ex.dkgCrypt.epoch, err)
-					}
-
-					for i, deal := range deals {
-						dealBytes, err := deal.MarshalMsg(nil)
-						if err != nil {
-						}
-
-						dealMsg := &DKGDealMessage{
-							ChainID:  []byte(ex.csState.ChainID()),
-							Version:  CONSENSUS_VER,
-							Epoch:    ex.dkgCrypt.epoch,
-							DealData: dealBytes,
-						}
-
-						ex.log.Infof("Send deal %d to other participants", i)
-
-						err = ex.deliver.deliverDKGDealMessage(ctx, dealMsg)
-						if err != nil {
-							ex.log.Panicf("Can't marshal deal epoch %d: %v", ex.dkgCrypt.epoch, err)
-						}
+						ex.log.Panicf("Can't marshal deal epoch %d: %v", ex.dkgCrypt.epoch, err)
 					}
 				}
+			case <-ex.stopCh:
+				ex.log.Info("DKG exchange new epoch loop stop")
+				return
+			case <-ctx.Done():
+				ex.log.Info("DKG exchange new epoch loop stop")
+				return
+			}
+		}
+	}()
+}
+
+func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
+	go func() {
+		for {
+			select {
 			case dealMsg := <-ex.dealMsgCh:
-				ex.log.Infof("DKG exchange receive deal epoch=%d", dealMsg.Epoch)
+				ex.log.Infof("DKG exchange receive deal %d epoch=%d", ex.index, dealMsg.Epoch)
 
 				var deal dkg.Deal
 				_, err := deal.UnmarshalMsg(dealMsg.DealData)
@@ -144,7 +126,10 @@ func (ex *dkgExchange) startLoop(ctx context.Context) {
 				if err != nil {
 					ex.log.Errorf("Process deal failed dealIndex %d epoch %d: %v", deal.Index, ex.dkgCrypt.epoch, err)
 					continue
+				} else {
+					ex.log.Infof("Process deal succeeded dealIndex %d epoch %d", deal.Index, ex.dkgCrypt.epoch)
 				}
+
 				if dealResp.Response.Status != vss.StatusApproval {
 					ex.log.Errorf("Deal response not approval dealIndex %d epoch %d", deal.Index, ex.dkgCrypt.epoch)
 					continue
@@ -169,8 +154,23 @@ func (ex *dkgExchange) startLoop(ctx context.Context) {
 				if err != nil {
 					ex.log.Errorf("Can't marshal deal epoch %d: %v", ex.dkgCrypt.epoch, err)
 				}
+			case <-ex.stopCh:
+				ex.log.Info("DKG exchange receive deal loop stop")
+				return
+			case <-ctx.Done():
+				ex.log.Info("DKG exchange receive deal loop stop")
+				return
+			}
+		}
+	}()
+}
+
+func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
+	go func() {
+		for {
+			select {
 			case dealRespMsg := <-ex.dealRespMsgCh:
-				ex.log.Infof("DKG exchange receive deal response epoch=%d", dealRespMsg.Epoch)
+				ex.log.Infof("DKG exchange receive deal response %d epoch=%d", ex.index, dealRespMsg.Epoch)
 
 				var resp dkg.Response
 				_, err := resp.UnmarshalMsg(dealRespMsg.RespData)
@@ -179,15 +179,32 @@ func (ex *dkgExchange) startLoop(ctx context.Context) {
 				}
 				err = ex.dkgCrypt.processResp(&resp)
 				if err != nil {
-					ex.log.Errorf("Process response failed: epoch %d: %v", ex.dkgCrypt.epoch, err)
+					if err == vss.ErrNoDealBeforeResponse {
+						ex.log.Warnf("Process response failed: epoch %d: %v", ex.dkgCrypt.epoch, err)
+						ex.dkgCrypt.addAdvanceResp(&resp)
+					} else {
+						ex.log.Errorf("Process response failed: epoch %d: %v", ex.dkgCrypt.epoch, err)
+					}
+				}
+
+				if ex.dkgCrypt.finished() {
+					ex.log.Info("DKG exchange finished")
+					ex.finished <- true
 				}
 			case <-ex.stopCh:
-				ex.log.Info("DKG exchange stop")
+				ex.log.Info("DKG exchange receive deal response loop stop")
 				return
 			case <-ctx.Done():
-				ex.log.Info("DKG exchange stop")
+				ex.log.Info("DKG exchange receive deal response loop stop")
 				return
 			}
 		}
 	}()
+}
+
+func (ex *dkgExchange) startLoop(ctx context.Context) {
+	ex.log.Info("Start DKG exchange loop")
+	ex.startNewEpochLoop(ctx)
+	ex.startReceiveDealLoop(ctx)
+	ex.startReceiveDealRespLoop(ctx)
 }

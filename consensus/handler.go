@@ -28,8 +28,7 @@ type consensusHandler struct {
 	dealMsgCh      chan *DKGDealMessage
 	dealRespMsgCh  chan *DKGDealRespMessage
 	voteCollector  *consensusVoteCollector
-	deliver        *messageDeliver
-	csState        ConsensusStore
+	csState        consensusStore
 	marshaler      codec.Marshaler
 }
 
@@ -39,7 +38,7 @@ func NewConsensusHandler(log tplog.Logger,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
-	csState ConsensusStore,
+	csState consensusStore,
 	marshaler codec.Marshaler) *consensusHandler {
 	return &consensusHandler{
 		log:            log,

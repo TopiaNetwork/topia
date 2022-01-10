@@ -1,19 +1,21 @@
 package consensus
 
 import (
+	"bytes"
 	"errors"
-	"github.com/TopiaNetwork/kyber/v3/util/encoding"
-	"github.com/TopiaNetwork/kyber/v3/util/key"
+	"fmt"
 	"sync"
 
 	"github.com/TopiaNetwork/kyber/v3"
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	"github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
+	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
 type DKGCrypt struct {
 	log             tplog.Logger
+	index           uint32
 	epoch           uint64
 	initPrivKey     kyber.Scalar
 	partPubKeysSync sync.RWMutex
@@ -22,28 +24,51 @@ type DKGCrypt struct {
 	nParticipant    int
 	suite           *bn256.Suite
 	remoteDealsSync sync.RWMutex
-	remoteDeals     map[uint32][]*dkg.Deal
+	remoteDeals     []*dkg.Deal
+	remoteRespsSync sync.RWMutex
+	remoteAdvanResp []*dkg.Response
 	dkGenerator     *dkg.DistKeyGenerator
 }
 
-func newDKGCrypt(log tplog.Logger, epoch uint64, threshold int, nParticipant int) *DKGCrypt {
-	suite := bn256.NewSuiteG2()
+func newDKGCrypt(log tplog.Logger, index uint32, epoch uint64, suite *bn256.Suite, initPrivKey string, initPartPubKeys []string, threshold int, nParticipant int) *DKGCrypt {
+	priKey, err := encoding.StringHexToScalar(suite, initPrivKey)
+	if err != nil {
+		log.Panicf("Invalid initPrivKey %s", initPrivKey)
+	}
 
-	keyP := key.NewKeyPair(suite)
+	if len(initPartPubKeys) != nParticipant {
+		log.Panicf("Invalid initPartPubKeys number, expected %d actual ", nParticipant, len(initPartPubKeys))
+	}
 
-	return &DKGCrypt{
+	initPartPubKeyP := make([]kyber.Point, nParticipant)
+	for i := 0; i < len(initPartPubKeys); i++ {
+		partPubKey, err := encoding.StringHexToPoint(suite, initPartPubKeys[i])
+		if err != nil {
+			log.Panicf("Invalid initPubKey %s", initPartPubKeys[i])
+		}
+		initPartPubKeyP[i] = partPubKey
+	}
+
+	dkgCrypt := &DKGCrypt{
 		log:             log,
+		index:           index,
 		epoch:           epoch,
-		initPrivKey:     keyP.Private,
-		initPartPubKeys: []kyber.Point{keyP.Public},
+		initPrivKey:     priKey,
+		initPartPubKeys: initPartPubKeyP,
 		threshold:       threshold,
 		nParticipant:    nParticipant,
 		suite:           suite,
-		remoteDeals:     make(map[uint32][]*dkg.Deal),
 	}
+
+	err = dkgCrypt.createGenerator()
+	if err != nil {
+		log.Panicf("Can't create DKG generator epoch %d: %v", epoch, err)
+	}
+
+	return dkgCrypt
 }
 
-func (d *DKGCrypt) addInitPubKey(pubKey kyber.Point) (bool, error) {
+func (d *DKGCrypt) addInitPubKeys(pubKey kyber.Point) (bool, error) {
 	if d.initPartPubKeys[0].Equal(pubKey) {
 		pubHex, _ := encoding.PointToStringHex(d.suite, pubKey)
 		d.log.Warnf("Receive my self init pub key %s", pubHex)
@@ -54,6 +79,9 @@ func (d *DKGCrypt) addInitPubKey(pubKey kyber.Point) (bool, error) {
 	defer d.partPubKeysSync.Unlock()
 
 	d.initPartPubKeys = append(d.initPartPubKeys, pubKey)
+
+	pubHex, _ := encoding.PointToStringHex(d.suite, pubKey)
+	d.log.Infof("Add participant pub hex %s", pubHex)
 
 	if len(d.initPartPubKeys) == d.nParticipant {
 		return true, nil
@@ -82,6 +110,15 @@ func (d *DKGCrypt) getEpoch() uint64 {
 	return d.epoch
 }
 
+func (d *DKGCrypt) pubKey(index int) string {
+	if index < 0 || index >= len(d.initPartPubKeys) {
+		d.log.Panicf("Out of index: %d[0, %d)", index, len(d.initPartPubKeys))
+	}
+	pkHex, _ := encoding.PointToStringHex(d.suite, d.initPartPubKeys[index])
+
+	return pkHex
+}
+
 func (d *DKGCrypt) getDeals() (map[int]*dkg.Deal, error) {
 	if d.dkGenerator == nil {
 		errStr := "DKG generator hasn't been created"
@@ -96,15 +133,53 @@ func (d *DKGCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 	d.remoteDealsSync.Lock()
 	defer d.remoteDealsSync.Unlock()
 
-	d.remoteDeals[deal.Index] = append(d.remoteDeals[deal.Index], deal)
+	for _, dl := range d.remoteDeals {
+		dlBytes, _ := dl.MarshalMsg(nil)
+		dealBytes, _ := deal.MarshalMsg(nil)
+		if bytes.Equal(dlBytes, dealBytes) {
+			err := fmt.Errorf("Receive the same deal, index=%d: %v", deal.Index, deal)
+			d.log.Warnf(err.Error())
+			return nil, err
+		} else {
+			d.remoteDeals = append(d.remoteDeals, deal)
+		}
+	}
 
-	return d.dkGenerator.ProcessDeal(deal)
+	resp, err := d.dkGenerator.ProcessDeal(deal)
+
+	if d.dkGenerator.ExpectedDeals() == d.nParticipant-1 {
+		d.processAdvanceResp()
+	}
+
+	return resp, err
+}
+
+func (d *DKGCrypt) addAdvanceResp(resp *dkg.Response) error {
+	d.remoteRespsSync.Lock()
+	defer d.remoteRespsSync.Unlock()
+
+	for _, res := range d.remoteAdvanResp {
+		resBytes, _ := res.MarshalMsg(nil)
+		respBytes, _ := resp.MarshalMsg(nil)
+		if bytes.Equal(resBytes, respBytes) {
+			err := fmt.Errorf("Receive the same resp, index=%d: %v", resp.Index, resp)
+			d.log.Warnf(err.Error())
+			return nil
+		} else {
+			d.remoteAdvanResp = append(d.remoteAdvanResp, resp)
+		}
+	}
+
+	if d.remoteAdvanResp == nil {
+		d.remoteAdvanResp = append(d.remoteAdvanResp, resp)
+	}
+
+	return nil
 }
 
 func (d *DKGCrypt) processResp(resp *dkg.Response) error {
 	j, err := d.dkGenerator.ProcessResponse(resp)
 	if err != nil {
-		d.log.Errorf("Process response failed: %v", err)
 		return err
 	}
 
@@ -113,4 +188,24 @@ func (d *DKGCrypt) processResp(resp *dkg.Response) error {
 	}
 
 	return nil
+}
+
+func (d *DKGCrypt) processAdvanceResp() error {
+	for _, resp := range d.remoteAdvanResp {
+		j, err := d.dkGenerator.ProcessResponse(resp)
+		if err != nil {
+			d.log.Errorf("Process advance response failed: %v", err)
+			return err
+		}
+
+		if j != nil {
+			d.log.Warnf("Got justification %v from response %d when process dvance response", j, resp.Index)
+		}
+	}
+
+	return nil
+}
+
+func (d *DKGCrypt) finished() bool {
+	return d.dkGenerator.Certified()
 }

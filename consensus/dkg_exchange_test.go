@@ -15,6 +15,7 @@ import (
 	vss "github.com/TopiaNetwork/kyber/v3/share/vss/pedersen"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
+
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )

@@ -2,7 +2,12 @@ package system_interaction
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/stretchr/testify/require"
+
 	"github.com/TopiaNetwork/topia/codec"
 	"github.com/TopiaNetwork/topia/integration/mock"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -11,9 +16,6 @@ import (
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/sync"
-	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func TestBlockRequest(t *testing.T) {

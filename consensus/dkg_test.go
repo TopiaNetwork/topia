@@ -1,10 +1,12 @@
 package consensus
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
+
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )

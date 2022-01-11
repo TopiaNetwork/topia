@@ -2,10 +2,11 @@ package codec
 
 import (
 	"fmt"
+	"io"
+
 	"github.com/TopiaNetwork/topia/codec/json"
 	"github.com/TopiaNetwork/topia/codec/proto"
 	"github.com/TopiaNetwork/topia/codec/rlp"
-	"io"
 )
 
 type CodecType byte

@@ -167,7 +167,7 @@ func generateOutput(output LogOutput, param string) (io.Writer, error) {
 		}
 	case SysLogOutput:
 		binName := filepath.Base(os.Args[0])
-		return  zerologger.ConnectSyslogByParam(param, binName)
+		return zerologger.ConnectSyslogByParam(param, binName)
 	default:
 		return nil, errors.New("unknown output type " + LogOutput.String(output))
 	}
@@ -198,7 +198,3 @@ func CreateModuleLogger(level logcomm.LogLevel, module string, l Logger) Logger 
 
 	return nil
 }
-
-
-
-

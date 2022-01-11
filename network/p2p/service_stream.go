@@ -4,8 +4,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	network2 "github.com/TopiaNetwork/topia/network/protocol"
 	"io"
+
+	network2 "github.com/TopiaNetwork/topia/network/protocol"
 
 	ggio "github.com/gogo/protobuf/io"
 	"github.com/libp2p/go-libp2p-core/network"

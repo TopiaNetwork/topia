@@ -1,9 +1,10 @@
 package consensus
 
 import (
+	"sync"
+
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
-	"sync"
 )
 
 type consensusVoteCollector struct {

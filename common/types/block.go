@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 )

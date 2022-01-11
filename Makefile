@@ -61,6 +61,7 @@ format:
 
 lint:
 	@echo "--> Running linter"
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.43.0
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint run
 .PHONY: lint
 

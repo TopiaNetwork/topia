@@ -8,8 +8,9 @@ import (
 
 	"github.com/TopiaNetwork/kyber/v3"
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
-	"github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
+	dkg "github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
+
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 

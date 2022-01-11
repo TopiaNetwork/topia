@@ -1,8 +1,9 @@
 package block
 
 import (
-	tptypes "github.com/TopiaNetwork/topia/common/types"
 	"path/filepath"
+
+	tptypes "github.com/TopiaNetwork/topia/common/types"
 
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"

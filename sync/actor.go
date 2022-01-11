@@ -2,6 +2,7 @@ package sync
 
 import (
 	"github.com/AsynkronIT/protoactor-go/actor"
+
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )

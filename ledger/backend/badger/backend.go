@@ -103,4 +103,3 @@ func (b *BadgerBackend) Stats() map[string]string {
 	//TODO implement me
 	panic("implement me")
 }
-

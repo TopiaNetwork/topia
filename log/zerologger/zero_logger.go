@@ -9,13 +9,13 @@ import (
 )
 
 type ZeroLogger struct {
-   log *zerolog.Logger
+	log *zerolog.Logger
 }
 
 func NewLogger(level zerolog.Level, w io.Writer) *ZeroLogger {
 	zl := zerolog.New(w).Level(level).With().Timestamp().Logger()
 
-	return &ZeroLogger {
+	return &ZeroLogger{
 		&zl,
 	}
 }
@@ -82,12 +82,9 @@ func (zl *ZeroLogger) UpdateLoggerLevel(level logcomm.LogLevel) {
 }
 
 func (zl *ZeroLogger) CreateModuleLogger(level zerolog.Level, module string) *ZeroLogger {
-	mLog := zl.log.With().Str("module",module).Logger().Level(level)
+	mLog := zl.log.With().Str("module", module).Logger().Level(level)
 
 	return &ZeroLogger{
 		&mLog,
 	}
 }
-
-
-

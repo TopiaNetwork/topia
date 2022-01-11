@@ -1,8 +1,9 @@
 package log
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 )
@@ -10,7 +11,7 @@ import (
 func TestCreateMainLogger(t *testing.T) {
 	i := 100
 	str := "TestCreate"
-	log, err := CreateMainLogger(logcomm.DebugLevel, JSONFormat, StdErrOutput,"")
+	log, err := CreateMainLogger(logcomm.DebugLevel, JSONFormat, StdErrOutput, "")
 	assert.Equal(t, err, nil)
 	log.Debug("TestCreateMainLogger ok")
 	log.Info("TestCreateMainLogger ok")
@@ -23,7 +24,7 @@ func TestCreateMainLogger(t *testing.T) {
 }
 
 func TestCreateModuleLogger(t *testing.T) {
-	log, err := CreateMainLogger(logcomm.DebugLevel, JSONFormat, StdErrOutput,"")
+	log, err := CreateMainLogger(logcomm.DebugLevel, JSONFormat, StdErrOutput, "")
 	assert.Equal(t, err, nil)
 	log.Debug("MainLogger ok")
 	log.Info("MainLogger ok")

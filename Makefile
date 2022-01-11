@@ -52,7 +52,10 @@ $(BUILDDIR)/:
 ###############################################################################
 
 format:
+	go get -u golang.org/x/tools/cmd/goimports
+	go get -u github.com/client9/misspell/cmd/misspell
 	find . -name '*.go' -type f -not -path "*.git*" -not -name '*.pb.go' -not -name '*pb_test.go' | xargs gofmt -w -s
+	find . -name '*.go' -type f -not -path "*.git*" -not -name '*.pb.go' -not -name '*pb_test.go' | xargs misspell -w
 	find . -name '*.go' -type f -not -path "*.git*"  -not -name '*.pb.go' -not -name '*pb_test.go' | xargs goimports -w -local github.com/TopiaNetwork/topia
 .PHONY: format
 

@@ -48,6 +48,15 @@ $(BUILDDIR)/:
 	mkdir -p $@
 
 ###############################################################################
+###                  Testing                       ###
+###############################################################################
+
+.PHONY: test
+test:
+	# test all packages
+	GO111MODULE=on go test `go list ./... | grep -v -e github.com/TopiaNetwork/topia/common -e github.com/TopiaNetwork/topia/ledger/backend`
+
+###############################################################################
 ###                  Formatting, linting, and vetting                       ###
 ###############################################################################
 

@@ -54,3 +54,25 @@ type Iterator interface {
 	// Close closes the iterator, relasing any allocated resources.
 	Close() error
 }
+
+// VersionSet specifies a set of existing versions
+type VersionSet interface {
+	// Last returns the most recent saved version, or 0 if none.
+	Last() uint64
+	// Count returns the number of saved versions.
+	Count() int
+	// Iterator returns an iterator over all saved versions.
+	Iterator() VersionIterator
+	// Equal returns true iff this set is identical to another.
+	Equal(VersionSet) bool
+	// Exists returns true if a saved version exists.
+	Exists(uint64) bool
+}
+
+type VersionIterator interface {
+	// Next advances the iterator to the next element.
+	// Returns whether the iterator is valid; once invalid, it remains invalid forever.
+	Next() bool
+	// Value returns the version ID at the current position.
+	Value() uint64
+}

@@ -13,7 +13,7 @@ type stateData struct {
 func newStateData(name string, backend bacs.Backend) *stateData {
 	return &stateData{
 		name:    name,
-		backend: bacs.NewBackendPrefixed([]byte(name), backend),
+		backend: backend,
 	}
 }
 

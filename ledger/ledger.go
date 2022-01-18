@@ -45,12 +45,28 @@ type Ledger interface {
 	GetBlockByTxID(txID string) (*types.Block, error)
 }
 
+type StateStore interface {
+	CreateNamedStateStore(name string) error
+
+	Put(name string, key []byte, value []byte) error
+
+	Delete(name string, key []byte) error
+
+	Exists(name string, key []byte) (bool, error)
+
+	Update(name string, key []byte, value []byte) error
+
+	GetState(name string, key []byte) ([]byte, []byte, error)
+
+	Commit() error
+}
+
 type ledger struct {
 	id           LedgerID
 	log          tplog.Logger
 	blockStore   *block.BlockStore
 	historyStore *history.HistoryStore
-	stateStore   *state.StateStore
+	stateStore   StateStore
 }
 
 func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backend.BackendType) Ledger {
@@ -123,4 +139,8 @@ func (l *ledger) GetBlockByHash(blockHash []byte) (*types.Block, error) {
 func (l *ledger) GetBlockByTxID(txID string) (*types.Block, error) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (l *ledger) GetStateStore() StateStore {
+	return l.stateStore
 }

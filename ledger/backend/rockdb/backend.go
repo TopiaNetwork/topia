@@ -63,12 +63,12 @@ func NewRocksdbBackend(log tplog.Logger, name string, path string, cacheSize int
 	}
 }
 
-func (b *RocksdbBackend) Get(bytes []byte) ([]byte, error) {
+func (b *RocksdbBackend) Get(bytes []byte, version *uint64) ([]byte, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) Has(key []byte) (bool, error) {
+func (b *RocksdbBackend) Has(key []byte, version *uint64) (bool, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -93,12 +93,12 @@ func (b *RocksdbBackend) DeleteSync(bytes []byte) error {
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) Iterator(start, end []byte) (tplgcmm.Iterator, error) {
+func (b *RocksdbBackend) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) ReverseIterator(start, end []byte) (tplgcmm.Iterator, error) {
+func (b *RocksdbBackend) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -119,6 +119,36 @@ func (b *RocksdbBackend) Print() error {
 }
 
 func (b *RocksdbBackend) Stats() map[string]string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *RocksdbBackend) Versions() (tplgcmm.VersionSet, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *RocksdbBackend) SaveNextVersion() (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *RocksdbBackend) SaveVersion(uint64) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *RocksdbBackend) DeleteVersion(uint64) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *RocksdbBackend) LastVersion() uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *RocksdbBackend) Commit() error {
 	//TODO implement me
 	panic("implement me")
 }

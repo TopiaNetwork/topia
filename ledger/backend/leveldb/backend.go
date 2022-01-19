@@ -40,12 +40,12 @@ func NewLeveldbBackend(log tplog.Logger, name string, path string, cacheSize int
 	}
 }
 
-func (b *LeveldbBackend) Get(bytes []byte) ([]byte, error) {
+func (b *LeveldbBackend) Get(bytes []byte, version *uint64) ([]byte, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) Has(key []byte) (bool, error) {
+func (b *LeveldbBackend) Has(key []byte, version *uint64) (bool, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -70,12 +70,12 @@ func (b *LeveldbBackend) DeleteSync(bytes []byte) error {
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) Iterator(start, end []byte) (tplgcmm.Iterator, error) {
+func (b *LeveldbBackend) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) ReverseIterator(start, end []byte) (tplgcmm.Iterator, error) {
+func (b *LeveldbBackend) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -96,6 +96,36 @@ func (b *LeveldbBackend) Print() error {
 }
 
 func (b *LeveldbBackend) Stats() map[string]string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *LeveldbBackend) Versions() (tplgcmm.VersionSet, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *LeveldbBackend) SaveNextVersion() (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *LeveldbBackend) SaveVersion(uint64) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *LeveldbBackend) DeleteVersion(uint64) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *LeveldbBackend) LastVersion() uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *LeveldbBackend) Commit() error {
 	//TODO implement me
 	panic("implement me")
 }

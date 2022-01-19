@@ -21,7 +21,7 @@ type MemBackend struct {
 	btree *btree.BTree
 }
 
-func NewLeveldbBackend(log tplog.Logger, name string, path string, cacheSize int) *MemBackend {
+func NewLMemBackend(log tplog.Logger, name string, path string, cacheSize int) *MemBackend {
 	return &MemBackend{
 		log:   log,
 		name:  name,
@@ -29,12 +29,12 @@ func NewLeveldbBackend(log tplog.Logger, name string, path string, cacheSize int
 	}
 }
 
-func (b *MemBackend) Get(bytes []byte) ([]byte, error) {
+func (b *MemBackend) Get(bytes []byte, version *uint64) ([]byte, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) Has(key []byte) (bool, error) {
+func (b *MemBackend) Has(key []byte, version *uint64) (bool, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -59,12 +59,12 @@ func (b *MemBackend) DeleteSync(bytes []byte) error {
 	panic("implement me")
 }
 
-func (b *MemBackend) Iterator(start, end []byte) (tplgcmm.Iterator, error) {
+func (b *MemBackend) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) ReverseIterator(start, end []byte) (tplgcmm.Iterator, error) {
+func (b *MemBackend) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -85,6 +85,36 @@ func (b *MemBackend) Print() error {
 }
 
 func (b *MemBackend) Stats() map[string]string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *MemBackend) Versions() (tplgcmm.VersionSet, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *MemBackend) SaveNextVersion() (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *MemBackend) SaveVersion(uint64) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *MemBackend) DeleteVersion(uint64) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *MemBackend) LastVersion() uint64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (b *MemBackend) Commit() error {
 	//TODO implement me
 	panic("implement me")
 }

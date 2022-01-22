@@ -26,7 +26,7 @@ type dkgExchange struct {
 	dealRespMsgCh chan *DKGDealRespMessage
 	deliver       messageDeliverI
 	csState       consensusStore
-	dkgCrypt      *DKGCrypt
+	dkgCrypt      *dkgCrypt
 }
 
 func newDKGExchange(log tplog.Logger,
@@ -48,7 +48,7 @@ func newDKGExchange(log tplog.Logger,
 	}
 }
 
-func (ex *dkgExchange) setDKGCrypt(dkgCrypt *DKGCrypt) {
+func (ex *dkgExchange) setDKGCrypt(dkgCrypt *dkgCrypt) {
 	ex.dkgCrypt = dkgCrypt
 }
 

@@ -19,5 +19,4 @@ func TestBasicFrandShuffle(t *testing.T) {
 	})
 
 	fmt.Println(records)
-
 }

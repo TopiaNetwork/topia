@@ -1,6 +1,8 @@
 package ledger
 
 import (
+	"errors"
+	"math/big"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,6 +34,10 @@ type Ledger interface {
 
 	GetAllConsensusNodes() ([]string, error)
 
+	GetChainTotalWeight() (*big.Int, error)
+
+	GetNodeWeight(nodeID string) (*big.Int, error)
+
 	GetBlockByNumber(blockNum tptypes.BlockNum) (*types.Block, error)
 
 	GetBlocksIterator(startBlockNum tptypes.BlockNum) (tplgtypes.ResultsIterator, error)
@@ -43,6 +49,14 @@ type Ledger interface {
 	GetBlockByHash(blockHash []byte) (*types.Block, error)
 
 	GetBlockByTxID(txID string) (*types.Block, error)
+
+	GetCurrentRound() uint64
+
+	SetCurrentRound(round uint64)
+
+	GetCurrentEpoch() uint64
+
+	SetCurrentEpoch(epoch uint64)
 }
 
 type StateStore interface {
@@ -87,8 +101,7 @@ func (l *ledger) ChainID() tpcmm.ChainID {
 }
 
 func (l *ledger) GetLatestBlock() (*tptypes.Block, error) {
-	//TODO implement me
-	panic("implement me")
+	return nil, errors.New("Can't get the latest block")
 }
 
 func (l *ledger) SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error {
@@ -107,6 +120,16 @@ func (l *ledger) ClearBlockMiddleResult(round uint64) error {
 }
 
 func (l *ledger) GetAllConsensusNodes() ([]string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *ledger) GetChainTotalWeight() (*big.Int, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *ledger) GetNodeWeight(nodeID string) (*big.Int, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -143,4 +166,20 @@ func (l *ledger) GetBlockByTxID(txID string) (*types.Block, error) {
 
 func (l *ledger) GetStateStore() StateStore {
 	return l.stateStore
+}
+
+func (l *ledger) GetCurrentRound() uint64 {
+	return 0
+}
+
+func (l *ledger) SetCurrentRound(round uint64) {
+
+}
+
+func (l *ledger) GetCurrentEpoch() uint64 {
+	return 0
+}
+
+func (l *ledger) SetCurrentEpoch(epoch uint64) {
+
 }

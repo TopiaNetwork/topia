@@ -2,6 +2,7 @@ package common
 
 import (
 	"hash"
+	"io"
 
 	"golang.org/x/crypto/blake2b"
 )
@@ -9,6 +10,9 @@ import (
 type Hasher interface {
 	Compute(string) []byte
 	Size() int
+	Writer() io.Writer
+	Bytes() []byte
+	Reset()
 }
 
 type blake2bHasher struct {
@@ -37,10 +41,23 @@ func NewBlake2bHasher(size int) Hasher {
 }
 
 func (b2bHasher *blake2bHasher) Compute(s string) []byte {
+	b2bHasher.hash.Reset()
 	_, _ = b2bHasher.hash.Write([]byte(s))
 	return b2bHasher.hash.Sum(nil)
 }
 
 func (b2bHasher *blake2bHasher) Size() int {
 	return b2bHasher.hash.Size()
+}
+
+func (b2bHasher *blake2bHasher) Writer() io.Writer {
+	return b2bHasher.hash
+}
+
+func (b2bHasher *blake2bHasher) Bytes() []byte {
+	return b2bHasher.hash.Sum(nil)
+}
+
+func (b2bHasher *blake2bHasher) Reset() {
+	b2bHasher.hash.Reset()
 }

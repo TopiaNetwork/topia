@@ -3,7 +3,7 @@ package crypt
 import (
 	"github.com/TopiaNetwork/topia/crypt/bls12381"
 	"github.com/TopiaNetwork/topia/crypt/secp256"
-	"github.com/TopiaNetwork/topia/crypt/types"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
@@ -17,10 +17,13 @@ const (
 )
 
 type CryptService interface {
-	GeneratePriPubKey() (types.PrivateKey, types.PublicKey, error)
-	ConvertToPublic() (types.PublicKey, error)
-	Sign(priKey types.PrivateKey, msg []byte) (types.Signature, error)
-	Verify(pubKey types.PublicKey, signData types.Signature) error
+	GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error)
+
+	ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error)
+
+	Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrtypes.Signature, error)
+
+	Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error)
 }
 
 func CreateCryptService(log tplog.Logger, cryptType CryptServiceType) CryptService {

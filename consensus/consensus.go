@@ -7,6 +7,8 @@ import (
 
 	"github.com/TopiaNetwork/topia/codec"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
+	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
@@ -40,17 +42,24 @@ type Consensus interface {
 }
 
 type consensus struct {
-	log       tplog.Logger
-	level     tplogcmm.LogLevel
-	handler   ConsensusHandler
-	marshaler codec.Marshaler
-	network   tpnet.Network
-	proposer  *consensusProposer
-	voter     *consensusVoter
-	dkgEx     *dkgExchange
+	log          tplog.Logger
+	level        tplogcmm.LogLevel
+	handler      ConsensusHandler
+	marshaler    codec.Marshaler
+	network      tpnet.Network
+	proposer     *consensusProposer
+	voter        *consensusVoter
+	dkgEx        *dkgExchange
+	epochService *epochService
 }
 
-func NewConsensus(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType, network tpnet.Network, ledger ledger.Ledger) Consensus {
+func NewConsensus(nodeID string,
+	level tplogcmm.LogLevel,
+	log tplog.Logger,
+	codecType codec.CodecType,
+	network tpnet.Network,
+	ledger ledger.Ledger,
+	config *tpconfig.ConsensusConfiguration) Consensus {
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
 	roundCh := make(chan *RoundInfo)
@@ -60,19 +69,24 @@ func NewConsensus(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.Cod
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 	deliver := newMessageDeliver(log, DeliverStrategy_All, network, marshaler)
 
-	proposer := newConsensusProposer(log, roundCh, deliver, ledger, marshaler)
+	cryptS := tpcrt.CreateCryptService(log, config.CrptyType)
+
+	proposer := newConsensusProposer(nodeID, log, roundCh, cryptS, deliver, ledger, marshaler)
 	voter := newConsensusVoter(log, proposeMsgChan, deliver)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, deliver, ledger)
 
+	epochService := newEpochService(log, roundCh, config.RoundDuration, config.EpochInterval, ledger, dkgEx)
+
 	return &consensus{
-		log:       consLog,
-		level:     level,
-		handler:   NewConsensusHandler(log, roundCh, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler),
-		marshaler: codec.CreateMarshaler(codecType),
-		network:   network,
-		proposer:  proposer,
-		voter:     voter,
-		dkgEx:     dkgEx,
+		log:          consLog,
+		level:        level,
+		handler:      NewConsensusHandler(log, roundCh, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler),
+		marshaler:    codec.CreateMarshaler(codecType),
+		network:      network,
+		proposer:     proposer,
+		voter:        voter,
+		dkgEx:        dkgEx,
+		epochService: epochService,
 	}
 }
 
@@ -115,6 +129,7 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
 
 	ctx := context.Background()
 
+	cons.epochService.start(ctx)
 	cons.proposer.start(ctx)
 	cons.voter.start(ctx)
 	cons.dkgEx.startLoop(ctx)

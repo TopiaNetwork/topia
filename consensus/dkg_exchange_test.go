@@ -82,6 +82,8 @@ func TestDkgExchangeLoop(t *testing.T) {
 	createTestDKGNode(log, nParticipant)
 
 	var wg sync.WaitGroup
+	msg := []byte("test dkg")
+	signData := make([][]byte, 0)
 	for i := 0; i < nParticipant; i++ {
 		wg.Add(1)
 		dkgExChangeMap[i].start(10)
@@ -96,6 +98,14 @@ func TestDkgExchangeLoop(t *testing.T) {
 						require.Equal(t, nParticipant, len(dkgEx.dkgCrypt.dkGenerator.QUAL()))
 						log.Infof("qualified shares: %v", dkgEx.dkgCrypt.dkGenerator.QualifiedShares())
 						log.Infof("QUAL: %v", dkgEx.dkgCrypt.dkGenerator.QUAL())
+
+						signDataT, err := dkgEx.dkgCrypt.Sign(msg)
+						require.Equal(t, nil, err)
+						//err = dkgEx.dkgCrypt.Verify(msg, signDataT)
+						//require.Equal(t, nil, err)
+
+						signData = append(signData, signDataT)
+
 						dkgEx.stop()
 						return
 					}
@@ -105,6 +115,20 @@ func TestDkgExchangeLoop(t *testing.T) {
 	}
 
 	wg.Wait()
+
+	/*
+		aggPubKey := dkgExChangeMap[0].dkgCrypt.AggregatePublicKeys()
+		require.NotEqual(t, nil, aggPubKey)
+		sds, err1 := dkgExChangeMap[0].dkgCrypt.AggregateSignatures(signData...)
+		require.Equal(t, nil, err1)
+		dkgExChangeMap[0].dkgCrypt.VerifyAggSignatures(aggPubKey, msg, sds)
+	*/
+
+	sig, err := dkgExChangeMap[0].dkgCrypt.RecoverSig(msg, signData)
+	require.Equal(t, nil, err)
+	err = dkgExChangeMap[0].dkgCrypt.Verify(msg, sig)
+	require.Equal(t, nil, err)
+
 	log.Info("All dkg finished")
 }
 

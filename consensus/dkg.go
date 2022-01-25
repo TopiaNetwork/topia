@@ -4,17 +4,20 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/TopiaNetwork/kyber/v3/share"
+	"github.com/TopiaNetwork/kyber/v3/sign/bls"
 	"sync"
 
 	"github.com/TopiaNetwork/kyber/v3"
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	dkg "github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
+	"github.com/TopiaNetwork/kyber/v3/sign/tbls"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
-type DKGCrypt struct {
+type dkgCrypt struct {
 	log             tplog.Logger
 	index           uint32
 	epoch           uint64
@@ -31,7 +34,7 @@ type DKGCrypt struct {
 	dkGenerator     *dkg.DistKeyGenerator
 }
 
-func newDKGCrypt(log tplog.Logger, index uint32, epoch uint64, suite *bn256.Suite, initPrivKey string, initPartPubKeys []string, threshold int, nParticipant int) *DKGCrypt {
+func newDKGCrypt(log tplog.Logger, index uint32, epoch uint64, suite *bn256.Suite, initPrivKey string, initPartPubKeys []string, threshold int, nParticipant int) *dkgCrypt {
 	priKey, err := encoding.StringHexToScalar(suite, initPrivKey)
 	if err != nil {
 		log.Panicf("Invalid initPrivKey %s", initPrivKey)
@@ -50,7 +53,7 @@ func newDKGCrypt(log tplog.Logger, index uint32, epoch uint64, suite *bn256.Suit
 		initPartPubKeyP[i] = partPubKey
 	}
 
-	dkgCrypt := &DKGCrypt{
+	dkgCrypt := &dkgCrypt{
 		log:             log,
 		index:           index,
 		epoch:           epoch,
@@ -69,7 +72,7 @@ func newDKGCrypt(log tplog.Logger, index uint32, epoch uint64, suite *bn256.Suit
 	return dkgCrypt
 }
 
-func (d *DKGCrypt) addInitPubKeys(pubKey kyber.Point) (bool, error) {
+func (d *dkgCrypt) addInitPubKeys(pubKey kyber.Point) (bool, error) {
 	if d.initPartPubKeys[0].Equal(pubKey) {
 		pubHex, _ := encoding.PointToStringHex(d.suite, pubKey)
 		d.log.Warnf("Receive my self init pub key %s", pubHex)
@@ -91,7 +94,7 @@ func (d *DKGCrypt) addInitPubKeys(pubKey kyber.Point) (bool, error) {
 	return false, nil
 }
 
-func (d *DKGCrypt) createGenerator() error {
+func (d *dkgCrypt) createGenerator() error {
 	if d.dkGenerator != nil {
 		d.log.Info("Dkg generator exist!")
 		return nil
@@ -107,11 +110,11 @@ func (d *DKGCrypt) createGenerator() error {
 	return nil
 }
 
-func (d *DKGCrypt) getEpoch() uint64 {
+func (d *dkgCrypt) getEpoch() uint64 {
 	return d.epoch
 }
 
-func (d *DKGCrypt) pubKey(index int) string {
+func (d *dkgCrypt) pubKey(index int) string {
 	if index < 0 || index >= len(d.initPartPubKeys) {
 		d.log.Panicf("Out of index: %d[0, %d)", index, len(d.initPartPubKeys))
 	}
@@ -120,7 +123,7 @@ func (d *DKGCrypt) pubKey(index int) string {
 	return pkHex
 }
 
-func (d *DKGCrypt) getDeals() (map[int]*dkg.Deal, error) {
+func (d *dkgCrypt) getDeals() (map[int]*dkg.Deal, error) {
 	if d.dkGenerator == nil {
 		errStr := "DKG generator hasn't been created"
 		d.log.Error(errStr)
@@ -130,7 +133,7 @@ func (d *DKGCrypt) getDeals() (map[int]*dkg.Deal, error) {
 	return d.dkGenerator.Deals()
 }
 
-func (d *DKGCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
+func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 	d.remoteDealsSync.Lock()
 	defer d.remoteDealsSync.Unlock()
 
@@ -155,7 +158,7 @@ func (d *DKGCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 	return resp, err
 }
 
-func (d *DKGCrypt) addAdvanceResp(resp *dkg.Response) error {
+func (d *dkgCrypt) addAdvanceResp(resp *dkg.Response) error {
 	d.remoteRespsSync.Lock()
 	defer d.remoteRespsSync.Unlock()
 
@@ -178,7 +181,7 @@ func (d *DKGCrypt) addAdvanceResp(resp *dkg.Response) error {
 	return nil
 }
 
-func (d *DKGCrypt) processResp(resp *dkg.Response) error {
+func (d *dkgCrypt) processResp(resp *dkg.Response) error {
 	j, err := d.dkGenerator.ProcessResponse(resp)
 	if err != nil {
 		return err
@@ -191,7 +194,7 @@ func (d *DKGCrypt) processResp(resp *dkg.Response) error {
 	return nil
 }
 
-func (d *DKGCrypt) processAdvanceResp() error {
+func (d *dkgCrypt) processAdvanceResp() error {
 	for _, resp := range d.remoteAdvanResp {
 		j, err := d.dkGenerator.ProcessResponse(resp)
 		if err != nil {
@@ -207,6 +210,63 @@ func (d *DKGCrypt) processAdvanceResp() error {
 	return nil
 }
 
-func (d *DKGCrypt) finished() bool {
+func (d *dkgCrypt) finished() bool {
 	return d.dkGenerator.Certified()
+}
+
+func (d *dkgCrypt) Sign(msg []byte) ([]byte, error) {
+	if d.dkGenerator == nil {
+		err := errors.New("Current state invalid and can't sign msg")
+		d.log.Error(err.Error())
+
+		return nil, err
+	}
+
+	dkShare, err := d.dkGenerator.DistKeyShare()
+	if err != nil {
+		return nil, err
+	}
+
+	return tbls.Sign(d.suite, dkShare.PriShare(), msg)
+}
+
+func (d *dkgCrypt) Verify(msg, sig []byte) error {
+	if d.dkGenerator == nil {
+		err := errors.New("Current state invalid and can't sign msg")
+		d.log.Error(err.Error())
+
+		return err
+	}
+
+	dkShare, err := d.dkGenerator.DistKeyShare()
+	if err != nil {
+		return err
+	}
+
+	pubPolicy := share.NewPubPoly(d.suite, d.suite.Point().Base(), dkShare.Commitments())
+	if pubPolicy.Commit() != dkShare.Public() {
+		err := errors.New("DKShare invalid: pub")
+		d.log.Error(err.Error())
+		return err
+	}
+
+	return bls.Verify(d.suite, dkShare.Public(), msg, sig)
+}
+
+func (d *dkgCrypt) RecoverSig(msg []byte, sigs [][]byte) ([]byte, error) {
+	if d.dkGenerator == nil {
+		err := errors.New("Current state invalid and can't sign msg")
+		d.log.Error(err.Error())
+
+		return nil, err
+	}
+
+	dkShare, err := d.dkGenerator.DistKeyShare()
+	if err != nil {
+		return nil, err
+	}
+
+	pubPoly := share.NewPubPoly(d.suite, d.suite.Point().Base(), dkShare.Commitments())
+
+	return tbls.Recover(d.suite, pubPoly, msg, sigs, d.threshold, d.nParticipant)
 }

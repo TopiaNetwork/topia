@@ -3,6 +3,7 @@ package consensus
 import (
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
+	"math/big"
 )
 
 type consensusStoreMock struct{}
@@ -32,6 +33,16 @@ func (cs *consensusStoreMock) ClearBlockMiddleResult(round uint64) error {
 }
 
 func (cs *consensusStoreMock) GetAllConsensusNodes() ([]string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cs *consensusStoreMock) GetChainTotalWeight() (*big.Int, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cs *consensusStoreMock) GetNodeWeight(nodeID string) (*big.Int, error) {
 	//TODO implement me
 	panic("implement me")
 }

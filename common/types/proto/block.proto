@@ -16,8 +16,8 @@ message BlockHead {
   uint64 Epoch            = 4  [(gogoproto.jsontag) = "epoch"];
   uint64 Round            = 5  [(gogoproto.jsontag) = "round"];
   bytes  ParentBlockHash  = 6  [(gogoproto.jsontag) = "parentBlockHash"];
-  bytes  ProposeSignature = 7  [(gogoproto.jsontag) = "parentBlockHash"];
-  bytes  VoteAggSignature = 8  [(gogoproto.jsontag) = "parentBlockHash"];
+  bytes  ProposeSignature = 7  [(gogoproto.jsontag) = "proposeSignature"];
+  bytes  VoteAggSignature = 8  [(gogoproto.jsontag) = "voteAggSignature"];
   bytes  ResultHash       = 9  [(gogoproto.jsontag) = "resultHash"];
   uint32 TxCount          = 10 [(gogoproto.jsontag) = "txCount"];
   bytes  TxHashRoot       = 11 [(gogoproto.jsontag) = "txHashRoot"];

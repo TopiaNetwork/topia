@@ -136,12 +136,11 @@ func (p *poiss) next() *big.Int {
 }
 
 type proposerSelectorPoiss struct {
-	crypt  tpcrt.CryptService
-	hasher tpcmm.Hasher
+	crypt tpcrt.CryptService
 }
 
-func newProposerSelectorPoiss(crypt tpcrt.CryptService, hasher tpcmm.Hasher) *proposerSelectorPoiss {
-	return &proposerSelectorPoiss{crypt: crypt, hasher: hasher}
+func newProposerSelectorPoiss(crypt tpcrt.CryptService) *proposerSelectorPoiss {
+	return &proposerSelectorPoiss{crypt: crypt}
 }
 
 func (ep *proposerSelectorPoiss) ComputeVRF(priKey tpcrtypes.PrivateKey, data []byte) ([]byte, error) {
@@ -149,7 +148,8 @@ func (ep *proposerSelectorPoiss) ComputeVRF(priKey tpcrtypes.PrivateKey, data []
 }
 
 func (ep *proposerSelectorPoiss) SelectProposer(VRFProof []byte, weight *big.Int, totalWeight *big.Int) int64 {
-	h := ep.hasher.Compute(string(VRFProof))
+	hasher := tpcmm.NewBlake2bHasher(0)
+	h := hasher.Compute(string(VRFProof))
 
 	lhs := new(big.Int).SetBytes(h[:])
 

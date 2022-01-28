@@ -5,6 +5,7 @@ import (
 	"fmt"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -51,6 +52,7 @@ func NewNode(endPoint string, seed string) *Node {
 	sysActor := actor.NewActorSystem()
 
 	nodeID := "TestNode"
+	var priKey tpcrtypes.PrivateKey
 
 	csConfig := &tpconfig.ConsensusConfiguration{
 		RoundDuration: time.Duration(500 * time.Millisecond),
@@ -60,7 +62,7 @@ func NewNode(endPoint string, seed string) *Node {
 
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed)
 	ledger := ledger.NewLedger(chainRootPath, "topia", mainLog, backend.BackendType_Badger)
-	cons := consensus.NewConsensus(nodeID, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, ledger, csConfig)
+	cons := consensus.NewConsensus(nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, ledger, csConfig)
 	txPool := transactionpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 

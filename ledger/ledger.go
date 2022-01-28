@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"errors"
-	"math/big"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -34,9 +33,9 @@ type Ledger interface {
 
 	GetAllConsensusNodes() ([]string, error)
 
-	GetChainTotalWeight() (*big.Int, error)
+	GetChainTotalWeight() (uint64, error)
 
-	GetNodeWeight(nodeID string) (*big.Int, error)
+	GetNodeWeight(nodeID string) (uint64, error)
 
 	GetBlockByNumber(blockNum tptypes.BlockNum) (*types.Block, error)
 
@@ -124,12 +123,12 @@ func (l *ledger) GetAllConsensusNodes() ([]string, error) {
 	panic("implement me")
 }
 
-func (l *ledger) GetChainTotalWeight() (*big.Int, error) {
+func (l *ledger) GetChainTotalWeight() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (l *ledger) GetNodeWeight(nodeID string) (*big.Int, error) {
+func (l *ledger) GetNodeWeight(nodeID string) (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }

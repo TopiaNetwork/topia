@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
 func TestComputeVRF(t *testing.T) {
@@ -14,7 +12,7 @@ func TestComputeVRF(t *testing.T) {
 
 	priKey, pubKey, _ := crypt.GeneratePriPubKey()
 
-	selector := newProposerSelectorPoiss(crypt, tpcmm.NewBlake2bHasher(0))
+	selector := newProposerSelectorPoiss(crypt)
 
 	vrfInputData := "TestSelectProposer1"
 
@@ -32,7 +30,7 @@ func TestSelectProposer(t *testing.T) {
 
 	priKey, pubKey, _ := crypt.GeneratePriPubKey()
 
-	selector := newProposerSelectorPoiss(crypt, tpcmm.NewBlake2bHasher(0))
+	selector := newProposerSelectorPoiss(crypt)
 
 	vrfInputData := "TestSelectProposer1"
 

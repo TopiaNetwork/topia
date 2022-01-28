@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
@@ -54,6 +55,7 @@ type consensus struct {
 }
 
 func NewConsensus(nodeID string,
+	priKey tpcrtypes.PrivateKey,
 	level tplogcmm.LogLevel,
 	log tplog.Logger,
 	codecType codec.CodecType,
@@ -67,11 +69,12 @@ func NewConsensus(nodeID string,
 	partPubKey := make(chan *DKGPartPubKeyMessage, PartPubKeyChannel_Size)
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
-	deliver := newMessageDeliver(log, DeliverStrategy_All, network, marshaler)
 
 	cryptS := tpcrt.CreateCryptService(log, config.CrptyType)
 
-	proposer := newConsensusProposer(nodeID, log, roundCh, cryptS, deliver, ledger, marshaler)
+	deliver := newMessageDeliver(log, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
+
+	proposer := newConsensusProposer(nodeID, priKey, log, roundCh, cryptS, deliver, ledger, marshaler)
 	voter := newConsensusVoter(log, proposeMsgChan, deliver)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, deliver, ledger)
 

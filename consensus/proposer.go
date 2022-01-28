@@ -2,82 +2,54 @@ package consensus
 
 import (
 	"context"
-	"encoding/binary"
-	tpcrt "github.com/TopiaNetwork/topia/crypt"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
+	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
+
+const defaultLeaderCount = int(3)
 
 type consensusProposer struct {
 	log          tplog.Logger
 	nodeID       string
-	prikey       tpcrtypes.PrivateKey
+	priKey       tpcrtypes.PrivateKey
 	lastRoundNum uint64
 	roundCh      chan *RoundInfo
 	deliver      messageDeliverI
 	csState      consensusStore
 	marshaler    codec.Marshaler
-	hasher       tpcmm.Hasher
-	selector     ProposerSelector
+	selector     *roleSelectorVRF
 }
 
-func newConsensusProposer(nodeID string, log tplog.Logger, roundCh chan *RoundInfo, crypt tpcrt.CryptService, deliver messageDeliverI, csState consensusStore, marshaler codec.Marshaler) *consensusProposer {
-	selector := NewProposerSelector(ProposerSelectionType_Poiss, crypt, tpcmm.NewBlake2bHasher(0))
+func newConsensusProposer(nodeID string, priKey tpcrtypes.PrivateKey, log tplog.Logger, roundCh chan *RoundInfo, crypt tpcrt.CryptService, deliver messageDeliverI, csState consensusStore, marshaler codec.Marshaler) *consensusProposer {
 	return &consensusProposer{
 		log:       log,
 		nodeID:    nodeID,
+		priKey:    priKey,
 		roundCh:   roundCh,
 		deliver:   deliver,
 		csState:   csState,
 		marshaler: marshaler,
-		hasher:    tpcmm.NewBlake2bHasher(0),
-		selector:  selector,
+		selector:  newLeaderSelectorVRF(log, crypt, csState),
 	}
 }
 
-func getVrfInputData(roundInfo *RoundInfo, hasher tpcmm.Hasher) ([]byte, error) {
-	hasher.Reset()
-
-	if err := binary.Write(hasher.Writer(), binary.BigEndian, roundInfo.Epoch); err != nil {
-		return nil, err
-	}
-	if err := binary.Write(hasher.Writer(), binary.BigEndian, roundInfo.CurRoundNum); err != nil {
-		return nil, err
-	}
-
-	csProofBytes, err := roundInfo.Proof.Marshal()
-	if err != nil {
-		return nil, err
-	}
-	if _, err = hasher.Writer().Write(csProofBytes); err != nil {
-		return nil, err
-	}
-
-	return hasher.Bytes(), nil
-}
-
-func canProposeBlock(nodeID string, csState consensusStore, vrfInputData []byte, priKey tpcrtypes.PrivateKey, selector ProposerSelector) (bool, []byte, error) {
-	totalWeight, err := csState.GetChainTotalWeight()
+func (p *consensusProposer) canProposeBlock(roundInfo *RoundInfo) (bool, []byte, error) {
+	selProposers, vrfProof, err := p.selector.Select(RoleSelector_Proposer, roundInfo, p.priKey, defaultLeaderCount)
 	if err != nil {
 		return false, nil, err
 	}
-	nodeWeight, err := csState.GetNodeWeight(nodeID)
-	if err != nil {
-		return false, nil, err
+	if len(selProposers) < defaultLeaderCount {
+		p.log.Errorf("expected proposer count %d, got %d", defaultLeaderCount, len(selProposers))
+		return false, vrfProof, nil
 	}
-
-	vrfProof, err := selector.ComputeVRF(priKey, vrfInputData)
-	if err != nil {
-		return false, nil, err
-	}
-
-	pCount := selector.SelectProposer(vrfProof, nodeWeight, totalWeight)
-	if pCount >= 1 {
-		return true, vrfProof, nil
+	for _, leader := range selProposers {
+		if leader.nodeID == p.nodeID {
+			return true, vrfProof, nil
+		}
 	}
 
 	return false, nil, nil
@@ -88,13 +60,7 @@ func (p *consensusProposer) start(ctx context.Context) {
 		for {
 			select {
 			case roundInfo := <-p.roundCh:
-				vrfInputData, err := getVrfInputData(roundInfo, p.hasher)
-				if err != nil {
-					p.log.Errorf("Can't get vrf inputing data: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
-					continue
-				}
-
-				canPropose, vrfProof, err := canProposeBlock(p.nodeID, p.csState, vrfInputData, p.prikey, p.selector)
+				canPropose, vrfProof, err := p.canProposeBlock(roundInfo)
 				if err != nil {
 					p.log.Errorf("Error happens when judge proposing block : epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 					continue
@@ -110,7 +76,7 @@ func (p *consensusProposer) start(ctx context.Context) {
 					p.log.Errorf("Produce propose block error: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 					continue
 				}
-				proposeBlock.Proof = vrfProof
+				proposeBlock.ProposerProof = vrfProof
 				if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
 					p.log.Errorf("Consensus deliver propose message err: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 				}
@@ -128,7 +94,7 @@ func (p *consensusProposer) createBlock(roundInfo *RoundInfo) (*tptypes.Block, e
 		p.log.Errorf("can't get the latest block: %v", err)
 	}
 
-	blockHashBytes, err := latestBlock.HashBytes(p.hasher, p.marshaler)
+	blockHashBytes, err := latestBlock.HashBytes(tpcmm.NewBlake2bHasher(0), p.marshaler)
 	if err != nil {
 		p.log.Errorf("can't get the hash bytes of block height %d: %v", latestBlock.Head.Height, err)
 		return nil, err

@@ -18,6 +18,8 @@ type ConsensusHandler interface {
 	ProcessDKGDeal(msg *DKGDealMessage) error
 
 	ProcessDKGDealResp(msg *DKGDealRespMessage) error
+
+	updateDKGBls(dkgBls DKGBls)
 }
 
 type consensusHandler struct {
@@ -128,4 +130,8 @@ func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) err
 	handler.dealRespMsgCh <- msg
 
 	return nil
+}
+
+func (handler *consensusHandler) updateDKGBls(dkgBls DKGBls) {
+	handler.voteCollector.updateDKGBls(dkgBls)
 }

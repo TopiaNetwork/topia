@@ -22,10 +22,16 @@ const (
 
 type messageDeliverI interface {
 	deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error
+
 	deliverVoteMessage(ctx context.Context, msg *VoteMessage) error
+
 	deliverDKGPartPubKeyMessage(ctx context.Context, msg *DKGPartPubKeyMessage) error
+
 	deliverDKGDealMessage(ctx context.Context, pubKey string, msg *DKGDealMessage) error
+
 	deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error
+
+	updateDKGBls(dkgBls DKGBls)
 }
 
 type messageDeliver struct {
@@ -36,6 +42,7 @@ type messageDeliver struct {
 	marshaler codec.Marshaler
 	csState   consensusStore
 	selector  *roleSelectorVRF
+	dkgBls    DKGBls
 }
 
 func newMessageDeliver(log tplog.Logger, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network network.Network, marshaler codec.Marshaler, crypt tpcrt.CryptService, csState consensusStore) *messageDeliver {
@@ -49,6 +56,14 @@ func newMessageDeliver(log tplog.Logger, priKey tpcrtypes.PrivateKey, strategy D
 }
 
 func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {
+	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
+	if err != nil {
+		md.log.Errorf("DKG sign ProposeMessage err: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("ProposeMessage marshal err: %v", err)
@@ -108,6 +123,14 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 }
 
 func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage) error {
+	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
+	if err != nil {
+		md.log.Errorf("DKG sign VoteMessage err: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("ProposeMessage marshal err: %v", err)
@@ -212,4 +235,8 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 	}
 
 	return err
+}
+
+func (md *messageDeliver) updateDKGBls(dkgBls DKGBls) {
+	md.dkgBls = dkgBls
 }

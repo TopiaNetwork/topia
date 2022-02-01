@@ -76,6 +76,10 @@ func (es *epochService) start(ctx context.Context) {
 		case <-roundTimer:
 			es.currentRound = es.currentRound + 1
 			es.state.SetCurrentRound(es.currentRound)
+			if !es.dkgExchange.dkgCrypt.finished() || es.dkgExchange.dkgCrypt.epoch < es.currentEpoch {
+				es.log.Warnf("Current epoch %d DKG unfinished and ignore the round %d", es.currentEpoch, es.currentRound)
+				continue
+			}
 			latestBlock, err := es.state.GetLatestBlock()
 			if err != nil {
 				es.log.Errorf("Can't get the latest block: err=%v", err)

@@ -18,8 +18,8 @@ import (
 )
 
 type dkgCrypt struct {
-	log             tplog.Logger
-	index           uint32
+	log tplog.Logger
+	//index           uint32
 	epoch           uint64
 	initPrivKey     kyber.Scalar
 	partPubKeysSync sync.RWMutex
@@ -34,7 +34,8 @@ type dkgCrypt struct {
 	dkGenerator     *dkg.DistKeyGenerator
 }
 
-func newDKGCrypt(log tplog.Logger, index uint32, epoch uint64, suite *bn256.Suite, initPrivKey string, initPartPubKeys []string, threshold int, nParticipant int) *dkgCrypt {
+func newDKGCrypt(log tplog.Logger /*index uint32, */, epoch uint64 /*suite *bn256.Suite, */, initPrivKey string, initPartPubKeys []string, threshold int, nParticipant int) *dkgCrypt {
+	suite := bn256.NewSuiteG2()
 	priKey, err := encoding.StringHexToScalar(suite, initPrivKey)
 	if err != nil {
 		log.Panicf("Invalid initPrivKey %s", initPrivKey)
@@ -54,8 +55,8 @@ func newDKGCrypt(log tplog.Logger, index uint32, epoch uint64, suite *bn256.Suit
 	}
 
 	dkgCrypt := &dkgCrypt{
-		log:             log,
-		index:           index,
+		log: log,
+		//index:           index,
 		epoch:           epoch,
 		initPrivKey:     priKey,
 		initPartPubKeys: initPartPubKeyP,
@@ -214,20 +215,29 @@ func (d *dkgCrypt) finished() bool {
 	return d.dkGenerator.Certified()
 }
 
-func (d *dkgCrypt) Sign(msg []byte) ([]byte, error) {
+func (d *dkgCrypt) Sign(msg []byte) ([]byte, []byte, error) {
 	if d.dkGenerator == nil {
 		err := errors.New("Current state invalid and can't sign msg")
 		d.log.Error(err.Error())
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	dkShare, err := d.dkGenerator.DistKeyShare()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return tbls.Sign(d.suite, dkShare.PriShare(), msg)
+	pubKeyPoint := dkShare.Public()
+	pubKey, err := pubKeyPoint.MarshalBinary()
+	if err != nil {
+		d.log.Errorf("Can't get pub key from point: %v", err)
+		return nil, nil, err
+	}
+
+	signedInfo, err := tbls.Sign(d.suite, dkShare.PriShare(), msg)
+
+	return signedInfo, pubKey, err
 }
 
 func (d *dkgCrypt) Verify(msg, sig []byte) error {

@@ -40,7 +40,7 @@ func createTestDKGExChange(log tplog.Logger, index int) *dkgExchange {
 	}
 	csStore := &consensusStoreMock{}
 
-	dkgEx := newDKGExchange(log, partPubKeyChMap[index], dealMsgChMap[index], dealRespMsgChMap[index], deliver, csStore)
+	dkgEx := newDKGExchange(log, partPubKeyChMap[index], dealMsgChMap[index], dealRespMsgChMap[index], initPrivKeys[index], initPubKeys, deliver, csStore)
 	dkgEx.index = index
 
 	return dkgEx
@@ -67,7 +67,7 @@ func createTestDKGNode(log tplog.Logger, nParticipant int) {
 		dkgEx := createTestDKGExChange(log, i)
 		dkgEx.startLoop(context.Background())
 
-		dkgCrypt := newDKGCrypt(log, uint32(i), 10, suite, initPrivKeys[i], initPubKeys, 2*nParticipant/3+1, nParticipant)
+		dkgCrypt := newDKGCrypt(log, 10 /*suite, */, initPrivKeys[i], initPubKeys, 2*nParticipant/3+1, nParticipant)
 		dkgEx.setDKGCrypt(dkgCrypt)
 
 		dkgExChangeMap[i] = dkgEx
@@ -91,7 +91,7 @@ func TestDkgExchangeLoop(t *testing.T) {
 			defer wg.Done()
 			for {
 				select {
-				case isFinished := <-dkgEx.finished:
+				case isFinished := <-dkgEx.finishedCh:
 					if isFinished {
 						log.Infof("%d DKG finished", index)
 						require.Equal(t, nParticipant, len(dkgEx.dkgCrypt.dkGenerator.QualifiedShares()))
@@ -99,7 +99,7 @@ func TestDkgExchangeLoop(t *testing.T) {
 						log.Infof("qualified shares: %v", dkgEx.dkgCrypt.dkGenerator.QualifiedShares())
 						log.Infof("QUAL: %v", dkgEx.dkgCrypt.dkGenerator.QUAL())
 
-						signDataT, err := dkgEx.dkgCrypt.Sign(msg)
+						signDataT, _, err := dkgEx.dkgCrypt.Sign(msg)
 						require.Equal(t, nil, err)
 						//err = dkgEx.dkgCrypt.Verify(msg, signDataT)
 						//require.Equal(t, nil, err)

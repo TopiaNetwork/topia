@@ -12,7 +12,7 @@ type consensusStore interface {
 
 	SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error
 
-	Commit() error
+	Commit(block *tptypes.Block) error
 
 	ClearBlockMiddleResult(round uint64) error
 

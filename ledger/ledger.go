@@ -27,7 +27,7 @@ type Ledger interface {
 
 	SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error
 
-	Commit() error
+	Commit(block *tptypes.Block) error
 
 	ClearBlockMiddleResult(round uint64) error
 
@@ -108,7 +108,7 @@ func (l *ledger) SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockR
 	panic("implement me")
 }
 
-func (l *ledger) Commit() error {
+func (l *ledger) Commit(block *tptypes.Block) error {
 	//TODO implement me
 	panic("implement me")
 }

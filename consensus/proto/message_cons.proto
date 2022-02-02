@@ -52,10 +52,10 @@ message CommitMessage {
   uint64 Epoch      = 3  [(gogoproto.jsontag) = "epoch"];
   uint64 Round      = 4  [(gogoproto.jsontag) = "round"];
   bytes Proof       = 5  [(gogoproto.jsontag) = "proof"];
-  bytes VoteHash    = 6  [(gogoproto.jsontag) = "voteHash"];
-  bytes BlockHash   = 7  [(gogoproto.jsontag) = "blockHash"];
-  bytes Signature   = 8  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey      = 9  [(gogoproto.jsontag) = "pubKey"];
+  bytes AggSign     = 6  [(gogoproto.jsontag) = "aggSign"];
+  bytes Signature   = 7  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey      = 8  [(gogoproto.jsontag) = "pubKey"];
+  bytes Block       = 9  [(gogoproto.jsontag) = "block"];
 }
 
 message ConsensusProof {

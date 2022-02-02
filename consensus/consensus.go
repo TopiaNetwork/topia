@@ -79,7 +79,7 @@ func NewConsensus(nodeID string,
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
 
 	epochService := newEpochService(log, roundCh, config.RoundDuration, config.EpochInterval, ledger, dkgEx)
-	csHandler := NewConsensusHandler(log, roundCh, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler)
+	csHandler := NewConsensusHandler(log, roundCh, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver)
 
 	dkgEx.addDKGBLSUpdater(deliver)
 	dkgEx.addDKGBLSUpdater(csHandler)

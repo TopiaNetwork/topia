@@ -21,7 +21,7 @@ func (cs *consensusStoreMock) SaveBlockMiddleResult(round uint64, blockResult *t
 	panic("implement me")
 }
 
-func (cs *consensusStoreMock) Commit() error {
+func (cs *consensusStoreMock) Commit(block *tptypes.Block) error {
 	//TODO implement me
 	panic("implement me")
 }

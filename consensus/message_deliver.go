@@ -25,6 +25,8 @@ type messageDeliverI interface {
 
 	deliverVoteMessage(ctx context.Context, msg *VoteMessage) error
 
+	deliverCommitMessage(ctx context.Context, msg *CommitMessage) error
+
 	deliverDKGPartPubKeyMessage(ctx context.Context, msg *DKGPartPubKeyMessage) error
 
 	deliverDKGDealMessage(ctx context.Context, pubKey string, msg *DKGDealMessage) error
@@ -150,6 +152,40 @@ func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessa
 	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send vote message to network failed: err=%v", err)
+	}
+
+	return err
+}
+
+func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitMessage) error {
+	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
+	if err != nil {
+		md.log.Errorf("DKG sign CommitMessage err: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		return err
+	}
+
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDs, err := md.csState.GetAllConsensusNodes()
+		if err != nil {
+			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			return err
+		}
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send propose message to network failed: err=%v", err)
 	}
 
 	return err

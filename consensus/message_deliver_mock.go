@@ -30,6 +30,11 @@ func (md *messageDeliverMock) deliverVoteMessage(ctx context.Context, msg *VoteM
 	panic("implement me")
 }
 
+func (md *messageDeliverMock) deliverCommitMessage(ctx context.Context, msg *CommitMessage) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (md *messageDeliverMock) deliverDKGPartPubKeyMessage(ctx context.Context, msg *DKGPartPubKeyMessage) error {
 	md.partPKSync.Lock()
 	defer md.partPKSync.Unlock()

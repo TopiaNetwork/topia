@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
-	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"os"
 	"os/signal"
@@ -57,7 +56,7 @@ func NewNode(endPoint string, seed string) *Node {
 	csConfig := &tpconfig.ConsensusConfiguration{
 		RoundDuration: time.Duration(500 * time.Millisecond),
 		EpochInterval: uint64(5 * 24 * 3600 * 1000 / 500),
-		CrptyType:     tpcrt.CryptServiceType_BLS12381,
+		CrptyType:     tpcrtypes.CryptType_BLS12381,
 	}
 
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed)

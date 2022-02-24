@@ -50,8 +50,10 @@ func NewNode(endPoint string, seed string) *Node {
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed)
 	ledger := ledger.NewLedger(chainRootPath, "topia", mainLog, backend.BackendType_Badger)
 	cons := consensus.NewConsensus(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, ledger)
-	txPool := transactionpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
-	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
+	txPool := transactionpool.NewTransactionPool(transactionpool.DefaultTransactionPoolConfig,
+	tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
+
+		syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 
 	return &Node{
 		log:       mainLog,
@@ -62,7 +64,7 @@ func NewNode(endPoint string, seed string) *Node {
 		network:   network,
 		ledger:    ledger,
 		consensus: cons,
-		txPool:    txPool,
+		txPool:    *txPool,
 		syncer:    syncer,
 	}
 }

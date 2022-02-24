@@ -2,18 +2,19 @@ package transactionpool
 
 import (
 	"github.com/AsynkronIT/protoactor-go/actor"
-
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
 
+
+
 type TransactionPoolActor struct {
 	log    tplog.Logger
 	pid    *actor.PID
-	txPool *transactionPool
+	txPool *TransactionPool
 }
 
-func CreateTransactionPoolActor(level tplogcmm.LogLevel, log tplog.Logger, sysActor *actor.ActorSystem, txPool *transactionPool) (*actor.PID, error) {
+func CreateTransactionPoolActor(level tplogcmm.LogLevel, log tplog.Logger, sysActor *actor.ActorSystem, txPool *TransactionPool) (*actor.PID, error) {
 	logTxPoolActor := tplog.CreateModuleLogger(level, "TransactionPoolActor", log)
 	tpActor := &TransactionPoolActor{
 		log: logTxPoolActor,

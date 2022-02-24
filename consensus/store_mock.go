@@ -3,6 +3,7 @@ package consensus
 import (
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
+	"github.com/TopiaNetwork/topia/transaction"
 )
 
 type consensusStoreMock struct{}
@@ -16,7 +17,7 @@ func (cs *consensusStoreMock) GetLatestBlock() (*tptypes.Block, error) {
 	panic("implement me")
 }
 
-func (cs *consensusStoreMock) SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error {
+func (cs *consensusStoreMock) SaveBlockMiddleResult(round uint64, blockResult *transaction.BlockResultStoreInfo) error {
 	//TODO implement me
 	panic("implement me")
 }

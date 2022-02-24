@@ -5,7 +5,6 @@ package transaction
 
 import (
 	fmt "fmt"
-	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/golang/protobuf/proto"
 	io "io"
 	math "math"
@@ -74,6 +73,7 @@ func (*Transaction) Descriptor() ([]byte, []int) {
 func (m *Transaction) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
+
 func (m *Transaction) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	b = b[:cap(b)]
 	n, err := m.MarshalToSizedBuffer(b)
@@ -82,12 +82,15 @@ func (m *Transaction) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 	}
 	return b[:n], nil
 }
+
 func (m *Transaction) XXX_Merge(src proto.Message) {
 	xxx_messageInfo_Transaction.Merge(m, src)
 }
+
 func (m *Transaction) XXX_Size() int {
 	return m.Size()
 }
+
 func (m *Transaction) XXX_DiscardUnknown() {
 	xxx_messageInfo_Transaction.DiscardUnknown(m)
 }
@@ -170,6 +173,28 @@ func (m *Transaction) GetOptions() uint32 {
 	}
 	return 0
 }
+
+
+
+// TxDifference returns a new set which is the difference between a and b.
+func TxDifference(a, b []Transaction) []Transaction {
+	keep := make([]Transaction, 0, len(a))
+	remove := make(map[TxID]struct{})
+	for _, tx := range b {
+		if txId,err := tx.TxID();err != nil {
+			remove[txId] = struct{}{}
+		}
+	}
+	for _, tx := range a {
+		if txId,err := tx.TxID();err !=nil{
+			if _, ok := remove[txId]; !ok {
+				keep = append(keep, tx)
+			}
+		}
+	}
+	return keep
+}
+
 
 type TransactionResult struct {
 	TxHash               []byte                         `protobuf:"bytes,1,opt,name=TxHash,proto3" json:"txHash"`

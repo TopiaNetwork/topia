@@ -24,7 +24,7 @@ type Ledger interface {
 
 	GetLatestBlock() (*tptypes.Block, error)
 
-	SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error
+	SaveBlockMiddleResult(round uint64, blockResult *transaction.BlockResultStoreInfo) error
 
 	Commit() error
 
@@ -91,7 +91,7 @@ func (l *ledger) GetLatestBlock() (*tptypes.Block, error) {
 	panic("implement me")
 }
 
-func (l *ledger) SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error {
+func (l *ledger) SaveBlockMiddleResult(round uint64, blockResult *transaction.BlockResultStoreInfo) error {
 	//TODO implement me
 	panic("implement me")
 }

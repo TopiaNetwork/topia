@@ -140,7 +140,7 @@ type TransactionPool struct {
 
 	locals       		 *accountSet
 	txStored       		 *txStored
-	signer        		 transaction.BaseSigner  //no achieved
+	Signer        		 transaction.BaseSigner  //no achieved
 	mu           		 sync.RWMutex
 	wg            		 sync.WaitGroup // tracks loop, scheduleReorgLoop
 
@@ -171,7 +171,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 		config:           conf,
 		log:              poolLog,
 		level:            level,
-		signer:           transaction.MakeSigner(),//no achieved for signer!!!!!!!!
+		Signer:           transaction.MakeSigner(),//no achieved for signer!!!!!!!!
 
 		pending:          make(map[account.Address]*txList),
 		queue:            make(map[account.Address]*txList),
@@ -189,7 +189,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 		marshaler:        codec.CreateMarshaler(codecType),
 		hasher:           tpcmm.NewBlake2bHasher(0),
 	}
-	pool.locals =newAccountSet(pool.signer)
+	pool.locals =newAccountSet(pool.Signer)
 	for _, addr := range conf.Locals {
 		//log.Info("Setting new local account", "address", addr)
 		pool.locals.add(addr)
@@ -327,11 +327,7 @@ func (pool *TransactionPool) loop() {
 	}
 }
 
-// CommitTxsForPending  : Block packaged transactions for pending
-func (pool *TransactionPool) CommitTxsForPending() (txs map[account.Address][]*transaction.Transaction)  {
-	return pool.Pending()
-}
-
+// RemoveTxs : after commitTxs you need removeTxs from txPool
 func (pool *TransactionPool) RemoveTxs(txl map[account.Address][]*transaction.Transaction) {
 	for _,txs := range txl {
 		for _,tx := range txs{
@@ -411,7 +407,7 @@ func (pool *TransactionPool) addTxs(txs []*transaction.Transaction,local,sync bo
 				errs[i] = ErrAlreadyKnown
 				continue
 			}
-			_,er := transaction.Sender(pool.signer,tx)
+			_,er := transaction.Sender(pool.Signer,tx)
 			if er != nil{
 				errs[i] = ErrInvalidSender
 				continue
@@ -447,7 +443,7 @@ func (pool *TransactionPool) addTxs(txs []*transaction.Transaction,local,sync bo
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
 func (pool *TransactionPool) addTxsLocked(txs []*transaction.Transaction, local bool) ([]error, *accountSet) {
-	dirty := newAccountSet(pool.signer)
+	dirty := newAccountSet(pool.Signer)
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
 		replaced, err := pool.add(tx, local)
@@ -503,7 +499,7 @@ func (pool *TransactionPool) Start(sysActor *actor.ActorSystem, network network.
 func (pool *TransactionPool) RemoveTxByKey(key transaction.TxID,outofbound bool) {
 	tx := pool.allTxsForLook.Get(key)
 	if tx == nil {return }
-	addr, _ := transaction.Sender(pool.signer,tx)
+	addr, _ := transaction.Sender(pool.Signer,tx)
 	// Remove it from the list of known transactions
 	pool.allTxsForLook.Remove(key)
 	if outofbound {
@@ -591,7 +587,7 @@ func (pool *TransactionPool) scheduleReorgLoop() {
 		case tx := <-pool.chanQueueTxEvent:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
 			// request one later if they want the events sent.
-			addr, _ := transaction.Sender(pool.signer, tx)
+			addr, _ := transaction.Sender(pool.Signer, tx)
 			if _, ok := queuedEvents[addr]; !ok {
 				queuedEvents[addr] = newTxSortedMap()
 			}
@@ -667,7 +663,7 @@ func (pool *TransactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 
 	// Notify subsystems for newly added transactions
 	for _, tx := range promoted {
-		addr, _ := transaction.Sender(pool.signer, tx)
+		addr, _ := transaction.Sender(pool.Signer, tx)
 		if _, ok := events[addr]; !ok {
 			events[addr] = newTxSortedMap()
 		}
@@ -714,7 +710,7 @@ func (pool *TransactionPool) Get(key transaction.TxID) *transaction.Transaction 
 // Note, this method assumes the pool lock is held!
 func (pool *TransactionPool) queueAddTx(key transaction.TxID, tx *transaction.Transaction, local bool, addAll bool) (bool, error) {
 	// Try to insert the transaction into the future queue
-	from, _ := transaction.Sender(pool.signer, tx) // already validated
+	from, _ := transaction.Sender(pool.Signer, tx) // already validated
 	if pool.queue[from] == nil {
 		pool.queue[from] = newTxList(false)
 	}
@@ -864,7 +860,7 @@ func (pool *TransactionPool) add(tx *transaction.Transaction, local bool) (repla
 		}
 	}
 	// Try to replace an existing transaction in the pending pool
-	from, _ := transaction.Sender(pool.signer, tx) // already validated
+	from, _ := transaction.Sender(pool.Signer, tx) // already validated
 
 	pool.queueTxEvent(tx)   //send new tx to chan queueTxEventChan
 

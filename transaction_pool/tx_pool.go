@@ -226,6 +226,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 		}
 
 	}
+
 	//Subscribe events from blockchain
 	pool.chainHeadSub = pool.config.chain.SubChainHeadEvent(pool.chanChainHead)
 
@@ -238,7 +239,6 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 // loop is the transaction pool's main event loop, waiting for and reacting to
 // outside blockchain events as well as for various reporting and transaction
 // eviction events.
-
 func (pool *TransactionPool) loop() {
 	defer pool.wg.Done()
 
@@ -326,6 +326,43 @@ func (pool *TransactionPool) loop() {
 		}
 	}
 }
+
+// CommitTxsForPending  : Block packaged transactions for pending
+func (pool *TransactionPool) CommitTxsForPending() (txs map[account.Address][]*transaction.Transaction)  {
+	return pool.Pending()
+}
+
+func (pool *TransactionPool) RemoveTxs(txl map[account.Address][]*transaction.Transaction) {
+	for _,txs := range txl {
+		for _,tx := range txs{
+			txId,_ := tx.TxID()
+			pool.RemoveTxByKey(txId,true)
+		}
+	}
+}
+
+
+
+func (pool *TransactionPool) Pending() map[account.Address][]*transaction.Transaction {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pending := make(map[account.Address][]*transaction.Transaction)
+	for addr, list := range pool.pending {
+		txs := list.Flatten()
+		if len(txs) > 0 {
+			pending[addr] = txs
+		}
+	}
+	return pending
+}
+
+func (pool *TransactionPool)Locals() []account.Address {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	return pool.locals.flatten()
+}
+
 
 func (pool *TransactionPool) loadconfig()(conf *TransactionPoolConfig,error error) {
 	data,err := ioutil.ReadFile(pool.config.PathConfig)
@@ -1032,7 +1069,6 @@ func (pool *TransactionPool) truncatePending() {
 						log.Trace("Removed fairness-exceeding pending transaction", "txId", txId)
 					}
 					pool.sortedByPriced.Removed(len(caps))
-
 					pending--
 				}
 			}
@@ -1215,8 +1251,6 @@ func(pool *TransactionPool)reset(oldHead,newHead *types.BlockHead) {
 	log.Debug("ReInjecting stale transactions", "count", len(reInject))
 
 }
-//内存太多（通过控制交易池容量是不是同样达到目的？），定时器形式，重制交易池。api要求暴露到命令行。
-
 
 
 // demoteUnexecutables removes invalid and processed transactions from the pools

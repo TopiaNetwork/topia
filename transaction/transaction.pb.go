@@ -9,6 +9,7 @@ import (
 	io "io"
 	math "math"
 	math_bits "math/bits"
+	"time"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -59,11 +60,14 @@ type Transaction struct {
 	Data                 []byte   `protobuf:"bytes,9,opt,name=Data,proto3" json:"data,omitempty"`
 	Signature            []byte   `protobuf:"bytes,10,opt,name=Signature,proto3" json:"signature,omitempty"`
 	Options              uint32   `protobuf:"varint,11,opt,name=Options,proto3" json:"options,omitempty"`
+	Time				 time.Time 					// Time first seen locally (spam avoidance)
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
-
+func (m *Transaction) setTime (){
+	m.Time = time.Now()
+}
 func (m *Transaction) Reset()         { *m = Transaction{} }
 func (m *Transaction) String() string { return proto.CompactTextString(m) }
 func (*Transaction) ProtoMessage()    {}

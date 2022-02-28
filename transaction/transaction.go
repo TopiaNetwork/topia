@@ -9,8 +9,8 @@ import (
 	//"github.com/TopiaNetwork/topia/common/types"
 )
 
-// TxID is a hash value of a Transaction.
-type TxID string
+// TxKey is a hash value of a Transaction.
+type TxKey string
 
 type TransactionType byte
 
@@ -31,7 +31,7 @@ func (m *Transaction) GetType() TransactionType {
 	panic("implement me")
 }
 
-func (m *Transaction) TxID() (TxID, error) {
+func (m *Transaction) TxID() (TxKey, error) {
 	hasher := tpcmm.NewBlake2bHasher(0)
 	txBytes, err := m.Marshal()
 	if err != nil {
@@ -40,7 +40,7 @@ func (m *Transaction) TxID() (TxID, error) {
 
 	hashBytes := hasher.Compute(string(txBytes))
 
-	return TxID(hex.EncodeToString(hashBytes)), nil
+	return TxKey(hex.EncodeToString(hashBytes)), nil
 }
 
 

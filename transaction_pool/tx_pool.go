@@ -40,6 +40,26 @@ var(
 
 )
 
+
+type TransactionPool interface {
+	AddTx(tx transaction.Transaction) error
+
+	RemoveTxByKey(key transaction.TxKey) error
+
+	Reset() error
+
+	UpdateTx(tx transaction.Transaction) error
+
+	Pending() ([]transaction.Transaction, error)
+
+	Size() int
+
+	Start(sysActor *actor.ActorSystem, network network.Network) error
+	CommitTransactions(map[account.Address][]*transaction.Transaction, int)
+	CommitTxsForPending(map[account.Address][]*transaction.Transaction) map[account.Address][]*transaction.Transaction
+	CommitTxsByPriceAndNonce(map[account.Address][]*transaction.Transaction) map[account.Address][]*transaction.Transaction
+}
+
 type TransactionPoolConfig struct {
 	chain          			blockChain
 	Locals                  []account.Address
@@ -126,7 +146,7 @@ type blockChain interface {
 	SubChainHeadEvent(ch chan<- transaction.ChainHeadEvent) Subscription
 }
 
-type TransactionPool struct {
+type transactionPool struct {
 	config				 TransactionPoolConfig
 	txFeed               Feed
 	chainHeadSub  		 Subscription
@@ -168,10 +188,10 @@ type TransactionPool struct {
 type txPoolResetRequest struct {
 	oldHead, newHead *types.BlockHead
 }
-func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *TransactionPool {
+func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 	conf = (&conf).check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
-	var pool = &TransactionPool{
+	var pool = &transactionPool{
 		config:           conf,
 		log:              poolLog,
 		level:            level,
@@ -240,10 +260,14 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	return pool
 }
 
+func (pool *transactionPool) processTx(msg *TxMessage) error {
+	return pool.handler.ProcessTx(msg)
+}
+
 // loop is the transaction pool's main event loop, waiting for and reacting to
 // outside blockchain events as well as for various reporting and transaction
 // eviction events.
-func (pool *TransactionPool) loop() {
+func (pool *transactionPool) loop() {
 	defer pool.wg.Done()
 
 	var (
@@ -332,7 +356,7 @@ func (pool *TransactionPool) loop() {
 }
 
 // RemoveTxs : after commitTxs you need removeTxs from txPool
-func (pool *TransactionPool) RemoveTxs(txl map[account.Address][]*transaction.Transaction) {
+func (pool *transactionPool) RemoveTxs(txl map[account.Address][]*transaction.Transaction) {
 	for _,txs := range txl {
 		for _,tx := range txs{
 			txId,_ := tx.TxID()
@@ -343,7 +367,7 @@ func (pool *TransactionPool) RemoveTxs(txl map[account.Address][]*transaction.Tr
 
 
 
-func (pool *TransactionPool) Pending() map[account.Address][]*transaction.Transaction {
+func (pool *transactionPool) Pending() map[account.Address][]*transaction.Transaction {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -357,14 +381,14 @@ func (pool *TransactionPool) Pending() map[account.Address][]*transaction.Transa
 	return pending
 }
 
-func (pool *TransactionPool)Locals() []account.Address {
+func (pool *transactionPool)Locals() []account.Address {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	return pool.locals.flatten()
 }
 
 
-func (pool *TransactionPool) Loadconfig()(conf *TransactionPoolConfig,error error) {
+func (pool *transactionPool) Loadconfig()(conf *TransactionPoolConfig,error error) {
 	data,err := ioutil.ReadFile(pool.config.PathConfig)
 	if err != nil {return nil,err}
 	config := &conf
@@ -375,7 +399,7 @@ func (pool *TransactionPool) Loadconfig()(conf *TransactionPoolConfig,error erro
 	return *config,nil
 }
 
-func (pool *TransactionPool) UpdateTxPoolConfig( conf TransactionPoolConfig){
+func (pool *transactionPool) UpdateTxPoolConfig( conf TransactionPoolConfig){
 	conf = (conf).check()
 	pool.config = conf
 	return
@@ -383,7 +407,7 @@ func (pool *TransactionPool) UpdateTxPoolConfig( conf TransactionPoolConfig){
 
 
 
-func (pool *TransactionPool) SaveConfig() error {
+func (pool *transactionPool) SaveConfig() error {
 	fmt.Printf("%v",pool.config)
 	conf,err := json.Marshal(pool.config)
 	if err!= nil {
@@ -398,17 +422,35 @@ func (pool *TransactionPool) SaveConfig() error {
 }
 
 
-////已经又txFeed，通过发布/订阅 并发模式广播出去。
-func (pool *TransactionPool) dispatch(context actor.Context, msg []byte) {
-	//dispatch 收到交易，定期（）广播出去，local交易优先广播，优先广播交易池中时间最长的。
-	//
+//已经有txFeed，通过发布/订阅 并发模式广播出去。
+//dispatch 收到交易，定期（）广播出去，local交易优先广播，优先广播交易池中时间最长的。
+func (pool *transactionPool) dispatch(context actor.Context, data []byte) {
+	var txPoolMsg TxPoolMessage
+	err := pool.marshaler.Unmarshal(data, &txPoolMsg)
+	if err != nil {
+		pool.log.Errorf("TransactionPool receive invalid data %v", data)
+		return
+	}
 
-	return
+	switch txPoolMsg.MsgType {
+	case TxPoolMessage_Tx:
+		var msg TxMessage
+		err := pool.marshaler.Unmarshal(txPoolMsg.Data, &msg)
+		if err != nil {
+			pool.log.Errorf("TransactionPool unmarshal msg %d err %v", txPoolMsg.MsgType, err)
+			return
+		}
+		pool.processTx(&msg)
+	default:
+		pool.log.Errorf("TransactionPool receive invalid msg %d", txPoolMsg.MsgType)
+		return
+	}
 }
 
 
 
-func (pool *TransactionPool) addTxs(txs []*transaction.Transaction,local,sync bool) []error {
+
+func (pool *transactionPool) addTxs(txs []*transaction.Transaction,local,sync bool) []error {
 	var (
 		errs = make([]error,len(txs))
 		news = make([]*transaction.Transaction,0,len(txs))
@@ -454,7 +496,7 @@ func (pool *TransactionPool) addTxs(txs []*transaction.Transaction,local,sync bo
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
-func (pool *TransactionPool) addTxsLocked(txs []*transaction.Transaction, local bool) ([]error, *accountSet) {
+func (pool *transactionPool) addTxsLocked(txs []*transaction.Transaction, local bool) ([]error, *accountSet) {
 	dirty := newAccountSet(pool.Signer)
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
@@ -475,13 +517,13 @@ func (pool *TransactionPool) addTxsLocked(txs []*transaction.Transaction, local 
 //
 // This method is used to add transactions from the RPC API and performs synchronous pool
 // reorganization and event propagation.
-func (pool *TransactionPool) AddLocals(txs []*transaction.Transaction) []error {
+func (pool *transactionPool) AddLocals(txs []*transaction.Transaction) []error {
 	return pool.addTxs(txs, !pool.config.NoLocalFile, true)
 }
 
 // AddLocal enqueues a single local transaction into the pool if it is valid. This is
 // a convenience wrapper aroundd AddLocals.
-func (pool *TransactionPool) AddLocal(tx *transaction.Transaction) error {
+func (pool *transactionPool) AddLocal(tx *transaction.Transaction) error {
 	errs := pool.AddLocals([]*transaction.Transaction{tx})
 	return errs[0]
 }
@@ -491,12 +533,12 @@ func (pool *TransactionPool) AddLocal(tx *transaction.Transaction) error {
 //
 // This method is used to add transactions from the p2p network and does not wait for pool
 // reorganization and internal event propagation.
-func (pool *TransactionPool) AddRemotes(txs []*transaction.Transaction) []error {
+func (pool *transactionPool) AddRemotes(txs []*transaction.Transaction) []error {
 	return pool.addTxs(txs, false, false)
 }
 
 //Start chinese:网络收到消息，把消息转发给交易池，转换数据结构。事件触发模型。
-func (pool *TransactionPool) Start(sysActor *actor.ActorSystem, network network.Network) error {
+func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network network.Network) error {
 	actorPID, err := CreateTransactionPoolActor(pool.level, pool.log, sysActor, pool)
 	if err != nil {
 //		pool.log.Panicf("CreateTransactionPoolActor error: %v", err)
@@ -508,7 +550,7 @@ func (pool *TransactionPool) Start(sysActor *actor.ActorSystem, network network.
 
 // RemoveTxByKey removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
-func (pool *TransactionPool) RemoveTxByKey(key transaction.TxID,outofbound bool) {
+func (pool *transactionPool) RemoveTxByKey(key transaction.TxKey,outofbound bool) {
 	tx := pool.allTxsForLook.Get(key)
 	if tx == nil {return }
 	addr, _ := transaction.Sender(pool.Signer,tx)
@@ -550,7 +592,7 @@ func (pool *TransactionPool) RemoveTxByKey(key transaction.TxID,outofbound bool)
 // scheduleReorgLoop schedules runs of reset and promoteExecutables. Code above should not
 // call those methods directly, but request them being run using requestReset and
 // requestPromoteExecutables instead.
-func (pool *TransactionPool) scheduleReorgLoop() {
+func (pool *transactionPool) scheduleReorgLoop() {
 	defer pool.wg.Done()
 
 	var (
@@ -620,7 +662,7 @@ func (pool *TransactionPool) scheduleReorgLoop() {
 }
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
-func (pool *TransactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet, events map[account.Address]*txSortedMap) {
+func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet, events map[account.Address]*txSortedMap) {
 	defer close(done)
 	var promoteAddrs []account.Address
 	if dirtyAccounts != nil && reset == nil {
@@ -694,7 +736,7 @@ func (pool *TransactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 
 // requestReset requests a pool reset to the new head block.
 // The returned channel is closed when the reset has occurred.
-func (pool *TransactionPool) requestReset(oldHead *types.BlockHead, newHead *types.BlockHead) chan struct{} {
+func (pool *transactionPool) requestReset(oldHead *types.BlockHead, newHead *types.BlockHead) chan struct{} {
 	select {
 	case pool.chanReqReset <- &txPoolResetRequest{oldHead, newHead}:
 		return <-pool.chanReorgDone
@@ -704,23 +746,23 @@ func (pool *TransactionPool) requestReset(oldHead *types.BlockHead, newHead *typ
 }
 
 
-func (pool *TransactionPool) Cost(tx *transaction.Transaction) *big.Int {
+func (pool *transactionPool) Cost(tx *transaction.Transaction) *big.Int {
 	total := pool.query.EstimateTxCost(tx)
 	return total
 }
-func (pool *TransactionPool) Gas(tx *transaction.Transaction) uint64 {
+func (pool *transactionPool) Gas(tx *transaction.Transaction) uint64 {
 	total := pool.query.EstimateTxGas(tx)
 	return total
 }
 
 
-func (pool *TransactionPool) Get(key transaction.TxID) *transaction.Transaction {
+func (pool *transactionPool) Get(key transaction.TxKey) *transaction.Transaction {
 	return pool.allTxsForLook.Get(key)
 }
 
 // queueAddTx inserts a new transaction into the non-executable transaction queue.
 // Note, this method assumes the pool lock is held!
-func (pool *TransactionPool) queueAddTx(key transaction.TxID, tx *transaction.Transaction, local bool, addAll bool) (bool, error) {
+func (pool *transactionPool) queueAddTx(key transaction.TxKey, tx *transaction.Transaction, local bool, addAll bool) (bool, error) {
 	// Try to insert the transaction into the future queue
 	from, _ := transaction.Sender(pool.Signer, tx) // already validated
 	if pool.queue[from] == nil {
@@ -757,7 +799,7 @@ func (pool *TransactionPool) queueAddTx(key transaction.TxID, tx *transaction.Tr
 // local retrieves all currently known local transactions, grouped by origin
 // account and sorted by nonce. The returned transaction set is a copy and can be
 // freely modified by calling code.
-func (pool *TransactionPool) local() map[account.Address][]*transaction.Transaction {
+func (pool *transactionPool) local() map[account.Address][]*transaction.Transaction {
 	txs := make(map[account.Address][]*transaction.Transaction)
 	for addr := range pool.locals.accounts {
 		if pending := pool.pending[addr]; pending != nil {
@@ -772,7 +814,7 @@ func (pool *TransactionPool) local() map[account.Address][]*transaction.Transact
 // local retrieves all currently known local transactions, grouped by origin
 // account and sorted by nonce. The returned transaction set is a copy and can be
 // freely modified by calling code.
-func (pool *TransactionPool) remote() map[account.Address][]*transaction.Transaction {
+func (pool *transactionPool) remote() map[account.Address][]*transaction.Transaction {
 	txs := make(map[account.Address][]*transaction.Transaction)
 	for addr := range pool.locals.accounts {
 		if pending := pool.pending[addr]; pending == nil {
@@ -785,7 +827,7 @@ func (pool *TransactionPool) remote() map[account.Address][]*transaction.Transac
 	return txs
 }
 
-func (pool *TransactionPool) ValidateTx(tx *transaction.Transaction,local bool) error {
+func (pool *transactionPool) ValidateTx(tx *transaction.Transaction,local bool) error {
 	from := account.Address(string(tx.FromAddr[:]))
 
 	if uint64(tx.Size()) > txMaxSize {
@@ -816,7 +858,7 @@ func (pool *TransactionPool) ValidateTx(tx *transaction.Transaction,local bool) 
 
 // stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
-func (pool *TransactionPool) stats() (int, int) {
+func (pool *transactionPool) stats() (int, int) {
 	pending := 0
 	for _, list := range pool.pending {
 		pending += list.Len()
@@ -835,7 +877,7 @@ func (pool *TransactionPool) stats() (int, int) {
 // If a newly added transaction is marked as local, its sending account will be
 // be added to the allowlist, preventing any associated transaction from being dropped
 // out of the pool due to pricing constraints.
-func (pool *TransactionPool) add(tx *transaction.Transaction, local bool) (replaced bool, err error) {
+func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (replaced bool, err error) {
 	// If the transaction is already known, discard it
 
 	txId,_ := tx.TxID()
@@ -910,12 +952,12 @@ func (pool *TransactionPool) add(tx *transaction.Transaction, local bool) (repla
 
 
 
-func (pool *TransactionPool)GetAccForTxID(key transaction.TxID) account.Address{
+func (pool *transactionPool)GetAccForTxID(key transaction.TxKey) account.Address{
 	return account.Address(string(pool.allTxsForLook.Get(key).FromAddr[:]))
 }
 // storeTx adds the specified transaction to the local disk  if it is
 // deemed to have been sent from a local account.
-func (pool *TransactionPool) storeTx(from account.Address, tx *transaction.Transaction) {
+func (pool *transactionPool) storeTx(from account.Address, tx *transaction.Transaction) {
 	if pool.txStored == nil || !pool.locals.contains(from) {
 		return
 	}
@@ -929,7 +971,7 @@ func (pool *TransactionPool) storeTx(from account.Address, tx *transaction.Trans
 // and returns whether it was inserted or an older was better.
 //
 // Note, this method assumes the pool lock is held!
-func (pool *TransactionPool) promoteTx(addr account.Address, txId transaction.TxID, tx *transaction.Transaction) bool {
+func (pool *transactionPool) promoteTx(addr account.Address, txId transaction.TxKey, tx *transaction.Transaction) bool {
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newTxList(true)
@@ -954,12 +996,12 @@ func (pool *TransactionPool) promoteTx(addr account.Address, txId transaction.Tx
 
 // SubscribeNewTxsEvent registers a subscription of NewTxsEvent and
 // starts sending event to the given channel.
-func (pool *TransactionPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) Subscription {
+func (pool *transactionPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 // requestPromoteExecutables requests transaction promotion checks for the given addresses.
 // The returned channel is closed when the promotion checks have occurred.
-func (pool *TransactionPool) requestPromoteExecutables(set *accountSet) chan struct{} {
+func (pool *transactionPool) requestPromoteExecutables(set *accountSet) chan struct{} {
 	select {
 	case pool.chanReqPromote <- set:
 		return <-pool.chanReorgDone
@@ -969,7 +1011,7 @@ func (pool *TransactionPool) requestPromoteExecutables(set *accountSet) chan str
 }
 
 // queueTxEvent enqueues a transaction event to be sent in the next reorg run.
-func (pool *TransactionPool) queueTxEvent(tx *transaction.Transaction) {
+func (pool *transactionPool) queueTxEvent(tx *transaction.Transaction) {
 	select {
 	case pool.chanQueueTxEvent <- tx:
 	case <-pool.chanReorgShutdown:
@@ -980,7 +1022,7 @@ func (pool *TransactionPool) queueTxEvent(tx *transaction.Transaction) {
 // promoteExecutables moves transactions that have become processable from the
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
-func (pool *TransactionPool) promoteExecutables(accounts []account.Address) []*transaction.Transaction {
+func (pool *transactionPool) promoteExecutables(accounts []account.Address) []*transaction.Transaction {
 	// Track the promoted transactions to broadcast them at once
 	var promoted []*transaction.Transaction
 
@@ -1047,7 +1089,7 @@ func (pool *TransactionPool) promoteExecutables(accounts []account.Address) []*t
 // truncatePending removes transactions from the pending queue if the pool is above the
 // pending limit. The algorithm tries to reduce transaction counts by an approximately
 // equal number for all for accounts with many pending transactions.
-func (pool *TransactionPool) truncatePending() {
+func (pool *transactionPool) truncatePending() {
 	pending := uint64(0)
 	for _, list := range pool.pending {
 		pending += uint64(list.Len())
@@ -1123,7 +1165,7 @@ func (pool *TransactionPool) truncatePending() {
 }
 
 // truncateQueue drops the oldes transactions in the queue if the pool is above the global queue limit.
-func (pool *TransactionPool) truncateQueue() {
+func (pool *transactionPool) truncateQueue() {
 	queued := uint64(0)
 	for _, list := range pool.queue {
 		queued += uint64(list.Len())
@@ -1168,7 +1210,7 @@ func (pool *TransactionPool) truncateQueue() {
 }
 
 
-func(pool *TransactionPool)reset(oldHead,newHead *types.BlockHead) {
+func(pool *transactionPool)reset(oldHead,newHead *types.BlockHead) {
 	//If the old header and the new header do not meet certain conditions,
 	//part of the transaction needs to be injected back into the transaction pool
 	var reInject []transaction.Transaction
@@ -1283,7 +1325,7 @@ func(pool *TransactionPool)reset(oldHead,newHead *types.BlockHead) {
 // Note: transactions are not marked as removed in the priced list because re-heaping
 // is always explicitly triggered by SetBaseFee and it would be unnecessary and wasteful
 // to trigger a re-heap is this function
-func (pool *TransactionPool) demoteUnexecutables() {
+func (pool *transactionPool) demoteUnexecutables() {
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
 		nonce := pool.curState.GetNonce(addr)
@@ -1329,6 +1371,42 @@ func (pool *TransactionPool) demoteUnexecutables() {
 		}
 	}
 }
+
+
+func (pool *transactionPool)TxsPackaged(txs map[account.Address][]*transaction.Transaction,txsType int){
+	switch txsType {
+	case 0:
+		pool.CommitTxsForPending(txs)
+		pool.RemoveTxs(txs)
+	case 1:
+		pool.CommitTxsByPriceAndNonce(txs)
+		pool.RemoveTxs(txs)
+	}
+}
+
+
+// CommitTxsForPending  : Block packaged transactions for pending
+func (pool *transactionPool) CommitTxsForPending(txs map[account.Address][]*transaction.Transaction) map[account.Address][]*transaction.Transaction {
+
+	return txs
+}
+// CommitTxsByPriceAndNonce  : Block packaged transactions sorted by price and nonce
+func (pool *transactionPool) CommitTxsByPriceAndNonce(txs map[account.Address][]*transaction.Transaction) map[account.Address][]*transaction.Transaction{
+
+	txset := transaction.NewTxsByPriceAndNonce(pool.Signer,txs)
+	txs = make(map[account.Address][]*transaction.Transaction,0)
+	for {
+		tx := txset.Peek()
+		if tx == nil {
+			break
+		}
+		from,_ := transaction.Sender(pool.Signer,tx)
+		txs[from] = append(txs[from],tx)
+	}
+	return txs
+}
+
+
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
 type addressByHeartbeat struct {
@@ -1415,10 +1493,10 @@ func (as *accountSet) flatten() []account.Address {
 type txLookup struct{
 	slots       int
 	lock        sync.RWMutex
-	locals      map[transaction.TxID]*transaction.Transaction
-	remotes     map[transaction.TxID]*transaction.Transaction
+	locals      map[transaction.TxKey]*transaction.Transaction
+	remotes     map[transaction.TxKey]*transaction.Transaction
 }
-func (t *txLookup) Range(f func(key transaction.TxID, tx *transaction.Transaction, local bool) bool, local bool, remote bool) {
+func (t *txLookup) Range(f func(key transaction.TxKey, tx *transaction.Transaction, local bool) bool, local bool, remote bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -1440,11 +1518,11 @@ func (t *txLookup) Range(f func(key transaction.TxID, tx *transaction.Transactio
 
 func newTxLookup() *txLookup {
 	return &txLookup{
-		locals:  make(map[transaction.TxID]*transaction.Transaction),
-		remotes: make(map[transaction.TxID]*transaction.Transaction),
+		locals:  make(map[transaction.TxKey]*transaction.Transaction),
+		remotes: make(map[transaction.TxKey]*transaction.Transaction),
 	}
 }
-func(t *txLookup)Get(key transaction.TxID) *transaction.Transaction{
+func(t *txLookup)Get(key transaction.TxKey) *transaction.Transaction{
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	if tx := t.locals[key];tx != nil {
@@ -1454,7 +1532,7 @@ func(t *txLookup)Get(key transaction.TxID) *transaction.Transaction{
 }
 
 // GetLocal returns a transaction if it exists in the lookup, or nil if not found.
-func (t *txLookup) GetLocal(key transaction.TxID) *transaction.Transaction {
+func (t *txLookup) GetLocal(key transaction.TxKey) *transaction.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -1462,7 +1540,7 @@ func (t *txLookup) GetLocal(key transaction.TxID) *transaction.Transaction {
 }
 
 // GetRemote returns a transaction if it exists in the lookup, or nil if not found.
-func (t *txLookup) GetRemote(key transaction.TxID) *transaction.Transaction {
+func (t *txLookup) GetRemote(key transaction.TxKey) *transaction.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -1511,7 +1589,7 @@ func(t *txLookup) Add(tx *transaction.Transaction,local bool){
 		}
 	}
 }
-func(t *txLookup)Remove(key transaction.TxID){
+func(t *txLookup)Remove(key transaction.TxKey){
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	tx,ok := t.locals[key]

@@ -11,10 +11,10 @@ import (
 type TransactionPoolActor struct {
 	log    tplog.Logger
 	pid    *actor.PID
-	txPool *TransactionPool
+	txPool *transactionPool
 }
 
-func CreateTransactionPoolActor(level tplogcmm.LogLevel, log tplog.Logger, sysActor *actor.ActorSystem, txPool *TransactionPool) (*actor.PID, error) {
+func CreateTransactionPoolActor(level tplogcmm.LogLevel, log tplog.Logger, sysActor *actor.ActorSystem, txPool *transactionPool) (*actor.PID, error) {
 	logTxPoolActor := tplog.CreateModuleLogger(level, "TransactionPoolActor", log)
 	tpActor := &TransactionPoolActor{
 		log: logTxPoolActor,

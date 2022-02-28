@@ -3,8 +3,8 @@ package transaction
 
 
 import (
-"github.com/TopiaNetwork/topia/account"
-"math/big"
+	"github.com/TopiaNetwork/topia/account"
+	"math/big"
 )
 
 
@@ -61,8 +61,7 @@ func Sender(signer BaseSigner,tx *Transaction) (account.Address, error) {
 	}
 	return account.Address(tx.FromAddr[:]),nil
 }
-func MakeSigner()BaseSigner{
+func MakeSigner()BaseSigner {
 	var signer BaseSigner
 	return signer
 }
-

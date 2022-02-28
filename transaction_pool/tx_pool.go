@@ -32,6 +32,7 @@ const (
 	// that validating a new transaction remains a constant operation (in reality
 	// O(maxslots), where max slots are 4 currently).
 	txSlotSize = 32 * 1024
+	txMaxSize  = 4 * txSlotSize
 )
 var(
 	evictionInterval    = 200 * time.Millisecond     // Time interval to check for evictable transactions
@@ -40,8 +41,7 @@ var(
 )
 
 type TransactionPoolConfig struct {
-	chain          		 blockChain
-
+	chain          			blockChain
 	Locals                  []account.Address
 	NoLocalFile             bool
 	NoRemoteFile			bool
@@ -69,9 +69,13 @@ var (
 	ErrGasPriceTooLow           = errors.New("transaction gas price too low for miner")
 	ErrReplaceUnderpriced       = errors.New("new transaction price under priced")
 	ErrUnderpriced 				= errors.New("transaction underpriced")
+	ErrTxGasLimit 				= errors.New("exceeds block gas limit")
+	ErrInsufficientFunds 		= errors.New("insufficient funds for gas * price + value")
+
 	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accpet
 	// another remote transaction.
 	ErrTxPoolOverflow 			= errors.New("txPool is full")
+	ErrOversizedData 			= errors.New("transaction overSized data")
 )
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
@@ -219,7 +223,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	}
 	//load txPool configs from disk
 	if !conf.NoConfigFile && conf.PathConfig !="" {
-		if con,err := pool.loadconfig();err != nil{
+		if con,err := pool.Loadconfig();err != nil{
 			log.Warn("Failed to load txPool configs")
 		}else {
 			conf = *con
@@ -278,7 +282,7 @@ func (pool *TransactionPool) loop() {
 				log.Warn("Failed to save remote transaction", "err", err)
 			}
 			//txPool configs save
-			if err := pool.saveconfig(); err != nil {
+			if err := pool.SaveConfig(); err != nil {
 				log.Warn("Failed to save transaction pool configs","err",err)
 			}
 			return
@@ -360,7 +364,7 @@ func (pool *TransactionPool)Locals() []account.Address {
 }
 
 
-func (pool *TransactionPool) loadconfig()(conf *TransactionPoolConfig,error error) {
+func (pool *TransactionPool) Loadconfig()(conf *TransactionPoolConfig,error error) {
 	data,err := ioutil.ReadFile(pool.config.PathConfig)
 	if err != nil {return nil,err}
 	config := &conf
@@ -371,7 +375,15 @@ func (pool *TransactionPool) loadconfig()(conf *TransactionPoolConfig,error erro
 	return *config,nil
 }
 
-func (pool *TransactionPool) saveconfig() error {
+func (pool *TransactionPool) UpdateTxPoolConfig( conf TransactionPoolConfig){
+	conf = (conf).check()
+	pool.config = conf
+	return
+}
+
+
+
+func (pool *TransactionPool) SaveConfig() error {
 	fmt.Printf("%v",pool.config)
 	conf,err := json.Marshal(pool.config)
 	if err!= nil {
@@ -550,7 +562,7 @@ func (pool *TransactionPool) scheduleReorgLoop() {
 		queuedEvents  = make(map[account.Address]*txSortedMap)
 	)
 	for {
-		// Launch next background reorg if needed
+		// Launch next bckground reorg if neededa
 		if curDone == nil && launchNextRun {
 			// Run the background reorg and announcements
 			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
@@ -775,13 +787,28 @@ func (pool *TransactionPool) remote() map[account.Address][]*transaction.Transac
 
 func (pool *TransactionPool) ValidateTx(tx *transaction.Transaction,local bool) error {
 	from := account.Address(string(tx.FromAddr[:]))
+
+	if uint64(tx.Size()) > txMaxSize {
+		return ErrOversizedData
+	}
+	// Ensure the transaction doesn't exceed the current block limit gas.
+	if pool.curMaxGasLimit < tx.GasLimit {
+		return ErrTxGasLimit
+	}
+	//
+	if !local && tx.GasPrice < pool.config.GasPriceLimit {
+		return ErrGasPriceTooLow
+	}
+	// Transactor should have enough funds to cover the costs
+	if pool.curState.GetBalance(from).Cmp(pool.Cost(tx)) < 0 {
+		return ErrInsufficientFunds
+	}
+
 	//Is nonce is validated
 	if !(pool.curState.GetNonce(from) > tx.Nonce){
 		return ErrNonceTooLow
 	}
-	if !local && tx.GasPrice < pool.config.GasPriceLimit {
-		return ErrGasPriceTooLow
-	}
+
 	return nil
 }
 

@@ -183,7 +183,7 @@ func (m *Transaction) GetOptions() uint32 {
 // TxDifference returns a new set which is the difference between a and b.
 func TxDifference(a, b []Transaction) []Transaction {
 	keep := make([]Transaction, 0, len(a))
-	remove := make(map[TxID]struct{})
+	remove := make(map[TxKey]struct{})
 	for _, tx := range b {
 		if txId,err := tx.TxID();err != nil {
 			remove[txId] = struct{}{}

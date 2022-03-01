@@ -42,20 +42,20 @@ var(
 
 
 type TransactionPool interface {
-	AddTx(tx transaction.Transaction) error
+	AddTx(tx *transaction.Transaction,local bool) error
 
-	RemoveTxByKey(key transaction.TxKey) error
+	RemoveTxByKey(key transaction.TxKey,outofbound bool) error
 
-	Reset() error
+	Reset(oldHead,newHead *types.BlockHead) error
 
-	UpdateTx(tx transaction.Transaction) error
+	UpdateTx(tx *transaction.Transaction,txKey transaction.TxKey) error
 
-	Pending() ([]transaction.Transaction, error)
+	Pending() map[account.Address][]*transaction.Transaction
 
 	Size() int
 
 	Start(sysActor *actor.ActorSystem, network network.Network) error
-	CommitTransactions(map[account.Address][]*transaction.Transaction, int)
+	TxsPackaged(txs map[account.Address][]*transaction.Transaction,txsType int)
 	CommitTxsForPending(map[account.Address][]*transaction.Transaction) map[account.Address][]*transaction.Transaction
 	CommitTxsByPriceAndNonce(map[account.Address][]*transaction.Transaction) map[account.Address][]*transaction.Transaction
 }
@@ -91,7 +91,7 @@ var (
 	ErrUnderpriced 				= errors.New("transaction underpriced")
 	ErrTxGasLimit 				= errors.New("exceeds block gas limit")
 	ErrInsufficientFunds 		= errors.New("insufficient funds for gas * price + value")
-
+	ErrTxNotExist					= errors.New("transaction not found")
 	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accpet
 	// another remote transaction.
 	ErrTxPoolOverflow 			= errors.New("txPool is full")
@@ -185,13 +185,30 @@ type transactionPool struct {
 	hasher         		 tpcmm.Hasher
 	changesSinceReorg 	 int // A counter for how many drops we've performed in-between reorg.
 }
+
+func (pool *transactionPool) AddTx(tx *transaction.Transaction,local bool) error {
+	txId ,err := tx.TxID()
+	if err != nil {
+		return err
+	}
+	if pool.allTxsForLook.Get(txId) != nil{ return nil}
+	if err := pool.ValidateTx(tx,local);err != nil {return err }
+	if local {
+		pool.AddLocal(tx)
+	} else {
+		pool.AddRemote(tx)
+	}
+	return nil
+}
+
+
 type txPoolResetRequest struct {
 	oldHead, newHead *types.BlockHead
 }
 func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 	conf = (&conf).check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
-	var pool = &transactionPool{
+	pool := &transactionPool{
 		config:           conf,
 		log:              poolLog,
 		level:            level,
@@ -209,10 +226,14 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 		chanInitDone:     make(chan struct{}),  // is closed once the pool is initialized (for tests)
 		chanQueueTxEvent: make(chan *transaction.Transaction),  //check new tx insert to txpool
 
-		handler:          NewTransactionPoolHandler(poolLog),
 		marshaler:        codec.CreateMarshaler(codecType),
 		hasher:           tpcmm.NewBlake2bHasher(0),
 	}
+
+	poolHandler := NewTransactionPoolHandler(poolLog, pool)
+
+	pool.handler = poolHandler
+
 	pool.locals =newAccountSet(pool.Signer)
 	for _, addr := range conf.Locals {
 		//log.Info("Setting new local account", "address", addr)
@@ -220,7 +241,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	}
 	pool.sortedByPriced = newTxPricedList(pool.allTxsForLook)  //done
 	//reset func to refresh the pool.
-	pool.reset(nil,conf.chain.CurrentBlock().GetHead())
+	pool.Reset(nil,conf.chain.CurrentBlock().GetHead())
 
 	// Start the reorg loop early, so it can handle requests generated during stored tx loading.
 	pool.wg.Add(1)
@@ -261,7 +282,12 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 }
 
 func (pool *transactionPool) processTx(msg *TxMessage) error {
-	return pool.handler.ProcessTx(msg)
+
+	err := pool.handler.ProcessTx(msg)
+	if err != nil{
+		return err
+	}
+	return nil
 }
 
 // loop is the transaction pool's main event loop, waiting for and reacting to
@@ -422,7 +448,6 @@ func (pool *transactionPool) SaveConfig() error {
 }
 
 
-//已经有txFeed，通过发布/订阅 并发模式广播出去。
 //dispatch 收到交易，定期（）广播出去，local交易优先广播，优先广播交易池中时间最长的。
 func (pool *transactionPool) dispatch(context actor.Context, data []byte) {
 	var txPoolMsg TxPoolMessage
@@ -440,14 +465,13 @@ func (pool *transactionPool) dispatch(context actor.Context, data []byte) {
 			pool.log.Errorf("TransactionPool unmarshal msg %d err %v", txPoolMsg.MsgType, err)
 			return
 		}
-		pool.processTx(&msg)
+		err = pool.processTx(&msg)
+		if err != nil {return}
 	default:
 		pool.log.Errorf("TransactionPool receive invalid msg %d", txPoolMsg.MsgType)
 		return
 	}
 }
-
-
 
 
 func (pool *transactionPool) addTxs(txs []*transaction.Transaction,local,sync bool) []error {
@@ -510,7 +534,22 @@ func (pool *transactionPool) addTxsLocked(txs []*transaction.Transaction, local 
 }
 
 
-
+func (pool *transactionPool)UpdateTx(tx *transaction.Transaction,txKey transaction.TxKey) error {
+	// chinese:如果交易的from和to都是同一个，并且，gas费用更高的后来者交易，可以替换未打包的交易。
+	err := pool.ValidateTx(tx,false)
+	if err != nil {return err}
+	 tx2:= pool.allTxsForLook.Get(txKey)
+	 if account.Address(tx2.FromAddr)==account.Address(tx.FromAddr) &&
+		 account.Address(tx2.TargetAddr)==account.Address(tx.TargetAddr) &&
+		 tx2.GasLimit <= tx.GasLimit {
+		 pool.RemoveTxByKey(txKey,true)
+		 pool.add(tx,false)
+	 }
+	return nil
+}
+func (pool *transactionPool)Size() int {
+	return pool.allTxsForLook.Count()
+}
 
 // AddLocals enqueues a batch of transactions into the pool if they are valid, marking the
 // senders as a local ones, ensuring they go around the local pricing constraints.
@@ -536,12 +575,16 @@ func (pool *transactionPool) AddLocal(tx *transaction.Transaction) error {
 func (pool *transactionPool) AddRemotes(txs []*transaction.Transaction) []error {
 	return pool.addTxs(txs, false, false)
 }
+func (pool *transactionPool) AddRemote(tx *transaction.Transaction) error {
+	errs := pool.AddRemotes([]*transaction.Transaction{tx})
+	return errs[0]
+}
 
 //Start chinese:网络收到消息，把消息转发给交易池，转换数据结构。事件触发模型。
 func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network network.Network) error {
 	actorPID, err := CreateTransactionPoolActor(pool.level, pool.log, sysActor, pool)
 	if err != nil {
-//		pool.log.Panicf("CreateTransactionPoolActor error: %v", err)
+		pool.log.Panicf("CreateTransactionPoolActor error: %v", err)
 		return err
 	}
 	network.RegisterModule("TransactionPool", actorPID, pool.marshaler)
@@ -550,9 +593,9 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network network.
 
 // RemoveTxByKey removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
-func (pool *transactionPool) RemoveTxByKey(key transaction.TxKey,outofbound bool) {
+func (pool *transactionPool) RemoveTxByKey(key transaction.TxKey,outofbound bool) error{
 	tx := pool.allTxsForLook.Get(key)
-	if tx == nil {return }
+	if tx == nil {return ErrTxNotExist }
 	addr, _ := transaction.Sender(pool.Signer,tx)
 	// Remove it from the list of known transactions
 	pool.allTxsForLook.Remove(key)
@@ -576,7 +619,7 @@ func (pool *transactionPool) RemoveTxByKey(key transaction.TxKey,outofbound bool
 			pool.pendingNonces.setIfLower(addr,tx.Nonce)
 			// Reduce the pending counter
 
-			return
+			return nil
 		}
 	}
 	// Transaction is in the future queue
@@ -587,6 +630,7 @@ func (pool *transactionPool) RemoveTxByKey(key transaction.TxKey,outofbound bool
 			delete(pool.heartbeats,addr)
 		}
 	}
+	return nil
 }
 
 // scheduleReorgLoop schedules runs of reset and promoteExecutables. Code above should not
@@ -674,7 +718,7 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 	pool.mu.Lock()
 	if reset != nil {
 		// Reset from the old head to the new, rescheduling any reorged transactions
-		pool.reset(reset.oldHead, reset.newHead)
+		pool.Reset(reset.oldHead, reset.newHead)
 
 		// Nonces were reset, discard any events that became stale
 		for addr := range events {
@@ -754,7 +798,6 @@ func (pool *transactionPool) Gas(tx *transaction.Transaction) uint64 {
 	total := pool.query.EstimateTxGas(tx)
 	return total
 }
-
 
 func (pool *transactionPool) Get(key transaction.TxKey) *transaction.Transaction {
 	return pool.allTxsForLook.Get(key)
@@ -855,7 +898,6 @@ func (pool *transactionPool) ValidateTx(tx *transaction.Transaction,local bool) 
 }
 
 
-
 // stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
 func (pool *transactionPool) stats() (int, int) {
@@ -875,7 +917,7 @@ func (pool *transactionPool) stats() (int, int) {
 // pending or queued one, it overwrites the previous transaction if its price is higher.
 //
 // If a newly added transaction is marked as local, its sending account will be
-// be added to the allowlist, preventing any associated transaction from being dropped
+// added to the allowlist, preventing any associated transaction from being dropped
 // out of the pool due to pricing constraints.
 func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (replaced bool, err error) {
 	// If the transaction is already known, discard it
@@ -1210,7 +1252,7 @@ func (pool *transactionPool) truncateQueue() {
 }
 
 
-func(pool *transactionPool)reset(oldHead,newHead *types.BlockHead) {
+func(pool *transactionPool)Reset(oldHead,newHead *types.BlockHead) error{
 	//If the old header and the new header do not meet certain conditions,
 	//part of the transaction needs to be injected back into the transaction pool
 	var reInject []transaction.Transaction
@@ -1234,7 +1276,7 @@ func(pool *transactionPool)reset(oldHead,newHead *types.BlockHead) {
 					log.Warn("Transcation pool reset with missing oldhead",
 					"old", types.BlockHash(oldHead.TxHashRoot),
 						"new", types.BlockHash(newHead.TxHashRoot))
-					return
+					return nil
 				}
 				log.Debug("Skipping transaction reset caused by setHead",
 					"old", types.BlockHash(oldHead.TxHashRoot), "oldnum", oldNum,
@@ -1252,7 +1294,7 @@ func(pool *transactionPool)reset(oldHead,newHead *types.BlockHead) {
 						rem == nil {
 						log.Error("UnRooted old chain seen by tx pool", "block", oldHead.Height,
 							"hash", types.BlockHash(oldHead.TxHashRoot))
-						return
+						return nil
 					}
 				}
 				for add.Head.Height > rem.Head.Height {
@@ -1266,7 +1308,7 @@ func(pool *transactionPool)reset(oldHead,newHead *types.BlockHead) {
 					if add = pool.config.chain.GetBlock(types.BlockHash(add.Head.ParentBlockHash),add.Head.Height - 1);add == nil {
 						log.Error("UnRooted new chain seen by tx pool", "block", newHead.Height,
 							"hash", types.BlockHash(newHead.TxHashRoot))
-						return
+						return nil
 					}
 				}
 				for types.BlockHash(rem.Head.TxHashRoot) != types.BlockHash(add.Head.TxHashRoot) {
@@ -1281,7 +1323,7 @@ func(pool *transactionPool)reset(oldHead,newHead *types.BlockHead) {
 						rem == nil {
 						log.Error("UnRooted old chain seen by tx pool", "block", oldHead.Height,
 							"hash", types.BlockHash(oldHead.TxHashRoot))
-						return
+						return nil
 					}
 					for _,tx := range add.Data.Txs{
 						var txType transaction.Transaction
@@ -1294,7 +1336,7 @@ func(pool *transactionPool)reset(oldHead,newHead *types.BlockHead) {
 						add ==nil{
 						log.Error("UnRooted new chain seen by tx pool", "block", newHead.Height,
 							"hash", types.BlockHash(newHead.TxHashRoot))
-						return
+						return nil
 					}
 				}
 				reInject = transaction.TxDifference(discarded,included)
@@ -1308,13 +1350,13 @@ func(pool *transactionPool)reset(oldHead,newHead *types.BlockHead) {
 	stateDb,err := pool.config.chain.StateAt(types.BlockHash(newHead.TxHashRoot))
 	if err != nil{
 		log.Error("Failed to reset txPool state", "err", err)
-		return
+		return nil
 	}
 	pool.curState      = stateDb
 	pool.pendingNonces = newTxNoncer(stateDb)
 	//pool.curMaxGasLimit     = newHead.GasLimit //no achieve for newhead no gaslimit
 	log.Debug("ReInjecting stale transactions", "count", len(reInject))
-
+	return nil
 }
 
 

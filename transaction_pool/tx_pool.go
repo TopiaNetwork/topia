@@ -176,7 +176,7 @@ type transactionPool struct {
 	heartbeats           	map[account.Address]time.Time // Last heartbeat from each known account
 
 	curState       		 	*StatePoolDB
-	pendingNonces  		 	*txNoncer      // Pending state tracking virtual nonces
+	pendingNonces  		 	uint64      // Pending state tracking virtual nonces
 	curMaxGasLimit       	uint64
 	log            		 	tplog.Logger
 	level          		 	tplogcmm.LogLevel
@@ -655,10 +655,6 @@ func (pool *transactionPool) RemoveTxByKey(key transaction.TxKey,outofbound bool
 				// Internal shuffle shouldn't touch the lookup set.
 				pool.queueAddTx(txId, tx, false, false)
 			}
-			// Update the account nonce if needed
-			pool.pendingNonces.setIfLower(addr,tx.Nonce)
-			// Reduce the pending counter
-
 			return nil
 		}
 	}
@@ -762,7 +758,7 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 
 		// Nonces were reset, discard any events that became stale
 		for addr := range events {
-			events[addr].Forward(pool.pendingNonces.get(addr))
+			events[addr].Forward(pool.curState.GetNonce(addr))
 			if events[addr].Len() == 0 {
 				delete(events, addr)
 			}
@@ -790,7 +786,6 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 			highestPending := list.LastElement()
 			nonces[addr] = highestPending.Nonce + 1
 		}
-		pool.pendingNonces.setAll(nonces)
 	}
 	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
 	pool.truncatePending()
@@ -1071,8 +1066,7 @@ func (pool *transactionPool) promoteTx(addr account.Address, txId transaction.Tx
 		return false
 	}
 
-	// Set the potentially new pending nonce and notify any subsystems of the new tx
-	pool.pendingNonces.set(addr, tx.Nonce+1)
+
 	// Successful promotion, bump the heartbeat
 	pool.heartbeats[addr] = time.Now()
 	return true
@@ -1146,7 +1140,7 @@ func (pool *transactionPool) promoteExecutables(accounts []account.Address) []*t
 		pool.log.Tracef("Removed unpayable queued transactions", "count", len(drops))
 
 		// Gather all executable transactions and promote them
-		readies := list.Ready(pool.pendingNonces.get(addr))
+		readies := list.Ready(pool.curState.GetNonce(addr))
 		for _, tx := range readies {
 			txId,_ := tx.TxID()
 			if pool.promoteTx(addr, txId, tx) {
@@ -1220,8 +1214,7 @@ func (pool *transactionPool) truncatePending() {
 		for _,tx := range caps{
 			txId,_ := tx.TxID()
 			pool.allTxsForLook.Remove(txId)
-			pool.pendingNonces.setIfLower(bePunished.accountAddr,tx.GetNonce())
-			pool.log.Tracef("Removed fairness-exceeding pending transaction", "txkey",txId)
+			pool.log.Tracef("Removed fairness-exceeding pending transaction", "txKey",txId)
 		}
 		pool.sortedByPriced.Removed(len(caps))
 		}
@@ -1381,7 +1374,6 @@ func(pool *transactionPool)Reset(oldHead,newHead *types.BlockHead) error{
 		return nil
 	}
 	pool.curState      = stateDb
-	pool.pendingNonces = newTxNoncer(stateDb)
 	//pool.curMaxGasLimit     = newHead.GasLimit //no achieve for newhead no gaslimit
 	pool.log.Debugf("ReInjecting stale transactions", "count", len(reInject))
 	return nil

@@ -33,13 +33,3 @@ func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
 	return nil
 }
 
-func(handler *transactionPoolHandler) BroadCastTx(tx *transaction.Transaction) (*TxMessage,error) {
-	var msg *TxMessage
-	data := tx.GetData()
-	msg.Data = data
-	_,err := msg.Marshal()
-	if err != nil {
-		return nil,err
-	}
-	return msg,nil
-}

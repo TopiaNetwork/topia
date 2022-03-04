@@ -1,6 +1,7 @@
 package transactionpool
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/transaction"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/log"
@@ -37,7 +39,7 @@ const (
 var(
 	evictionInterval    = 200 * time.Millisecond     // Time interval to check for evictable transactions
 	statsReportInterval = 500 * time.Millisecond // Time interval to report transaction pool stats
-
+	republicInterval	= 30  * 	time.Second            //time interval to check transaction lifetime for report
 )
 
 
@@ -80,6 +82,7 @@ type TransactionPoolConfig struct {
 	QueueMaxTxsGlobal 		uint64 // Maximum number of non-executable transaction slots for all accounts
 
 	LifetimeForAccount      time.Duration
+	DurationForTxRePublic	time.Duration
 }
 
 var (
@@ -111,28 +114,29 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	QueueMaxTxsGlobal:		8192*2,
 
 	LifetimeForAccount:		30 * time.Minute,
+	DurationForTxRePublic:  30 * time.Second,
 }
 
 func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 	conf := *config
 	if conf.GasPriceLimit < 1 {
-		//tplog.Logger.Warnf("Invalid gasPriceLimit,updated to default value:",string(conf.gasLimit),string(DefaultTransactionPoolConfig.gasLimit))
+		tplog.Logger.Warnf("Invalid GasPriceLimit,updated to default value:","from",conf.GasPriceLimit,"to",DefaultTransactionPoolConfig.GasPriceLimit)
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
 	if conf.PendingAccountSlots < 1 {
-		//tplog.Logger.Warnf("Invalid MaxTxForQueuePerAccount,updated to default value:",string(conf.MaxTxForQueuePerAccount),string(DefaultTransactionPoolConfig.MaxTxForQueuePerAccount))
+		tplog.Logger.Warnf("Invalid PendingAccountSlots,updated to default value:","from",conf.PendingAccountSlots,"to",DefaultTransactionPoolConfig.PendingAccountSlots)
 		conf.PendingAccountSlots = DefaultTransactionPoolConfig.PendingAccountSlots
 	}
 	if conf.PendingGlobalSlots < 1 {
-		//tplog.Logger.Warnf("Invalid MaxTxForQueue,updated to default value:",string(conf.MaxTxForQueue),string(DefaultTransactionPoolConfig.MaxTxForQueue))
+		tplog.Logger.Warnf("Invalid PendingGlobalSlots,updated to default value:","from",conf.PendingGlobalSlots,"to",DefaultTransactionPoolConfig.PendingGlobalSlots)
 		conf.PendingGlobalSlots = DefaultTransactionPoolConfig.PendingGlobalSlots
 	}
 	if conf.QueueMaxTxsAccount < 1 {
-		//tplog.Logger.Warnf("Invalid MaxTxForQueue,updated to default value:",string(conf.MaxTxForQueue),string(DefaultTransactionPoolConfig.MaxTxForQueue))
+		tplog.Logger.Warnf("Invalid QueueMaxTxsAccount,updated to default value:","from",conf.QueueMaxTxsAccount,"to",DefaultTransactionPoolConfig.QueueMaxTxsAccount)
 		conf.QueueMaxTxsAccount = DefaultTransactionPoolConfig.QueueMaxTxsAccount
 	}
 	if conf.QueueMaxTxsGlobal < 1 {
-		//tplog.Logger.Warnf("Invalid MaxTxForQueue,updated to default value:",string(conf.MaxTxForQueue),string(DefaultTransactionPoolConfig.MaxTxForQueue))
+		tplog.Logger.Warnf("Invalid MaxTxForQueue,updated to default value:","from",conf.QueueMaxTxsGlobal,"to",DefaultTransactionPoolConfig.QueueMaxTxsGlobal)
 		conf.QueueMaxTxsGlobal = DefaultTransactionPoolConfig.QueueMaxTxsGlobal
 	}
 
@@ -143,47 +147,45 @@ type blockChain interface {
 	CurrentBlock() *types.Block
 	GetBlock(hash types.BlockHash,num uint64) *types.Block
 	StateAt(root types.BlockHash)(*StatePoolDB,error)
-	SubChainHeadEvent(ch chan<- transaction.ChainHeadEvent) Subscription
+	SubChainHeadEvent(ch chan<- transaction.ChainHeadEvent) TxPoolPubSubService
 }
 
 type transactionPool struct {
-	config				 TransactionPoolConfig
-	txFeed               Feed
-	chainHeadSub  		 Subscription
-	scope       		 SubscriptionScope
+	config				 	TransactionPoolConfig
+	pubSubService			TxPoolPubSubService
 
-	chanChainHead 		 chan transaction.ChainHeadEvent
-	chanReqReset     	 chan *txPoolResetRequest
-	chanReqPromote   	 chan *accountSet
-	chanReorgDone    	 chan chan struct{}
-	chanReorgShutdown	 chan struct{}  // requests shutdown of scheduleReorgLoop
-	chanInitDone     	 chan struct{}  // is closed once the pool is initialized (for tests)
-	chanQueueTxEvent  	 chan *transaction.Transaction  //check new tx insert to txpool
+	chanChainHead 		 	chan transaction.ChainHeadEvent
+	chanReqReset     	 	chan *txPoolResetRequest
+	chanReqPromote   	 	chan *accountSet
+	chanReorgDone    	 	chan chan struct{}
+	chanReorgShutdown	 	chan struct{}  // requests shutdown of scheduleReorgLoop
+	chanInitDone     	 	chan struct{}  // is closed once the pool is initialized (for tests)
+	chanQueueTxEvent  	 	chan *transaction.Transaction  //check new tx insert to txpool
 
-	query                 TxPoolQuery
+	query                 	TxPoolQuery
 
-	locals       		 *accountSet
-	txStored       		 *txStored
-	Signer        		 transaction.BaseSigner  //no achieved
-	mu           		 sync.RWMutex
-	wg            		 sync.WaitGroup // tracks loop, scheduleReorgLoop
+	locals       		 	*accountSet
+	txStored       		 	*txStored
+	Signer        		 	transaction.BaseSigner  //no achieved
+	mu           		 	sync.RWMutex
+	wg            		 	sync.WaitGroup // tracks loop, scheduleReorgLoop
 
-	pending       		 map[account.Address]*txList
-	queue        	  	 map[account.Address]*txList
-	allTxsForLook        *txLookup
-	sortedByPriced       *txPricedList
-	heartbeats           map[account.Address]time.Time // Last heartbeat from each known account
+	pending       		 	map[account.Address]*txList
+	queue        	  	 	map[account.Address]*txList
+	allTxsForLook        	*txLookup
+	sortedByPriced       	*txPricedList
+	heartbeats           	map[account.Address]time.Time // Last heartbeat from each known account
 
-	curState       		 *StatePoolDB
-	pendingNonces  		 *txNoncer      // Pending state tracking virtual nonces
-	curMaxGasLimit       uint64
-	log            		 tplog.Logger
-	level          		 tplogcmm.LogLevel
-	network        		 network.Network
-	handler        		 TransactionPoolHandler
-	marshaler      		 codec.Marshaler
-	hasher         		 tpcmm.Hasher
-	changesSinceReorg 	 int // A counter for how many drops we've performed in-between reorg.
+	curState       		 	*StatePoolDB
+	pendingNonces  		 	*txNoncer      // Pending state tracking virtual nonces
+	curMaxGasLimit       	uint64
+	log            		 	tplog.Logger
+	level          		 	tplogcmm.LogLevel
+	network        		 	network.Network
+	handler        		 	TransactionPoolHandler
+	marshaler      		 	codec.Marshaler
+	hasher         		 	tpcmm.Hasher
+	changesSinceReorg 	 	int // A counter for how many drops we've performed in-between reorg.
 }
 
 func (pool *transactionPool) AddTx(tx *transaction.Transaction,local bool) error {
@@ -205,7 +207,7 @@ func (pool *transactionPool) AddTx(tx *transaction.Transaction,local bool) error
 type txPoolResetRequest struct {
 	oldHead, newHead *types.BlockHead
 }
-func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
+func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType,ctx context.Context) *transactionPool {
 	conf = (&conf).check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
@@ -264,7 +266,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	}
 	//load txPool configs from disk
 	if !conf.NoConfigFile && conf.PathConfig !="" {
-		if con,err := pool.Loadconfig();err != nil{
+		if con,err := pool.LoadConfig();err != nil{
 			log.Warn("Failed to load txPool configs")
 		}else {
 			conf = *con
@@ -273,7 +275,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	}
 
 	//Subscribe events from blockchain
-	pool.chainHeadSub = pool.config.chain.SubChainHeadEvent(pool.chanChainHead)
+	pool.pubSubService = pool.config.chain.SubChainHeadEvent(pool.chanChainHead)
 
 	//start the main event loop
 	pool.wg.Add(1)
@@ -290,6 +292,17 @@ func (pool *transactionPool) processTx(msg *TxMessage) error {
 	return nil
 }
 
+func(pool *transactionPool) BroadCastTx(tx *transaction.Transaction) error {
+	var msg *TxMessage
+	data := tx.GetData()
+	msg.Data = data
+	_,err := msg.Marshal()
+	if err != nil {
+		return err
+	}
+	pool.network.Publish(pool.pubSubService.ctx,protocol.SyncProtocolID_Msg,data)
+	return nil
+}
 // loop is the transaction pool's main event loop, waiting for and reacting to
 // outside blockchain events as well as for various reporting and transaction
 // eviction events.
@@ -299,15 +312,17 @@ func (pool *transactionPool) loop() {
 	var (
 		prevPending, prevQueued, prevStales int
 		// Start the stats reporting and transaction eviction tickers
-		report  = time.NewTicker(statsReportInterval)
-		evict   = time.NewTicker(evictionInterval)
-		stored = time.NewTicker(pool.config.ReStoredDur)
+		report  	= time.NewTicker(statsReportInterval) //500ms report queue stats
+		evict   	= time.NewTicker(evictionInterval)		//200ms report eviction
+		stored 		= time.NewTicker(pool.config.ReStoredDur)
+		republic 	= time.NewTicker(republicInterval)      //30s check tx lifetime
 		// Track the previous head headers for transaction reorgs
 		head = pool.config.chain.CurrentBlock()
 	)
 	defer report.Stop()
 	defer evict.Stop()
 	defer stored.Stop()
+	defer republic.Stop()
 
 	// Notify tests that the init phase is done
 	close(pool.chanInitDone)
@@ -321,7 +336,7 @@ func (pool *transactionPool) loop() {
 			}
 
 		// System shutdown.  When the system is shut down, save to the files locals/remotes/configs
-		case <-pool.chainHeadSub.Err():
+		case <-pool.pubSubService.err:
 			close(pool.chanReorgShutdown)
 			//local txs save
 			if err := pool.txStored.saveLocal(pool.local()); err != nil {
@@ -377,6 +392,33 @@ func (pool *transactionPool) loop() {
 				}
 				pool.mu.Unlock()
 			}
+		case <-republic.C:
+			pool.mu.Lock()
+			for addr := range pool.queue {
+				// republic local transactions from the republic mechanism
+				if pool.locals.contains(addr) {
+					if time.Since(pool.heartbeats[addr]) > pool.config.DurationForTxRePublic {
+						list := pool.queue[addr].Flatten()
+						for _, tx := range list {
+							pool.BroadCastTx(tx)
+						}
+					}
+				}
+			}
+			for addr := range pool.queue {
+				// republic non-locals transactions from the republic mechanism
+				if ! pool.locals.contains(addr) {
+					if pool.locals.contains(addr) {
+						if time.Since(pool.heartbeats[addr]) > pool.config.DurationForTxRePublic {
+							list := pool.queue[addr].Flatten()
+							for _, tx := range list {
+								pool.BroadCastTx(tx)
+							}
+						}
+					}
+				}
+			}
+			pool.mu.Unlock()
 		}
 	}
 }
@@ -414,7 +456,7 @@ func (pool *transactionPool)Locals() []account.Address {
 }
 
 
-func (pool *transactionPool) Loadconfig()(conf *TransactionPoolConfig,error error) {
+func (pool *transactionPool) LoadConfig()(conf *TransactionPoolConfig,error error) {
 	data,err := ioutil.ReadFile(pool.config.PathConfig)
 	if err != nil {return nil,err}
 	config := &conf
@@ -449,7 +491,7 @@ func (pool *transactionPool) SaveConfig() error {
 
 
 //dispatch 收到交易，定期（）广播出去，local交易优先广播，优先广播交易池中时间最长的。
-func (pool *transactionPool) dispatch(context actor.Context, data []byte) {
+func (pool *transactionPool) Dispatch(context context.Context, data []byte) {
 	var txPoolMsg TxPoolMessage
 	err := pool.marshaler.Unmarshal(data, &txPoolMsg)
 	if err != nil {
@@ -648,7 +690,7 @@ func (pool *transactionPool) scheduleReorgLoop() {
 		queuedEvents  = make(map[account.Address]*txSortedMap)
 	)
 	for {
-		// Launch next bckground reorg if neededa
+		// Launch next background reorg if needed
 		if curDone == nil && launchNextRun {
 			// Run the background reorg and announcements
 			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
@@ -771,8 +813,11 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 		var txs []*transaction.Transaction
 		for _, set := range events {
 			txs = append(txs, set.Flatten()...)
+
 		}
-		pool.txFeed.Send(NewTxsEvent{txs})
+		for _,tx := range txs{
+			pool.BroadCastTx(tx)
+		}
 	}
 }
 
@@ -1035,12 +1080,19 @@ func (pool *transactionPool) promoteTx(addr account.Address, txId transaction.Tx
 	return true
 }
 
+func (pool *transactionPool) Stop() {
 
-// SubscribeNewTxsEvent registers a subscription of NewTxsEvent and
-// starts sending event to the given channel.
-func (pool *transactionPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) Subscription {
-	return pool.scope.Track(pool.txFeed.Subscribe(ch))
+	// Unsubscribe subscriptions registered from blockchain
+	pool.pubSubService.UnSubscribe(protocol.SyncProtocolID_Msg)
+	pool.wg.Wait()
+
+	if pool.txStored != nil {
+		pool.txStored.close()
+	}
+	log.Info("Transaction pool stopped")
 }
+
+
 // requestPromoteExecutables requests transaction promotion checks for the given addresses.
 // The returned channel is closed when the promotion checks have occurred.
 func (pool *transactionPool) requestPromoteExecutables(set *accountSet) chan struct{} {

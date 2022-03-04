@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"container/heap"
+	"github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/transaction"
 	"math"
 	"math/big"
@@ -674,7 +675,7 @@ func (l *txPricedList) Reheap() {
 	defer l.reheapMu.Unlock()
 	atomic.StoreInt64(&l.stales, 0)
 	l.floating.list = make([]*transaction.Transaction, 0, l.all.RemoteCount())
-	l.all.Range(func(key transaction.TxID, tx *transaction.Transaction, local bool) bool {
+	l.all.Range(func(key transaction.TxKey, tx *transaction.Transaction, local bool) bool {
 		l.floating.list = append(l.floating.list, tx)
 		return true
 	}, false, true) // Only iterate remotes
@@ -699,3 +700,51 @@ type TxByNonce []*transaction.Transaction
 func (s TxByNonce) Len() int           { return len(s) }
 func (s TxByNonce) Less(i, j int) bool { return s[i].Nonce < s[j].Nonce }
 func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+
+// An Item is something we manage in a priority queue.
+type GreyAccCnt struct {
+	accountAddr    account.Address // The value of the item; arbitrary.
+	priority int    // The priority of the item in the queue.
+	// The index is needed by update and is maintained by the heap.Interface methods.
+	index int // The index of the item in the heap.
+}
+
+// A PriorityQueue implements heap.Interface and holds GreyAccCnt.
+type GreyAccQueue []*GreyAccCnt
+
+func (pq GreyAccQueue) Len() int { return len(pq) }
+
+func (pq GreyAccQueue) Less(i, j int) bool {
+	// We want Pop to give us the highest, not lowest, priority so we use greater than here.
+	return pq[i].priority > pq[j].priority
+}
+
+func (pq GreyAccQueue) Swap(i, j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+	pq[i].index = i
+	pq[j].index = j
+}
+
+func (pq *GreyAccQueue) Push(x interface{}) {
+	n := len(*pq)
+	item := x.(*GreyAccCnt)
+	item.index = n
+	*pq = append(*pq, item)
+}
+
+func (pq *GreyAccQueue) Pop() interface{} {
+	old := *pq
+	n := len(old)
+	GreyAccCnt := old[n-1]
+	GreyAccCnt.index = -1 // for safety
+	*pq = old[0 : n-1]
+	return GreyAccCnt
+}
+
+// update modifies the priority and value of an Item in the queue.
+func (pq *GreyAccQueue) update(GreyAccCnt *GreyAccCnt, accountAddr account.Address, priority int) {
+	GreyAccCnt.accountAddr = accountAddr
+	GreyAccCnt.priority = priority
+	heap.Fix(pq, GreyAccCnt.index)
+}

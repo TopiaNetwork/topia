@@ -1,6 +1,7 @@
 package transactionpool
 
 import (
+	"container/heap"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,7 +17,6 @@ import (
 	"github.com/TopiaNetwork/topia/network/p2p"
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/transaction"
-	"github.com/ethereum/go-ethereum/common/prque"
 	"io/ioutil"
 	"math"
 	"math/big"
@@ -1190,73 +1190,51 @@ func (pool *transactionPool) truncatePending() {
 		return
 	}
 
+	var greyAccounts map[account.Address]int
 	// Assemble a spam order to penalize large transactors first
-	spammers := prque.New(nil)
+
 	for addr, list := range pool.pending {
 		// Only evict transactions from high rollers
 		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.PendingAccountSlots {
-			spammers.Push(addr, int64(list.Len()))
+			greyAccounts[addr] = list.Len()
 		}
 	}
-	// Gradually drop transactions from offenders
-	offenders := []account.Address{}
-	for pending > pool.config.PendingGlobalSlots && !spammers.Empty() {
-		// Retrieve the next offender if not local address
-		offender, _ := spammers.Pop()
-		offenders = append(offenders, offender.(account.Address))
-
-		// Equalize balances until all the same or below threshold
-		if len(offenders) > 1 {
-			// Calculate the equalization threshold for all current offenders
-			threshold := pool.pending[offender.(account.Address)].Len()
-
-			// Iteratively reduce all offenders until below limit or threshold reached
-			for pending > pool.config.PendingGlobalSlots && pool.pending[offenders[len(offenders)-2]].Len() > threshold {
-				for i := 0; i < len(offenders)-1; i++ {
-					list := pool.pending[offenders[i]]
-
-					caps := list.Cap(list.Len() - 1)
-					for _, tx := range caps {
-						// Drop the transaction from the global pools too
-						txId,_ := tx.TxID()
-						pool.allTxsForLook.Remove(txId)
-
-						// Update the account nonce to the dropped transaction
-						pool.pendingNonces.setIfLower(offenders[i], tx.Nonce)
-						pool.log.Tracef("Removed fairness-exceeding pending transaction", "txId", txId)
-					}
-					pool.sortedByPriced.Removed(len(caps))
-					pending--
-				}
+	if len(greyAccounts) >0{
+		greyAccountsQueue := make(GreyAccQueue, len(greyAccounts))
+		i := 0
+		for accAddr, cnt := range greyAccounts {
+			greyAccountsQueue[i] = &GreyAccCnt{
+				accountAddr: accAddr,
+				priority:    cnt,
+				index:       i,
 			}
+			i++
 		}
+		heap.Init(&greyAccountsQueue)
+
+	//chinese 最先抛出积压交易最多的账户及其交易
+	for pending > pool.config.PendingGlobalSlots && len(greyAccounts) >0 {
+		bePunished := heap.Pop(&greyAccountsQueue).(*GreyAccCnt)
+		list := pool.pending[bePunished.accountAddr]
+		caps := list.Cap(list.Len()-1)
+		for _,tx := range caps{
+			txId,_ := tx.TxID()
+			pool.allTxsForLook.Remove(txId)
+			pool.pendingNonces.setIfLower(bePunished.accountAddr,tx.GetNonce())
+			pool.log.Tracef("Removed fairness-exceeding pending transaction", "txkey",txId)
+		}
+		pool.sortedByPriced.Removed(len(caps))
+		}
+		pending --
 	}
 
-	// If still above threshold, reduce to limit or min allowance
-	if pending > pool.config.PendingGlobalSlots && len(offenders) > 0 {
-		for pending > pool.config.PendingGlobalSlots && uint64(pool.pending[offenders[len(offenders)-1]].Len()) > pool.config.PendingAccountSlots {
-			for _, addr := range offenders {
-				list := pool.pending[addr]
-
-				caps := list.Cap(list.Len() - 1)
-				for _, tx := range caps {
-					// Drop the transaction from the global pools too
-					txId,_ := tx.TxID()
-					pool.allTxsForLook.Remove(txId)
-
-					// Update the account nonce to the dropped transaction
-					pool.pendingNonces.setIfLower(addr, tx.Nonce)
-					pool.log.Tracef("Removed fairness-exceeding pending transaction", "txId", txId)
-				}
-				pool.sortedByPriced.Removed(len(caps))
-
-				pending--
-			}
-		}
-	}
 }
 
-// truncateQueue drops the oldes transactions in the queue if the pool is above the global queue limit.
+
+
+
+
+// truncateQueue drops the older transactions in the queue if the pool is above the global queue limit.
 func (pool *transactionPool) truncateQueue() {
 	queued := uint64(0)
 	for _, list := range pool.queue {

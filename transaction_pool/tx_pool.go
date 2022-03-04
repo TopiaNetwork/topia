@@ -13,6 +13,7 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/network/p2p"
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/transaction"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -147,12 +148,12 @@ type blockChain interface {
 	CurrentBlock() *types.Block
 	GetBlock(hash types.BlockHash,num uint64) *types.Block
 	StateAt(root types.BlockHash)(*StatePoolDB,error)
-	SubChainHeadEvent(ch chan<- transaction.ChainHeadEvent) TxPoolPubSubService
+	SubChainHeadEvent(ch chan<- transaction.ChainHeadEvent) p2p.P2PPubSubService
 }
 
 type transactionPool struct {
 	config				 	TransactionPoolConfig
-	pubSubService			TxPoolPubSubService
+	pubSubService			p2p.P2PPubSubService
 
 	chanChainHead 		 	chan transaction.ChainHeadEvent
 	chanReqReset     	 	chan *txPoolResetRequest
@@ -163,7 +164,6 @@ type transactionPool struct {
 	chanQueueTxEvent  	 	chan *transaction.Transaction  //check new tx insert to txpool
 
 	query                 	TxPoolQuery
-
 	locals       		 	*accountSet
 	txStored       		 	*txStored
 	Signer        		 	transaction.BaseSigner  //no achieved
@@ -207,7 +207,7 @@ func (pool *transactionPool) AddTx(tx *transaction.Transaction,local bool) error
 type txPoolResetRequest struct {
 	oldHead, newHead *types.BlockHead
 }
-func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType,ctx context.Context) *transactionPool {
+func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 	conf = (&conf).check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
@@ -227,7 +227,6 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 		chanReorgShutdown:make(chan struct{}),  // requests shutdown of scheduleReorgLoop
 		chanInitDone:     make(chan struct{}),  // is closed once the pool is initialized (for tests)
 		chanQueueTxEvent: make(chan *transaction.Transaction),  //check new tx insert to txpool
-
 		marshaler:        codec.CreateMarshaler(codecType),
 		hasher:           tpcmm.NewBlake2bHasher(0),
 	}
@@ -300,7 +299,7 @@ func(pool *transactionPool) BroadCastTx(tx *transaction.Transaction) error {
 	if err != nil {
 		return err
 	}
-	pool.network.Publish(pool.pubSubService.ctx,protocol.SyncProtocolID_Msg,data)
+	pool.network.Publish(pool.pubSubService.Ctx,protocol.SyncProtocolID_Msg,data)
 	return nil
 }
 // loop is the transaction pool's main event loop, waiting for and reacting to
@@ -336,7 +335,7 @@ func (pool *transactionPool) loop() {
 			}
 
 		// System shutdown.  When the system is shut down, save to the files locals/remotes/configs
-		case <-pool.pubSubService.err:
+		case <-pool.pubSubService.Err():
 			close(pool.chanReorgShutdown)
 			//local txs save
 			if err := pool.txStored.saveLocal(pool.local()); err != nil {
@@ -490,7 +489,7 @@ func (pool *transactionPool) SaveConfig() error {
 }
 
 
-//dispatch 收到交易，定期（）广播出去，local交易优先广播，优先广播交易池中时间最长的。
+//dispatch
 func (pool *transactionPool) Dispatch(context context.Context, data []byte) {
 	var txPoolMsg TxPoolMessage
 	err := pool.marshaler.Unmarshal(data, &txPoolMsg)

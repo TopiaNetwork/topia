@@ -14,18 +14,19 @@ import (
 
 type P2PPubSubService struct {
 	sync.Mutex
-	ctx             context.Context
+	Ctx             context.Context
 	log             tplog.Logger
 	topicValidation bool
 	pubSub          *pubsub.PubSub
 	p2pService      *P2PService
 	topics          map[string]*pubsub.Topic
 	subs            map[string]*pubsub.Subscription
+	err 			chan error // returns the error channel
 }
 
 func NewP2PPubSubService(ctx context.Context, log tplog.Logger, topicValidation bool, pubSub *pubsub.PubSub, p2pService *P2PService) *P2PPubSubService {
 	return &P2PPubSubService{
-		ctx:             ctx,
+		Ctx:             ctx,
 		log:             tplog.CreateModuleLogger(logcomm.InfoLevel, "P2PPubSubService", log),
 		topicValidation: topicValidation,
 		pubSub:          pubSub,
@@ -140,4 +141,9 @@ func (ps *P2PPubSubService) Publish(ctx context.Context, topic string, data []by
 		return fmt.Errorf("could not publish top topic (%s): %w", topic, err)
 	}
 	return nil
+}
+
+
+func (ps *P2PPubSubService) Err() <-chan error {
+	return ps.err
 }

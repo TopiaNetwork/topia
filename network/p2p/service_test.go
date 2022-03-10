@@ -50,11 +50,11 @@ func sendByDHT(t *testing.T, routeStrategy tpnetcmn.RouteStrategy) {
 	p2p1.Connect(p2p2.ListenAddr())
 
 	require.Eventually(t, func() bool {
-		return p2p1.dht.RoutingTable().Find(p2p2.ID()) != ""
+		return p2p1.dhtServices[DHTServiceType_General].dht.RoutingTable().Find(p2p2.ID()) != ""
 	}, time.Second*5, ticksForAssertEventually, "dht servers p2p1 failed to connect")
 
 	require.Eventually(t, func() bool {
-		return p2p2.dht.RoutingTable().Find(p2p1.ID()) != ""
+		return p2p2.dhtServices[DHTServiceType_General].dht.RoutingTable().Find(p2p1.ID()) != ""
 	}, time.Second*5, ticksForAssertEventually, "dht servers p2p2 failed to connect")
 
 	ctx := context.Background()
@@ -95,11 +95,11 @@ func TestSendWithMultiProtocols(t *testing.T) {
 	p2p1.Connect(p2p2.ListenAddr())
 
 	require.Eventually(t, func() bool {
-		return p2p1.dht.RoutingTable().Find(p2p2.ID()) != ""
+		return p2p1.dhtServices[DHTServiceType_General].dht.RoutingTable().Find(p2p2.ID()) != ""
 	}, time.Second*5, ticksForAssertEventually, "dht servers p2p1 failed to connect")
 
 	require.Eventually(t, func() bool {
-		return p2p2.dht.RoutingTable().Find(p2p1.ID()) != ""
+		return p2p2.dhtServices[DHTServiceType_General].dht.RoutingTable().Find(p2p1.ID()) != ""
 	}, time.Second*5, ticksForAssertEventually, "dht servers p2p2 failed to connect")
 
 	ctx := context.Background()

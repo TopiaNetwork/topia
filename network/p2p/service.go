@@ -228,6 +228,7 @@ func (p2p *P2PService) createDHTService(ctx context.Context, p2pLog tplog.Logger
 		DHTServiceType_Validate: dhtOptionsValidate,
 	}
 
+	p2p.dhtServices = make(map[DHTServiceType]*P2PDHTService)
 	for dhtSType, dhtOpts := range dhtOptsMap {
 		dht, err := dht.New(ctx, h, dhtOpts...)
 		if err != nil {

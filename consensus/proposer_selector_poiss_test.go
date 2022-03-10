@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"math/big"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -42,18 +43,42 @@ func TestSelectProposer(t *testing.T) {
 	require.Equal(t, nil, err)
 	require.Equal(t, true, isOk)
 
+	var maxPris []*big.Int
+
 	pCount0 := selector.SelectProposer(vrfProof, big.NewInt(20), big.NewInt(30))
-	t.Logf("pCount0=%d, weight proportion 20/30", pCount0)
+	if pCount0 > 0 {
+		maxPris = append(maxPris, new(big.Int).SetBytes(selector.MaxPriority(vrfProof, pCount0)))
+	}
+	t.Logf("pCount0=%d, vrfProof=%v, weight proportion 20/30", pCount0, vrfProof)
 
 	pCount1 := selector.SelectProposer(vrfProof, big.NewInt(30), big.NewInt(30))
-	t.Logf("pCount1=%d, weight proportion 30/30", pCount1)
+	if pCount1 > 0 {
+		maxPris = append(maxPris, new(big.Int).SetBytes(selector.MaxPriority(vrfProof, pCount1)))
+	}
+	t.Logf("pCount0=%d, vrfProof=%v, weight proportion 20/30", pCount1, vrfProof)
 
 	pCount2 := selector.SelectProposer(vrfProof, big.NewInt(30), big.NewInt(30))
-	t.Logf("pCount2=%d, weight proportion 30/30", pCount2)
+	if pCount2 > 0 {
+		maxPris = append(maxPris, new(big.Int).SetBytes(selector.MaxPriority(vrfProof, pCount2)))
+	}
+	t.Logf("pCount2=%d, vrfProof=%v, weight proportion 20/30", pCount2, vrfProof)
 
-	pCount3 := selector.SelectProposer(vrfProof, big.NewInt(1), big.NewInt(100))
-	t.Logf("pCount3=%d, weight proportion 1/100", pCount3)
+	pCount3 := selector.SelectProposer(vrfProof, big.NewInt(10), big.NewInt(100))
+	if pCount3 > 0 {
+		maxPris = append(maxPris, new(big.Int).SetBytes(selector.MaxPriority(vrfProof, pCount3)))
+	}
+	t.Logf("pCount3=%d, vrfProof=%v, weight proportion 20/30", pCount3, vrfProof)
 
-	pCount4 := selector.SelectProposer(vrfProof, big.NewInt(1), big.NewInt(100))
-	t.Logf("pCount4=%d, weight proportion 1/100", pCount4)
+	pCount4 := selector.SelectProposer(vrfProof, big.NewInt(5), big.NewInt(100))
+	if pCount4 > 0 {
+		maxPris = append(maxPris, new(big.Int).SetBytes(selector.MaxPriority(vrfProof, pCount4)))
+	}
+	t.Logf("pCount4=%d, vrfProof=%v, weight proportion 20/30", pCount4, vrfProof)
+
+	t.Logf("Before max pri sort: %v", maxPris)
+	sort.Slice(maxPris, func(i, j int) bool {
+		return maxPris[i].Cmp(maxPris[j]) < 0
+	})
+	t.Logf("After max pri sort: %v", maxPris)
+
 }

@@ -14,4 +14,5 @@ const (
 	CryptType_Unknown CryptType = iota
 	CryptType_BLS12381
 	CryptType_Secp256
+	CryptType_Ed25519
 )

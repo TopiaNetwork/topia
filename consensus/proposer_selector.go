@@ -19,6 +19,8 @@ type ProposerSelector interface {
 	ComputeVRF(priKey tpcrtypes.PrivateKey, data []byte) ([]byte, error)
 
 	SelectProposer(VRFProof []byte, weight *big.Int, totalWeight *big.Int) int64
+
+	MaxPriority(vrf []byte, winCount int64) []byte
 }
 
 func NewProposerSelector(psType ProposerSelectionType, crypt tpcrt.CryptService) ProposerSelector {

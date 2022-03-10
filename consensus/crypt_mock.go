@@ -10,6 +10,10 @@ import (
 
 type CryptServiceMock struct{}
 
+func (cs *CryptServiceMock) CryptType() tpcrtypes.CryptType {
+	return tpcrtypes.CryptType_Ed25519
+}
+
 func (cs *CryptServiceMock) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
 	pubKey, priKey, err := ed25519.GenerateKey(rand.Reader)
 
@@ -42,4 +46,8 @@ func (cs *CryptServiceMock) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signD
 	edPubKey := ed25519.PublicKey(pubKey)
 
 	return ed25519.Verify(edPubKey, msg, signData), nil
+}
+
+func (cs *CryptServiceMock) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
+	return tpcrtypes.UndefAddress, nil
 }

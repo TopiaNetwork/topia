@@ -19,9 +19,15 @@ const (
 )
 
 const (
-	P2PProtocolPrefix    = "/topia"
-	AsyncSendProtocolID  = P2PProtocolPrefix + "/asyncsend/0.0.1"
-	SyncProtocolID_Block = P2PProtocolPrefix + "/sync/blk/0.0.1"
-	SyncProtocolID_Msg   = P2PProtocolPrefix + "/sync/msg/0.0.1"
-	HeatBeatPtotocolID   = P2PProtocolPrefix + "/hearbeat/0.0.1"
+	P2PProtocolPrefix         = "/topia"
+	AsyncSendProtocolID       = P2PProtocolPrefix + "/asyncsend/0.0.1"
+	SyncProtocolID_Block      = P2PProtocolPrefix + "/sync/blk/0.0.1"
+	SyncProtocolID_Msg        = P2PProtocolPrefix + "/sync/msg/0.0.1"
+	HeatBeatPtotocolID        = P2PProtocolPrefix + "/hearbeat/0.0.1"
+	P2PProtocolExecutePrefix  = "/topia/execute"
+	ForwardExecute_Msg        = P2PProtocolExecutePrefix + "/forward/msg/0.0.1"
+	P2PProtocolProposePrefix  = "/topia/propose"
+	ForwardPropose_Msg        = P2PProtocolProposePrefix + "/forward/msg/0.0.1"
+	P2PProtocolValidatePrefix = "/topia/validate"
+	FrowardValidate_Msg       = P2PProtocolValidatePrefix + "/forward/msg/0.0.1"
 )

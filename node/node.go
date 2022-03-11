@@ -3,8 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	tpconfig "github.com/TopiaNetwork/topia/configuration"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,7 +12,9 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/consensus"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -59,8 +59,9 @@ func NewNode(endPoint string, seed string) *Node {
 		CrptyType:     tpcrtypes.CryptType_BLS12381,
 	}
 
-	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed)
 	ledger := ledger.NewLedger(chainRootPath, "topia", mainLog, backend.BackendType_Badger)
+
+	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, ledger)
 	cons := consensus.NewConsensus(nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, ledger, csConfig)
 	txPool := transactionpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)

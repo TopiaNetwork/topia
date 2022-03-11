@@ -56,6 +56,12 @@ type Ledger interface {
 	GetCurrentEpoch() uint64
 
 	SetCurrentEpoch(epoch uint64)
+
+	GetActiveExecutorIDs() ([]string, error)
+
+	GetActiveProposerIDs() ([]string, error)
+
+	GetActiveValidatorIDs() ([]string, error)
 }
 
 type StateStore interface {
@@ -181,4 +187,16 @@ func (l *ledger) GetCurrentEpoch() uint64 {
 
 func (l *ledger) SetCurrentEpoch(epoch uint64) {
 
+}
+
+func (l *ledger) GetActiveExecutorIDs() ([]string, error) {
+	return nil, nil
+}
+
+func (l *ledger) GetActiveProposerIDs() ([]string, error) {
+	return nil, nil
+}
+
+func (l *ledger) GetActiveValidatorIDs() ([]string, error) {
+	return nil, nil
 }

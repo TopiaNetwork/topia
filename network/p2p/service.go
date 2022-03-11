@@ -49,19 +49,21 @@ type P2PService struct {
 	sysActor      *actor.ActorSystem
 	modPIDS       map[string]*actor.PID      //module name -> actor PID
 	modMarshals   map[string]codec.Marshaler //module name -> Marshaler
+	netActiveNode tpnetcmn.NetworkActiveNode
 	dhtServices   map[DHTServiceType]*P2PDHTService
 	streamService *P2PStreamService
 	pubsubService *P2PPubSubService
 }
 
-func NewP2PService(ctx context.Context, log tplog.Logger, sysActor *actor.ActorSystem, endPoint string, seed string) *P2PService {
+func NewP2PService(ctx context.Context, log tplog.Logger, sysActor *actor.ActorSystem, endPoint string, seed string, netActiveNode tpnetcmn.NetworkActiveNode) *P2PService {
 	p2pLog := tplog.CreateModuleLogger(logcomm.InfoLevel, "P2PService", log)
 
 	p2p := &P2PService{
-		log:         p2pLog,
-		sysActor:    sysActor,
-		modPIDS:     make(map[string]*actor.PID),
-		modMarshals: make(map[string]codec.Marshaler),
+		log:           p2pLog,
+		sysActor:      sysActor,
+		modPIDS:       make(map[string]*actor.PID),
+		modMarshals:   make(map[string]codec.Marshaler),
+		netActiveNode: netActiveNode,
 	}
 
 	p2pPrivKey, err := p2p.createP2PPrivKey(seed)
@@ -220,6 +222,54 @@ func (p2p *P2PService) createDHTService(ctx context.Context, p2pLog tplog.Logger
 		dhtOptionsValidate = append(dhtOptionsValidate, p2p.withBootPeers(bootNodesValidate))
 	}
 	dhtOptionsValidate = append(dhtOptionsValidate, p2p.defaultDHTOptionsValidate()...)
+
+	if p2p.netActiveNode != nil {
+		dhtOptionsExecute = append(dhtOptionsExecute, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
+			activeExcutors, err := p2p.netActiveNode.GetActiveExecutorIDs()
+			if err != nil {
+				p2pLog.Errorf("Can't get active excutors: %v", err)
+			}
+
+			p2pLog.Debugf("Current active excutors: %v", activeExcutors)
+
+			if len(activeExcutors) > 0 {
+				return tpcmm.IsContainString(p.String(), activeExcutors)
+			}
+
+			return false
+		}))
+
+		dhtOptionsPropose = append(dhtOptionsPropose, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
+			activeProposers, err := p2p.netActiveNode.GetActiveProposerIDs()
+			if err != nil {
+				p2pLog.Errorf("Can't get active proposers: %v", err)
+			}
+
+			p2pLog.Debugf("Current active proposers: %v", activeProposers)
+
+			if len(activeProposers) > 0 {
+				return tpcmm.IsContainString(p.String(), activeProposers)
+			}
+
+			return false
+		}))
+
+		dhtOptionsValidate = append(dhtOptionsValidate, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
+			activeValidates, err := p2p.netActiveNode.GetActiveValidatorIDs()
+			if err != nil {
+				p2pLog.Errorf("Can't get active validates: %v", err)
+			}
+
+			p2pLog.Debugf("Current active validates: %v", activeValidates)
+
+			if len(activeValidates) > 0 {
+				return tpcmm.IsContainString(p.String(), activeValidates)
+			}
+
+			return false
+		}))
+
+	}
 
 	dhtOptsMap := map[DHTServiceType][]dht.Option{
 		DHTServiceType_General:  dhtOptions,

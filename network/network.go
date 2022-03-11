@@ -7,6 +7,7 @@ import (
 
 	"github.com/TopiaNetwork/topia/codec"
 	tplog "github.com/TopiaNetwork/topia/log"
+	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/p2p"
 )
@@ -41,9 +42,9 @@ type network struct {
 	p2p *p2p.P2PService
 }
 
-func NewNetwork(ctx context.Context, log tplog.Logger, sysActor *actor.ActorSystem, endPoint string, seed string) Network {
+func NewNetwork(ctx context.Context, log tplog.Logger, sysActor *actor.ActorSystem, endPoint string, seed string, netActiveNode tpnetcmn.NetworkActiveNode) Network {
 	return &network{
-		p2p: p2p.NewP2PService(ctx, log, sysActor, endPoint, seed),
+		p2p: p2p.NewP2PService(ctx, log, sysActor, endPoint, seed, netActiveNode),
 	}
 }
 

@@ -12,6 +12,7 @@ type consensusVoteCollector struct {
 	log       tplog.Logger
 	threshold uint64
 	votes     []*VoteMessage
+	dkgBls    DKGBls
 }
 
 func newConsensusVoteCollector(log tplog.Logger) *consensusVoteCollector {
@@ -39,7 +40,16 @@ func (vc *consensusVoteCollector) tryAggregateSignAndAddVote(vote *VoteMessage) 
 }
 
 func (vc *consensusVoteCollector) produceAggSign() (tpcrtypes.Signature, error) {
-	return nil, nil
+	signArr := make([][]byte, 0)
+	for _, vote := range vc.votes {
+		signArr = append(signArr, vote.Signature)
+	}
+
+	return vc.dkgBls.RecoverSig(vc.votes[0].Block, signArr)
+}
+
+func (vc *consensusVoteCollector) updateDKGBls(dkgBls DKGBls) {
+	vc.dkgBls = dkgBls
 }
 
 func (vc *consensusVoteCollector) reset() {

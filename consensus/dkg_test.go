@@ -16,7 +16,7 @@ func TestCreateGenerator(t *testing.T) {
 	suite := bn256.NewSuiteG2()
 
 	creatKeyPairs(suite, 7)
-	dkgCrypt := newDKGCrypt(log, 0, 10, suite, initPrivKeys[0], initPubKeys, 5, 7)
+	dkgCrypt := newDKGCrypt(log, 0 /*suite, */, initPrivKeys[0], initPubKeys, 5, 7)
 
 	err := dkgCrypt.createGenerator()
 	require.Equal(t, nil, err)

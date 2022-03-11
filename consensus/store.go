@@ -3,7 +3,6 @@ package consensus
 import (
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
-	"math/big"
 )
 
 type consensusStore interface {
@@ -13,13 +12,13 @@ type consensusStore interface {
 
 	SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error
 
-	Commit() error
+	Commit(block *tptypes.Block) error
 
 	ClearBlockMiddleResult(round uint64) error
 
 	GetAllConsensusNodes() ([]string, error)
 
-	GetChainTotalWeight() (*big.Int, error)
+	GetChainTotalWeight() (uint64, error)
 
-	GetNodeWeight(nodeID string) (*big.Int, error)
+	GetNodeWeight(nodeID string) (uint64, error)
 }

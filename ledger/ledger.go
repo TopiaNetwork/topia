@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"errors"
-	"math/big"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -28,15 +27,15 @@ type Ledger interface {
 
 	SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockResultStoreInfo) error
 
-	Commit() error
+	Commit(block *tptypes.Block) error
 
 	ClearBlockMiddleResult(round uint64) error
 
 	GetAllConsensusNodes() ([]string, error)
 
-	GetChainTotalWeight() (*big.Int, error)
+	GetChainTotalWeight() (uint64, error)
 
-	GetNodeWeight(nodeID string) (*big.Int, error)
+	GetNodeWeight(nodeID string) (uint64, error)
 
 	GetBlockByNumber(blockNum tptypes.BlockNum) (*types.Block, error)
 
@@ -57,6 +56,12 @@ type Ledger interface {
 	GetCurrentEpoch() uint64
 
 	SetCurrentEpoch(epoch uint64)
+
+	GetActiveExecutorIDs() ([]string, error)
+
+	GetActiveProposerIDs() ([]string, error)
+
+	GetActiveValidatorIDs() ([]string, error)
 }
 
 type StateStore interface {
@@ -109,7 +114,7 @@ func (l *ledger) SaveBlockMiddleResult(round uint64, blockResult *tptypes.BlockR
 	panic("implement me")
 }
 
-func (l *ledger) Commit() error {
+func (l *ledger) Commit(block *tptypes.Block) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -124,12 +129,12 @@ func (l *ledger) GetAllConsensusNodes() ([]string, error) {
 	panic("implement me")
 }
 
-func (l *ledger) GetChainTotalWeight() (*big.Int, error) {
+func (l *ledger) GetChainTotalWeight() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (l *ledger) GetNodeWeight(nodeID string) (*big.Int, error) {
+func (l *ledger) GetNodeWeight(nodeID string) (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -182,4 +187,16 @@ func (l *ledger) GetCurrentEpoch() uint64 {
 
 func (l *ledger) SetCurrentEpoch(epoch uint64) {
 
+}
+
+func (l *ledger) GetActiveExecutorIDs() ([]string, error) {
+	return nil, nil
+}
+
+func (l *ledger) GetActiveProposerIDs() ([]string, error) {
+	return nil, nil
+}
+
+func (l *ledger) GetActiveValidatorIDs() ([]string, error) {
+	return nil, nil
 }

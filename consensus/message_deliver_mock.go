@@ -17,6 +17,7 @@ type messageDeliverMock struct {
 	partPubKeyChMap  map[int]chan *DKGPartPubKeyMessage
 	dealMsgChMap     map[int]chan *DKGDealMessage
 	dealRespMsgChMap map[int]chan *DKGDealRespMessage
+	dkgBls           DKGBls
 }
 
 func (md *messageDeliverMock) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {
@@ -25,6 +26,11 @@ func (md *messageDeliverMock) deliverProposeMessage(ctx context.Context, msg *Pr
 }
 
 func (md *messageDeliverMock) deliverVoteMessage(ctx context.Context, msg *VoteMessage) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (md *messageDeliverMock) deliverCommitMessage(ctx context.Context, msg *CommitMessage) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -69,4 +75,8 @@ func (md *messageDeliverMock) deliverDKGDealRespMessage(ctx context.Context, msg
 	}
 
 	return nil
+}
+
+func (md *messageDeliverMock) updateDKGBls(dkgBls DKGBls) {
+	md.dkgBls = dkgBls
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,29 +30,40 @@ import (
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 )
 
+type DHTServiceType int
+
+const (
+	DHTServiceType_Unknown = iota
+	DHTServiceType_General
+	DHTServiceType_Execute
+	DHTServiceType_Propose
+	DHTServiceType_Validate
+)
+
 type P2PService struct {
 	sync.Mutex
 	ctx           context.Context
 	log           tplog.Logger
 	host          host.Host
 	pubsub        *pubsub.PubSub
-	dht           *dht.IpfsDHT
 	sysActor      *actor.ActorSystem
 	modPIDS       map[string]*actor.PID      //module name -> actor PID
 	modMarshals   map[string]codec.Marshaler //module name -> Marshaler
-	dhtService    *P2PDHTService
+	netActiveNode tpnetcmn.NetworkActiveNode
+	dhtServices   map[DHTServiceType]*P2PDHTService
 	streamService *P2PStreamService
 	pubsubService *P2PPubSubService
 }
 
-func NewP2PService(ctx context.Context, log tplog.Logger, sysActor *actor.ActorSystem, endPoint string, seed string) *P2PService {
+func NewP2PService(ctx context.Context, log tplog.Logger, sysActor *actor.ActorSystem, endPoint string, seed string, netActiveNode tpnetcmn.NetworkActiveNode) *P2PService {
 	p2pLog := tplog.CreateModuleLogger(logcomm.InfoLevel, "P2PService", log)
 
 	p2p := &P2PService{
-		log:         p2pLog,
-		sysActor:    sysActor,
-		modPIDS:     make(map[string]*actor.PID),
-		modMarshals: make(map[string]codec.Marshaler),
+		log:           p2pLog,
+		sysActor:      sysActor,
+		modPIDS:       make(map[string]*actor.PID),
+		modMarshals:   make(map[string]codec.Marshaler),
+		netActiveNode: netActiveNode,
 	}
 
 	p2pPrivKey, err := p2p.createP2PPrivKey(seed)
@@ -76,27 +88,6 @@ func NewP2PService(ctx context.Context, log tplog.Logger, sysActor *actor.ActorS
 		return nil
 	}
 
-	var bootNodes []string
-	var dhtOptions []dht.Option
-	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES) != nil {
-		bootNodes = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES).([]string)
-	}
-	if len(bootNodes) > 0 {
-		dhtOptions = append(dhtOptions, p2p.withBootPeers(bootNodes))
-	}
-	dhtOptions = append(dhtOptions, p2p.defaultDHTOptions()...)
-	dht, err := dht.New(ctx, h, dhtOptions...)
-	if err != nil {
-		p2pLog.Errorf("create p2p dht err: %v", err)
-		return nil
-	}
-
-	err = dht.Bootstrap(ctx)
-	if err != nil {
-		p2pLog.Errorf("dht bootstrap err: %v", err)
-		return nil
-	}
-
 	pubsub, err := pubsub.NewGossipSub(ctx, h, p2p.defaultPubSubOptions()...)
 	if err != nil {
 		p2pLog.Errorf("create p2p pubsub err: %v", err)
@@ -106,10 +97,13 @@ func NewP2PService(ctx context.Context, log tplog.Logger, sysActor *actor.ActorS
 	p2p.ctx = ctx
 
 	p2p.host = h
-	p2p.dht = dht
 	p2p.pubsub = pubsub
 
-	p2p.dhtService = NewP2PDHTService(ctx, p2pLog, dht)
+	if err = p2p.createDHTService(ctx, p2pLog, h); err != nil {
+		p2pLog.Errorf("create DHT service err: %v", err)
+		return nil
+	}
+
 	p2p.streamService = NewP2PStreamService(ctx, p2pLog, p2p)
 	p2p.pubsubService = NewP2PPubSubService(ctx, p2pLog, true, pubsub, p2p)
 
@@ -117,6 +111,9 @@ func NewP2PService(ctx context.Context, log tplog.Logger, sysActor *actor.ActorS
 	p2p.host.SetStreamHandler(tpnetprotoc.SyncProtocolID_Block, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.SyncProtocolID_Msg, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.HeatBeatPtotocolID, p2p.streamService.handleIncomingStreamWithResp)
+	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_Msg, p2p.streamService.handleIncomingStream)
+	p2p.host.SetStreamHandler(tpnetprotoc.ForwardPropose_Msg, p2p.streamService.handleIncomingStream)
+	p2p.host.SetStreamHandler(tpnetprotoc.FrowardValidate_Msg, p2p.streamService.handleIncomingStream)
 
 	p2pLog.Info("create p2p service successfully")
 
@@ -141,6 +138,27 @@ func (p2p *P2PService) defaultDHTOptions() []dht.Option {
 	}
 }
 
+func (p2p *P2PService) defaultDHTOptionsExecute() []dht.Option {
+	return []dht.Option{
+		dht.ProtocolPrefix(tpnetprotoc.P2PProtocolExecutePrefix),
+		dht.Mode(dht.ModeServer),
+	}
+}
+
+func (p2p *P2PService) defaultDHTOptionsPropose() []dht.Option {
+	return []dht.Option{
+		dht.ProtocolPrefix(tpnetprotoc.P2PProtocolProposePrefix),
+		dht.Mode(dht.ModeServer),
+	}
+}
+
+func (p2p *P2PService) defaultDHTOptionsValidate() []dht.Option {
+	return []dht.Option{
+		dht.ProtocolPrefix(tpnetprotoc.P2PProtocolValidatePrefix),
+		dht.Mode(dht.ModeServer),
+	}
+}
+
 func (p2p *P2PService) defaultPubSubOptions() []pubsub.Option {
 	return []pubsub.Option{
 		pubsub.WithMaxMessageSize(tpnetprotoc.PubSubMaxMsgSize),
@@ -159,6 +177,125 @@ func (p2p *P2PService) withBootPeers(bootPeers []string) dht.Option {
 		peers = append(peers, *peerInfo)
 	}
 	return dht.BootstrapPeers(peers...)
+}
+
+func (p2p *P2PService) createDHTService(ctx context.Context, p2pLog tplog.Logger, h host.Host) error {
+	var bootNodes []string
+	var bootNodesExecute []string
+	var bootNodesPropose []string
+	var bootNodesValidate []string
+
+	var dhtOptions []dht.Option
+	var dhtOptionsExecute []dht.Option
+	var dhtOptionsPropose []dht.Option
+	var dhtOptionsValidate []dht.Option
+
+	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES) != nil {
+		bootNodes = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES).([]string)
+	}
+	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_EXECUTE) != nil {
+		bootNodes = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_EXECUTE).([]string)
+	}
+	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE) != nil {
+		bootNodes = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE).([]string)
+	}
+	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_VALIDATE) != nil {
+		bootNodes = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE).([]string)
+	}
+
+	if len(bootNodes) > 0 {
+		dhtOptions = append(dhtOptions, p2p.withBootPeers(bootNodes))
+	}
+	dhtOptions = append(dhtOptions, p2p.defaultDHTOptions()...)
+
+	if len(bootNodesExecute) > 0 {
+		dhtOptionsExecute = append(dhtOptionsExecute, p2p.withBootPeers(bootNodesExecute))
+	}
+	dhtOptionsExecute = append(dhtOptionsExecute, p2p.defaultDHTOptionsExecute()...)
+
+	if len(bootNodesPropose) > 0 {
+		dhtOptionsPropose = append(dhtOptionsPropose, p2p.withBootPeers(bootNodesPropose))
+	}
+	dhtOptionsPropose = append(dhtOptionsPropose, p2p.defaultDHTOptionsPropose()...)
+
+	if len(bootNodesValidate) > 0 {
+		dhtOptionsValidate = append(dhtOptionsValidate, p2p.withBootPeers(bootNodesValidate))
+	}
+	dhtOptionsValidate = append(dhtOptionsValidate, p2p.defaultDHTOptionsValidate()...)
+
+	if p2p.netActiveNode != nil {
+		dhtOptionsExecute = append(dhtOptionsExecute, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
+			activeExcutors, err := p2p.netActiveNode.GetActiveExecutorIDs()
+			if err != nil {
+				p2pLog.Errorf("Can't get active excutors: %v", err)
+			}
+
+			p2pLog.Debugf("Current active excutors: %v", activeExcutors)
+
+			if len(activeExcutors) > 0 {
+				return tpcmm.IsContainString(p.String(), activeExcutors)
+			}
+
+			return false
+		}))
+
+		dhtOptionsPropose = append(dhtOptionsPropose, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
+			activeProposers, err := p2p.netActiveNode.GetActiveProposerIDs()
+			if err != nil {
+				p2pLog.Errorf("Can't get active proposers: %v", err)
+			}
+
+			p2pLog.Debugf("Current active proposers: %v", activeProposers)
+
+			if len(activeProposers) > 0 {
+				return tpcmm.IsContainString(p.String(), activeProposers)
+			}
+
+			return false
+		}))
+
+		dhtOptionsValidate = append(dhtOptionsValidate, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
+			activeValidates, err := p2p.netActiveNode.GetActiveValidatorIDs()
+			if err != nil {
+				p2pLog.Errorf("Can't get active validates: %v", err)
+			}
+
+			p2pLog.Debugf("Current active validates: %v", activeValidates)
+
+			if len(activeValidates) > 0 {
+				return tpcmm.IsContainString(p.String(), activeValidates)
+			}
+
+			return false
+		}))
+
+	}
+
+	dhtOptsMap := map[DHTServiceType][]dht.Option{
+		DHTServiceType_General:  dhtOptions,
+		DHTServiceType_Execute:  dhtOptionsExecute,
+		DHTServiceType_Propose:  dhtOptionsPropose,
+		DHTServiceType_Validate: dhtOptionsValidate,
+	}
+
+	p2p.dhtServices = make(map[DHTServiceType]*P2PDHTService)
+	for dhtSType, dhtOpts := range dhtOptsMap {
+		dht, err := dht.New(ctx, h, dhtOpts...)
+		if err != nil {
+			p2pLog.Errorf("create p2p dht err: %v", err)
+			return err
+		}
+
+		err = dht.Bootstrap(ctx)
+		if err != nil {
+			p2pLog.Errorf("dht bootstrap err: %v", err)
+			return err
+		}
+
+		p2p.dhtServices[dhtSType] = NewP2PDHTService(ctx, p2pLog, dht)
+	}
+
+	return nil
 }
 
 func (p2p *P2PService) ID() peer.ID {
@@ -256,6 +393,26 @@ func (p2p *P2PService) dispatchAndWaitResp(moduleName string, streamMsg *message
 	}
 }
 
+func (p2p *P2PService) DHTServiceOfProtocol(protocolID string) (*P2PDHTService, error) {
+	if strings.Contains(protocolID, tpnetprotoc.P2PProtocolPrefix) {
+		return p2p.dhtServices[DHTServiceType_General], nil
+	}
+
+	if strings.Contains(protocolID, tpnetprotoc.P2PProtocolExecutePrefix) {
+		return p2p.dhtServices[DHTServiceType_Execute], nil
+	}
+
+	if strings.Contains(protocolID, tpnetprotoc.P2PProtocolProposePrefix) {
+		return p2p.dhtServices[DHTServiceType_Propose], nil
+	}
+
+	if strings.Contains(protocolID, tpnetprotoc.P2PProtocolValidatePrefix) {
+		return p2p.dhtServices[DHTServiceType_Validate], nil
+	}
+
+	return nil, fmt.Errorf("unknown protocolID %s", protocolID)
+}
+
 func (p2p *P2PService) Send(ctx context.Context, protocolID string, moduleName string, data []byte) error {
 	var peerIDList []peer.ID
 	if ctx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
@@ -275,13 +432,18 @@ func (p2p *P2PService) Send(ctx context.Context, protocolID string, moduleName s
 			rStrategy = ctx.Value(tpnetcmn.NetContextKey_RouteStrategy).(tpnetcmn.RouteStrategy)
 		}
 
+		dhtService, err := p2p.DHTServiceOfProtocol(protocolID)
+		if err != nil {
+			return err
+		}
+
 		switch rStrategy {
 		case tpnetcmn.RouteStrategy_Default:
-			peerIDList, _ = p2p.dhtService.GetAllPeerIDs()
+			peerIDList, _ = dhtService.GetAllPeerIDs()
 		case tpnetcmn.RouteStrategy_NearestBucket:
-			peerIDList, _ = p2p.dhtService.GetNearestPeerIDs(p2p.host.ID())
+			peerIDList, _ = dhtService.GetNearestPeerIDs(p2p.host.ID())
 		case tpnetcmn.RouteStrategy_BucketsWithFactor:
-			peerIDList, _ = p2p.dhtService.GetPeersWithFactor()
+			peerIDList, _ = dhtService.GetPeersWithFactor()
 		default:
 			p2p.log.Debugf("Send with invalid RouteStrategy: %d", rStrategy)
 		}
@@ -377,13 +539,18 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 			rStrategy = ctx.Value(tpnetcmn.NetContextKey_RouteStrategy).(tpnetcmn.RouteStrategy)
 		}
 
+		dhtService, err := p2p.DHTServiceOfProtocol(protocolID)
+		if err != nil {
+			return nil, err
+		}
+
 		switch rStrategy {
 		case tpnetcmn.RouteStrategy_Default:
-			peerIDList, _ = p2p.dhtService.GetAllPeerIDs()
+			peerIDList, _ = dhtService.GetAllPeerIDs()
 		case tpnetcmn.RouteStrategy_NearestBucket:
-			peerIDList, _ = p2p.dhtService.GetNearestPeerIDs(p2p.host.ID())
+			peerIDList, _ = dhtService.GetNearestPeerIDs(p2p.host.ID())
 		case tpnetcmn.RouteStrategy_BucketsWithFactor:
-			peerIDList, _ = p2p.dhtService.GetPeersWithFactor()
+			peerIDList, _ = dhtService.GetPeersWithFactor()
 		default:
 			p2p.log.Debugf("SendWithResponse invalid with RouteStrategy: %d", rStrategy)
 		}
@@ -547,6 +714,9 @@ func (p2p *P2PService) Start() {
 }
 
 func (p2p *P2PService) Close() {
-	p2p.dht.Close()
+	for _, dhtService := range p2p.dhtServices {
+		dhtService.Close()
+	}
+
 	p2p.host.Close()
 }

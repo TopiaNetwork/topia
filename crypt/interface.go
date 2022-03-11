@@ -8,15 +8,9 @@ import (
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
 
-type CryptServiceType int
-
-const (
-	CryptServiceType_Unknown CryptServiceType = iota
-	CryptServiceType_BLS12381
-	CryptServiceType_Secp256
-)
-
 type CryptService interface {
+	CryptType() tpcrtypes.CryptType
+
 	GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error)
 
 	ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error)
@@ -24,14 +18,16 @@ type CryptService interface {
 	Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrtypes.Signature, error)
 
 	Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error)
+
+	CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error)
 }
 
-func CreateCryptService(log tplog.Logger, cryptType CryptServiceType) CryptService {
+func CreateCryptService(log tplog.Logger, cryptType tpcrtypes.CryptType) CryptService {
 	cryptLog := tplog.CreateModuleLogger(tplogcmm.InfoLevel, "crypt", log)
 	switch cryptType {
-	case CryptServiceType_BLS12381:
+	case tpcrtypes.CryptType_BLS12381:
 		return bls12381.New(cryptLog)
-	case CryptServiceType_Secp256:
+	case tpcrtypes.CryptType_Secp256:
 		return secp256.New(cryptLog)
 	default:
 		cryptLog.Panicf("invalid crypt type %d", cryptType)

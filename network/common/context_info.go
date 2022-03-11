@@ -8,6 +8,9 @@ const (
 	NetContextKey_RouteStrategy
 	NetContextKey_RespThreshold
 	NetContextKey_BOOTNODES
+	NetContextKey_BOOTNODES_EXECUTE
+	NetContextKey_BOOTNODES_PROPOSE
+	NetContextKey_BOOTNODES_VALIDATE
 )
 
 type RouteStrategy int

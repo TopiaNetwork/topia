@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"context"
 	"github.com/TopiaNetwork/topia/codec"
 	tptypes "github.com/TopiaNetwork/topia/common/types"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -13,11 +14,15 @@ type ConsensusHandler interface {
 
 	ProcessVote(msg *VoteMessage) error
 
+	ProcessCommit(msg *CommitMessage) error
+
 	ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error
 
 	ProcessDKGDeal(msg *DKGDealMessage) error
 
 	ProcessDKGDealResp(msg *DKGDealRespMessage) error
+
+	updateDKGBls(dkgBls DKGBls)
 }
 
 type consensusHandler struct {
@@ -30,6 +35,7 @@ type consensusHandler struct {
 	voteCollector  *consensusVoteCollector
 	csState        consensusStore
 	marshaler      codec.Marshaler
+	deliver        messageDeliverI
 }
 
 func NewConsensusHandler(log tplog.Logger,
@@ -39,7 +45,8 @@ func NewConsensusHandler(log tplog.Logger,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
 	csState consensusStore,
-	marshaler codec.Marshaler) *consensusHandler {
+	marshaler codec.Marshaler,
+	deliver messageDeliverI) *consensusHandler {
 	return &consensusHandler{
 		log:            log,
 		roundCh:        roundCh,
@@ -50,6 +57,7 @@ func NewConsensusHandler(log tplog.Logger,
 		voteCollector:  newConsensusVoteCollector(log),
 		csState:        csState,
 		marshaler:      marshaler,
+		deliver:        deliver,
 	}
 }
 
@@ -58,15 +66,21 @@ func (handler *consensusHandler) VerifyBlock(block *tptypes.Block) error {
 }
 
 func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {
-	err := handler.csState.Commit()
-	if err != nil {
-		handler.log.Errorf("Can't commit block height =%d, err=%v", err)
-		return err
-	}
-
 	handler.proposeMsgChan <- msg
 
 	return nil
+}
+
+func (handler *consensusHandler) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
+	return &CommitMessage{
+		ChainID: msg.ChainID,
+		Version: msg.Version,
+		Epoch:   msg.Epoch,
+		Round:   msg.Round,
+		Proof:   msg.Proof,
+		AggSign: aggSign,
+		Block:   msg.Block,
+	}, nil
 }
 
 func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
@@ -76,15 +90,21 @@ func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
 		return err
 	}
 
-	var block tptypes.Block
-	err = handler.marshaler.Unmarshal(msg.Block, &block)
-	if err != nil {
-		handler.log.Errorf("Unmarshal block failed: %v", err)
-		return err
-	}
-
 	if aggSign != nil {
-		err := handler.csState.Commit()
+		commitMsg, _ := handler.produceCommitMsg(msg, aggSign)
+		err := handler.deliver.deliverCommitMessage(context.Background(), commitMsg)
+		if err != nil {
+			handler.log.Panicf("Can't deliver commit message: %v", err)
+		}
+
+		var block tptypes.Block
+		err = handler.marshaler.Unmarshal(msg.Block, &block)
+		if err != nil {
+			handler.log.Errorf("Unmarshal block failed: %v", err)
+			return err
+		}
+		block.Head.VoteAggSignature = aggSign
+		err = handler.csState.Commit(&block)
 		if err != nil {
 			handler.log.Errorf("Can't commit block height =%d, err=%v", block.Head.Height, err)
 			return err
@@ -93,21 +113,45 @@ func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
 		handler.csState.ClearBlockMiddleResult(msg.Round)
 		handler.voteCollector.reset()
 
-		csProof := ConsensusProof{
-			ParentBlockHash: block.Head.ParentBlockHash,
-			Height:          block.Head.Height,
-			AggSign:         aggSign,
-		}
+		/*
+			csProof := ConsensusProof{
+				ParentBlockHash: block.Head.ParentBlockHash,
+				Height:          block.Head.Height,
+				AggSign:         aggSign,
+			}
 
-		roundInfo := &RoundInfo{
-			Epoch:        block.Head.Epoch,
-			LastRoundNum: block.Head.Round,
-			CurRoundNum:  block.Head.Round + 1,
-			Proof:        &csProof,
-		}
+			roundInfo := &RoundInfo{
+				Epoch:        block.Head.Epoch,
+				LastRoundNum: block.Head.Round,
+				CurRoundNum:  block.Head.Round + 1,
+				Proof:        &csProof,
+			}
 
-		handler.roundCh <- roundInfo
+			handler.roundCh <- roundInfo
+		*/
 	}
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
+	var block tptypes.Block
+	err := handler.marshaler.Unmarshal(msg.Block, &block)
+	if err != nil {
+		handler.log.Errorf("Unmarshal block failed: %v", err)
+		return err
+	}
+
+	block.Head.VoteAggSignature = msg.AggSign
+
+	err = handler.csState.Commit(&block)
+	if err != nil {
+		handler.log.Errorf("Can't commit block height =%d, err=%v", block.Head.Height, err)
+		return err
+	}
+
+	handler.csState.ClearBlockMiddleResult(msg.Round)
+	handler.voteCollector.reset()
 
 	return nil
 }
@@ -128,4 +172,8 @@ func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) err
 	handler.dealRespMsgCh <- msg
 
 	return nil
+}
+
+func (handler *consensusHandler) updateDKGBls(dkgBls DKGBls) {
+	handler.voteCollector.updateDKGBls(dkgBls)
 }

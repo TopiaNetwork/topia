@@ -70,3 +70,7 @@ func (ps *P2PDHTService) GetPeersWithFactor() ([]peer.ID, error) {
 
 	return filterPeers, nil
 }
+
+func (ps *P2PDHTService) Close() error {
+	return ps.dht.Close()
+}

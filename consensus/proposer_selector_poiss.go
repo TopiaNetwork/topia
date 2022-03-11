@@ -1,6 +1,8 @@
 package consensus
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"math/big"
 
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -88,7 +90,7 @@ func lambda(weight, totalWeight *big.Int) *big.Int {
 	return lam
 }
 
-var MaxWinCount = 3 * int64(5)
+var MaxWinCount = int64(26)
 
 type poiss struct {
 	lam  *big.Int
@@ -136,12 +138,11 @@ func (p *poiss) next() *big.Int {
 }
 
 type proposerSelectorPoiss struct {
-	crypt  tpcrt.CryptService
-	hasher tpcmm.Hasher
+	crypt tpcrt.CryptService
 }
 
-func newProposerSelectorPoiss(crypt tpcrt.CryptService, hasher tpcmm.Hasher) *proposerSelectorPoiss {
-	return &proposerSelectorPoiss{crypt: crypt, hasher: hasher}
+func newProposerSelectorPoiss(crypt tpcrt.CryptService) *proposerSelectorPoiss {
+	return &proposerSelectorPoiss{crypt: crypt}
 }
 
 func (ep *proposerSelectorPoiss) ComputeVRF(priKey tpcrtypes.PrivateKey, data []byte) ([]byte, error) {
@@ -149,7 +150,8 @@ func (ep *proposerSelectorPoiss) ComputeVRF(priKey tpcrtypes.PrivateKey, data []
 }
 
 func (ep *proposerSelectorPoiss) SelectProposer(VRFProof []byte, weight *big.Int, totalWeight *big.Int) int64 {
-	h := ep.hasher.Compute(string(VRFProof))
+	hasher := tpcmm.NewBlake2bHasher(0)
+	h := hasher.Compute(string(VRFProof))
 
 	lhs := new(big.Int).SetBytes(h[:])
 
@@ -164,4 +166,16 @@ func (ep *proposerSelectorPoiss) SelectProposer(VRFProof []byte, weight *big.Int
 	}
 
 	return j
+}
+
+func (ep *proposerSelectorPoiss) MaxPriority(vrf []byte, winCount int64) []byte {
+	var maxPrior []byte
+	i := int64(1)
+	for ; i <= winCount; i++ {
+		prior := sha256.Sum256(bytes.Join([][]byte{vrf, tpcmm.Uint64ToBytes(uint64(i))}, nil))
+		if bytes.Compare(prior[:], maxPrior) > 0 {
+			maxPrior = prior[:]
+		}
+	}
+	return maxPrior
 }

@@ -15,6 +15,7 @@ import (
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/consensus"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -30,6 +31,7 @@ type Node struct {
 	sysActor  *actor.ActorSystem
 	handler   NodeHandler
 	marshaler codec.Marshaler
+	evHub     eventhub.EventHub
 	network   tpnet.Network
 	ledger    ledger.Ledger
 	consensus consensus.Consensus
@@ -61,6 +63,8 @@ func NewNode(endPoint string, seed string) *Node {
 
 	ledger := ledger.NewLedger(chainRootPath, "topia", mainLog, backend.BackendType_Badger)
 
+	evHub := eventhub.NewEventHub(tplogcmm.InfoLevel, mainLog)
+
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, ledger)
 	cons := consensus.NewConsensus(nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, ledger, csConfig)
 	txPool := transactionpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
@@ -72,6 +76,7 @@ func NewNode(endPoint string, seed string) *Node {
 		sysActor:  sysActor,
 		handler:   NewNodeHandler(mainLog),
 		marshaler: codec.CreateMarshaler(codec.CodecType_PROTO),
+		evHub:     evHub,
 		network:   network,
 		ledger:    ledger,
 		consensus: cons,
@@ -111,6 +116,7 @@ func (n *Node) Start() {
 
 	n.network.RegisterModule("node", actorPID, n.marshaler)
 
+	n.evHub.Start(n.sysActor)
 	n.network.Start()
 	n.consensus.Start(n.sysActor)
 	n.txPool.Start(n.sysActor, n.network)

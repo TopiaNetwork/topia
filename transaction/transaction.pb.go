@@ -49,17 +49,19 @@ func (TransactionResult_ResultStatus) EnumDescriptor() ([]byte, []int) {
 }
 
 type Transaction struct {
-	FromAddr             []byte   `protobuf:"bytes,1,opt,name=FromAddr,proto3" json:"from"`
-	TargetAddr           []byte   `protobuf:"bytes,2,opt,name=TargetAddr,proto3" json:"target"`
-	Version              uint32   `protobuf:"varint,3,opt,name=Version,proto3" json:"version"`
-	ChainID              []byte   `protobuf:"bytes,4,opt,name=ChainID,proto3" json:"chainID"`
-	Nonce                uint64   `protobuf:"varint,5,opt,name=Nonce,proto3" json:"nonce"`
-	Value                []byte   `protobuf:"bytes,6,opt,name=Value,proto3" json:"value"`
+	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
+	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
+	FromAddr             []byte   `protobuf:"bytes,3,opt,name=FromAddr,proto3" json:"fromAddr"`
+	TargetAddr           []byte   `protobuf:"bytes,4,opt,name=TargetAddr,proto3" json:"targetAddr"`
+	FeePayer             []byte   `protobuf:"bytes,5,opt,name=FeePayer,proto3" json:"feePayer,omitempty"`
+	Nonce                uint64   `protobuf:"varint,6,opt,name=Nonce,proto3" json:"nonce"`
 	GasPrice             uint64   `protobuf:"varint,7,opt,name=GasPrice,proto3" json:"gasPrice,omitempty"`
 	GasLimit             uint64   `protobuf:"varint,8,opt,name=GasLimit,proto3" json:"gasLimit,omitempty"`
-	Data                 []byte   `protobuf:"bytes,9,opt,name=Data,proto3" json:"data,omitempty"`
-	Signature            []byte   `protobuf:"bytes,10,opt,name=Signature,proto3" json:"signature,omitempty"`
-	Options              uint32   `protobuf:"varint,11,opt,name=Options,proto3" json:"options,omitempty"`
+	Type                 uint32   `protobuf:"varint,9,opt,name=Type,proto3" json:"type"`
+	Data                 []byte   `protobuf:"bytes,10,opt,name=Data,proto3" json:"data,omitempty"`
+	Signature            []byte   `protobuf:"bytes,11,opt,name=Signature,proto3" json:"signature,omitempty"`
+	FeePayerSignature    []byte   `protobuf:"bytes,12,opt,name=FeePayerSignature,proto3" json:"feePayerSignature,omitempty"`
+	Options              uint32   `protobuf:"varint,13,opt,name=Options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -94,6 +96,20 @@ func (m *Transaction) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Transaction proto.InternalMessageInfo
 
+func (m *Transaction) GetChainID() []byte {
+	if m != nil {
+		return m.ChainID
+	}
+	return nil
+}
+
+func (m *Transaction) GetVersion() uint32 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
 func (m *Transaction) GetFromAddr() []byte {
 	if m != nil {
 		return m.FromAddr
@@ -108,16 +124,9 @@ func (m *Transaction) GetTargetAddr() []byte {
 	return nil
 }
 
-func (m *Transaction) GetVersion() uint32 {
+func (m *Transaction) GetFeePayer() []byte {
 	if m != nil {
-		return m.Version
-	}
-	return 0
-}
-
-func (m *Transaction) GetChainID() []byte {
-	if m != nil {
-		return m.ChainID
+		return m.FeePayer
 	}
 	return nil
 }
@@ -127,13 +136,6 @@ func (m *Transaction) GetNonce() uint64 {
 		return m.Nonce
 	}
 	return 0
-}
-
-func (m *Transaction) GetValue() []byte {
-	if m != nil {
-		return m.Value
-	}
-	return nil
 }
 
 func (m *Transaction) GetGasPrice() uint64 {
@@ -150,6 +152,13 @@ func (m *Transaction) GetGasLimit() uint64 {
 	return 0
 }
 
+func (m *Transaction) GetType() uint32 {
+	if m != nil {
+		return m.Type
+	}
+	return 0
+}
+
 func (m *Transaction) GetData() []byte {
 	if m != nil {
 		return m.Data
@@ -160,6 +169,13 @@ func (m *Transaction) GetData() []byte {
 func (m *Transaction) GetSignature() []byte {
 	if m != nil {
 		return m.Signature
+	}
+	return nil
+}
+
+func (m *Transaction) GetFeePayerSignature() []byte {
+	if m != nil {
+		return m.FeePayerSignature
 	}
 	return nil
 }
@@ -239,36 +255,39 @@ func init() {
 func init() { proto.RegisterFile("transaction.proto", fileDescriptor_2cc4e03d2c28c490) }
 
 var fileDescriptor_2cc4e03d2c28c490 = []byte{
-	// 462 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x92, 0x41, 0x6f, 0xd3, 0x3c,
-	0x18, 0xc7, 0xe7, 0x35, 0x4d, 0xda, 0xa7, 0x7b, 0xa7, 0xd5, 0xaf, 0x00, 0x8b, 0x43, 0x5c, 0x2a,
-	0x86, 0x2a, 0x84, 0x8a, 0x34, 0xc4, 0x07, 0xa0, 0x0c, 0xc6, 0x04, 0x62, 0xc8, 0x2b, 0x3b, 0x70,
-	0x33, 0xad, 0xc9, 0x22, 0x2d, 0x71, 0x65, 0xbb, 0x13, 0x7c, 0x13, 0x3e, 0x12, 0xe2, 0xc4, 0x91,
-	0x53, 0x84, 0xca, 0x01, 0x29, 0x9f, 0x02, 0xe5, 0x71, 0xb2, 0x05, 0x38, 0xb9, 0xfa, 0xfd, 0x7f,
-	0xcf, 0xe3, 0x2a, 0x7f, 0xc3, 0xd0, 0x19, 0x99, 0x5b, 0xb9, 0x70, 0xa9, 0xce, 0xa7, 0x2b, 0xa3,
-	0x9d, 0xa6, 0x5d, 0x3c, 0x6e, 0x43, 0xa2, 0x13, 0xed, 0xd1, 0xf8, 0x57, 0x07, 0x06, 0xf3, 0x6b,
-	0x91, 0xde, 0x85, 0xde, 0x73, 0xa3, 0xb3, 0x27, 0xcb, 0xa5, 0x61, 0x64, 0x44, 0x26, 0x3b, 0xb3,
-	0x5e, 0x59, 0xf0, 0xe0, 0x83, 0xd1, 0x99, 0xb8, 0x4a, 0xe8, 0x7d, 0x80, 0xb9, 0x34, 0x89, 0x72,
-	0xe8, 0x6d, 0xa3, 0x07, 0x65, 0xc1, 0x43, 0x87, 0x54, 0xb4, 0x52, 0xba, 0x0f, 0xd1, 0x99, 0x32,
-	0x36, 0xd5, 0x39, 0xeb, 0x8c, 0xc8, 0xe4, 0xbf, 0xd9, 0xa0, 0x2c, 0x78, 0x74, 0xe9, 0x91, 0x68,
-	0xb2, 0x4a, 0x7b, 0x7a, 0x2e, 0xd3, 0xfc, 0xf8, 0x90, 0x05, 0xb8, 0x0f, 0xb5, 0x85, 0x47, 0xa2,
-	0xc9, 0x28, 0x87, 0xee, 0x6b, 0x9d, 0x2f, 0x14, 0xeb, 0x8e, 0xc8, 0x24, 0x98, 0xf5, 0xcb, 0x82,
-	0x77, 0xf3, 0x0a, 0x08, 0xcf, 0x2b, 0xe1, 0x4c, 0x5e, 0xac, 0x15, 0x0b, 0x71, 0x0b, 0x0a, 0x97,
-	0x15, 0x10, 0x9e, 0xd3, 0x03, 0xe8, 0x1d, 0x49, 0xfb, 0xc6, 0xa4, 0x0b, 0xc5, 0x22, 0x5c, 0x72,
-	0xb3, 0x2c, 0x38, 0x4d, 0x6a, 0xf6, 0x40, 0x67, 0xa9, 0x53, 0xd9, 0xca, 0x7d, 0x12, 0x57, 0x5e,
-	0x3d, 0xf3, 0x2a, 0xcd, 0x52, 0xc7, 0x7a, 0x7f, 0xcc, 0x20, 0xfb, 0x6b, 0x06, 0x19, 0xbd, 0x07,
-	0xc1, 0xa1, 0x74, 0x92, 0xf5, 0xf1, 0x7f, 0xd0, 0xb2, 0xe0, 0xbb, 0x4b, 0xe9, 0x64, 0xcb, 0xc5,
-	0x9c, 0x3e, 0x86, 0xfe, 0x69, 0x9a, 0xe4, 0xd2, 0xad, 0x8d, 0x62, 0x80, 0xf2, 0xad, 0xb2, 0xe0,
-	0xff, 0xdb, 0x06, 0xb6, 0x26, 0xae, 0x4d, 0xfa, 0x10, 0xa2, 0x93, 0x55, 0x55, 0x99, 0x65, 0x03,
-	0xfc, 0xac, 0x37, 0xca, 0x82, 0x0f, 0xb5, 0x47, 0xad, 0x91, 0xc6, 0x1a, 0x7f, 0x25, 0x30, 0x6c,
-	0x35, 0x2d, 0x94, 0x5d, 0x5f, 0x38, 0x3a, 0x86, 0x70, 0xfe, 0xf1, 0x85, 0xb4, 0xe7, 0x75, 0xdb,
-	0xbe, 0x45, 0x24, 0xa2, 0x4e, 0xaa, 0x6a, 0x8e, 0xa4, 0x7d, 0x6b, 0xd5, 0x12, 0xab, 0x0e, 0x7c,
-	0x35, 0x89, 0x47, 0xa2, 0xc9, 0xe8, 0x31, 0x84, 0xa7, 0x4e, 0xba, 0xb5, 0xc5, 0x9e, 0x77, 0x0f,
-	0xf6, 0xfd, 0x13, 0x9b, 0xfe, 0x73, 0xe9, 0xd4, 0x1f, 0x5e, 0xf6, 0x37, 0x5a, 0xfc, 0x2d, 0xea,
-	0x05, 0x63, 0x0e, 0x3b, 0x6d, 0x87, 0x86, 0xb0, 0x7d, 0xf2, 0x72, 0x6f, 0x8b, 0x46, 0xd0, 0x79,
-	0x66, 0xcc, 0x1e, 0x99, 0xdd, 0xf9, 0xb2, 0x89, 0xc9, 0xb7, 0x4d, 0x4c, 0xbe, 0x6f, 0x62, 0xf2,
-	0x63, 0x13, 0x93, 0xcf, 0x3f, 0xe3, 0xad, 0x77, 0x83, 0xd6, 0x93, 0x7f, 0x1f, 0xe2, 0xed, 0x8f,
-	0x7e, 0x07, 0x00, 0x00, 0xff, 0xff, 0x80, 0x15, 0xda, 0xf6, 0x08, 0x03, 0x00, 0x00,
+	// 506 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x93, 0x4f, 0x6f, 0x12, 0x41,
+	0x18, 0xc6, 0xbb, 0xed, 0xb2, 0xc0, 0x0b, 0x25, 0x65, 0x8c, 0x3a, 0x51, 0xc3, 0x20, 0x49, 0x0d,
+	0x07, 0x83, 0x49, 0x8d, 0x1f, 0x40, 0xac, 0xad, 0x8d, 0x7f, 0xda, 0x4c, 0xd1, 0x83, 0xb7, 0x11,
+	0x86, 0xed, 0x26, 0xb2, 0x4b, 0x66, 0x06, 0x23, 0xdf, 0xc4, 0x8f, 0x64, 0x3c, 0x79, 0xf4, 0x34,
+	0x31, 0x78, 0x9b, 0x8b, 0x5f, 0xc1, 0xf0, 0xce, 0x2e, 0xac, 0xed, 0x69, 0xc9, 0xef, 0xfd, 0x3d,
+	0xef, 0x64, 0x26, 0x0f, 0xd0, 0x36, 0x4a, 0xa4, 0x5a, 0x8c, 0x4d, 0x92, 0xa5, 0x83, 0xb9, 0xca,
+	0x4c, 0x46, 0x2a, 0xf8, 0xb9, 0x07, 0x71, 0x16, 0x67, 0x1e, 0xf5, 0xfe, 0x86, 0xd0, 0x18, 0x6d,
+	0x45, 0x72, 0x08, 0xd5, 0x17, 0x57, 0x22, 0x49, 0xcf, 0x8e, 0x69, 0xd0, 0x0d, 0xfa, 0xcd, 0x61,
+	0xc3, 0x59, 0x56, 0x1d, 0x7b, 0xc4, 0x8b, 0xd9, 0x5a, 0xfb, 0x20, 0x95, 0x4e, 0xb2, 0x94, 0xee,
+	0x76, 0x83, 0xfe, 0xbe, 0xd7, 0xbe, 0x78, 0xc4, 0x8b, 0x19, 0xe9, 0x43, 0xed, 0x44, 0x65, 0xb3,
+	0xe7, 0x93, 0x89, 0xa2, 0x7b, 0xb8, 0xae, 0xe9, 0x2c, 0xab, 0x4d, 0x73, 0xc6, 0x37, 0x53, 0x32,
+	0x00, 0x18, 0x09, 0x15, 0x4b, 0x83, 0x6e, 0x88, 0x6e, 0xcb, 0x59, 0x06, 0x66, 0x43, 0x79, 0xc9,
+	0x20, 0x47, 0x50, 0x3b, 0x91, 0xf2, 0x42, 0x2c, 0xa5, 0xa2, 0x15, 0xb4, 0xef, 0x38, 0xcb, 0xc8,
+	0x34, 0x67, 0x8f, 0xb3, 0x59, 0x62, 0xe4, 0x6c, 0x6e, 0x96, 0x7c, 0xe3, 0x11, 0x06, 0x95, 0x77,
+	0x59, 0x3a, 0x96, 0x34, 0xea, 0x06, 0xfd, 0x70, 0x58, 0x77, 0x96, 0x55, 0xd2, 0x35, 0xe0, 0x9e,
+	0xaf, 0x97, 0x9e, 0x0a, 0x7d, 0xa1, 0x92, 0xb1, 0xa4, 0x55, 0x74, 0x70, 0x69, 0x9c, 0xb3, 0xf2,
+	0xd2, 0xc2, 0xcb, 0x33, 0x6f, 0x92, 0x59, 0x62, 0x68, 0xed, 0xbf, 0x0c, 0xb2, 0x6b, 0x19, 0x64,
+	0xe4, 0x01, 0x84, 0xa3, 0xe5, 0x5c, 0xd2, 0x3a, 0x3e, 0x5d, 0xcd, 0x59, 0x16, 0x9a, 0xe5, 0x5c,
+	0x72, 0xa4, 0xe4, 0x11, 0x84, 0xc7, 0xc2, 0x08, 0x0a, 0x78, 0x2d, 0xe2, 0x2c, 0x6b, 0x4d, 0x84,
+	0x11, 0xa5, 0x4d, 0x38, 0x27, 0xcf, 0xa0, 0x7e, 0x99, 0xc4, 0xa9, 0x30, 0x0b, 0x25, 0x69, 0x03,
+	0xe5, 0xbb, 0xce, 0xb2, 0x5b, 0xba, 0x80, 0xa5, 0xc4, 0xd6, 0x24, 0x6f, 0xa1, 0x5d, 0xbc, 0xc8,
+	0x36, 0xde, 0xc4, 0x38, 0x73, 0x96, 0xdd, 0x9f, 0x5e, 0x1f, 0x96, 0xd6, 0xdc, 0x4c, 0x92, 0x27,
+	0x50, 0x3d, 0x9f, 0xaf, 0xab, 0xa3, 0xe9, 0x3e, 0x5e, 0xe7, 0xb6, 0xb3, 0xac, 0x9d, 0x79, 0x54,
+	0x8a, 0x16, 0x56, 0xef, 0x47, 0x00, 0xed, 0x52, 0xe3, 0xb8, 0xd4, 0x8b, 0xcf, 0x86, 0xf4, 0x20,
+	0x1a, 0x7d, 0x7d, 0x25, 0xf4, 0x55, 0x5e, 0x3b, 0x70, 0x96, 0x45, 0x06, 0x09, 0xcf, 0x27, 0xeb,
+	0xd2, 0x9d, 0x0a, 0xfd, 0x5e, 0xcb, 0x09, 0x96, 0x2e, 0xf4, 0xa5, 0x8b, 0x3d, 0xe2, 0xc5, 0x8c,
+	0x9c, 0x41, 0x74, 0x69, 0x84, 0x59, 0x68, 0xac, 0x5c, 0xeb, 0xe8, 0xd0, 0x57, 0x7d, 0x70, 0xe3,
+	0xd0, 0x81, 0xff, 0x78, 0xd9, 0x9f, 0xa8, 0xf1, 0x37, 0xcf, 0x17, 0xf4, 0x18, 0x34, 0xcb, 0x0e,
+	0x89, 0x60, 0xf7, 0xfc, 0xf5, 0xc1, 0x0e, 0xa9, 0xc2, 0xde, 0x4b, 0xa5, 0x0e, 0x82, 0xe1, 0xc3,
+	0xef, 0xab, 0x4e, 0xf0, 0x73, 0xd5, 0x09, 0x7e, 0xad, 0x3a, 0xc1, 0xef, 0x55, 0x27, 0xf8, 0xf6,
+	0xa7, 0xb3, 0xf3, 0xb1, 0x51, 0xfa, 0xeb, 0x7d, 0x8a, 0xf0, 0xf4, 0xa7, 0xff, 0x02, 0x00, 0x00,
+	0xff, 0xff, 0xd3, 0x20, 0x8c, 0x49, 0x90, 0x03, 0x00, 0x00,
 }
 
 func (m *Transaction) Marshal() (dAtA []byte, err error) {
@@ -298,21 +317,33 @@ func (m *Transaction) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.Options != 0 {
 		i = encodeVarintTransaction(dAtA, i, uint64(m.Options))
 		i--
-		dAtA[i] = 0x58
+		dAtA[i] = 0x68
+	}
+	if len(m.FeePayerSignature) > 0 {
+		i -= len(m.FeePayerSignature)
+		copy(dAtA[i:], m.FeePayerSignature)
+		i = encodeVarintTransaction(dAtA, i, uint64(len(m.FeePayerSignature)))
+		i--
+		dAtA[i] = 0x62
 	}
 	if len(m.Signature) > 0 {
 		i -= len(m.Signature)
 		copy(dAtA[i:], m.Signature)
 		i = encodeVarintTransaction(dAtA, i, uint64(len(m.Signature)))
 		i--
-		dAtA[i] = 0x52
+		dAtA[i] = 0x5a
 	}
 	if len(m.Data) > 0 {
 		i -= len(m.Data)
 		copy(dAtA[i:], m.Data)
 		i = encodeVarintTransaction(dAtA, i, uint64(len(m.Data)))
 		i--
-		dAtA[i] = 0x4a
+		dAtA[i] = 0x52
+	}
+	if m.Type != 0 {
+		i = encodeVarintTransaction(dAtA, i, uint64(m.Type))
+		i--
+		dAtA[i] = 0x48
 	}
 	if m.GasLimit != 0 {
 		i = encodeVarintTransaction(dAtA, i, uint64(m.GasLimit))
@@ -324,41 +355,41 @@ func (m *Transaction) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x38
 	}
-	if len(m.Value) > 0 {
-		i -= len(m.Value)
-		copy(dAtA[i:], m.Value)
-		i = encodeVarintTransaction(dAtA, i, uint64(len(m.Value)))
-		i--
-		dAtA[i] = 0x32
-	}
 	if m.Nonce != 0 {
 		i = encodeVarintTransaction(dAtA, i, uint64(m.Nonce))
 		i--
-		dAtA[i] = 0x28
+		dAtA[i] = 0x30
 	}
-	if len(m.ChainID) > 0 {
-		i -= len(m.ChainID)
-		copy(dAtA[i:], m.ChainID)
-		i = encodeVarintTransaction(dAtA, i, uint64(len(m.ChainID)))
+	if len(m.FeePayer) > 0 {
+		i -= len(m.FeePayer)
+		copy(dAtA[i:], m.FeePayer)
+		i = encodeVarintTransaction(dAtA, i, uint64(len(m.FeePayer)))
 		i--
-		dAtA[i] = 0x22
-	}
-	if m.Version != 0 {
-		i = encodeVarintTransaction(dAtA, i, uint64(m.Version))
-		i--
-		dAtA[i] = 0x18
+		dAtA[i] = 0x2a
 	}
 	if len(m.TargetAddr) > 0 {
 		i -= len(m.TargetAddr)
 		copy(dAtA[i:], m.TargetAddr)
 		i = encodeVarintTransaction(dAtA, i, uint64(len(m.TargetAddr)))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x22
 	}
 	if len(m.FromAddr) > 0 {
 		i -= len(m.FromAddr)
 		copy(dAtA[i:], m.FromAddr)
 		i = encodeVarintTransaction(dAtA, i, uint64(len(m.FromAddr)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.Version != 0 {
+		i = encodeVarintTransaction(dAtA, i, uint64(m.Version))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.ChainID) > 0 {
+		i -= len(m.ChainID)
+		copy(dAtA[i:], m.ChainID)
+		i = encodeVarintTransaction(dAtA, i, uint64(len(m.ChainID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -426,6 +457,13 @@ func (m *Transaction) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.ChainID)
+	if l > 0 {
+		n += 1 + l + sovTransaction(uint64(l))
+	}
+	if m.Version != 0 {
+		n += 1 + sovTransaction(uint64(m.Version))
+	}
 	l = len(m.FromAddr)
 	if l > 0 {
 		n += 1 + l + sovTransaction(uint64(l))
@@ -434,19 +472,12 @@ func (m *Transaction) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTransaction(uint64(l))
 	}
-	if m.Version != 0 {
-		n += 1 + sovTransaction(uint64(m.Version))
-	}
-	l = len(m.ChainID)
+	l = len(m.FeePayer)
 	if l > 0 {
 		n += 1 + l + sovTransaction(uint64(l))
 	}
 	if m.Nonce != 0 {
 		n += 1 + sovTransaction(uint64(m.Nonce))
-	}
-	l = len(m.Value)
-	if l > 0 {
-		n += 1 + l + sovTransaction(uint64(l))
 	}
 	if m.GasPrice != 0 {
 		n += 1 + sovTransaction(uint64(m.GasPrice))
@@ -454,11 +485,18 @@ func (m *Transaction) Size() (n int) {
 	if m.GasLimit != 0 {
 		n += 1 + sovTransaction(uint64(m.GasLimit))
 	}
+	if m.Type != 0 {
+		n += 1 + sovTransaction(uint64(m.Type))
+	}
 	l = len(m.Data)
 	if l > 0 {
 		n += 1 + l + sovTransaction(uint64(l))
 	}
 	l = len(m.Signature)
+	if l > 0 {
+		n += 1 + l + sovTransaction(uint64(l))
+	}
+	l = len(m.FeePayerSignature)
 	if l > 0 {
 		n += 1 + l + sovTransaction(uint64(l))
 	}
@@ -530,6 +568,59 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChainID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTransaction
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthTransaction
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTransaction
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChainID = append(m.ChainID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ChainID == nil {
+				m.ChainID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTransaction
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field FromAddr", wireType)
 			}
 			var byteLen int
@@ -562,7 +653,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 				m.FromAddr = []byte{}
 			}
 			iNdEx = postIndex
-		case 2:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TargetAddr", wireType)
 			}
@@ -596,28 +687,9 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 				m.TargetAddr = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			m.Version = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowTransaction
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Version |= uint32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 4:
+		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ChainID", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field FeePayer", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -644,12 +716,12 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.ChainID = append(m.ChainID[:0], dAtA[iNdEx:postIndex]...)
-			if m.ChainID == nil {
-				m.ChainID = []byte{}
+			m.FeePayer = append(m.FeePayer[:0], dAtA[iNdEx:postIndex]...)
+			if m.FeePayer == nil {
+				m.FeePayer = []byte{}
 			}
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Nonce", wireType)
 			}
@@ -668,40 +740,6 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 6:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowTransaction
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthTransaction
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTransaction
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Value = append(m.Value[:0], dAtA[iNdEx:postIndex]...)
-			if m.Value == nil {
-				m.Value = []byte{}
-			}
-			iNdEx = postIndex
 		case 7:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field GasPrice", wireType)
@@ -741,6 +779,25 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 				}
 			}
 		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTransaction
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 10:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
 			}
@@ -774,7 +831,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 				m.Data = []byte{}
 			}
 			iNdEx = postIndex
-		case 10:
+		case 11:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Signature", wireType)
 			}
@@ -808,7 +865,41 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 				m.Signature = []byte{}
 			}
 			iNdEx = postIndex
-		case 11:
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FeePayerSignature", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTransaction
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthTransaction
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTransaction
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.FeePayerSignature = append(m.FeePayerSignature[:0], dAtA[iNdEx:postIndex]...)
+			if m.FeePayerSignature == nil {
+				m.FeePayerSignature = []byte{}
+			}
+			iNdEx = postIndex
+		case 13:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Options", wireType)
 			}

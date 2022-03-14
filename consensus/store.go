@@ -18,6 +18,12 @@ type consensusStore interface {
 
 	GetAllConsensusNodes() ([]string, error)
 
+	GetActiveExecutorIDs() ([]string, error)
+
+	GetActiveProposerIDs() ([]string, error)
+
+	GetActiveValidatorIDs() ([]string, error)
+
 	GetChainTotalWeight() (uint64, error)
 
 	GetNodeWeight(nodeID string) (uint64, error)

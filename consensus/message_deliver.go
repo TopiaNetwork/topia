@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"fmt"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -55,6 +56,40 @@ func newMessageDeliver(log tplog.Logger, priKey tpcrtypes.PrivateKey, strategy D
 		marshaler: marshaler,
 		selector:  newLeaderSelectorVRF(log, crypt, csState),
 	}
+}
+
+func (md *messageDeliver) deliverPreparePackagedMessage(ctx context.Context, msg *PreparePackedMessage) error {
+	sigData, pubKey, err := md.dkgBls.Sign(msg.TxRoot)
+	if err != nil {
+		md.log.Errorf("DKG sign PreparePackedMessage err: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("PreparePackedMessage marshal err: %v", err)
+		return err
+	}
+
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDs, err := md.csState.GetActiveExecutorIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
+			return err
+		}
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send prepare packed message to network failed: err=%v", err)
+	}
+
+	return err
 }
 
 func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {

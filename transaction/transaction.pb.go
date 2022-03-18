@@ -49,23 +49,24 @@ func (TransactionResult_ResultStatus) EnumDescriptor() ([]byte, []int) {
 }
 
 type Transaction struct {
-	FromAddr             []byte   `protobuf:"bytes,1,opt,name=FromAddr,proto3" json:"from"`
-	TargetAddr           []byte   `protobuf:"bytes,2,opt,name=TargetAddr,proto3" json:"target"`
-	Version              uint32   `protobuf:"varint,3,opt,name=Version,proto3" json:"version"`
-	ChainID              []byte   `protobuf:"bytes,4,opt,name=ChainID,proto3" json:"chainID"`
-	Nonce                uint64   `protobuf:"varint,5,opt,name=Nonce,proto3" json:"nonce"`
-	Value                []byte   `protobuf:"bytes,6,opt,name=Value,proto3" json:"value"`
-	GasPrice             uint64   `protobuf:"varint,7,opt,name=GasPrice,proto3" json:"gasPrice,omitempty"`
-	GasLimit             uint64   `protobuf:"varint,8,opt,name=GasLimit,proto3" json:"gasLimit,omitempty"`
-	Data                 []byte   `protobuf:"bytes,9,opt,name=Data,proto3" json:"data,omitempty"`
-	Signature            []byte   `protobuf:"bytes,10,opt,name=Signature,proto3" json:"signature,omitempty"`
-	Options              uint32   `protobuf:"varint,11,opt,name=Options,proto3" json:"options,omitempty"`
-	Time				 time.Time 					// Time first seen locally (spam avoidance)
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	FromAddr             []byte    `protobuf:"bytes,1,opt,name=FromAddr,proto3" json:"from"`
+	TargetAddr           []byte    `protobuf:"bytes,2,opt,name=TargetAddr,proto3" json:"target"`
+	Version              uint32    `protobuf:"varint,3,opt,name=Version,proto3" json:"version"`
+	ChainID              []byte    `protobuf:"bytes,4,opt,name=ChainID,proto3" json:"chainID"`
+	Nonce                uint64    `protobuf:"varint,5,opt,name=Nonce,proto3" json:"nonce"`
+	Value                []byte    `protobuf:"bytes,6,opt,name=Value,proto3" json:"value"`
+	GasPrice             uint64    `protobuf:"varint,7,opt,name=GasPrice,proto3" json:"gasPrice,omitempty"`
+	GasLimit             uint64    `protobuf:"varint,8,opt,name=GasLimit,proto3" json:"gasLimit,omitempty"`
+	Data                 []byte    `protobuf:"bytes,9,opt,name=Data,proto3" json:"data,omitempty"`
+	Signature            []byte    `protobuf:"bytes,10,opt,name=Signature,proto3" json:"signature,omitempty"`
+	Options              uint32    `protobuf:"varint,11,opt,name=Options,proto3" json:"options,omitempty"`
+	Time                 time.Time // Time first seen locally (spam avoidance)
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
-func (m *Transaction) setTime (){
+
+func (m *Transaction) setTime() {
 	m.Time = time.Now()
 }
 func (m *Transaction) Reset()         { *m = Transaction{} }
@@ -178,19 +179,17 @@ func (m *Transaction) GetOptions() uint32 {
 	return 0
 }
 
-
-
 // TxDifference returns a new set which is the difference between a and b.
 func TxDifference(a, b []Transaction) []Transaction {
 	keep := make([]Transaction, 0, len(a))
-	remove := make(map[TxKey]struct{})
+	remove := make(map[string]struct{})
 	for _, tx := range b {
-		if txId,err := tx.TxID();err != nil {
+		if txId, err := tx.TxID(); err != nil {
 			remove[txId] = struct{}{}
 		}
 	}
 	for _, tx := range a {
-		if txId,err := tx.TxID();err !=nil{
+		if txId, err := tx.TxID(); err != nil {
 			if _, ok := remove[txId]; !ok {
 				keep = append(keep, tx)
 			}
@@ -198,7 +197,6 @@ func TxDifference(a, b []Transaction) []Transaction {
 	}
 	return keep
 }
-
 
 type TransactionResult struct {
 	TxHash               []byte                         `protobuf:"bytes,1,opt,name=TxHash,proto3" json:"txHash"`

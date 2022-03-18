@@ -1,0 +1,133 @@
+package transactionpool
+
+import (
+	"encoding/json"
+	"io/ioutil"
+	"time"
+
+	"github.com/TopiaNetwork/topia/account"
+	tplog "github.com/TopiaNetwork/topia/log"
+)
+
+type TransactionPoolConfig struct {
+	chain        TransactionPoolServant
+	Locals       []account.Address
+	NoLocalFile  bool
+	NoRemoteFile bool
+	NoConfigFile bool
+
+	PathLocal   string
+	PathRemote  string
+	PathConfig  string
+	ReStoredDur time.Duration
+
+	GasPriceLimit uint64
+
+	PendingAccountSlots uint64 // Number of executable transaction slots guaranteed per account
+	PendingGlobalSlots  uint64 // Maximum number of executable transaction slots for all accounts
+	QueueMaxTxsAccount  uint64 // Maximum number of non-executable transaction slots permitted per account
+	QueueMaxTxsGlobal   uint64 // Maximum number of non-executable transaction slots for all accounts
+
+	LifetimeForTx         time.Duration
+	DurationForTxRePublic time.Duration
+}
+
+var DefaultTransactionPoolConfig = TransactionPoolConfig{
+	PathLocal:   "localTransactions.rlp",
+	PathRemote:  "remoteTransactions.rlp",
+	PathConfig:  "txPoolConfigs.json",
+	ReStoredDur: 30 * time.Minute,
+
+	GasPriceLimit:       1,
+	PendingAccountSlots: 16,
+	PendingGlobalSlots:  8192, // queue capacity
+	QueueMaxTxsAccount:  64,
+	QueueMaxTxsGlobal:   8192 * 2,
+
+	LifetimeForTx:         30 * time.Minute,
+	DurationForTxRePublic: 30 * time.Second,
+}
+
+func (config *TransactionPoolConfig) check() TransactionPoolConfig {
+	conf := *config
+	if conf.GasPriceLimit < 1 {
+		tplog.Logger.Infof("Invalid GasPriceLimit,updated to default value:", "from", conf.GasPriceLimit, "to", DefaultTransactionPoolConfig.GasPriceLimit)
+		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
+	}
+	if conf.PendingAccountSlots < 1 {
+		tplog.Logger.Infof("Invalid PendingAccountSlots,updated to default value:", "from", conf.PendingAccountSlots, "to", DefaultTransactionPoolConfig.PendingAccountSlots)
+		conf.PendingAccountSlots = DefaultTransactionPoolConfig.PendingAccountSlots
+	}
+	if conf.PendingGlobalSlots < 1 {
+		tplog.Logger.Infof("Invalid PendingGlobalSlots,updated to default value:", "from", conf.PendingGlobalSlots, "to", DefaultTransactionPoolConfig.PendingGlobalSlots)
+		conf.PendingGlobalSlots = DefaultTransactionPoolConfig.PendingGlobalSlots
+	}
+	if conf.QueueMaxTxsAccount < 1 {
+		tplog.Logger.Infof("Invalid QueueMaxTxsAccount,updated to default value:", "from", conf.QueueMaxTxsAccount, "to", DefaultTransactionPoolConfig.QueueMaxTxsAccount)
+		conf.QueueMaxTxsAccount = DefaultTransactionPoolConfig.QueueMaxTxsAccount
+	}
+	if conf.QueueMaxTxsGlobal < 1 {
+		tplog.Logger.Infof("Invalid QueueMaxTxsGlobal,updated to default value:", "from", conf.QueueMaxTxsGlobal, "to", DefaultTransactionPoolConfig.QueueMaxTxsGlobal)
+		conf.QueueMaxTxsGlobal = DefaultTransactionPoolConfig.QueueMaxTxsGlobal
+	}
+	if conf.LifetimeForTx < 1 {
+		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
+	}
+	if conf.DurationForTxRePublic < 1 {
+		conf.DurationForTxRePublic = DefaultTransactionPoolConfig.DurationForTxRePublic
+	}
+	if conf.PathConfig == "" {
+		conf.PathConfig = DefaultTransactionPoolConfig.PathConfig
+	}
+	if conf.PathRemote == "" {
+		conf.PathRemote = DefaultTransactionPoolConfig.PathRemote
+	}
+	if conf.PathLocal == "" {
+		conf.PathLocal = DefaultTransactionPoolConfig.PathLocal
+	}
+
+	return conf
+}
+
+func (pool *transactionPool) LoadConfig() (conf *TransactionPoolConfig, error error) {
+	data, err := ioutil.ReadFile(pool.config.PathConfig)
+	if err != nil {
+		return nil, err
+	}
+	config := &conf
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		return nil, err
+	}
+	return *config, nil
+}
+
+func (pool *transactionPool) UpdateTxPoolConfig(conf TransactionPoolConfig) {
+	conf = (conf).check()
+	pool.config = conf
+	return
+}
+
+func (pool *transactionPool) SaveConfig() error {
+	pool.log.Info("saving tx pool config")
+	conf, err := json.Marshal(pool.config)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(pool.config.PathConfig, conf, 0664)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (pool *transactionPool) loadConfig(nofile bool, path string) {
+	if !nofile && path != "" {
+		if con, err := pool.LoadConfig(); err != nil {
+			pool.log.Warnf("Failed to load txPool configs", "err", err)
+		} else {
+			pool.config = *con
+		}
+	}
+}

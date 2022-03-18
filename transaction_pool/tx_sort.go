@@ -2,156 +2,25 @@ package transactionpool
 
 import (
 	"container/heap"
-	"github.com/TopiaNetwork/topia/account"
-	"github.com/TopiaNetwork/topia/transaction"
+	"encoding/hex"
 	"math"
 	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/TopiaNetwork/topia/account"
+	"github.com/TopiaNetwork/topia/transaction"
 )
 
-type esCache struct {
-	putNo uint64
-	getNo uint64
-	value *transaction.Transaction
-}
-type EsQueue struct {
-	capacity uint64
-	capMod   uint64
-	putPos   uint64
-	getPos   uint64
-	cache    []esCache
-}
-//
-//func NewQueue(capacity uint64) *EsQueue{
-//	q := new(EsQueue)
-//	q.capacity = MinQuantity(capacity)
-//	q.capMod   = q.capacity - 1
-//	q.putPos = 0
-//	q.getPos = 0
-//	q.cache    = make([]esCache,q.capacity)
-//	for i := range q.cache {
-//		cache := &q.cache[i]
-//		cache.getNo = uint64(i)
-//		cache.putNo = uint64(i)
-//	}
-//	cache := &q.cache[0]
-//	cache.getNo = q.capacity
-//	cache.putNo = q.capacity
-//	return q
-//}
-//
-//// MinQuantity Round up to the nearest multiple of two
-//func MinQuantity(v uint64) uint64 {
-//	v--
-//	v |= v >> 1
-//	v |= v >> 2
-//	v |= v >> 4
-//	v |= v >> 8
-//	v |= v >> 16
-//	v |= v >> 32
-//	v++
-//	return v
-//}
-//
-//func (q *EsQueue) Capacity() uint64 {
-//	return q.capacity
-//}
-//func (q *EsQueue) Quantity() uint64 {
-//	var putPos,getPos uint64
-//	var quantity uint64
-//	getPos = atomic.LoadUint64(&q.getPos)
-//	putPos = atomic.LoadUint64(&q.putPos)
-//
-//	if putPos >= getPos {
-//		quantity = putPos - getPos
-//	} else {
-//		quantity = q.capMod + putPos - getPos
-//	}
-//	return quantity
-//}
-//// Put queue functions
-//func (q *EsQueue) Put(val *transaction.Transaction) (ok bool,quantity uint64) {
-//	var putPos,putPosNew,getPos,posCnt uint64
-//	var cache *esCache
-//	capMod := q.capMod
-//	getPos = atomic.LoadUint64(&q.getPos)
-//	putPos = atomic.LoadUint64(&q.putPos)
-//	if putPos >= getPos {
-//		posCnt = putPos - getPos
-//	} else {
-//		posCnt = capMod + putPos - getPos
-//	}
-//	if posCnt >= capMod-1 {
-//		runtime.Gosched()
-//		return false,posCnt
-//	}
-//	putPosNew = putPos + 1
-//	if !atomic.CompareAndSwapUint64(&q.putPos,putPos,putPosNew) {
-//		runtime.Gosched()
-//		return false, posCnt
-//	}
-//	cache = &q.cache[putPosNew&capMod]
-//
-//	for {
-//		getNo := atomic.LoadUint64(&cache.getNo)
-//		putNo := atomic.LoadUint64(&cache.putNo)
-//		if putPosNew == putNo && getNo == putNo {
-//			cache.value = val
-//			atomic.AddUint64(&cache.putNo, q.capacity)
-//			return true, posCnt + 1
-//		} else {
-//			runtime.Gosched()
-//		}
-//	}
-//}
-//
-//
-//// Get queue functions
-//func (q *EsQueue) Get() (val *transaction.Transaction,ok bool,quantity uint64) {
-//	var putPos, getPos, getPosNew, posCnt uint64
-//	var cache *esCache
-//	capMod  := q.capMod
-//	putPos = atomic.LoadUint64(&q.putPos)
-//	getPos = atomic.LoadUint64(&q.getPos)
-//
-//	if putPos >= getPos {
-//		posCnt = putPos - getPos
-//	} else {
-//		posCnt = capMod + putPos - getPos
-//	}
-//
-//	if posCnt < 1 {
-//		runtime.Gosched()
-//		return nil, false, posCnt
-//	}
-//
-//	getPosNew = getPos + 1
-//	if !atomic.CompareAndSwapUint64(&q.getPos,getPos,getPosNew) {
-//		runtime.Gosched()
-//		return nil, false, posCnt
-//	}
-//
-//	cache = &q.cache[getPosNew&capMod]
-//
-//	for {
-//		getNo := atomic.LoadUint64(&cache.getNo)
-//		putNo := atomic.LoadUint64(&cache.putNo)
-//		if getPosNew == getNo && getNo == putNo - q.capacity {
-//			val = cache.value
-//			cache.value = nil
-//			atomic.AddUint64(&cache.getNo,q.capacity)
-//			return val, true, posCnt -1
-//		} else {
-//			runtime.Gosched()
-//		}
-//	}
-//}
-//
+const (
+	txSlotSize = 32 * 1024
+	txMaxSize  = 4 * txSlotSize
+)
 
-// nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
-// retrieving sorted transactions from the possibly gapped future queue.
+//nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
+//retrieving sorted transactions from the possibly gapped future queue.
 type nonceHeap []uint64
 
 func (h nonceHeap) Len() int           { return len(h) }
@@ -174,8 +43,8 @@ func (h *nonceHeap) Pop() interface{} {
 // iterating over the contents in a nonce-incrementing way.
 type txSortedMap struct {
 	items map[uint64]*transaction.Transaction // Hash map storing the transaction data
-	index *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
-	cache []*transaction.Transaction            // Cache of the transactions already sorted
+	index *nonceHeap                          // Heap of nonces of all the stored transactions (non-strict mode)
+	cache []*transaction.Transaction          // Cache of the transactions already sorted
 }
 
 // newTxSortedMap creates a new nonce-sorted transaction map.
@@ -215,7 +84,7 @@ func (m *txSortedMap) Forward(threshold uint64) []*transaction.Transaction {
 	}
 	// If we had a cached order, shift the front
 	if m.cache != nil {
-		m.cache = m.cache[len(removed):]  //chinese ：缓存交易里删除remved
+		m.cache = m.cache[len(removed):]
 	}
 	return removed
 }
@@ -366,15 +235,14 @@ func (m *txSortedMap) LastElement() *transaction.Transaction {
 	return cache[len(cache)-1]
 }
 
-
 // txList is a "list" of transactions belonging to an account, sorted by account
 // nonce. The same type can be used both for storing contiguous transactions for
 // the executable/pending queue; and for storing gapped transactions for the non-
 // executable/future queue, with minor behavioral changes.
 type txList struct {
-	strict bool         // Whether nonces are strictly continuous or not
-	txs    *txSortedMap // Heap indexed sorted hash map of the transactions
-
+	strict  bool         // Whether nonces are strictly continuous or not
+	txs     *txSortedMap // Heap indexed sorted hash map of the transactions
+	servant TransactionPoolServant
 	costcap *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
 	gascap  uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
 }
@@ -404,15 +272,14 @@ func (l *txList) Add(tx *transaction.Transaction) (bool, *transaction.Transactio
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce)
 	if old != nil {
-		return false,nil
-		}
-	//no achieved for priceBump
-	txQuery := TxPoolQuery{}
+		return false, nil
+	}
+	txQuery := l.servant
 	l.txs.Put(tx)
-	if cost := txQuery.EstimateTxCost(tx);l.costcap.Cmp(cost) <0 {
+	if cost := txQuery.EstimateTxCost(tx); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
-	if gas := txQuery.EstimateTxGas(tx);l.gascap < gas {
+	if gas := txQuery.EstimateTxGas(tx); l.gascap < gas {
 		l.gascap = gas
 	}
 	return true, old
@@ -441,7 +308,7 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*transaction.Tra
 	}
 	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
 	l.gascap = gasLimit
-	txQuery := TxPoolQuery{}
+	txQuery := l.servant
 	// Filter out all the transactions above the account's funds
 	removed := l.txs.Filter(func(tx *transaction.Transaction) bool {
 		gas := txQuery.EstimateTxGas(tx)
@@ -523,17 +390,235 @@ func (l *txList) LastElement() *transaction.Transaction {
 	return l.txs.LastElement()
 }
 
+type pendingTxs struct {
+	Mu     sync.RWMutex
+	accTxs map[account.Address]*txList
+}
+
+func newPendingTxs() *pendingTxs {
+	txs := &pendingTxs{
+		accTxs: make(map[account.Address]*txList),
+	}
+	return txs
+}
+
+type queueTxs struct {
+	Mu     sync.RWMutex
+	accTxs map[account.Address]*txList
+}
+
+func newQueueTxs() *queueTxs {
+	txs := &queueTxs{
+		accTxs: make(map[account.Address]*txList),
+	}
+	return txs
+}
+
+type accountSet struct {
+	accounts map[account.Address]struct{}
+	cache    *[]account.Address
+}
+
+func newAccountSet(addrs ...account.Address) *accountSet {
+	as := &accountSet{
+		accounts: make(map[account.Address]struct{}),
+	}
+	for _, addr := range addrs {
+		as.add(addr)
+	}
+	return as
+}
+
+func (accSet *accountSet) contains(addr account.Address) bool {
+	_, exist := accSet.accounts[addr]
+	return exist
+}
+func (accSet *accountSet) containsTx(tx *transaction.Transaction) bool {
+	addr := account.Address(hex.EncodeToString(tx.FromAddr))
+	return accSet.contains(addr)
+}
+
+func (accSet *accountSet) empty() bool {
+	return len(accSet.accounts) == 0
+}
+func (accSet *accountSet) len() int {
+	return len(accSet.accounts)
+}
+
+func (accSet *accountSet) add(addr account.Address) {
+	accSet.accounts[addr] = struct{}{}
+	accSet.cache = nil
+}
+func (accSet *accountSet) addTx(tx *transaction.Transaction) {
+	addr := account.Address(hex.EncodeToString(tx.FromAddr))
+	accSet.add(addr)
+}
+func (accSet *accountSet) merge(other *accountSet) {
+	for addr := range other.accounts {
+		accSet.accounts[addr] = struct{}{}
+	}
+	accSet.cache = nil
+}
+
+func (accSet *accountSet) RemoveAccount(key account.Address) {
+	delete(accSet.accounts, key)
+}
+
+// flatten returns the list of addresses within this set, also caching it for later
+// reuse. The returned slice should not be changed!
+func (accSet *accountSet) flatten() []account.Address {
+	if accSet.cache == nil {
+		accounts := make([]account.Address, 0, len(accSet.accounts))
+		for acc := range accSet.accounts {
+			accounts = append(accounts, acc)
+		}
+		accSet.cache = &accounts
+	}
+	return *accSet.cache
+}
+
+type txLookup struct {
+	slots   int
+	lock    sync.RWMutex
+	locals  map[string]*transaction.Transaction
+	remotes map[string]*transaction.Transaction
+}
+
+func (t *txLookup) Range(f func(key string, tx *transaction.Transaction, local bool) bool, local bool, remote bool) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	if local {
+		for k, v := range t.locals {
+			if !f(k, v, true) {
+				return
+			}
+		}
+	}
+	if remote {
+		for k, v := range t.remotes {
+			if !f(k, v, false) {
+				return
+			}
+		}
+	}
+}
+
+func newTxLookup() *txLookup {
+	return &txLookup{
+		locals:  make(map[string]*transaction.Transaction),
+		remotes: make(map[string]*transaction.Transaction),
+	}
+}
+func (t *txLookup) Get(key string) *transaction.Transaction {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	if tx := t.locals[key]; tx != nil {
+		return tx
+	}
+	return t.remotes[key]
+}
+
+// GetLocalTx returns a transaction if it exists in the lookup, or nil if not found.
+func (t *txLookup) GetLocalTx(key string) *transaction.Transaction {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return t.locals[key]
+}
+
+// GetRemoteTx returns a transaction if it exists in the lookup, or nil if not found.
+func (t *txLookup) GetRemoteTx(key string) *transaction.Transaction {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return t.remotes[key]
+}
+
+func (t *txLookup) Count() int {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	return len(t.locals) + len(t.remotes)
+}
+
+// LocalCount returns the current number of local transactions in the lookup.
+func (t *txLookup) LocalCount() int {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return len(t.locals)
+}
+
+// RemoteCount returns the current number of remote transactions in the lookup.
+func (t *txLookup) RemoteCount() int {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return len(t.remotes)
+}
+
+// Slots returns the current number of Quota used in the lookup.
+func (t *txLookup) Slots() int {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return t.slots
+}
+
+func (t *txLookup) Add(tx *transaction.Transaction, local bool) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.slots += numSlots(tx)
+	if txId, err := tx.TxID(); err != nil {
+		if local {
+			t.locals[txId] = tx
+		} else {
+			t.remotes[txId] = tx
+		}
+	}
+}
+func (t *txLookup) Remove(key string) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	tx, ok := t.locals[key]
+	if !ok {
+		tx, ok = t.remotes[key]
+	}
+	if !ok {
+		//tplog.Logger.Infof("No transaction found to be deleted", "txKey", key)
+		return
+	}
+	t.slots -= numSlots(tx)
+	delete(t.locals, key)
+	delete(t.remotes, key)
+}
+
+// RemoteToLocals migrates the transactions belongs to the given locals to locals
+// set. The assumption is held the locals set is thread-safe to be used.
+func (t *txLookup) RemoteToLocals(locals *accountSet) int {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	var migrated int
+	for key, tx := range t.remotes {
+		if locals.containsTx(tx) {
+			t.locals[key] = tx
+			delete(t.remotes, key)
+			migrated += 1
+		}
+	}
+	return migrated
+}
 
 // priceHeap is a heap.Interface implementation over transactions for retrieving
 // price-sorted transactions to discard when the pool fills up.
-type priceHeap struct{
-	list    []*transaction.Transaction
+type priceHeap struct {
+	list []*transaction.Transaction
 }
 
 func (h *priceHeap) Len() int      { return len(h.list) }
 func (h *priceHeap) Swap(i, j int) { h.list[i], h.list[j] = h.list[j], h.list[i] }
 
-//chinese 两笔交易排序，先对比价格，价格一样，根据Nonce倒序排列，即优先抛掉价格小的，或者nonce大的。
 func (h *priceHeap) Less(i, j int) bool {
 	switch h.cmp(h.list[i], h.list[j]) {
 	case -1:
@@ -545,12 +630,14 @@ func (h *priceHeap) Less(i, j int) bool {
 	}
 }
 func (h *priceHeap) cmp(a, b *transaction.Transaction) int {
-	if a.GasPrice == b.GasPrice{return 0}
-	if a.GasPrice < b.GasPrice{
+	if a.GasPrice == b.GasPrice {
+		return 0
+	}
+	if a.GasPrice < b.GasPrice {
 		return 1
-	} else if a.GasPrice > b.GasPrice{
+	} else if a.GasPrice > b.GasPrice {
 		return -1
-	} else{
+	} else {
 		return 0
 	}
 }
@@ -569,14 +656,12 @@ func (h *priceHeap) Pop() interface{} {
 	return x
 }
 
-
 type txPricedList struct {
-	stales int64
-	all              *txLookup  // Pointer to the map of all transactions
-	floating         priceHeap  // Heaps of prices of all the stored **remote** transactions
-	reheapMu         sync.Mutex // Mutex asserts that only one routine is reheaping the list
+	stales    int64
+	all       *txLookup  // Pointer to the map of all transactions
+	remoteTxs priceHeap  // Heaps of prices of all the stored **remote** transactions
+	reheapMu  sync.Mutex // Mutex asserts that only one routine is reheaping the list
 }
-
 
 // newTxPricedList creates a new price-sorted transaction heap.
 func newTxPricedList(all *txLookup) *txPricedList {
@@ -591,13 +676,13 @@ func (l *txPricedList) Put(tx *transaction.Transaction, local bool) {
 		return
 	}
 	// Insert every new transaction to the urgent heap first; Discard will balance the heaps
-	heap.Push(&l.floating, tx)
+	heap.Push(&l.remoteTxs, tx)
 }
 
 //Removed chinese 删除N条交易，当删除当交易大于队列中当四分之一的时候，重置队列。
 func (l *txPricedList) Removed(count int) {
 	stales := atomic.AddInt64(&l.stales, int64(count))
-	if int(stales) <= (len(l.floating.list))/4 {
+	if int(stales) <= (len(l.remoteTxs.list))/4 {
 		return
 	}
 	l.Reheap()
@@ -608,8 +693,8 @@ func (l *txPricedList) Removed(count int) {
 func (l *txPricedList) Underpriced(tx *transaction.Transaction) bool {
 	// Note: with two queues, being underpriced is defined as being worse than the worst item
 	// in all non-empty queues if there is any. If both queues are empty then nothing is underpriced.
-	return (l.underpricedFor(&l.floating, tx) || len(l.floating.list) == 0) &&
-		( len(l.floating.list) != 0)
+	return (l.underpricedFor(&l.remoteTxs, tx) || len(l.remoteTxs.list) == 0) &&
+		(len(l.remoteTxs.list) != 0)
 }
 
 // underpricedFor checks whether a transaction is cheaper than (or as cheap as) the
@@ -618,15 +703,15 @@ func (l *txPricedList) underpricedFor(h *priceHeap, tx *transaction.Transaction)
 	// Discard stale price points if found at the heap start
 	for len(h.list) > 0 {
 		head := h.list[0]
-		txId,err := head.TxID()
+		txId, err := head.TxID()
 		if err == nil {
-			if l.all.GetRemote(txId) == nil { // Removed or migrated
+			if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
 				atomic.AddInt64(&l.stales, -1)
 				heap.Pop(h)
 				continue
 			}
 		}
-		if l.all.GetRemote(txId) == nil { // Removed or migrated
+		if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
 			atomic.AddInt64(&l.stales, -1)
 			heap.Pop(h)
 			continue
@@ -649,9 +734,9 @@ func (l *txPricedList) Discard(slots int, force bool) ([]*transaction.Transactio
 	drop := make([]*transaction.Transaction, 0, slots) // Remote underpriced transactions to drop
 	for slots > 0 {
 		// Discard stale transactions if found during cleanup
-		tx := heap.Pop(&l.floating).(*transaction.Transaction)
-		if txId,err := tx.TxID();err == nil {
-			if l.all.GetRemote(txId) == nil { // Removed or migrated
+		tx := heap.Pop(&l.remoteTxs).(*transaction.Transaction)
+		if txId, err := tx.TxID(); err == nil {
+			if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
 				atomic.AddInt64(&l.stales, -1)
 				continue
 			}
@@ -662,7 +747,7 @@ func (l *txPricedList) Discard(slots int, force bool) ([]*transaction.Transactio
 	// If we still can't make enough room for the new transaction
 	if slots > 0 && !force {
 		for _, tx := range drop {
-			heap.Push(&l.floating, tx)
+			heap.Push(&l.remoteTxs, tx)
 		}
 		return nil, false
 	}
@@ -674,26 +759,18 @@ func (l *txPricedList) Reheap() {
 	l.reheapMu.Lock()
 	defer l.reheapMu.Unlock()
 	atomic.StoreInt64(&l.stales, 0)
-	l.floating.list = make([]*transaction.Transaction, 0, l.all.RemoteCount())
-	l.all.Range(func(key transaction.TxKey, tx *transaction.Transaction, local bool) bool {
-		l.floating.list = append(l.floating.list, tx)
+	l.remoteTxs.list = make([]*transaction.Transaction, 0, l.all.RemoteCount())
+	l.all.Range(func(key string, tx *transaction.Transaction, local bool) bool {
+		l.remoteTxs.list = append(l.remoteTxs.list, tx)
 		return true
 	}, false, true) // Only iterate remotes
-	heap.Init(&l.floating)
+	heap.Init(&l.remoteTxs)
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
+// numSlots calculates the number of slots needed for a single transaction.
+func numSlots(tx *transaction.Transaction) int {
+	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+}
 
 type TxByNonce []*transaction.Transaction
 
@@ -701,39 +778,38 @@ func (s TxByNonce) Len() int           { return len(s) }
 func (s TxByNonce) Less(i, j int) bool { return s[i].Nonce < s[j].Nonce }
 func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-
-// An Item is something we manage in a priority queue.
-type GreyAccCnt struct {
-	accountAddr    account.Address // The value of the item; arbitrary.
-	priority int    // The priority of the item in the queue.
+// CntAccountItem is an item  we manage in a priority queue for cnt.
+type CntAccountItem struct {
+	accountAddr account.Address
+	cnt         int // The priority of CntAccountItem in the queue is counts of account in txPool.
 	// The index is needed by update and is maintained by the heap.Interface methods.
-	index int // The index of the item in the heap.
+	index int // The index of the CntAccountItem item in the heap.
 }
 
-// A PriorityQueue implements heap.Interface and holds GreyAccCnt.
-type GreyAccQueue []*GreyAccCnt
+// A CntAccountHeap implements heap.Interface and holds GreyAccCnt.
+type CntAccountHeap []*CntAccountItem
 
-func (pq GreyAccQueue) Len() int { return len(pq) }
+func (pq CntAccountHeap) Len() int { return len(pq) }
 
-func (pq GreyAccQueue) Less(i, j int) bool {
+func (pq CntAccountHeap) Less(i, j int) bool {
 	// We want Pop to give us the highest, not lowest, priority so we use greater than here.
-	return pq[i].priority > pq[j].priority
+	return pq[i].cnt < pq[j].cnt
 }
 
-func (pq GreyAccQueue) Swap(i, j int) {
+func (pq CntAccountHeap) Swap(i, j int) {
 	pq[i], pq[j] = pq[j], pq[i]
 	pq[i].index = i
 	pq[j].index = j
 }
 
-func (pq *GreyAccQueue) Push(x interface{}) {
+func (pq *CntAccountHeap) Push(x interface{}) {
 	n := len(*pq)
-	item := x.(*GreyAccCnt)
+	item := x.(*CntAccountItem)
 	item.index = n
 	*pq = append(*pq, item)
 }
 
-func (pq *GreyAccQueue) Pop() interface{} {
+func (pq *CntAccountHeap) Pop() interface{} {
 	old := *pq
 	n := len(old)
 	GreyAccCnt := old[n-1]
@@ -742,9 +818,16 @@ func (pq *GreyAccQueue) Pop() interface{} {
 	return GreyAccCnt
 }
 
-// update modifies the priority and value of an Item in the queue.
-func (pq *GreyAccQueue) update(GreyAccCnt *GreyAccCnt, accountAddr account.Address, priority int) {
-	GreyAccCnt.accountAddr = accountAddr
-	GreyAccCnt.priority = priority
-	heap.Fix(pq, GreyAccCnt.index)
+// addressByHeartbeat is an account address tagged with its last activity timestamp.
+type txByHeartbeat struct {
+	tx                 string
+	ActivationInterval time.Time
 }
+
+type txsByHeartbeat []txByHeartbeat
+
+func (t txsByHeartbeat) Len() int { return len(t) }
+func (t txsByHeartbeat) Less(i, j int) bool {
+	return t[i].ActivationInterval.Before(t[j].ActivationInterval)
+}
+func (t txsByHeartbeat) Swap(i, j int) { t[i], t[j] = t[j], t[i] }

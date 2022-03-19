@@ -125,9 +125,11 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	pool.handler = poolHandler
 
 	pool.locals = newAccountSet()
-	for _, addr := range conf.Locals {
-		pool.log.Info("Setting new local account")
-		pool.locals.add(addr)
+	if len(conf.Locals) > 0 {
+		for _, addr := range conf.Locals {
+			pool.log.Info("Setting new local account")
+			pool.locals.add(addr)
+		}
 	}
 	pool.sortedByPriced = newTxPricedList(pool.allTxsForLook) //done
 	pool.Reset(nil, conf.chain.CurrentBlock().GetHead())

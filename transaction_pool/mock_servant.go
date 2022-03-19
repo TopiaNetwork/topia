@@ -2,7 +2,7 @@
 // Source: servant.go
 
 // Package mock_transactionpool is a generated GoMock package.
-package mock_transactionpool
+package transactionpool
 
 import (
 	big "math/big"
@@ -12,7 +12,6 @@ import (
 	types "github.com/TopiaNetwork/topia/common/types"
 	p2p "github.com/TopiaNetwork/topia/network/p2p"
 	transaction "github.com/TopiaNetwork/topia/transaction"
-	transaction_pool "github.com/TopiaNetwork/topia/transaction_pool"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -96,10 +95,10 @@ func (mr *MockTransactionPoolServantMockRecorder) GetBlock(hash, num interface{}
 }
 
 // StateAt mocks base method.
-func (m *MockTransactionPoolServant) StateAt(root types.BlockHash) (*transaction_pool.StatePoolDB, error) {
+func (m *MockTransactionPoolServant) StateAt(root types.BlockHash) (*StatePoolDB, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StateAt", root)
-	ret0, _ := ret[0].(*transaction_pool.StatePoolDB)
+	ret0, _ := ret[0].(*StatePoolDB)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

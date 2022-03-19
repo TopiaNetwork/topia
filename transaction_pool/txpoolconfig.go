@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/TopiaNetwork/topia/account"
-	tplog "github.com/TopiaNetwork/topia/log"
 )
 
 type TransactionPoolConfig struct {
@@ -51,23 +50,23 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 	conf := *config
 	if conf.GasPriceLimit < 1 {
-		tplog.Logger.Infof("Invalid GasPriceLimit,updated to default value:", "from", conf.GasPriceLimit, "to", DefaultTransactionPoolConfig.GasPriceLimit)
+		//tplog.Logger.Infof("Invalid GasPriceLimit,updated to default value:", "from", conf.GasPriceLimit, "to", DefaultTransactionPoolConfig.GasPriceLimit)
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
 	if conf.PendingAccountSlots < 1 {
-		tplog.Logger.Infof("Invalid PendingAccountSlots,updated to default value:", "from", conf.PendingAccountSlots, "to", DefaultTransactionPoolConfig.PendingAccountSlots)
+		//tplog.Logger.Infof("Invalid PendingAccountSlots,updated to default value:", "from", conf.PendingAccountSlots, "to", DefaultTransactionPoolConfig.PendingAccountSlots)
 		conf.PendingAccountSlots = DefaultTransactionPoolConfig.PendingAccountSlots
 	}
 	if conf.PendingGlobalSlots < 1 {
-		tplog.Logger.Infof("Invalid PendingGlobalSlots,updated to default value:", "from", conf.PendingGlobalSlots, "to", DefaultTransactionPoolConfig.PendingGlobalSlots)
+		//tplog.Logger.Infof("Invalid PendingGlobalSlots,updated to default value:", "from", conf.PendingGlobalSlots, "to", DefaultTransactionPoolConfig.PendingGlobalSlots)
 		conf.PendingGlobalSlots = DefaultTransactionPoolConfig.PendingGlobalSlots
 	}
 	if conf.QueueMaxTxsAccount < 1 {
-		tplog.Logger.Infof("Invalid QueueMaxTxsAccount,updated to default value:", "from", conf.QueueMaxTxsAccount, "to", DefaultTransactionPoolConfig.QueueMaxTxsAccount)
+		//tplog.Logger.Infof("Invalid QueueMaxTxsAccount,updated to default value:", "from", conf.QueueMaxTxsAccount, "to", DefaultTransactionPoolConfig.QueueMaxTxsAccount)
 		conf.QueueMaxTxsAccount = DefaultTransactionPoolConfig.QueueMaxTxsAccount
 	}
 	if conf.QueueMaxTxsGlobal < 1 {
-		tplog.Logger.Infof("Invalid QueueMaxTxsGlobal,updated to default value:", "from", conf.QueueMaxTxsGlobal, "to", DefaultTransactionPoolConfig.QueueMaxTxsGlobal)
+		//tplog.Logger.Infof("Invalid QueueMaxTxsGlobal,updated to default value:", "from", conf.QueueMaxTxsGlobal, "to", DefaultTransactionPoolConfig.QueueMaxTxsGlobal)
 		conf.QueueMaxTxsGlobal = DefaultTransactionPoolConfig.QueueMaxTxsGlobal
 	}
 	if conf.LifetimeForTx < 1 {

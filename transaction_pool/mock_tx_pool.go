@@ -2,7 +2,7 @@
 // Source: tx_pool.go
 
 // Package transactionpool is a generated GoMock package.
-package mock_transactionpool
+package transactionpool
 
 import (
 	reflect "reflect"

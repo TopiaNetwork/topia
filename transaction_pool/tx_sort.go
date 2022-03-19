@@ -423,6 +423,9 @@ func newAccountSet(addrs ...account.Address) *accountSet {
 	as := &accountSet{
 		accounts: make(map[account.Address]struct{}),
 	}
+	if addrs == nil {
+		return nil
+	}
 	for _, addr := range addrs {
 		as.add(addr)
 	}

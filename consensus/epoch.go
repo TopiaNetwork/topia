@@ -2,19 +2,12 @@ package consensus
 
 import (
 	"context"
+	"github.com/TopiaNetwork/topia/ledger"
+	"github.com/TopiaNetwork/topia/state"
 	"time"
 
-	tptypes "github.com/TopiaNetwork/topia/common/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
-
-type EpochState interface {
-	GetCurrentRound() uint64
-	SetCurrentRound(round uint64)
-	GetCurrentEpoch() uint64
-	SetCurrentEpoch(epoch uint64)
-	GetLatestBlock() (*tptypes.Block, error)
-}
 
 type epochService struct {
 	log           tplog.Logger
@@ -23,7 +16,7 @@ type epochService struct {
 	roundCh       chan *RoundInfo
 	roundDuration time.Duration //unit: ms
 	epochInterval uint64        //the round number between two epochs
-	state         EpochState
+	ledger        ledger.Ledger
 	dkgExchange   *dkgExchange
 }
 
@@ -31,13 +24,17 @@ func newEpochService(log tplog.Logger,
 	roundCh chan *RoundInfo,
 	roundDuration time.Duration,
 	epochInterval uint64,
-	state EpochState,
+	ledger ledger.Ledger,
 	dkgExchange *dkgExchange) *epochService {
-	if state == nil || dkgExchange == nil {
+	if ledger == nil || dkgExchange == nil {
 		panic("Invalid input parameter and can't create epoch service!")
 	}
-	currentEpoch := state.GetCurrentEpoch()
-	currentRound := state.GetCurrentRound()
+
+	csStateRN := state.CreateCompositionStateReadonly(log, ledger)
+	defer csStateRN.Stop()
+
+	currentEpoch := csStateRN.GetCurrentEpoch()
+	currentRound := csStateRN.GetCurrentRound()
 
 	return &epochService{
 		log:           log,
@@ -46,7 +43,7 @@ func newEpochService(log tplog.Logger,
 		roundCh:       roundCh,
 		roundDuration: roundDuration,
 		epochInterval: epochInterval,
-		state:         state,
+		ledger:        ledger,
 		dkgExchange:   dkgExchange,
 	}
 }
@@ -54,8 +51,11 @@ func newEpochService(log tplog.Logger,
 func (es *epochService) start(ctx context.Context) {
 	startRound := uint64(0)
 
-	es.currentEpoch = es.state.GetCurrentEpoch()
-	es.currentRound = es.state.GetCurrentRound()
+	csStateRN := state.CreateCompositionStateReadonly(es.log, es.ledger)
+	defer csStateRN.Stop()
+
+	es.currentEpoch = csStateRN.GetCurrentEpoch()
+	es.currentRound = csStateRN.GetCurrentRound()
 
 	if es.currentEpoch != 0 {
 		startRound = es.currentRound
@@ -70,17 +70,23 @@ func (es *epochService) start(ctx context.Context) {
 	for {
 		select {
 		case <-nextEpochTimer:
+			csStateEpoch := state.CreateCompositionState(es.log, es.ledger)
+			defer csStateEpoch.Commit()
+
 			es.currentEpoch = es.currentEpoch + 1
-			es.state.SetCurrentEpoch(es.currentEpoch)
+			csStateEpoch.SetCurrentEpoch(es.currentEpoch)
 			es.dkgExchange.start(es.currentEpoch)
 		case <-roundTimer:
+			csStateRound := state.CreateCompositionState(es.log, es.ledger)
+			defer csStateRound.Commit()
+
 			es.currentRound = es.currentRound + 1
-			es.state.SetCurrentRound(es.currentRound)
+			csStateRound.SetCurrentRound(es.currentRound)
 			if !es.dkgExchange.dkgCrypt.finished() || es.dkgExchange.dkgCrypt.epoch < es.currentEpoch {
 				es.log.Warnf("Current epoch %d DKG unfinished and ignore the round %d", es.currentEpoch, es.currentRound)
 				continue
 			}
-			latestBlock, err := es.state.GetLatestBlock()
+			latestBlock, err := csStateRN.GetLatestBlock()
 			if err != nil {
 				es.log.Errorf("Can't get the latest block: err=%v", err)
 				continue

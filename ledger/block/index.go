@@ -2,8 +2,7 @@ package block
 
 import (
 	"fmt"
-
-	tptypes "github.com/TopiaNetwork/topia/common/types"
+	tptypes "github.com/TopiaNetwork/topia/chain/types"
 
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"

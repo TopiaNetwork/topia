@@ -3,7 +3,6 @@ package consensus
 import (
 	"encoding/binary"
 	"errors"
-	tplog "github.com/TopiaNetwork/topia/log"
 	"math/big"
 	"sort"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	tplog "github.com/TopiaNetwork/topia/log"
 )
 
 const uint64Mask = uint64(0x7FFFFFFFFFFFFFFF)
@@ -38,11 +38,12 @@ type candidateInfo struct {
 type roleSelectorVRF struct {
 	log     tplog.Logger
 	crypt   tpcrt.CryptService
-	csState consensusStore
+	csState consensusServant
 }
 
-func newLeaderSelectorVRF(log tplog.Logger, crypt tpcrt.CryptService, csState consensusStore) *roleSelectorVRF {
+func newLeaderSelectorVRF(log tplog.Logger, crypt tpcrt.CryptService, csState consensusServant) *roleSelectorVRF {
 	return &roleSelectorVRF{
+		log:     log,
 		crypt:   crypt,
 		csState: csState,
 	}

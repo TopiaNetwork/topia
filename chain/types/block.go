@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/TopiaNetwork/topia/codec"
@@ -27,5 +28,5 @@ func (m *Block) HashHex(hasher tpcmm.Hasher, marshaler codec.Marshaler) (string,
 		return "", err
 	}
 
-	return fmt.Sprintf("%x", hashBytes), nil
+	return fmt.Sprintf("%x", hex.EncodeToString(hashBytes)), nil
 }

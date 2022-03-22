@@ -12,6 +12,16 @@ import (
 	"github.com/TopiaNetwork/topia/network/p2p"
 )
 
+var CurrentNetworkType = NetworkType_Testnet
+
+type NetworkType byte
+
+const (
+	NetworkType_Unknown NetworkType = iota
+	NetworkType_Mainnet
+	NetworkType_Testnet
+)
+
 type Network interface {
 	ID() string
 
@@ -94,4 +104,26 @@ func (net *network) Start() {
 
 func (net *network) Stop() {
 	net.p2p.Close()
+}
+
+func (n NetworkType) String() string {
+	switch n {
+	case NetworkType_Mainnet:
+		return "Mainnet"
+	case NetworkType_Testnet:
+		return "Testnet"
+	default:
+		return "Unknown"
+	}
+}
+
+func (n NetworkType) Value(netType byte) NetworkType {
+	switch netType {
+	case 'm':
+		return NetworkType_Mainnet
+	case 't':
+		return NetworkType_Testnet
+	default:
+		return NetworkType_Unknown
+	}
 }

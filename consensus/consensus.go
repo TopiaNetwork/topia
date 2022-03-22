@@ -2,14 +2,14 @@ package consensus
 
 import (
 	"context"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
+	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
-	tptypes "github.com/TopiaNetwork/topia/common/types"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"

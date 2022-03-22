@@ -21,8 +21,9 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/state"
 	"github.com/TopiaNetwork/topia/sync"
-	transactionpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
 
 type Node struct {
@@ -35,7 +36,7 @@ type Node struct {
 	network   tpnet.Network
 	ledger    ledger.Ledger
 	consensus consensus.Consensus
-	txPool    transactionpool.TransactionPool
+	txPool    txpool.TransactionPool
 	syncer    sync.Syncer
 }
 
@@ -65,9 +66,9 @@ func NewNode(endPoint string, seed string) *Node {
 
 	evHub := eventhub.NewEventHub(tplogcmm.InfoLevel, mainLog)
 
-	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, ledger)
+	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
 	cons := consensus.NewConsensus(nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, ledger, csConfig)
-	txPool := transactionpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
+	txPool := txpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 
 	return &Node{

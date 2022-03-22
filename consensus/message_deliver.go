@@ -3,6 +3,8 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/ledger"
+	"github.com/TopiaNetwork/topia/state"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
@@ -38,27 +40,31 @@ type messageDeliverI interface {
 }
 
 type messageDeliver struct {
-	log       tplog.Logger
-	priKey    tpcrtypes.PrivateKey
-	strategy  DeliverStrategy
-	network   network.Network
-	marshaler codec.Marshaler
-	csState   consensusStore
-	selector  *roleSelectorVRF
-	dkgBls    DKGBls
+	log          tplog.Logger
+	priKey       tpcrtypes.PrivateKey
+	strategy     DeliverStrategy
+	network      network.Network
+	ledger       ledger.Ledger
+	marshaler    codec.Marshaler
+	cryptService tpcrt.CryptService
+	dkgBls       DKGBls
 }
 
-func newMessageDeliver(log tplog.Logger, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network network.Network, marshaler codec.Marshaler, crypt tpcrt.CryptService, csState consensusStore) *messageDeliver {
+func newMessageDeliver(log tplog.Logger, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network network.Network, marshaler codec.Marshaler, crypt tpcrt.CryptService, ledger ledger.Ledger) *messageDeliver {
 	return &messageDeliver{
 		log:       log,
+		priKey:    priKey,
 		strategy:  strategy,
 		network:   network,
+		ledger:    ledger,
 		marshaler: marshaler,
-		selector:  newLeaderSelectorVRF(log, crypt, csState),
 	}
 }
 
 func (md *messageDeliver) deliverPreparePackagedMessage(ctx context.Context, msg *PreparePackedMessage) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
 	sigData, pubKey, err := md.dkgBls.Sign(msg.TxRoot)
 	if err != nil {
 		md.log.Errorf("DKG sign PreparePackedMessage err: %v", err)
@@ -75,7 +81,7 @@ func (md *messageDeliver) deliverPreparePackagedMessage(ctx context.Context, msg
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := md.csState.GetActiveExecutorIDs()
+		peerIDs, err := csStateRN.GetActiveExecutorIDs()
 		if err != nil {
 			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
 			return err
@@ -93,6 +99,9 @@ func (md *messageDeliver) deliverPreparePackagedMessage(ctx context.Context, msg
 }
 
 func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
 	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
 	if err != nil {
 		md.log.Errorf("DKG sign ProposeMessage err: %v", err)
@@ -109,7 +118,7 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := md.csState.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetAllConsensusNodes()
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err
@@ -127,7 +136,10 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 }
 
 func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, error) {
-	lastBlock, err := md.csState.GetLatestBlock()
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
+	lastBlock, err := csStateRN.GetLatestBlock()
 	if err != nil {
 		md.log.Errorf("Can't get the latest block: %v", err)
 		return "", nil, err
@@ -149,7 +161,7 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 		},
 	}
 
-	selVoteColectors, vrfProof, err := md.selector.Select(RoleSelector_VoteCollector, roundInfo, md.priKey, 1)
+	selVoteColectors, vrfProof, err := newLeaderSelectorVRF(md.log, md.cryptService, csStateRN).Select(RoleSelector_VoteCollector, roundInfo, md.priKey, 1)
 	if len(selVoteColectors) != 1 {
 		err := fmt.Errorf("Expect vote collector count 1, got %d", len(selVoteColectors))
 		md.log.Errorf(err.Error())
@@ -193,6 +205,9 @@ func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessa
 }
 
 func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitMessage) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
 	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
 	if err != nil {
 		md.log.Errorf("DKG sign CommitMessage err: %v", err)
@@ -209,7 +224,7 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := md.csState.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetAllConsensusNodes()
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err
@@ -227,6 +242,9 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 }
 
 func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *DKGPartPubKeyMessage) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("DKGPartPubKeyMessage marshal err: %v", err)
@@ -235,7 +253,7 @@ func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := md.csState.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetAllConsensusNodes()
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err
@@ -283,6 +301,9 @@ func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, pubKey stri
 }
 
 func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("DKGDealRespMessage marshal err: %v", err)
@@ -291,7 +312,7 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := md.csState.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetAllConsensusNodes()
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err

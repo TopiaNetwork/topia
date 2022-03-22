@@ -1,50 +1,74 @@
 package state
 
 import (
-	bacs "github.com/TopiaNetwork/topia/ledger/backend"
+	"errors"
 	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
 )
 
 type stateData struct {
-	name    string
-	backend bacs.Backend
+	name      string
+	backendR  tplgcmm.DBReader
+	backendRW tplgcmm.DBReadWriter
 }
 
-func newStateData(name string, backend bacs.Backend) *stateData {
+func newStateData(name string, backendRW tplgcmm.DBReadWriter) *stateData {
 	return &stateData{
-		name:    name,
-		backend: backend,
+		name:      name,
+		backendRW: backendRW,
 	}
 }
 
-func (s *stateData) Get(key []byte, version *uint64) ([]byte, error) {
-	return s.backend.Get(key, version)
+func newStateDataReadonly(name string, backendR tplgcmm.DBReader) *stateData {
+	return &stateData{
+		name:     name,
+		backendR: backendR,
+	}
+}
+
+func (s *stateData) Get(key []byte) ([]byte, error) {
+	if s.backendR != nil {
+		return s.backendR.Get(key)
+	} else {
+		return s.backendRW.Get(key)
+	}
 }
 
 func (s *stateData) Set(key []byte, value []byte) error {
-	return s.backend.Set(key, value)
+	if s.backendR != nil {
+		return errors.New("Read only state data store")
+	}
+
+	return s.backendRW.Set(key, value)
 }
 
 func (s *stateData) Delete(key []byte) error {
-	return s.backend.Delete(key)
+	if s.backendR != nil {
+		return errors.New("Read only state data store")
+	}
+
+	return s.backendRW.Delete(key)
 }
 
-func (s *stateData) SaveVersion(version uint64) error {
-	return s.backend.SaveVersion(version)
+func (s *stateData) Has(key []byte) (bool, error) {
+	if s.backendR != nil {
+		return s.backendR.Has(key)
+	} else {
+		return s.backendRW.Has(key)
+	}
 }
 
-func (s *stateData) DeleteVersion(version uint64) error {
-	return s.backend.DeleteVersion(version)
-}
-
-func (s *stateData) Has(key []byte, version *uint64) (bool, error) {
-	return s.backend.Has(key, version)
-}
-
-func (s *stateData) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
-	return s.backend.Iterator(start, end, version)
+func (s *stateData) Iterator(start, end []byte) (tplgcmm.Iterator, error) {
+	if s.backendR != nil {
+		return s.backendR.Iterator(start, end)
+	} else {
+		return s.backendRW.Iterator(start, end)
+	}
 }
 
 func (s *stateData) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
-	return s.backend.ReverseIterator(start, end, version)
+	if s.backendR != nil {
+		return s.backendR.ReverseIterator(start, end)
+	} else {
+		return s.backendRW.ReverseIterator(start, end)
+	}
 }

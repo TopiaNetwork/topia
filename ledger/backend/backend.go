@@ -24,39 +24,21 @@ const (
 )
 
 type Backend interface {
-	Get([]byte, *uint64) ([]byte, error)
+	// Reader opens a read-only transaction at the current working version.
+	Reader() tplgcmm.DBReader
 
-	Has(key []byte, version *uint64) (bool, error)
+	// ReaderAt opens a read-only transaction at a specified version.
+	// Returns ErrVersionDoesNotExist for invalid versions.
+	ReaderAt(uint64) (tplgcmm.DBReader, error)
 
-	Set([]byte, []byte) error
+	// ReadWriter opens a read-write transaction at the current version.
+	ReadWriter() tplgcmm.DBReadWriter
 
-	// SetSync sets the value for the given key, and flushes it to storage before returning.
-	SetSync([]byte, []byte) error
+	// Writer opens a write-only transaction at the current version.
+	Writer() tplgcmm.DBWriter
 
-	Delete([]byte) error
-
-	// DeleteSync deletes the key, and flushes the delete to storage before returning.
-	DeleteSync([]byte) error
-
-	Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error)
-
-	// ReverseIterator returns an iterator over a domain of keys, in descending order. The caller
-	// must call Close when done. End is exclusive, and start must be less than end. A nil end
-	// iterates from the last key (inclusive), and a nil start iterates to the first key (inclusive).
-	// Empty keys are not valid.
-	ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error)
-
-	// Close closes the database connection.
-	Close() error
-
-	// NewBatch creates a batch for atomic updates. The caller must call Batch.Close.
-	NewBatch() tplgcmm.Batch
-
-	// Print is used for debugging.
-	Print() error
-
-	// Stats returns a map of property values for all keys and the size of the cache.
-	Stats() map[string]string
+	//PendingTxCount return pending transaction count
+	PendingTxCount() int32
 
 	// Versions returns all saved versions as an immutable set which is safe for concurrent access.
 	Versions() (tplgcmm.VersionSet, error)
@@ -75,11 +57,12 @@ type Backend interface {
 	// DeleteVersion deletes a saved version. Returns ErrVersionDoesNotExist for invalid versions.
 	DeleteVersion(uint64) error
 
-	//Get the last version
-	LastVersion() uint64
+	// Revert reverts the DB state to the last saved version; if none exist, this clears the DB.
+	// Returns an error if any open DBWriter transactions exist.
+	Revert() error
 
-	// Commit flushes pending writes and discards the transaction.
-	Commit() error
+	// Close closes the database connection.
+	Close() error
 }
 
 func NewBackend(backendType BackendType, log tplog.Logger, path string, name string) Backend {
@@ -87,14 +70,14 @@ func NewBackend(backendType BackendType, log tplog.Logger, path string, name str
 
 	switch backendType {
 	case BackendType_Leveldb:
-		return leveldb.NewLeveldbBackend(bLog, path, name, DefaultCacheSize)
+		return leveldb.NewLeveldbBackend(bLog, name, path, DefaultCacheSize)
 	case BackendType_Rocksdb:
 		bLog.Panic("Don't support rocksdb now")
 		//return rocksdb.NewRocksdbBackend(bLog, path, name, DefaultCacheSize)
 	case BackendType_Badger:
-		return badger.NewBadgerBackend(bLog, path, name, DefaultCacheSize)
+		return badger.NewBadgerBackend(bLog, name, path, DefaultCacheSize)
 	case BackendType_Memdb:
-		return memdb.NewLMemBackend(bLog, path, name, DefaultCacheSize)
+		return memdb.NewLMemBackend(bLog, name, path, DefaultCacheSize)
 	default:
 		bLog.Panicf("Invalid backend type %d", backendType)
 	}

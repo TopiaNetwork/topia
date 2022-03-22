@@ -29,92 +29,57 @@ func NewLMemBackend(log tplog.Logger, name string, path string, cacheSize int) *
 	}
 }
 
-func (b *MemBackend) Get(bytes []byte, version *uint64) ([]byte, error) {
+func (m *MemBackend) Reader() tplgcmm.DBReader {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) Has(key []byte, version *uint64) (bool, error) {
+func (m *MemBackend) ReaderAt(u uint64) (tplgcmm.DBReader, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) Set(bytes []byte, bytes2 []byte) error {
+func (m *MemBackend) ReadWriter() tplgcmm.DBReadWriter {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) SetSync(bytes []byte, bytes2 []byte) error {
+func (m *MemBackend) Writer() tplgcmm.DBWriter {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) Delete(bytes []byte) error {
+func (m *MemBackend) PendingTxCount() int32 {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) DeleteSync(bytes []byte) error {
+func (m *MemBackend) Versions() (tplgcmm.VersionSet, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
+func (m *MemBackend) SaveNextVersion() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
+func (m *MemBackend) SaveVersion(u uint64) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) Close() error {
+func (m *MemBackend) DeleteVersion(u uint64) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) NewBatch() tplgcmm.Batch {
+func (m *MemBackend) Revert() error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *MemBackend) Print() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *MemBackend) Stats() map[string]string {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *MemBackend) Versions() (tplgcmm.VersionSet, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *MemBackend) SaveNextVersion() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *MemBackend) SaveVersion(uint64) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *MemBackend) DeleteVersion(uint64) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *MemBackend) LastVersion() uint64 {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *MemBackend) Commit() error {
+func (m *MemBackend) Close() error {
 	//TODO implement me
 	panic("implement me")
 }

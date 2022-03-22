@@ -5,19 +5,18 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
-	"fmt"
+	lru "github.com/hashicorp/golang-lru"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v3"
 	bpb "github.com/dgraph-io/badger/v3/pb"
 	"github.com/dgraph-io/ristretto/z"
-	lru "github.com/hashicorp/golang-lru"
 
 	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
-	"github.com/TopiaNetwork/topia/ledger/backend/version"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
@@ -26,13 +25,83 @@ var (
 )
 
 type BadgerBackend struct {
-	log        tplog.Logger
-	name       string
-	cache      *lru.ARCCache
-	db         *badger.DB
-	versionMng *versionManager
+	log         tplog.Logger
+	db          *badger.DB
+	vmgr        *versionManager
+	mtx         sync.RWMutex
+	openWriters int32
+	cache       *lru.ARCCache
 }
 
+type badgerTxn struct {
+	txn *badger.Txn
+	db  *BadgerBackend
+}
+
+type badgerWriter struct {
+	badgerTxn
+	discarded bool
+}
+
+type badgerIterator struct {
+	reverse    bool
+	start, end []byte
+	iter       *badger.Iterator
+	lastErr    error
+	// Whether iterator has been advanced to the first element (is fully initialized)
+	primed bool
+}
+
+// Map our versions to Badger timestamps.
+//
+// A badger Txn's commit timestamp must be strictly greater than a record's "last-read"
+// timestamp in order to detect conflicts, and a Txn must be read at a timestamp after last
+// commit to see current state. So we must use commit increments that are more
+// granular than our version interval, and map versions to the corresponding timestamp.
+type versionManager struct {
+	*tplgcmm.VersionManager
+	vmap   map[uint64]uint64
+	lastTs uint64
+}
+
+// NewDB creates or loads a BadgerBackend key-value database inside the given directory.
+// If dir does not exist, it will be created.
+func NewBadgerBackend(log tplog.Logger, name string, path string, cacheSize int) *BadgerBackend {
+	pathWithName := filepath.Join(path, name+".db")
+	if err := os.MkdirAll(pathWithName, 0755); err != nil {
+		log.Panicf("can't change the path %s to 0755", pathWithName)
+		return nil
+	}
+
+	opts := badger.DefaultOptions(path)
+	opts.SyncWrites = false // note that we have Sync methods
+	opts.Logger = nil       // badger is too chatty by default
+	return NewDBWithOptions(log, opts, cacheSize)
+}
+
+// NewDBWithOptions creates a BadgerBackend key-value database with the specified Options
+// (https://pkg.go.dev/github.com/dgraph-io/badger/v3#Options)
+func NewDBWithOptions(log tplog.Logger, opts badger.Options, cacheSize int) *BadgerBackend {
+	d, err := badger.OpenManaged(opts)
+	if err != nil {
+		log.Panicf("Can't open with managed option: %v", err)
+		return nil
+	}
+	vmgr, err := readVersionsFile(filepath.Join(opts.Dir, versionsFilename))
+	if err != nil {
+		log.Panicf("Can't read versions file: %v", err)
+		return nil
+	}
+	cache, _ := lru.NewARC(cacheSize)
+
+	return &BadgerBackend{
+		db:    d,
+		vmgr:  vmgr,
+		cache: cache,
+	}
+}
+
+// Load metadata CSV file containing valid versions
 func readVersionsFile(path string) (*versionManager, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0644)
 	if err != nil {
@@ -65,125 +134,15 @@ func readVersionsFile(path string) (*versionManager, error) {
 		versions = append(versions, version)
 		vmap[version] = ts
 	}
-	vMNG := version.NewVersionManager(versions)
+	vmgr := tplgcmm.NewVersionManager(versions)
 	return &versionManager{
-		VersionManager: vMNG,
+		VersionManager: vmgr,
 		vmap:           vmap,
 		lastTs:         lastTs,
 	}, nil
 }
 
-func NewBadgerBackend(log tplog.Logger, name string, path string, cacheSize int) *BadgerBackend {
-	pathWithName := filepath.Join(path, name+".db")
-	if err := os.MkdirAll(pathWithName, 0755); err != nil {
-		log.Panicf("can't change the path %s to 0755", pathWithName)
-		return nil
-	}
-
-	versionMNG, err := readVersionsFile(filepath.Join(path, versionsFilename))
-	if err != nil {
-		return nil
-	}
-
-	opts := badger.DefaultOptions(pathWithName)
-	opts.SyncWrites = false
-	opts.Logger = nil
-
-	db, err := badger.Open(opts)
-	if err != nil {
-		log.Panicf("can't open badger: path=%s, err=%v", pathWithName, err)
-		return nil
-	}
-
-	cache, _ := lru.NewARC(cacheSize)
-	return &BadgerBackend{
-		log:        log,
-		name:       name,
-		cache:      cache,
-		db:         db,
-		versionMng: versionMNG,
-	}
-}
-
-func (b *BadgerBackend) vesionTxn(version *uint64) *badger.Txn {
-	var ts uint64
-	if version == nil {
-		ts = b.versionMng.lastTs
-	} else {
-		if tsm, has := b.versionMng.versionTs(*version); has {
-			ts = tsm
-		} else {
-			return nil
-		}
-	}
-
-	return b.db.NewTransactionAt(ts, true)
-}
-
-func (b *BadgerBackend) Get(key []byte, version *uint64) ([]byte, error) {
-	txn := b.vesionTxn(version)
-	if txn == nil {
-		return nil, fmt.Errorf("Can't get badger txn: version=%d", *version)
-	}
-	defer txn.Discard()
-
-	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-
-	val, err := item.ValueCopy(nil)
-	if err == nil && val == nil {
-		val = []byte{}
-	}
-
-	return val, err
-}
-
-func (b *BadgerBackend) Has(key []byte, version *uint64) (bool, error) {
-	txn := b.vesionTxn(version)
-	if txn == nil {
-		return false, fmt.Errorf("Can't get badger txn: version=%d", *version)
-	}
-	defer txn.Discard()
-
-	_, err := txn.Get(key)
-	if err != nil && err != badger.ErrKeyNotFound {
-		return false, err
-	}
-
-	return (err != badger.ErrKeyNotFound), nil
-}
-
-func (b *BadgerBackend) Set(key, value []byte) error {
-	return b.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(key, value)
-	})
-}
-
-func withSync(db *badger.DB, err error) error {
-	if err != nil {
-		return err
-	}
-	return db.Sync()
-}
-
-func (b *BadgerBackend) SetSync(key, value []byte) error {
-	return withSync(b.db, b.Set(key, value))
-}
-
-func (b *BadgerBackend) Delete(key []byte) error {
-	return b.db.Update(func(txn *badger.Txn) error {
-		return txn.Delete(key)
-	})
-}
-
-func (b *BadgerBackend) DeleteSync(key []byte) error {
-	return withSync(b.db, b.Delete(key))
-}
-
+// Write version metadata to CSV file
 func writeVersionsFile(vm *versionManager, path string) error {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
@@ -208,95 +167,107 @@ func writeVersionsFile(vm *versionManager, path string) error {
 	return w.WriteAll(rows)
 }
 
+func (b *BadgerBackend) Reader() tplgcmm.DBReader {
+	b.mtx.RLock()
+	ts := b.vmgr.lastTs
+	b.mtx.RUnlock()
+	return &badgerTxn{txn: b.db.NewTransactionAt(ts, false), db: b}
+}
+
+func (b *BadgerBackend) ReaderAt(version uint64) (tplgcmm.DBReader, error) {
+	b.mtx.RLock()
+	defer b.mtx.RUnlock()
+	ts, has := b.vmgr.versionTs(version)
+	if !has {
+		return nil, tplgcmm.ErrVersionDoesNotExist
+	}
+	return &badgerTxn{txn: b.db.NewTransactionAt(ts, false), db: b}, nil
+}
+
+func (b *BadgerBackend) ReadWriter() tplgcmm.DBReadWriter {
+	atomic.AddInt32(&b.openWriters, 1)
+	b.mtx.RLock()
+	ts := b.vmgr.lastTs
+	b.mtx.RUnlock()
+	return &badgerWriter{badgerTxn{txn: b.db.NewTransactionAt(ts, true), db: b}, false}
+}
+
+func (b *BadgerBackend) Writer() tplgcmm.DBWriter {
+	// Badger has a WriteBatch, but it doesn't support conflict detection
+	return b.ReadWriter()
+}
+
 func (b *BadgerBackend) Close() error {
-	writeVersionsFile(b.versionMng, filepath.Join(b.db.Opts().Dir, versionsFilename))
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+	writeVersionsFile(b.vmgr, filepath.Join(b.db.Opts().Dir, versionsFilename))
 	return b.db.Close()
 }
 
-func (b *BadgerBackend) Print() error {
-	return nil
-}
-
-func (b *BadgerBackend) iteratorOpts(start, end []byte, opts badger.IteratorOptions, version *uint64) (*BadgerBackendIterator, error) {
-	if (start != nil && len(start) == 0) || (end != nil && len(end) == 0) {
-		return nil, errors.New("invalid input params")
-	}
-	txn := b.vesionTxn(version)
-	iter := txn.NewIterator(opts)
-	iter.Rewind()
-	iter.Seek(start)
-	if opts.Reverse && iter.Valid() && bytes.Equal(iter.Item().Key(), start) {
-		// If we're going in reverse, our starting point was "end",
-		// which is exclusive.
-		iter.Next()
-	}
-	return &BadgerBackendIterator{
-		reverse: opts.Reverse,
-		start:   start,
-		end:     end,
-
-		txn:  txn,
-		iter: iter,
-	}, nil
-}
-
-func (b *BadgerBackend) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
-	opts := badger.DefaultIteratorOptions
-	return b.iteratorOpts(start, end, opts, version)
-}
-
-func (b *BadgerBackend) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
-	opts := badger.DefaultIteratorOptions
-	opts.Reverse = true
-	return b.iteratorOpts(end, start, opts, version)
-}
-
-func (b *BadgerBackend) Stats() map[string]string {
-	return nil
-}
-
+// Versions implements DBConnection.
+// Returns a VersionSet that is valid until the next call to SaveVersion or DeleteVersion.
 func (b *BadgerBackend) Versions() (tplgcmm.VersionSet, error) {
-	return b.versionMng, nil
+	b.mtx.RLock()
+	defer b.mtx.RUnlock()
+	return b.vmgr, nil
 }
 
-func (b *BadgerBackend) save(version uint64) (uint64, error) {
-	b.versionMng = b.versionMng.Copy()
-	return b.versionMng.Save(version)
+func (b *BadgerBackend) save(target uint64) (uint64, error) {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+	/* Allow multi open writers
+	if b.openWriters > 0 {
+		return 0, tplgcmm.ErrOpenTransactions
+	}*/
+	b.vmgr = b.vmgr.Copy()
+	return b.vmgr.Save(target)
 }
 
+// SaveNextVersion implements DBConnection.
 func (b *BadgerBackend) SaveNextVersion() (uint64, error) {
 	return b.save(0)
 }
 
-func (b *BadgerBackend) SaveVersion(version uint64) error {
-	_, err := b.save(version)
+// SaveVersion implements DBConnection.
+func (b *BadgerBackend) SaveVersion(target uint64) error {
+	if target == 0 {
+		return tplgcmm.ErrInvalidVersion
+	}
+	_, err := b.save(target)
 	return err
 }
 
-func (b *BadgerBackend) DeleteVersion(version uint64) error {
-	if !b.versionMng.Exists(version) {
-		return fmt.Errorf("version %d not exist", version)
+func (b *BadgerBackend) DeleteVersion(target uint64) error {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+	if !b.vmgr.Exists(target) {
+		return tplgcmm.ErrVersionDoesNotExist
 	}
-	b.versionMng = b.versionMng.Copy()
-	b.versionMng.Delete(version)
-
+	b.vmgr = b.vmgr.Copy()
+	b.vmgr.Delete(target)
 	return nil
 }
 
 func (b *BadgerBackend) Revert() error {
+	b.mtx.RLock()
+	defer b.mtx.RUnlock()
+	if b.openWriters > 0 {
+		return tplgcmm.ErrOpenTransactions
+	}
+
 	// Revert from latest commit timestamp to last "saved" timestamp
 	// if no versions exist, use 0 as it precedes any possible commit timestamp
 	var target uint64
-	last := b.versionMng.Last()
+	last := b.vmgr.Last()
 	if last == 0 {
 		target = 0
 	} else {
 		var has bool
-		if target, has = b.versionMng.versionTs(last); !has {
+		if target, has = b.vmgr.versionTs(last); !has {
 			return errors.New("bad version history")
 		}
 	}
-	lastTs := b.versionMng.lastTs
+	lastTs := b.vmgr.lastTs
 	if target == lastTs {
 		return nil
 	}
@@ -354,103 +325,132 @@ func (b *BadgerBackend) Revert() error {
 	return txn.CommitAt(lastTs, nil)
 }
 
-func (b *BadgerBackend) LastVersion() uint64 {
-	return b.versionMng.Last()
+func (b *BadgerBackend) Stats() map[string]string { return nil }
+
+func (b *BadgerBackend) PendingTxCount() int32 {
+	return b.openWriters
 }
 
-func (b *BadgerBackend) Commit() error {
-	txn := b.vesionTxn(nil)
-	if txn == nil {
-		return errors.New("Can't get the last bedger txt")
+func (tx *badgerTxn) Get(key []byte) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, tplgcmm.ErrKeyEmpty
 	}
 
-	b.versionMng.updateCommitTs(txn.ReadTs())
-
-	return txn.CommitAt(b.versionMng.lastTs, nil)
-}
-
-func (b *BadgerBackend) NewBatch() tplgcmm.Batch {
-	wb := &BadgerBackendBatch{
-		db:         b.db,
-		wb:         b.db.NewWriteBatch(),
-		firstFlush: make(chan struct{}, 1),
+	item, err := tx.txn.Get(key)
+	if err == badger.ErrKeyNotFound {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
 	}
-	wb.firstFlush <- struct{}{}
-	return wb
-}
-
-var _ tplgcmm.Batch = (*BadgerBackendBatch)(nil)
-
-type BadgerBackendBatch struct {
-	db *badger.DB
-	wb *badger.WriteBatch
-
-	// Calling db.Flush twice panics, so we must keep track of whether we've
-	// flushed already on our own. If Write can receive from the firstFlush
-	// channel, then it's the first and only Flush call we should do.
-	//
-	// Upstream bug report:
-	// https://github.com/dgraph-io/badger/issues/1394
-	firstFlush chan struct{}
-}
-
-func (b *BadgerBackendBatch) Set(key, value []byte) error {
-	return b.wb.Set(key, value)
-}
-
-func (b *BadgerBackendBatch) Delete(key []byte) error {
-	return b.wb.Delete(key)
-}
-
-func (b *BadgerBackendBatch) Write() error {
-	select {
-	case <-b.firstFlush:
-		return b.wb.Flush()
-	default:
-		return fmt.Errorf("batch already flushed")
+	val, err := item.ValueCopy(nil)
+	if err == nil && val == nil {
+		val = []byte{}
 	}
+	return val, err
 }
 
-func (b *BadgerBackendBatch) WriteSync() error {
-	return withSync(b.db, b.Write())
-}
-
-func (b *BadgerBackendBatch) Close() error {
-	select {
-	case <-b.firstFlush: // a Flush after Cancel panics too
-	default:
+func (tx *badgerTxn) Has(key []byte) (bool, error) {
+	if len(key) == 0 {
+		return false, tplgcmm.ErrKeyEmpty
 	}
-	b.wb.Cancel()
+
+	_, err := tx.txn.Get(key)
+	if err != nil && err != badger.ErrKeyNotFound {
+		return false, err
+	}
+	return (err != badger.ErrKeyNotFound), nil
+}
+
+func (tx *badgerWriter) Set(key, value []byte) error {
+	if err := tplgcmm.ValidateKv(key, value); err != nil {
+		return err
+	}
+	return tx.txn.Set(key, value)
+}
+
+func (tx *badgerWriter) Delete(key []byte) error {
+	if len(key) == 0 {
+		return tplgcmm.ErrKeyEmpty
+	}
+	return tx.txn.Delete(key)
+}
+
+func (tx *badgerWriter) Commit() (err error) {
+	if tx.discarded {
+		return errors.New("transaction has been discarded")
+	}
+	defer func() { err = tplgcmm.CombineErrors(err, tx.Discard(), "Discard also failed") }()
+	// Commit to the current commit timestamp, after ensuring it is > ReadTs
+	tx.db.mtx.RLock()
+	tx.db.vmgr.updateCommitTs(tx.txn.ReadTs())
+	ts := tx.db.vmgr.lastTs
+	tx.db.mtx.RUnlock()
+	err = tx.txn.CommitAt(ts, nil)
+	return
+}
+
+func (tx *badgerTxn) Discard() error {
+	tx.txn.Discard()
 	return nil
 }
 
-type BadgerBackendIterator struct {
-	reverse    bool
-	start, end []byte
-
-	txn  *badger.Txn
-	iter *badger.Iterator
-
-	lastErr error
+func (tx *badgerWriter) Discard() error {
+	if !tx.discarded {
+		defer atomic.AddInt32(&tx.db.openWriters, -1)
+		tx.discarded = true
+	}
+	return tx.badgerTxn.Discard()
 }
 
-func (i *BadgerBackendIterator) Close() error {
+func (tx *badgerTxn) iteratorOpts(start, end []byte, opts badger.IteratorOptions) (*badgerIterator, error) {
+	if (start != nil && len(start) == 0) || (end != nil && len(end) == 0) {
+		return nil, tplgcmm.ErrKeyEmpty
+	}
+	iter := tx.txn.NewIterator(opts)
+	iter.Rewind()
+	iter.Seek(start)
+	if opts.Reverse && iter.Valid() && bytes.Equal(iter.Item().Key(), start) {
+		// If we're going in reverse, our starting point was "end", which is exclusive.
+		iter.Next()
+	}
+	return &badgerIterator{
+		reverse: opts.Reverse,
+		start:   start,
+		end:     end,
+		iter:    iter,
+		primed:  false,
+	}, nil
+}
+
+func (tx *badgerTxn) Iterator(start, end []byte) (tplgcmm.Iterator, error) {
+	opts := badger.DefaultIteratorOptions
+	return tx.iteratorOpts(start, end, opts)
+}
+
+func (tx *badgerTxn) ReverseIterator(start, end []byte) (tplgcmm.Iterator, error) {
+	opts := badger.DefaultIteratorOptions
+	opts.Reverse = true
+	return tx.iteratorOpts(end, start, opts)
+}
+
+func (i *badgerIterator) Close() error {
 	i.iter.Close()
-	i.txn.Discard()
 	return nil
 }
 
-func (i *BadgerBackendIterator) Domain() (start, end []byte) { return i.start, i.end }
-func (i *BadgerBackendIterator) Error() error                { return i.lastErr }
+func (i *badgerIterator) Domain() (start, end []byte) { return i.start, i.end }
+func (i *badgerIterator) Error() error                { return i.lastErr }
 
-func (i *BadgerBackendIterator) Next() {
-	if !i.Valid() {
-		panic("iterator is invalid")
+func (i *badgerIterator) Next() bool {
+	if !i.primed {
+		i.primed = true
+	} else {
+		i.iter.Next()
 	}
-	i.iter.Next()
+	return i.Valid()
 }
 
-func (i *BadgerBackendIterator) Valid() bool {
+func (i *badgerIterator) Valid() bool {
 	if !i.iter.Valid() {
 		return false
 	}
@@ -464,16 +464,14 @@ func (i *BadgerBackendIterator) Valid() bool {
 	return true
 }
 
-func (i *BadgerBackendIterator) Key() []byte {
+func (i *badgerIterator) Key() []byte {
 	if !i.Valid() {
 		panic("iterator is invalid")
 	}
-	// Note that we don't use KeyCopy, so this is only valid until the next
-	// call to Next.
 	return i.iter.Item().KeyCopy(nil)
 }
 
-func (i *BadgerBackendIterator) Value() []byte {
+func (i *badgerIterator) Value() []byte {
 	if !i.Valid() {
 		panic("iterator is invalid")
 	}
@@ -482,12 +480,6 @@ func (i *BadgerBackendIterator) Value() []byte {
 		i.lastErr = err
 	}
 	return val
-}
-
-type versionManager struct {
-	*version.VersionManager
-	vmap   map[uint64]uint64
-	lastTs uint64
 }
 
 func (vm *versionManager) versionTs(ver uint64) (uint64, bool) {

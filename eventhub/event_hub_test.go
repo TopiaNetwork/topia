@@ -3,20 +3,20 @@ package eventhub
 import (
 	"context"
 	"fmt"
-	tplog "github.com/TopiaNetwork/topia/log"
-	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/stretchr/testify/assert"
 
-	"github.com/TopiaNetwork/topia/transaction"
+	tplog "github.com/TopiaNetwork/topia/log"
+	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	tx "github.com/TopiaNetwork/topia/transaction"
 )
 
 func receivedTxCallBack_test(ctx context.Context, data interface{}) error {
 	switch recvData := data.(type) {
-	case *transaction.Transaction:
+	case *tx.Transaction:
 		fmt.Println("Received tx")
 		return nil
 	default:
@@ -36,7 +36,7 @@ func TestEventHub(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	evHub.Observe(context.Background(), EventName_TxReceived, receivedTxCallBack_test)
-	evHub.Trig(context.Background(), EventName_TxReceived, &transaction.Transaction{})
+	evHub.Trig(context.Background(), EventName_TxReceived, &tx.Transaction{})
 
 	time.Sleep(time.Second * 5)
 }

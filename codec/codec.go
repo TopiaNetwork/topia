@@ -12,7 +12,7 @@ import (
 type CodecType byte
 
 const (
-	CodecType_Unknown = iota
+	CodecType_Unknown CodecType = iota
 	CodecType_JSON
 	CodecType_PROTO
 	CodecType_RLP

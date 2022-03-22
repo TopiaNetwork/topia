@@ -4,14 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"reflect"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
-	tptypes "github.com/TopiaNetwork/topia/common/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	"github.com/TopiaNetwork/topia/transaction"
+	tx "github.com/TopiaNetwork/topia/transaction"
 )
 
 type EventHub interface {
@@ -34,10 +34,10 @@ func NewEventHub(level tplogcmm.LogLevel, log tplog.Logger) EventHub {
 
 	evManager := newEventManager()
 
-	evManager.registerEvent(EventName_TxReceived, reflect.TypeOf(&transaction.Transaction{}).String())
-	evManager.registerEvent(EventName_TxPrepared, reflect.TypeOf(&transaction.Transaction{}).String())
-	evManager.registerEvent(EventName_TxRollbacked, reflect.TypeOf(&transaction.Transaction{}).String())
-	evManager.registerEvent(EventName_TxCommited, reflect.TypeOf(&transaction.Transaction{}).String())
+	evManager.registerEvent(EventName_TxReceived, reflect.TypeOf(&tx.Transaction{}).String())
+	evManager.registerEvent(EventName_TxPrepared, reflect.TypeOf(&tx.Transaction{}).String())
+	evManager.registerEvent(EventName_TxRollbacked, reflect.TypeOf(&tx.Transaction{}).String())
+	evManager.registerEvent(EventName_TxCommited, reflect.TypeOf(&tx.Transaction{}).String())
 	evManager.registerEvent(EventName_BlockCreated, reflect.TypeOf(&tptypes.Block{}).String())
 	evManager.registerEvent(EventName_BlockCommited, reflect.TypeOf(&tptypes.Block{}).String())
 	evManager.registerEvent(EventName_BlockVerified, reflect.TypeOf(&tptypes.Block{}).String())

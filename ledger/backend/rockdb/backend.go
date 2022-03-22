@@ -63,92 +63,57 @@ func NewRocksdbBackend(log tplog.Logger, name string, path string, cacheSize int
 	}
 }
 
-func (b *RocksdbBackend) Get(bytes []byte, version *uint64) ([]byte, error) {
+func (r *RocksdbBackend) Reader() tplgcmm.DBReader {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) Has(key []byte, version *uint64) (bool, error) {
+func (r *RocksdbBackend) ReaderAt(u uint64) (tplgcmm.DBReader, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) Set(bytes []byte, bytes2 []byte) error {
+func (r *RocksdbBackend) ReadWriter() tplgcmm.DBReadWriter {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) SetSync(bytes []byte, bytes2 []byte) error {
+func (r *RocksdbBackend) Writer() tplgcmm.DBWriter {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) Delete(bytes []byte) error {
+func (r *RocksdbBackend) PendingTxCount() int32 {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) DeleteSync(bytes []byte) error {
+func (r *RocksdbBackend) Versions() (tplgcmm.VersionSet, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
+func (r *RocksdbBackend) SaveNextVersion() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
+func (r *RocksdbBackend) SaveVersion(u uint64) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) Close() error {
+func (r *RocksdbBackend) DeleteVersion(u uint64) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) NewBatch() tplgcmm.Batch {
+func (r *RocksdbBackend) Revert() error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *RocksdbBackend) Print() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *RocksdbBackend) Stats() map[string]string {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *RocksdbBackend) Versions() (tplgcmm.VersionSet, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *RocksdbBackend) SaveNextVersion() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *RocksdbBackend) SaveVersion(uint64) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *RocksdbBackend) DeleteVersion(uint64) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *RocksdbBackend) LastVersion() uint64 {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *RocksdbBackend) Commit() error {
+func (r *RocksdbBackend) Close() error {
 	//TODO implement me
 	panic("implement me")
 }

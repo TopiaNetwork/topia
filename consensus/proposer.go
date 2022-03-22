@@ -2,12 +2,14 @@ package consensus
 
 import (
 	"context"
+	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
-	tptypes "github.com/TopiaNetwork/topia/common/types"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/state"
 )
 
 const defaultLeaderCount = int(3)
@@ -19,26 +21,29 @@ type consensusProposer struct {
 	lastRoundNum uint64
 	roundCh      chan *RoundInfo
 	deliver      messageDeliverI
-	csState      consensusStore
 	marshaler    codec.Marshaler
-	selector     *roleSelectorVRF
+	ledger       ledger.Ledger
+	cryptService tpcrt.CryptService
 }
 
-func newConsensusProposer(nodeID string, priKey tpcrtypes.PrivateKey, log tplog.Logger, roundCh chan *RoundInfo, crypt tpcrt.CryptService, deliver messageDeliverI, csState consensusStore, marshaler codec.Marshaler) *consensusProposer {
+func newConsensusProposer(nodeID string, priKey tpcrtypes.PrivateKey, log tplog.Logger, roundCh chan *RoundInfo, crypt tpcrt.CryptService, deliver messageDeliverI, ledger ledger.Ledger, marshaler codec.Marshaler) *consensusProposer {
 	return &consensusProposer{
-		log:       log,
-		nodeID:    nodeID,
-		priKey:    priKey,
-		roundCh:   roundCh,
-		deliver:   deliver,
-		csState:   csState,
-		marshaler: marshaler,
-		selector:  newLeaderSelectorVRF(log, crypt, csState),
+		log:          log,
+		nodeID:       nodeID,
+		priKey:       priKey,
+		roundCh:      roundCh,
+		deliver:      deliver,
+		marshaler:    marshaler,
+		ledger:       ledger,
+		cryptService: crypt,
 	}
 }
 
 func (p *consensusProposer) canProposeBlock(roundInfo *RoundInfo) (bool, []byte, error) {
-	selProposers, vrfProof, err := p.selector.Select(RoleSelector_Proposer, roundInfo, p.priKey, defaultLeaderCount)
+	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
+	defer csStateRN.Stop()
+
+	selProposers, vrfProof, err := newLeaderSelectorVRF(p.log, p.cryptService, csStateRN).Select(RoleSelector_Proposer, roundInfo, p.priKey, defaultLeaderCount)
 	if err != nil {
 		return false, nil, err
 	}
@@ -88,8 +93,11 @@ func (p *consensusProposer) start(ctx context.Context) {
 	}()
 }
 
-func (p *consensusProposer) createBlock(roundInfo *RoundInfo) (*tptypes.Block, error) {
-	latestBlock, err := p.csState.GetLatestBlock()
+func (p *consensusProposer) createBlock(roundInfo *RoundInfo) (*types.Block, error) {
+	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
+	defer csStateRN.Stop()
+
+	latestBlock, err := csStateRN.GetLatestBlock()
 	if err != nil {
 		p.log.Errorf("can't get the latest block: %v", err)
 	}
@@ -100,10 +108,10 @@ func (p *consensusProposer) createBlock(roundInfo *RoundInfo) (*tptypes.Block, e
 		return nil, err
 	}
 
-	return &tptypes.Block{
-		Head: &tptypes.BlockHead{
-			ChainID:         []byte(p.csState.ChainID()),
-			Version:         tptypes.BLOCK_VER,
+	return &types.Block{
+		Head: &types.BlockHead{
+			ChainID:         []byte(csStateRN.ChainID()),
+			Version:         types.BLOCK_VER,
 			Height:          latestBlock.Head.Height + 1,
 			Epoch:           roundInfo.Epoch,
 			Round:           roundInfo.CurRoundNum,
@@ -113,6 +121,9 @@ func (p *consensusProposer) createBlock(roundInfo *RoundInfo) (*tptypes.Block, e
 }
 
 func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo) (*ProposeMessage, error) {
+	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
+	defer csStateRN.Stop()
+
 	newBlock, err := p.createBlock(roundInfo)
 	if err != nil {
 		p.log.Errorf("Create block failed: %v", err)
@@ -131,7 +142,7 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo) (*ProposeM
 	}
 
 	return &ProposeMessage{
-		ChainID: []byte(p.csState.ChainID()),
+		ChainID: []byte(csStateRN.ChainID()),
 		Version: CONSENSUS_VER,
 		Epoch:   roundInfo.Epoch,
 		Round:   roundInfo.CurRoundNum,

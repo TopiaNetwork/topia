@@ -38,3 +38,23 @@ func IsContainString(target string, str_array []string) bool {
 func IsContainItem(target interface{}, array []interface{}) bool {
 	return mapset.NewSetFromSlice(array).Contains(target)
 }
+
+func Has0xPrefix(str string) bool {
+	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
+}
+
+func IsHexCharacter(c byte) bool {
+	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
+}
+
+func IsHex(str string) bool {
+	if len(str)%2 != 0 {
+		return false
+	}
+	for _, c := range []byte(str) {
+		if !IsHexCharacter(c) {
+			return false
+		}
+	}
+	return true
+}

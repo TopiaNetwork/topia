@@ -2,6 +2,9 @@ package consensus
 
 import (
 	"context"
+	"github.com/TopiaNetwork/topia/execution"
+	"github.com/TopiaNetwork/topia/ledger"
+	"github.com/TopiaNetwork/topia/state"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -11,22 +14,22 @@ import (
 )
 
 type consensusExecutor struct {
-	log        tplog.Logger
-	txPool     txpool.TransactionPool
-	marshaler  codec.Marshaler
-	epochState EpochState
-	csState    consensusStore
-	deliver    *messageDeliver
+	log          tplog.Logger
+	txPool       txpool.TransactionPool
+	marshaler    codec.Marshaler
+	ledger       ledger.Ledger
+	exeScheduler execution.Executionscheduler
+	deliver      *messageDeliver
 }
 
-func newConsensusExecutor(log tplog.Logger, txPool txpool.TransactionPool, marshaler codec.Marshaler, epochState EpochState, csState consensusStore, deliver *messageDeliver) *consensusExecutor {
+func newConsensusExecutor(log tplog.Logger, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.Executionscheduler, deliver *messageDeliver) *consensusExecutor {
 	return &consensusExecutor{
-		log:        log,
-		txPool:     txPool,
-		marshaler:  marshaler,
-		epochState: epochState,
-		csState:    csState,
-		deliver:    deliver,
+		log:          log,
+		txPool:       txPool,
+		marshaler:    marshaler,
+		ledger:       ledger,
+		exeScheduler: exeScheduler,
+		deliver:      deliver,
 	}
 }
 
@@ -34,23 +37,22 @@ func (e *consensusExecutor) start() {
 
 }
 
-func (e *consensusExecutor) makePreparePackedMsg(txs []tx.Transaction) (*PreparePackedMessage, error) {
-	latestBlock, err := e.csState.GetLatestBlock()
+func (e *consensusExecutor) makePreparePackedMsg(txRoot []byte, txRSRoot []byte, compState state.CompositionState) (*PreparePackedMessage, error) {
+	latestBlock, err := compState.GetLatestBlock()
 	if err != nil {
 		e.log.Errorf("can't get the latest bock when making prepare packed msg: %v", err)
 		return nil, err
 	}
 	parentBlockHahs, _ := latestBlock.HashBytes(tpcmm.NewBlake2bHasher(0), e.marshaler)
 
-	txRoot := tx.TxRoot(tpcmm.NewBlake2bHasher(0), e.marshaler, txs)
-
 	return &PreparePackedMessage{
-		ChainID:         []byte(e.csState.ChainID()),
+		ChainID:         []byte(compState.ChainID()),
 		Version:         CONSENSUS_VER,
-		Epoch:           e.epochState.GetCurrentEpoch(),
-		Round:           e.epochState.GetCurrentRound(),
+		Epoch:           compState.GetCurrentEpoch(),
+		Round:           compState.GetCurrentRound(),
 		ParentBlockHash: parentBlockHahs,
 		TxRoot:          txRoot,
+		TxResultRoot:    txRSRoot,
 	}, nil
 }
 
@@ -66,11 +68,29 @@ func (e *consensusExecutor) Prepare(ctx context.Context) error {
 		return nil
 	}
 
-	for _, tx := range pendTxs {
+	txRoot := tx.TxRoot(pendTxs)
+	compState := state.CreateCompositionState(e.log, e.ledger)
 
+	var packedTxs execution.PackedTxs
+
+	maxStateVer, err := e.exeScheduler.MaxStateVersion(compState)
+	if err != nil {
+		e.log.Errorf("Can't get max state version: %v", err)
+		return err
 	}
 
-	packedMsg, err := e.makePreparePackedMsg(pendTxs)
+	packedTxs.StateVersion = maxStateVer + 1
+	packedTxs.TxRoot = txRoot
+	packedTxs.TxList = append(packedTxs.TxList, pendTxs...)
+
+	txsRS, err := e.exeScheduler.ExecutePackedTx(ctx, &packedTxs, compState)
+	if err != nil {
+		e.log.Errorf("Execute state version %d packed txs err: %v", packedTxs.StateVersion, err)
+		return err
+	}
+	txRSRoot := tx.TxResultRoot(txsRS.TxsResult, packedTxs.TxList)
+
+	packedMsg, err := e.makePreparePackedMsg(txRoot, txRSRoot, compState)
 	if err != nil {
 		return err
 	}

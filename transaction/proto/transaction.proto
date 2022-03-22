@@ -28,9 +28,10 @@ message Transaction {
 message TransactionResult {
   bytes  TxHash       = 1  [(gogoproto.jsontag) = "txHash"];
   uint64 GasUsed      = 2  [(gogoproto.jsontag) = "gasUsed"];
+  bytes  ErrString    = 3  [(gogoproto.jsontag) = "errString"];
   enum ResultStatus {
     OK = 0;
     Err = 1;
   }
-  ResultStatus Status = 3  [(gogoproto.jsontag) = "status"];
+  ResultStatus Status = 4 [(gogoproto.jsontag) = "status"];
 }

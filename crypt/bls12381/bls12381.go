@@ -2,13 +2,11 @@ package bls12381
 
 import (
 	"fmt"
-
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
 const (
-	AddressLen      = 48 //48 bytes
 	PublicKeyBytes  = 48 //48 bytes
 	PrivateKeyBytes = 32 //32 bytes
 )
@@ -46,8 +44,8 @@ func (c *CryptServiceBLS12381) Verify(pubKey tpcrtypes.PublicKey, msg []byte, si
 }
 
 func (c *CryptServiceBLS12381) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-	if len(pubKey) != AddressLen {
-		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid pubkey: len %d, expected %d", len(pubKey), AddressLen)
+	if len(pubKey) != tpcrtypes.AddressLen_BLS12381 {
+		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid pubkey: len %d, expected %d", len(pubKey), tpcrtypes.AddressLen_BLS12381)
 	}
 	return tpcrtypes.NewAddress(tpcrtypes.CryptType_BLS12381, pubKey)
 }

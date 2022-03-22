@@ -1,13 +1,13 @@
 package leveldb
 
 import (
+	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
 	"os"
 	"path/filepath"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb"
 
-	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
@@ -40,92 +40,57 @@ func NewLeveldbBackend(log tplog.Logger, name string, path string, cacheSize int
 	}
 }
 
-func (b *LeveldbBackend) Get(bytes []byte, version *uint64) ([]byte, error) {
+func (l *LeveldbBackend) Reader() tplgcmm.DBReader {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) Has(key []byte, version *uint64) (bool, error) {
+func (l *LeveldbBackend) ReaderAt(u uint64) (tplgcmm.DBReader, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) Set(bytes []byte, bytes2 []byte) error {
+func (l *LeveldbBackend) ReadWriter() tplgcmm.DBReadWriter {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) SetSync(bytes []byte, bytes2 []byte) error {
+func (l *LeveldbBackend) Writer() tplgcmm.DBWriter {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) Delete(bytes []byte) error {
+func (l *LeveldbBackend) PendingTxCount() int32 {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) DeleteSync(bytes []byte) error {
+func (l *LeveldbBackend) Versions() (tplgcmm.VersionSet, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
+func (l *LeveldbBackend) SaveNextVersion() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
+func (l *LeveldbBackend) SaveVersion(u uint64) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) Close() error {
+func (l *LeveldbBackend) DeleteVersion(u uint64) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) NewBatch() tplgcmm.Batch {
+func (l *LeveldbBackend) Revert() error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (b *LeveldbBackend) Print() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *LeveldbBackend) Stats() map[string]string {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *LeveldbBackend) Versions() (tplgcmm.VersionSet, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *LeveldbBackend) SaveNextVersion() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *LeveldbBackend) SaveVersion(uint64) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *LeveldbBackend) DeleteVersion(uint64) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *LeveldbBackend) LastVersion() uint64 {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (b *LeveldbBackend) Commit() error {
+func (l *LeveldbBackend) Close() error {
 	//TODO implement me
 	panic("implement me")
 }

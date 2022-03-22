@@ -5,7 +5,7 @@ package sync
 
 import (
 	fmt "fmt"
-	proto1 "github.com/TopiaNetwork/topia/common/types"
+	proto1 "github.com/TopiaNetwork/topia/chain/types"
 	_ "github.com/gogo/protobuf/gogoproto"
 	proto "github.com/golang/protobuf/proto"
 	io "io"
@@ -181,7 +181,7 @@ type BlockResponse struct {
 	Height uint64                 `protobuf:"varint,1,opt,name=Height,proto3" json:"height"`
 	Code   BlockResponse_RespCode `protobuf:"varint,2,opt,name=Code,proto3,enum=proto.BlockResponse_RespCode" json:"code"`
 	Block  *proto1.Block          `protobuf:"bytes,3,opt,name=block,proto3" json:"block"`
-	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte                 `json:"-"`
 	XXX_sizecache        int32                  `json:"-"`
 }

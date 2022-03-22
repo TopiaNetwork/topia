@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"errors"
 
 	"github.com/lazyledger/smt"
 
-	"github.com/TopiaNetwork/topia/ledger/backend"
+	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
 )
 
 func encodeProof(sp *smt.SparseMerkleProof) ([]byte, error) {
@@ -32,9 +33,45 @@ type stateProof struct {
 	smTree *smt.SparseMerkleTree
 }
 
-func newStateProof(nodes backend.Backend, values backend.Backend) *stateProof {
+func newStateProof(nodes tplgcmm.DBReadWriter, values tplgcmm.DBReadWriter) *stateProof {
+	hasher := sha256.New()
+	smTree := smt.NewSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, hasher)
+	stateIt, err := values.Iterator(nil, nil)
+	if err != nil {
+		return nil
+	}
+	for stateIt.Next() {
+		smTree.Update(stateIt.Key(), stateIt.Value())
+	}
+	stateRoot := smTree.Root()
+	if stateRoot != nil {
+		smTree = smt.ImportSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, hasher, stateRoot)
+	}
+
 	return &stateProof{
-		smTree: smt.NewSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, sha256.New()),
+		smTree: smTree,
+	}
+}
+
+func newStateProofReadonly(nodes tplgcmm.DBReader, values tplgcmm.DBReader) *stateProof {
+	hasher := sha256.New()
+	smTree := smt.NewSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, hasher)
+	stateIt, err := values.Iterator(nil, nil)
+	if err != nil {
+		return nil
+	}
+	for stateIt.Next() {
+		smTree.Update(stateIt.Key(), stateIt.Value())
+	}
+	stateIt.Close()
+
+	stateRoot := smTree.Root()
+	if stateRoot != nil {
+		smTree = smt.ImportSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, hasher, stateRoot)
+	}
+
+	return &stateProof{
+		smTree: smTree,
 	}
 }
 
@@ -55,7 +92,7 @@ func (p *stateProof) Has(key []byte) (bool, error) {
 }
 
 func (p *stateProof) Root() []byte {
-	return p.Root()
+	return p.smTree.Root()
 }
 
 func (p *stateProof) Proof(key []byte) ([]byte, error) {
@@ -68,20 +105,35 @@ func (p *stateProof) Proof(key []byte) ([]byte, error) {
 }
 
 type stateProofDB struct {
-	backend backend.Backend
+	backendRW tplgcmm.DBReadWriter
+}
+
+type stateProofDBReadonly struct {
+	backendR tplgcmm.DBReader
 }
 
 func (s *stateProofDB) Get(key []byte) ([]byte, error) {
-	lastVer := s.backend.LastVersion()
-	return s.backend.Get(key, &lastVer)
+	return s.backendRW.Get(key)
 }
 
 func (s *stateProofDB) Set(key []byte, value []byte) error {
-	return s.backend.Set(key, value)
+	return s.backendRW.Set(key, value)
 }
 
 func (s *stateProofDB) Delete(key []byte) error {
-	return s.backend.Delete(key)
+	return s.backendRW.Delete(key)
+}
+
+func (s *stateProofDBReadonly) Get(key []byte) ([]byte, error) {
+	return s.backendR.Get(key)
+}
+
+func (s *stateProofDBReadonly) Set(key []byte, value []byte) error {
+	return errors.New("Can't set because of read only state proof db")
+}
+
+func (s *stateProofDBReadonly) Delete(key []byte) error {
+	return errors.New("Can't delete because of read only state proof db")
 }
 
 func VerifyProof(proofData []byte, root []byte, key []byte, value []byte) bool {

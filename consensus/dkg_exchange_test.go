@@ -16,6 +16,8 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
+	"github.com/TopiaNetwork/topia/ledger"
+	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
@@ -29,7 +31,7 @@ var dkgExChangeMap = make(map[int]*dkgExchange)
 var initPrivKeys []string
 var initPubKeys []string
 
-func createTestDKGExChange(log tplog.Logger, index int) *dkgExchange {
+func createTestDKGExChange(log tplog.Logger, index int, ledger ledger.Ledger) *dkgExchange {
 	deliver := &messageDeliverMock{
 		log:              log,
 		index:            index,
@@ -38,9 +40,8 @@ func createTestDKGExChange(log tplog.Logger, index int) *dkgExchange {
 		dealMsgChMap:     dealMsgChMap,
 		dealRespMsgChMap: dealRespMsgChMap,
 	}
-	csStore := &consensusStoreMock{}
 
-	dkgEx := newDKGExchange(log, partPubKeyChMap[index], dealMsgChMap[index], dealRespMsgChMap[index], initPrivKeys[index], initPubKeys, deliver, csStore)
+	dkgEx := newDKGExchange(log, partPubKeyChMap[index], dealMsgChMap[index], dealRespMsgChMap[index], initPrivKeys[index], initPubKeys, deliver, ledger)
 	dkgEx.index = index
 
 	return dkgEx
@@ -57,6 +58,8 @@ func creatKeyPairs(suite *bn256.Suite, nParticipant int) {
 }
 
 func createTestDKGNode(log tplog.Logger, nParticipant int) {
+	lg := ledger.NewLedger(".", "dkgtest", log, backend.BackendType_Badger)
+
 	suite := bn256.NewSuiteG2()
 	creatKeyPairs(suite, nParticipant)
 	for i := 0; i < nParticipant; i++ {
@@ -64,7 +67,7 @@ func createTestDKGNode(log tplog.Logger, nParticipant int) {
 		dealMsgChMap[i] = make(chan *DKGDealMessage, DealMSGChannel_Size)
 		dealRespMsgChMap[i] = make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 
-		dkgEx := createTestDKGExChange(log, i)
+		dkgEx := createTestDKGExChange(log, i, lg)
 		dkgEx.startLoop(context.Background())
 
 		dkgCrypt := newDKGCrypt(log, 10 /*suite, */, initPrivKeys[i], initPubKeys, 2*nParticipant/3+1, nParticipant)

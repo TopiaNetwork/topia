@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -100,23 +101,24 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	conf = (&conf).check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
-		config:        conf,
-		log:           poolLog,
-		level:         level,
-		allTxsForLook: newTxLookup(),
-
-		chanChainHead:     make(chan transaction.ChainHeadEvent, chainHeadChanSize),
-		chanReqReset:      make(chan *txPoolResetRequest),
-		chanReqPromote:    make(chan *accountSet),
-		chanReorgDone:     make(chan chan struct{}),
-		chanReorgShutdown: make(chan struct{}),                 // requests shutdown of scheduleReorgLoop
-		chanInitDone:      make(chan struct{}),                 // is closed once the pool is initialized (for tests)
-		chanQueueTxEvent:  make(chan *transaction.Transaction), //check new tx insert to txpool
-		chanRmTxs:         make(chan []string),
+		config:              conf,
+		log:                 poolLog,
+		level:               level,
+		allTxsForLook:       newTxLookup(),
+		ActivationIntervals: make(map[string]time.Time),
+		chanChainHead:       make(chan transaction.ChainHeadEvent, chainHeadChanSize),
+		chanReqReset:        make(chan *txPoolResetRequest),
+		chanReqPromote:      make(chan *accountSet),
+		chanReorgDone:       make(chan chan struct{}),
+		chanReorgShutdown:   make(chan struct{}),                 // requests shutdown of scheduleReorgLoop
+		chanInitDone:        make(chan struct{}),                 // is closed once the pool is initialized (for tests)
+		chanQueueTxEvent:    make(chan *transaction.Transaction), //check new tx insert to txpool
+		chanRmTxs:           make(chan []string),
 
 		marshaler: codec.CreateMarshaler(codecType),
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
+	pool.curMaxGasLimit = pool.query.GetMaxGasLimit()
 	pool.pending = newPendingTxs()
 	pool.queue = newQueueTxs()
 
@@ -134,6 +136,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	pool.sortedByPriced = newTxPricedList(pool.allTxsForLook) //done
 	pool.Reset(nil, conf.chain.CurrentBlock().GetHead())
 
+	pool.wg.Add(1)
 	go pool.scheduleReorgLoop()
 
 	pool.loadLocal(conf.NoLocalFile, conf.PathLocal)
@@ -331,8 +334,10 @@ func (pool *transactionPool) queueAddTx(key string, tx *transaction.Transaction,
 	from := account.Address(hex.EncodeToString(tx.FromAddr))
 	if pool.queue.accTxs[from] == nil {
 		pool.queue.accTxs[from] = newTxList(false)
+
 	}
 	inserted, old := pool.queue.accTxs[from].Add(tx)
+	fmt.Println("queueAddTx0001", inserted, old)
 	if !inserted {
 		// An older transaction was existed
 		return false, ErrReplaceUnderpriced
@@ -376,7 +381,7 @@ func (pool *transactionPool) GetLocalTxs() map[account.Address][]*transaction.Tr
 }
 
 func (pool *transactionPool) ValidateTx(tx *transaction.Transaction, local bool) error {
-	from := account.Address(string(tx.FromAddr[:]))
+	from := account.Address(tx.FromAddr[:])
 
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
@@ -429,28 +434,36 @@ func (pool *transactionPool) stats() (int, int) {
 // out of the pool due to pricing constraints.
 func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (replaced bool, err error) {
 	// If the transaction is already known, discard it
-
 	txId, _ := tx.TxID()
 	if pool.allTxsForLook.Get(txId) != nil {
+		fmt.Println("add 0001")
 		pool.log.Tracef("Discarding already known transaction", "hash", txId)
 		return false, ErrAlreadyKnown
+		fmt.Println("add 0002")
+
 	}
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
 	isLocal := local || pool.locals.containsTx(tx)
+	fmt.Println("add 0003")
 
 	// If the transaction fails basic validation, discard it
-	if err := pool.ValidateTx(tx, isLocal); err != nil {
-		pool.log.Tracef("Discarding invalid transaction", "txId", txId, "err", err)
-		return false, err
-	}
+	//if err := pool.ValidateTx(tx, isLocal); err != nil {
+	//	pool.log.Tracef("Discarding invalid transaction", "txId", txId, "err", err)
+	//	return false, err
+	//}
+	fmt.Println("add 0005")
+
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.allTxsForLook.Slots()+numSlots(tx)) > pool.config.PendingGlobalSlots+pool.config.QueueMaxTxsGlobal {
 		// If the new transaction is underpriced, don't accept it
+		fmt.Println("add 0006")
+
 		if !isLocal && pool.sortedByPriced.Underpriced(tx) {
 			pool.log.Tracef("Discarding underpriced transaction", "hash", txId, "GasPrice", tx.GasPrice)
 			return false, ErrUnderpriced
 		}
+		fmt.Println("add 0007")
 		if pool.changesSinceReorg > int(pool.config.PendingGlobalSlots/4) {
 			return false, ErrTxPoolOverflow
 		}
@@ -469,9 +482,14 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 			pool.RemoveTxByKey(txId)
 		}
 	}
+	fmt.Println("add 0008")
+
 	// Try to replace an existing transaction in the pending pool
 	from := account.Address(hex.EncodeToString(tx.FromAddr))
+	fmt.Println("add from 0009", from)
+
 	if list := pool.pending.accTxs[from]; list != nil && list.Overlaps(tx) {
+		fmt.Println("add 0010")
 		inserted, old := list.Add(tx)
 		if !inserted {
 			return false, ErrReplaceUnderpriced
@@ -484,17 +502,30 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 		pool.sortedByPriced.Put(tx, isLocal)
 		pool.ActivationIntervals[txId] = time.Now()
 	}
+	fmt.Println("add 0011")
 	// New transaction isn't replacing a pending one, push into queue
 	replaced, err = pool.queueAddTx(txId, tx, isLocal, true)
+	fmt.Println("add 0012")
 	if err != nil {
 		return false, err
 	}
+	fmt.Println("add 0013")
+
 	// Mark local addresses and store local transactions
 	if local && !pool.locals.contains(from) {
+		fmt.Println("add 0014")
+
 		pool.log.Infof("Setting new local account", "address", from)
+		fmt.Println("add 0015")
+
 		pool.locals.add(from)
+		fmt.Println("add 0016")
+
 		pool.sortedByPriced.Removed(pool.allTxsForLook.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
+		fmt.Println("add 0017")
+
 	}
+	fmt.Println("add 0018")
 
 	pool.log.Tracef("Pooled new future transaction", "txId", txId, "from", from, "to", tx.TargetAddr)
 	return replaced, nil

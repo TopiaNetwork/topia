@@ -274,14 +274,16 @@ func (l *txList) Add(tx *transaction.Transaction) (bool, *transaction.Transactio
 	if old != nil {
 		return false, nil
 	}
-	txQuery := l.servant
+	//txQuery := l.servant
 	l.txs.Put(tx)
-	if cost := txQuery.EstimateTxCost(tx); l.costcap.Cmp(cost) < 0 {
-		l.costcap = cost
-	}
-	if gas := txQuery.EstimateTxGas(tx); l.gascap < gas {
-		l.gascap = gas
-	}
+	//if cost := txQuery.EstimateTxCost(tx); l.costcap.Cmp(cost) < 0 {
+	//	l.costcap = cost
+	//}
+	//
+	//if gas := txQuery.EstimateTxGas(tx); l.gascap < gas {
+	//	l.gascap = gas
+	//}
+
 	return true, old
 }
 
@@ -579,6 +581,7 @@ func (t *txLookup) Add(tx *transaction.Transaction, local bool) {
 			t.remotes[txId] = tx
 		}
 	}
+
 }
 func (t *txLookup) Remove(key string) {
 	t.lock.Lock()

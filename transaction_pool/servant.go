@@ -16,6 +16,7 @@ type TransactionPoolServant interface {
 	SubChainHeadEvent(ch chan<- transaction.ChainHeadEvent) p2p.P2PPubSubService
 	EstimateTxCost(tx *transaction.Transaction) *big.Int
 	EstimateTxGas(tx *transaction.Transaction) uint64
+	GetMaxGasLimit() uint64
 }
 
 type StatePoolDB interface {

@@ -254,6 +254,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 						return nil
 					}
 				}
+
 				reInject = transaction.TxDifference(discarded, included)
 			}
 		}

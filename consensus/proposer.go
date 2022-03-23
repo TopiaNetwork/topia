@@ -3,6 +3,8 @@ package consensus
 import (
 	"container/list"
 	"context"
+	"sync"
+
 	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -11,7 +13,6 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
-	"sync"
 )
 
 const defaultLeaderCount = int(3)

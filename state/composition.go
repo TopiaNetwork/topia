@@ -1,6 +1,8 @@
 package state
 
 import (
+	"math/big"
+
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -12,7 +14,6 @@ import (
 	statechain "github.com/TopiaNetwork/topia/state/chain"
 	statenode "github.com/TopiaNetwork/topia/state/node"
 	staetround "github.com/TopiaNetwork/topia/state/round"
-	"math/big"
 )
 
 type NodeNetWorkStateWapper interface {
@@ -32,19 +33,25 @@ type CompositionStateReadonly interface {
 
 	NetworkType() tpnet.NetworkType
 
+	GetLatestBlock() (*tpchaintypes.Block, error)
+
 	GetAllConsensusNodes() ([]string, error)
 
 	GetChainTotalWeight() (uint64, error)
-
-	GetNodeWeight(nodeID string) (uint64, error)
-
-	GetLatestBlock() (*tpchaintypes.Block, error)
 
 	GetActiveExecutorIDs() ([]string, error)
 
 	GetActiveProposerIDs() ([]string, error)
 
 	GetActiveValidatorIDs() ([]string, error)
+
+	GetNodeWeight(nodeID string) (uint64, error)
+
+	GetActiveExecutorsTotalWeight(uint64, error)
+
+	GetActiveProposersTotalWeight(uint64, error)
+
+	GetActiveValidatorsTotalWeight(uint64, error)
 
 	GetCurrentRound() uint64
 

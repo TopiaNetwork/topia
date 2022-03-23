@@ -222,10 +222,10 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 		},
 	}
 
-	selVoteColectors, vrfProof, err := newLeaderSelectorVRF(md.log, md.cryptService, csStateRN).Select(RoleSelector_VoteCollector, roundInfo, md.priKey, 1)
+	selVoteColectors, vrfProof, err := newLeaderSelectorVRF(md.log, md.cryptService).Select(RoleSelector_VoteCollector, roundInfo, 0, md.priKey, csStateRN, 1)
 	if len(selVoteColectors) != 1 {
 		err := fmt.Errorf("Expect vote collector count 1, got %d", len(selVoteColectors))
-		md.log.Errorf(err.Error())
+		md.log.Errorf("%v", err)
 		return "", nil, err
 	}
 

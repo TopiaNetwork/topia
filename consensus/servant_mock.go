@@ -41,17 +41,17 @@ func (cs *consensusServantMock) GetChainTotalWeight() (uint64, error) {
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetActiveExecutorsTotalWeight(uint64, error) {
+func (cs *consensusServantMock) GetActiveExecutorsTotalWeight() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetActiveProposersTotalWeight(uint64, error) {
+func (cs *consensusServantMock) GetActiveProposersTotalWeight() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetActiveValidatorsTotalWeight(uint64, error) {
+func (cs *consensusServantMock) GetActiveValidatorsTotalWeight() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }

@@ -51,7 +51,7 @@ func (p *consensusProposer) canProposeBlock(roundInfo *RoundInfo) (bool, []byte,
 	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 	defer csStateRN.Stop()
 
-	selProposers, vrfProof, err := newLeaderSelectorVRF(p.log, p.cryptService, csStateRN).Select(RoleSelector_Proposer, roundInfo, p.priKey, defaultLeaderCount)
+	selProposers, vrfProof, err := newLeaderSelectorVRF(p.log, p.cryptService).Select(RoleSelector_ExecutionLauncher, roundInfo, 0, p.priKey, csStateRN, defaultLeaderCount)
 	if err != nil {
 		return false, nil, err
 	}

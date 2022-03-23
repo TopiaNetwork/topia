@@ -47,11 +47,11 @@ type CompositionStateReadonly interface {
 
 	GetNodeWeight(nodeID string) (uint64, error)
 
-	GetActiveExecutorsTotalWeight(uint64, error)
+	GetActiveExecutorsTotalWeight() (uint64, error)
 
-	GetActiveProposersTotalWeight(uint64, error)
+	GetActiveProposersTotalWeight() (uint64, error)
 
-	GetActiveValidatorsTotalWeight(uint64, error)
+	GetActiveValidatorsTotalWeight() (uint64, error)
 
 	GetCurrentRound() uint64
 

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/network"
 )
 
 type messageDeliverMock struct {
@@ -18,6 +19,21 @@ type messageDeliverMock struct {
 	dealMsgChMap     map[int]chan *DKGDealMessage
 	dealRespMsgChMap map[int]chan *DKGDealRespMessage
 	dkgBls           DKGBls
+}
+
+func (md *messageDeliverMock) deliverNetwork() network.Network {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (md *messageDeliverMock) deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (md *messageDeliverMock) deliverPreparePackagedMessageProp(ctx context.Context, msg *PreparePackedMessageProp) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (md *messageDeliverMock) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {

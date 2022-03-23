@@ -3,7 +3,6 @@ package transactionpool
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -207,9 +206,9 @@ func (pool *transactionPool) addTxs(txs []*transaction.Transaction, local, sync 
 	}
 	// Process all the new transaction and merge any errors into the original slice
 	pool.pending.Mu.Lock()
+	//newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
 	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
 	pool.pending.Mu.Unlock()
-
 	var nilSlot = 0
 	for _, err := range newErrs {
 		for errs[nilSlot] != nil {
@@ -222,6 +221,7 @@ func (pool *transactionPool) addTxs(txs []*transaction.Transaction, local, sync 
 	done := pool.requestReplaceExecutables(dirtyAddrs)
 	if sync {
 		<-done
+
 	}
 	return errs
 }
@@ -334,10 +334,9 @@ func (pool *transactionPool) queueAddTx(key string, tx *transaction.Transaction,
 	from := account.Address(hex.EncodeToString(tx.FromAddr))
 	if pool.queue.accTxs[from] == nil {
 		pool.queue.accTxs[from] = newTxList(false)
-
 	}
+
 	inserted, old := pool.queue.accTxs[from].Add(tx)
-	fmt.Println("queueAddTx0001", inserted, old)
 	if !inserted {
 		// An older transaction was existed
 		return false, ErrReplaceUnderpriced
@@ -354,8 +353,10 @@ func (pool *transactionPool) queueAddTx(key string, tx *transaction.Transaction,
 		pool.log.Errorf("Missing transaction in lookup set, please report the issue", "TxID", key)
 	}
 	if addAll {
+
 		pool.allTxsForLook.Add(tx, local)
 		pool.sortedByPriced.Put(tx, local)
+
 	}
 	// If we never record the ActivationInterval, do it right now.
 	if _, exist := pool.ActivationIntervals[key]; !exist {
@@ -381,8 +382,7 @@ func (pool *transactionPool) GetLocalTxs() map[account.Address][]*transaction.Tr
 }
 
 func (pool *transactionPool) ValidateTx(tx *transaction.Transaction, local bool) error {
-	from := account.Address(tx.FromAddr[:])
-
+	//from := account.Address(tx.FromAddr[:])
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
 	}
@@ -394,15 +394,15 @@ func (pool *transactionPool) ValidateTx(tx *transaction.Transaction, local bool)
 	if !local && tx.GasPrice < pool.config.GasPriceLimit {
 		return ErrGasPriceTooLow
 	}
-	// Transactor should have enough funds to cover the costs
-	if pool.curState.GetBalance(from).Cmp(pool.Cost(tx)) < 0 {
-		return ErrInsufficientFunds
-	}
-
-	//Is nonce is validated
-	if !(pool.curState.GetNonce(from) > tx.Nonce) {
-		return ErrNonceTooLow
-	}
+	//// Transactor should have enough funds to cover the costs
+	//if pool.curState.GetBalance(from).Cmp(pool.Cost(tx)) < 0 {
+	//	return ErrInsufficientFunds
+	//}
+	//
+	////Is nonce is validated
+	//if !(pool.curState.GetNonce(from) > tx.Nonce) {
+	//	return ErrNonceTooLow
+	//}
 
 	return nil
 }
@@ -436,34 +436,27 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 	// If the transaction is already known, discard it
 	txId, _ := tx.TxID()
 	if pool.allTxsForLook.Get(txId) != nil {
-		fmt.Println("add 0001")
 		pool.log.Tracef("Discarding already known transaction", "hash", txId)
 		return false, ErrAlreadyKnown
-		fmt.Println("add 0002")
 
 	}
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
 	isLocal := local || pool.locals.containsTx(tx)
-	fmt.Println("add 0003")
-
-	// If the transaction fails basic validation, discard it
-	//if err := pool.ValidateTx(tx, isLocal); err != nil {
-	//	pool.log.Tracef("Discarding invalid transaction", "txId", txId, "err", err)
-	//	return false, err
-	//}
-	fmt.Println("add 0005")
+	//If the transaction fails basic validation, discard it
+	if err := pool.ValidateTx(tx, isLocal); err != nil {
+		pool.log.Tracef("Discarding invalid transaction", "txId", txId, "err", err)
+		return false, err
+	}
 
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.allTxsForLook.Slots()+numSlots(tx)) > pool.config.PendingGlobalSlots+pool.config.QueueMaxTxsGlobal {
 		// If the new transaction is underpriced, don't accept it
-		fmt.Println("add 0006")
 
 		if !isLocal && pool.sortedByPriced.Underpriced(tx) {
 			pool.log.Tracef("Discarding underpriced transaction", "hash", txId, "GasPrice", tx.GasPrice)
 			return false, ErrUnderpriced
 		}
-		fmt.Println("add 0007")
 		if pool.changesSinceReorg > int(pool.config.PendingGlobalSlots/4) {
 			return false, ErrTxPoolOverflow
 		}
@@ -482,14 +475,11 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 			pool.RemoveTxByKey(txId)
 		}
 	}
-	fmt.Println("add 0008")
 
 	// Try to replace an existing transaction in the pending pool
 	from := account.Address(hex.EncodeToString(tx.FromAddr))
-	fmt.Println("add from 0009", from)
 
 	if list := pool.pending.accTxs[from]; list != nil && list.Overlaps(tx) {
-		fmt.Println("add 0010")
 		inserted, old := list.Add(tx)
 		if !inserted {
 			return false, ErrReplaceUnderpriced
@@ -502,32 +492,24 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 		pool.sortedByPriced.Put(tx, isLocal)
 		pool.ActivationIntervals[txId] = time.Now()
 	}
-	fmt.Println("add 0011")
 	// New transaction isn't replacing a pending one, push into queue
 	replaced, err = pool.queueAddTx(txId, tx, isLocal, true)
-	fmt.Println("add 0012")
 	if err != nil {
 		return false, err
 	}
-	fmt.Println("add 0013")
 
 	// Mark local addresses and store local transactions
 	if local && !pool.locals.contains(from) {
-		fmt.Println("add 0014")
 
-		pool.log.Infof("Setting new local account", "address", from)
-		fmt.Println("add 0015")
+		//pool.log.Infof("Setting new local account", "address", from)
 
 		pool.locals.add(from)
-		fmt.Println("add 0016")
 
 		pool.sortedByPriced.Removed(pool.allTxsForLook.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
-		fmt.Println("add 0017")
 
 	}
-	fmt.Println("add 0018")
 
-	pool.log.Tracef("Pooled new future transaction", "txId", txId, "from", from, "to", tx.TargetAddr)
+	//pool.log.Tracef("Pooled new future transaction", "txId", txId, "from", from, "to", tx.TargetAddr)
 	return replaced, nil
 }
 

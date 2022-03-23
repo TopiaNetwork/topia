@@ -25,25 +25,29 @@ var (
 
 func init() {
 	testTxPoolConfig = DefaultTransactionPoolConfig
-	Tx1 = settransaction(1)
+	Tx1 = settransaction(1, 10000)
+	Tx2 = settransaction(2, 20000)
+	Tx3 = settransaction(3, 30000)
+	Tx4 = settransaction(4, 40000)
 	TestBlockHash = "0x224111a2131c213b213112d121c1231e"
+
 	TestBlockHead = &types.BlockHead{
 		ChainID:              []byte{0x01},
 		Version:              0,
 		Height:               0,
 		Epoch:                0,
 		Round:                0,
-		ParentBlockHash:      nil,
-		ProposeSignature:     nil,
-		VoteAggSignature:     nil,
-		ResultHash:           nil,
-		TxCount:              0,
-		TxHashRoot:           nil,
+		ParentBlockHash:      []byte{0x32, 0x54, 0x12, 0x12, 0x87, 0x68, 0x12, 0x62},
+		ProposeSignature:     []byte{0x32, 0x54, 0x12, 0x12, 0x87, 0x13, 0x68, 0x43},
+		VoteAggSignature:     []byte{0x32, 0x54, 0x23, 0x12, 0x12, 0x87, 0x68, 0x12},
+		ResultHash:           []byte{0x12, 0x43, 0x54, 0x23, 0x12, 0x53, 0x12, 0x43},
+		TxCount:              2,
+		TxHashRoot:           []byte{0x12, 0x73, 0x24, 0x23, 0x12, 0x53, 0x12, 0x43},
 		TimeStamp:            0,
-		DataHash:             nil,
-		Reserved:             nil,
+		DataHash:             []byte{0x12, 0x73, 0x24, 0x23, 0x12, 0x53, 0x12, 0x43},
+		Reserved:             []byte{0x12, 0x73, 0x24, 0x23, 0x12, 0x53, 0x12, 0x43},
 		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     nil,
+		XXX_unrecognized:     []byte{0x12, 0x73, 0x24, 0x23, 0x12, 0x53, 0x12, 0x43},
 		XXX_sizecache:        0,
 	}
 	TestBlockData = &types.BlockData{
@@ -57,19 +61,19 @@ func init() {
 		Head:                 TestBlockHead,
 		Data:                 TestBlockData,
 		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     nil,
-		XXX_sizecache:        0,
+		XXX_unrecognized:     []byte{0x43, 0x12, 0x53, 0x13, 0x12, 0x53, 0x15},
+		XXX_sizecache:        123,
 	}
 
 }
 
-func settransaction(nonce uint64) *transaction.Transaction {
+func settransaction(nonce uint64, gaseLimit uint64) *transaction.Transaction {
 	tx := &transaction.Transaction{
-		FromAddr:   []byte{0x21, 0x23, 0x43, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43},
-		TargetAddr: []byte{0x23, 0x34, 0x34, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43}, Version: 1, ChainID: []byte{0x01},
+		FromAddr:   []byte{0x00, 0x00, 0x43, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43},
+		TargetAddr: []byte{0x00, 0x00, 0x34, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43}, Version: 1, ChainID: []byte{0x01},
 		Nonce: nonce, Value: []byte{0x12, 0x32}, GasPrice: 10000,
-		GasLimit: 100, Data: []byte{0x32, 0x32, 0x32},
-		Signature: []byte{0x32, 0x23, 0x42}, Options: 0, Time: time.Now()}
+		GasLimit: gaseLimit, Data: []byte{0x32, 0x32, 0x32, 0x65, 0x32, 0x65, 0x32, 0x65},
+		Signature: []byte{0x32, 0x23, 0x42, 0x23, 0x42, 0x23, 0x42}, Options: 0, Time: time.Now()}
 	return tx
 }
 
@@ -136,6 +140,8 @@ func SetNewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, 
 		}
 	}
 	pool.sortedByPriced = newTxPricedList(pool.allTxsForLook) //done
+	pool.curMaxGasLimit = uint64(987654321)
+
 	//pool.Reset(nil, conf.chain.CurrentBlock().GetHead())
 	//
 	//pool.wg.Add(1)
@@ -144,7 +150,7 @@ func SetNewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, 
 	//pool.loadLocal(conf.NoLocalFile, conf.PathLocal)
 	//pool.loadRemote(conf.NoRemoteFile, conf.PathRemote)
 	//pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
-	//
+
 	//pool.pubSubService = pool.config.chain.SubChainHeadEvent(pool.chanChainHead)
 	//
 	//go pool.loop()
@@ -181,15 +187,77 @@ func TestTransactionQueue(t *testing.T) {
 	}
 }
 
-func TestTransactionPending(t *testing.T) {
+//test pool.add,pool.locals.containsTx(tx),pool.queueAddTx(),pool.locals.contains()
+func TestTxadd1(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	testTxPoolConfig.chain = servant
 	log := NewMockLogger(ctrl)
 	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
+
 	ok, err := pool.add(Tx1, true)
 	if !ok {
 		fmt.Println(err)
 	}
+	if len(pool.queue.accTxs) != 1 {
+		t.Error("except len of queue is 1,got", len(pool.queue.accTxs))
+	}
+}
+
+//pool.AddTx,AddLocal,AddLocals,addTxs,addTxsLocked,AddRemote
+func TestAddTx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	servant := NewMockTransactionPoolServant(ctrl)
+	testTxPoolConfig.chain = servant
+	log := NewMockLogger(ctrl)
+	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
+	err := pool.AddTx(Tx1, true)
+	if err != nil {
+		fmt.Println(err)
+	}
+	if pool.allTxsForLook.Count() != 1 {
+		t.Error("except len of queue is 1,got", pool.allTxsForLook.Count())
+	}
+}
+
+func TestRemoveTx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	servant := NewMockTransactionPoolServant(ctrl)
+	testTxPoolConfig.chain = servant
+	log := NewMockLogger(ctrl)
+	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
+	pool.add(Tx1, true)
+	fmt.Println(len(pool.pending.accTxs))
+	fmt.Println(len(pool.queue.accTxs))
+	fmt.Println(pool.allTxsForLook.Count())
+	txKey, err := Tx1.TxID()
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = pool.RemoveTxByKey(txKey)
+	if err != nil {
+		fmt.Println(err)
+	}
+	if len(pool.queue.accTxs) != 1 {
+		t.Error("except len of queue is 0,got", len(pool.queue.accTxs))
+	}
+	if pool.allTxsForLook.Count() != 0 {
+		t.Error("except len of allTxsForLook is 0,got", pool.allTxsForLook.Count())
+	}
+
+}
+
+func TestUpdateTx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	servant := NewMockTransactionPoolServant(ctrl)
+	testTxPoolConfig.chain = servant
+	log := NewMockLogger(ctrl)
+	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
+	pool.add(Tx1, true)
+	fmt.Println(pool.allTxsForLook.locals)
+
 }

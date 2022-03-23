@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"container/heap"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -417,16 +418,13 @@ func newQueueTxs() *queueTxs {
 }
 
 type accountSet struct {
-	accounts map[account.Address]struct{}
+	accounts map[account.Address]uint8
 	cache    *[]account.Address
 }
 
 func newAccountSet(addrs ...account.Address) *accountSet {
 	as := &accountSet{
-		accounts: make(map[account.Address]struct{}),
-	}
-	if addrs == nil {
-		return nil
+		accounts: make(map[account.Address]uint8),
 	}
 	for _, addr := range addrs {
 		as.add(addr)
@@ -435,6 +433,7 @@ func newAccountSet(addrs ...account.Address) *accountSet {
 }
 
 func (accSet *accountSet) contains(addr account.Address) bool {
+
 	_, exist := accSet.accounts[addr]
 	return exist
 }
@@ -451,7 +450,7 @@ func (accSet *accountSet) len() int {
 }
 
 func (accSet *accountSet) add(addr account.Address) {
-	accSet.accounts[addr] = struct{}{}
+	accSet.accounts[addr] = 1
 	accSet.cache = nil
 }
 func (accSet *accountSet) addTx(tx *transaction.Transaction) {
@@ -460,13 +459,13 @@ func (accSet *accountSet) addTx(tx *transaction.Transaction) {
 }
 func (accSet *accountSet) merge(other *accountSet) {
 	for addr := range other.accounts {
-		accSet.accounts[addr] = struct{}{}
+		accSet.accounts[addr] = 1
 	}
 	accSet.cache = nil
 }
 
-func (accSet *accountSet) RemoveAccount(key account.Address) {
-	delete(accSet.accounts, key)
+func (accSet *accountSet) RemoveAccount(addr account.Address) {
+	delete(accSet.accounts, addr)
 }
 
 // flatten returns the list of addresses within this set, also caching it for later
@@ -574,9 +573,10 @@ func (t *txLookup) Add(tx *transaction.Transaction, local bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.slots += numSlots(tx)
-	if txId, err := tx.TxID(); err != nil {
+	if txId, err := tx.TxID(); err == nil {
 		if local {
 			t.locals[txId] = tx
+			fmt.Println("txlookup add tx 00001")
 		} else {
 			t.remotes[txId] = tx
 		}
@@ -587,6 +587,7 @@ func (t *txLookup) Remove(key string) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	tx, ok := t.locals[key]
+	fmt.Println("local:", ok)
 	if !ok {
 		tx, ok = t.remotes[key]
 	}
@@ -685,7 +686,8 @@ func (l *txPricedList) Put(tx *transaction.Transaction, local bool) {
 	heap.Push(&l.remoteTxs, tx)
 }
 
-//Removed chinese 删除N条交易，当删除当交易大于队列中当四分之一的时候，重置队列。
+//Removed Delete transactions and reset the queue when the number of deleted transactions
+//is greater than a quarter of the number in the queue.
 func (l *txPricedList) Removed(count int) {
 	stales := atomic.AddInt64(&l.stales, int64(count))
 	if int(stales) <= (len(l.remoteTxs.list))/4 {

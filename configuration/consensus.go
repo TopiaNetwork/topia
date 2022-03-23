@@ -6,9 +6,10 @@ import (
 )
 
 type ConsensusConfiguration struct {
-	RoundDuration      time.Duration
-	EpochInterval      uint64 //the round number between two epochs
-	CrptyType          types.CryptType
-	InitDKGPrivKey     string
-	InitDKGPartPubKeys []string
+	RoundDuration            time.Duration
+	EpochInterval            uint64 //the round number between two epochs
+	CrptyType                types.CryptType
+	InitDKGPrivKey           string
+	InitDKGPartPubKeys       []string
+	ExecutionPrepareInterval time.Duration
 }

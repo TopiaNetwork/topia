@@ -21,7 +21,18 @@ const (
 	MOD_NAME = "excution"
 )
 
-type Executionscheduler interface {
+type SchedulerState uint32
+
+const (
+	SchedulerState_Unknown SchedulerState = iota
+	SchedulerState_Idle
+	SchedulerState_Executing
+	SchedulerState_Commiting
+)
+
+type ExecutionScheduler interface {
+	State() SchedulerState
+
 	MaxStateVersion(compState state.CompositionState) (uint64, error)
 
 	ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error)
@@ -33,6 +44,7 @@ type executionScheduler struct {
 	log              tplog.Logger
 	manager          *executionManager
 	executeMutex     trylock.TryLocker
+	schedulerState   *atomic.Uint32
 	lastStateVersion *atomic.Uint64
 	exePackedTxsList *list.List
 }
@@ -44,8 +56,13 @@ func NewExecutionScheduler(log tplog.Logger) *executionScheduler {
 		manager:          newExecutionManager(),
 		executeMutex:     trylock.New(),
 		lastStateVersion: atomic.NewUint64(0),
+		schedulerState:   atomic.NewUint32(uint32(SchedulerState_Idle)),
 		exePackedTxsList: list.New(),
 	}
+}
+
+func (scheduler *executionScheduler) State() SchedulerState {
+	return SchedulerState(scheduler.schedulerState.Load())
 }
 
 func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error) {
@@ -55,6 +72,9 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 		return nil, err
 	}
 	defer scheduler.executeMutex.Unlock()
+
+	scheduler.schedulerState.Store(uint32(SchedulerState_Executing))
+	defer scheduler.schedulerState.Store(uint32(SchedulerState_Idle))
 
 	if scheduler.exePackedTxsList.Len() != 0 {
 		exeTxsItem := scheduler.exePackedTxsList.Front()
@@ -120,6 +140,9 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 	}
 	defer scheduler.executeMutex.Unlock()
 
+	scheduler.schedulerState.Store(uint32(SchedulerState_Commiting))
+	defer scheduler.schedulerState.Store(uint32(SchedulerState_Idle))
+
 	if scheduler.exePackedTxsList.Len() != 0 {
 		exeTxsItem := scheduler.exePackedTxsList.Front()
 		exeTxsF := exeTxsItem.Value.(*executionPackedTxs)
@@ -142,10 +165,38 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 			return errCMMState
 		}
 
+		scheduler.exePackedTxsList.Remove(exeTxsItem)
+
 		return nil
 	} else {
 		err := fmt.Errorf("Empty executed packedTxs stateVersion=%d", stateVersion)
 		scheduler.log.Errorf("%v", err)
 		return err
+	}
+}
+
+func (s SchedulerState) String() string {
+	switch s {
+	case SchedulerState_Idle:
+		return "Idle"
+	case SchedulerState_Executing:
+		return "Executing"
+	case SchedulerState_Commiting:
+		return "Commiting"
+	default:
+		return "Unknown"
+	}
+}
+
+func (s SchedulerState) Value(state string) SchedulerState {
+	switch state {
+	case "Idle":
+		return SchedulerState_Idle
+	case "Executing":
+		return SchedulerState_Executing
+	case "Commiting":
+		return SchedulerState_Commiting
+	default:
+		return SchedulerState_Unknown
 	}
 }

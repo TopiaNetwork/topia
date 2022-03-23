@@ -3,6 +3,7 @@ package consensus
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 	"sort"
 	"strings"
@@ -20,8 +21,8 @@ var divider *big.Int
 type RoleSelector byte
 
 const (
-	RoleSelector_Unknown = iota
-	RoleSelector_Proposer
+	RoleSelector_Unknown RoleSelector = iota
+	RoleSelector_ExecutionLauncher
 	RoleSelector_VoteCollector
 )
 
@@ -36,16 +37,14 @@ type candidateInfo struct {
 }
 
 type roleSelectorVRF struct {
-	log     tplog.Logger
-	crypt   tpcrt.CryptService
-	csState consensusServant
+	log   tplog.Logger
+	crypt tpcrt.CryptService
 }
 
-func newLeaderSelectorVRF(log tplog.Logger, crypt tpcrt.CryptService, csState consensusServant) *roleSelectorVRF {
+func newLeaderSelectorVRF(log tplog.Logger, crypt tpcrt.CryptService) *roleSelectorVRF {
 	return &roleSelectorVRF{
-		log:     log,
-		crypt:   crypt,
-		csState: csState,
+		log:   log,
+		crypt: crypt,
 	}
 }
 
@@ -120,7 +119,7 @@ func (selector *roleSelectorVRF) makeVRFHash(role RoleSelector, epoch uint64, ro
 	return hasher.Bytes()
 }
 
-func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, roundInfo *RoundInfo) ([]byte, error) {
+func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, roundInfo *RoundInfo, stateVersion uint64) ([]byte, error) {
 	hasher := tpcmm.NewBlake2bHasher(0)
 
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, role); err != nil {
@@ -130,6 +129,9 @@ func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, roundInfo *R
 		return nil, err
 	}
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, roundInfo.CurRoundNum); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(hasher.Writer(), binary.BigEndian, stateVersion); err != nil {
 		return nil, err
 	}
 
@@ -144,16 +146,10 @@ func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, roundInfo *R
 	return hasher.Bytes(), nil
 }
 
-func (selector *roleSelectorVRF) getCandidateInfos() ([]*candidateInfo, error) {
-	csNodes, err := selector.csState.GetAllConsensusNodes()
-	if err != nil {
-		selector.log.Errorf("Can't get all consensus nodes: %v", err)
-		return nil, err
-	}
-
+func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, csServant consensusServant) ([]*candidateInfo, error) {
 	var canInfos []*candidateInfo
-	for _, nodeId := range csNodes {
-		nodeWeight, err := selector.csState.GetNodeWeight(nodeId)
+	for _, nodeId := range avtiveNodeID {
+		nodeWeight, err := csServant.GetNodeWeight(nodeId)
 		if err != nil {
 			selector.log.Errorf("Can't get node weight: %v", err)
 			return nil, err
@@ -170,20 +166,51 @@ func (selector *roleSelectorVRF) getCandidateInfos() ([]*candidateInfo, error) {
 
 func (selector *roleSelectorVRF) Select(role RoleSelector,
 	roundInfo *RoundInfo,
+	stateVersion uint64,
 	priKey tpcrtypes.PrivateKey,
+	csServant consensusServant,
 	count int) ([]*candidateInfo, []byte, error) {
 	thresholdVals := make([]uint64, count)
-	totalWeight, err := selector.csState.GetChainTotalWeight()
+
+	err := error(nil)
+	var totalActiveWeight uint64
+	var avtiveNodeID []string
+
+	switch role {
+	case RoleSelector_ExecutionLauncher:
+		{
+			totalActiveWeight, err = csServant.GetActiveExecutorsTotalWeight()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			avtiveNodeID, err = csServant.GetActiveExecutorIDs()
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	case RoleSelector_VoteCollector:
+		{
+			totalActiveWeight, err = csServant.GetActiveValidatorsTotalWeight()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			avtiveNodeID, err = csServant.GetActiveValidatorIDs()
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	default:
+		return nil, nil, fmt.Errorf("Invalid role %s", role.String())
+	}
+
+	canInfos, err := selector.getCandidateInfos(avtiveNodeID, csServant)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	canInfos, err := selector.getCandidateInfos()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	vrfInputData, err := selector.getVrfInputData(role, roundInfo)
+	vrfInputData, err := selector.getVrfInputData(role, roundInfo, stateVersion)
 	if err != nil {
 		selector.log.Errorf("Can't get vrf inputing data: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 		return nil, nil, err
@@ -198,7 +225,7 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 	seed := selector.hashToSeed(vrfHash)
 
 	for i := 0; i < count; i++ {
-		thresholdVals[i] = selector.thresholdValue(&seed, totalWeight)
+		thresholdVals[i] = selector.thresholdValue(&seed, totalActiveWeight)
 	}
 	sort.Slice(thresholdVals, func(i, j int) bool { return thresholdVals[i] < thresholdVals[j] })
 
@@ -219,4 +246,26 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 	}
 
 	return cansResult, vrfProof, errors.New("Invalid parameters")
+}
+
+func (r RoleSelector) String() string {
+	switch r {
+	case RoleSelector_ExecutionLauncher:
+		return "ExecutionLauncher"
+	case RoleSelector_VoteCollector:
+		return "VoteCollector"
+	default:
+		return "Unknown"
+	}
+}
+
+func (r RoleSelector) Value(roleSelector string) RoleSelector {
+	switch roleSelector {
+	case "ExecutionLauncher":
+		return RoleSelector_ExecutionLauncher
+	case "VoteCollector":
+		return RoleSelector_VoteCollector
+	default:
+		return RoleSelector_Unknown
+	}
 }

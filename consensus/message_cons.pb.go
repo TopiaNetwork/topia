@@ -27,35 +27,38 @@ type ConsensusMessage_Type int32
 
 const (
 	ConsensusMessage_Unknown     ConsensusMessage_Type = 0
-	ConsensusMessage_Prepare     ConsensusMessage_Type = 1
-	ConsensusMessage_Propose     ConsensusMessage_Type = 2
-	ConsensusMessage_Vote        ConsensusMessage_Type = 3
-	ConsensusMessage_Commit      ConsensusMessage_Type = 4
-	ConsensusMessage_PartPubKey  ConsensusMessage_Type = 5
-	ConsensusMessage_DKGDeal     ConsensusMessage_Type = 6
-	ConsensusMessage_DKGDealResp ConsensusMessage_Type = 7
+	ConsensusMessage_PrepareExe  ConsensusMessage_Type = 1
+	ConsensusMessage_PrepareProp ConsensusMessage_Type = 2
+	ConsensusMessage_Propose     ConsensusMessage_Type = 3
+	ConsensusMessage_Vote        ConsensusMessage_Type = 4
+	ConsensusMessage_Commit      ConsensusMessage_Type = 5
+	ConsensusMessage_PartPubKey  ConsensusMessage_Type = 6
+	ConsensusMessage_DKGDeal     ConsensusMessage_Type = 7
+	ConsensusMessage_DKGDealResp ConsensusMessage_Type = 8
 )
 
 var ConsensusMessage_Type_name = map[int32]string{
 	0: "Unknown",
-	1: "Prepare",
-	2: "Propose",
-	3: "Vote",
-	4: "Commit",
-	5: "PartPubKey",
-	6: "DKGDeal",
-	7: "DKGDealResp",
+	1: "PrepareExe",
+	2: "PrepareProp",
+	3: "Propose",
+	4: "Vote",
+	5: "Commit",
+	6: "PartPubKey",
+	7: "DKGDeal",
+	8: "DKGDealResp",
 }
 
 var ConsensusMessage_Type_value = map[string]int32{
 	"Unknown":     0,
-	"Prepare":     1,
-	"Propose":     2,
-	"Vote":        3,
-	"Commit":      4,
-	"PartPubKey":  5,
-	"DKGDeal":     6,
-	"DKGDealResp": 7,
+	"PrepareExe":  1,
+	"PrepareProp": 2,
+	"Propose":     3,
+	"Vote":        4,
+	"Commit":      5,
+	"PartPubKey":  6,
+	"DKGDeal":     7,
+	"DKGDealResp": 8,
 }
 
 func (x ConsensusMessage_Type) String() string {
@@ -117,7 +120,7 @@ func (m *ConsensusMessage) GetData() []byte {
 	return nil
 }
 
-type PreparePackedMessage struct {
+type PreparePackedMessageExe struct {
 	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
@@ -125,25 +128,24 @@ type PreparePackedMessage struct {
 	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature"`
 	PubKey               []byte   `protobuf:"bytes,6,opt,name=PubKey,proto3" json:"pubKey"`
 	ParentBlockHash      []byte   `protobuf:"bytes,7,opt,name=ParentBlockHash,proto3" json:"parentBlockHash"`
-	TxRoot               []byte   `protobuf:"bytes,8,opt,name=TxRoot,proto3" json:"txRoot"`
-	TxResultRoot         []byte   `protobuf:"bytes,9,opt,name=TxResultRoot,proto3" json:"txResultRoot"`
+	StateVersion         uint64   `protobuf:"varint,8,opt,name=StateVersion,proto3" json:"stateVersion"`
+	TxRoot               []byte   `protobuf:"bytes,9,opt,name=TxRoot,proto3" json:"txRoot"`
 	Txs                  [][]byte `protobuf:"bytes,10,rep,name=Txs,proto3" json:"txs"`
-	TxResults            [][]byte `protobuf:"bytes,11,rep,name=TxResults,proto3" json:"txResult"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *PreparePackedMessage) Reset()         { *m = PreparePackedMessage{} }
-func (m *PreparePackedMessage) String() string { return proto.CompactTextString(m) }
-func (*PreparePackedMessage) ProtoMessage()    {}
-func (*PreparePackedMessage) Descriptor() ([]byte, []int) {
+func (m *PreparePackedMessageExe) Reset()         { *m = PreparePackedMessageExe{} }
+func (m *PreparePackedMessageExe) String() string { return proto.CompactTextString(m) }
+func (*PreparePackedMessageExe) ProtoMessage()    {}
+func (*PreparePackedMessageExe) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3d1eb6dc904811c3, []int{1}
 }
-func (m *PreparePackedMessage) XXX_Unmarshal(b []byte) error {
+func (m *PreparePackedMessageExe) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *PreparePackedMessage) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *PreparePackedMessageExe) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	b = b[:cap(b)]
 	n, err := m.MarshalToSizedBuffer(b)
 	if err != nil {
@@ -151,89 +153,213 @@ func (m *PreparePackedMessage) XXX_Marshal(b []byte, deterministic bool) ([]byte
 	}
 	return b[:n], nil
 }
-func (m *PreparePackedMessage) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PreparePackedMessage.Merge(m, src)
+func (m *PreparePackedMessageExe) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PreparePackedMessageExe.Merge(m, src)
 }
-func (m *PreparePackedMessage) XXX_Size() int {
+func (m *PreparePackedMessageExe) XXX_Size() int {
 	return m.Size()
 }
-func (m *PreparePackedMessage) XXX_DiscardUnknown() {
-	xxx_messageInfo_PreparePackedMessage.DiscardUnknown(m)
+func (m *PreparePackedMessageExe) XXX_DiscardUnknown() {
+	xxx_messageInfo_PreparePackedMessageExe.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_PreparePackedMessage proto.InternalMessageInfo
+var xxx_messageInfo_PreparePackedMessageExe proto.InternalMessageInfo
 
-func (m *PreparePackedMessage) GetChainID() []byte {
+func (m *PreparePackedMessageExe) GetChainID() []byte {
 	if m != nil {
 		return m.ChainID
 	}
 	return nil
 }
 
-func (m *PreparePackedMessage) GetVersion() uint32 {
+func (m *PreparePackedMessageExe) GetVersion() uint32 {
 	if m != nil {
 		return m.Version
 	}
 	return 0
 }
 
-func (m *PreparePackedMessage) GetEpoch() uint64 {
+func (m *PreparePackedMessageExe) GetEpoch() uint64 {
 	if m != nil {
 		return m.Epoch
 	}
 	return 0
 }
 
-func (m *PreparePackedMessage) GetRound() uint64 {
+func (m *PreparePackedMessageExe) GetRound() uint64 {
 	if m != nil {
 		return m.Round
 	}
 	return 0
 }
 
-func (m *PreparePackedMessage) GetSignature() []byte {
+func (m *PreparePackedMessageExe) GetSignature() []byte {
 	if m != nil {
 		return m.Signature
 	}
 	return nil
 }
 
-func (m *PreparePackedMessage) GetPubKey() []byte {
+func (m *PreparePackedMessageExe) GetPubKey() []byte {
 	if m != nil {
 		return m.PubKey
 	}
 	return nil
 }
 
-func (m *PreparePackedMessage) GetParentBlockHash() []byte {
+func (m *PreparePackedMessageExe) GetParentBlockHash() []byte {
 	if m != nil {
 		return m.ParentBlockHash
 	}
 	return nil
 }
 
-func (m *PreparePackedMessage) GetTxRoot() []byte {
+func (m *PreparePackedMessageExe) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *PreparePackedMessageExe) GetTxRoot() []byte {
 	if m != nil {
 		return m.TxRoot
 	}
 	return nil
 }
 
-func (m *PreparePackedMessage) GetTxResultRoot() []byte {
-	if m != nil {
-		return m.TxResultRoot
-	}
-	return nil
-}
-
-func (m *PreparePackedMessage) GetTxs() [][]byte {
+func (m *PreparePackedMessageExe) GetTxs() [][]byte {
 	if m != nil {
 		return m.Txs
 	}
 	return nil
 }
 
-func (m *PreparePackedMessage) GetTxResults() [][]byte {
+type PreparePackedMessageProp struct {
+	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
+	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
+	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature"`
+	PubKey               []byte   `protobuf:"bytes,6,opt,name=PubKey,proto3" json:"pubKey"`
+	ParentBlockHash      []byte   `protobuf:"bytes,7,opt,name=ParentBlockHash,proto3" json:"parentBlockHash"`
+	StateVersion         uint64   `protobuf:"varint,8,opt,name=StateVersion,proto3" json:"stateVersion"`
+	TxRoot               []byte   `protobuf:"bytes,9,opt,name=TxRoot,proto3" json:"txRoot"`
+	TxResultRoot         []byte   `protobuf:"bytes,10,opt,name=TxResultRoot,proto3" json:"txResultRoot"`
+	TxHashs              [][]byte `protobuf:"bytes,11,rep,name=TxHashs,proto3" json:"txHashs"`
+	TxResults            [][]byte `protobuf:"bytes,12,rep,name=TxResults,proto3" json:"txResult"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *PreparePackedMessageProp) Reset()         { *m = PreparePackedMessageProp{} }
+func (m *PreparePackedMessageProp) String() string { return proto.CompactTextString(m) }
+func (*PreparePackedMessageProp) ProtoMessage()    {}
+func (*PreparePackedMessageProp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3d1eb6dc904811c3, []int{2}
+}
+func (m *PreparePackedMessageProp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PreparePackedMessageProp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *PreparePackedMessageProp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PreparePackedMessageProp.Merge(m, src)
+}
+func (m *PreparePackedMessageProp) XXX_Size() int {
+	return m.Size()
+}
+func (m *PreparePackedMessageProp) XXX_DiscardUnknown() {
+	xxx_messageInfo_PreparePackedMessageProp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PreparePackedMessageProp proto.InternalMessageInfo
+
+func (m *PreparePackedMessageProp) GetChainID() []byte {
+	if m != nil {
+		return m.ChainID
+	}
+	return nil
+}
+
+func (m *PreparePackedMessageProp) GetVersion() uint32 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
+func (m *PreparePackedMessageProp) GetEpoch() uint64 {
+	if m != nil {
+		return m.Epoch
+	}
+	return 0
+}
+
+func (m *PreparePackedMessageProp) GetRound() uint64 {
+	if m != nil {
+		return m.Round
+	}
+	return 0
+}
+
+func (m *PreparePackedMessageProp) GetSignature() []byte {
+	if m != nil {
+		return m.Signature
+	}
+	return nil
+}
+
+func (m *PreparePackedMessageProp) GetPubKey() []byte {
+	if m != nil {
+		return m.PubKey
+	}
+	return nil
+}
+
+func (m *PreparePackedMessageProp) GetParentBlockHash() []byte {
+	if m != nil {
+		return m.ParentBlockHash
+	}
+	return nil
+}
+
+func (m *PreparePackedMessageProp) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *PreparePackedMessageProp) GetTxRoot() []byte {
+	if m != nil {
+		return m.TxRoot
+	}
+	return nil
+}
+
+func (m *PreparePackedMessageProp) GetTxResultRoot() []byte {
+	if m != nil {
+		return m.TxResultRoot
+	}
+	return nil
+}
+
+func (m *PreparePackedMessageProp) GetTxHashs() [][]byte {
+	if m != nil {
+		return m.TxHashs
+	}
+	return nil
+}
+
+func (m *PreparePackedMessageProp) GetTxResults() [][]byte {
 	if m != nil {
 		return m.TxResults
 	}
@@ -259,7 +385,7 @@ func (m *ProposeMessage) Reset()         { *m = ProposeMessage{} }
 func (m *ProposeMessage) String() string { return proto.CompactTextString(m) }
 func (*ProposeMessage) ProtoMessage()    {}
 func (*ProposeMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3d1eb6dc904811c3, []int{2}
+	return fileDescriptor_3d1eb6dc904811c3, []int{3}
 }
 func (m *ProposeMessage) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -367,7 +493,7 @@ func (m *VoteMessage) Reset()         { *m = VoteMessage{} }
 func (m *VoteMessage) String() string { return proto.CompactTextString(m) }
 func (*VoteMessage) ProtoMessage()    {}
 func (*VoteMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3d1eb6dc904811c3, []int{3}
+	return fileDescriptor_3d1eb6dc904811c3, []int{4}
 }
 func (m *VoteMessage) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -481,7 +607,7 @@ func (m *CommitMessage) Reset()         { *m = CommitMessage{} }
 func (m *CommitMessage) String() string { return proto.CompactTextString(m) }
 func (*CommitMessage) ProtoMessage()    {}
 func (*CommitMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3d1eb6dc904811c3, []int{4}
+	return fileDescriptor_3d1eb6dc904811c3, []int{5}
 }
 func (m *CommitMessage) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -582,7 +708,7 @@ func (m *ConsensusProof) Reset()         { *m = ConsensusProof{} }
 func (m *ConsensusProof) String() string { return proto.CompactTextString(m) }
 func (*ConsensusProof) ProtoMessage()    {}
 func (*ConsensusProof) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3d1eb6dc904811c3, []int{5}
+	return fileDescriptor_3d1eb6dc904811c3, []int{6}
 }
 func (m *ConsensusProof) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -644,7 +770,7 @@ func (m *DKGPartPubKeyMessage) Reset()         { *m = DKGPartPubKeyMessage{} }
 func (m *DKGPartPubKeyMessage) String() string { return proto.CompactTextString(m) }
 func (*DKGPartPubKeyMessage) ProtoMessage()    {}
 func (*DKGPartPubKeyMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3d1eb6dc904811c3, []int{6}
+	return fileDescriptor_3d1eb6dc904811c3, []int{7}
 }
 func (m *DKGPartPubKeyMessage) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -727,7 +853,7 @@ func (m *DKGDealMessage) Reset()         { *m = DKGDealMessage{} }
 func (m *DKGDealMessage) String() string { return proto.CompactTextString(m) }
 func (*DKGDealMessage) ProtoMessage()    {}
 func (*DKGDealMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3d1eb6dc904811c3, []int{7}
+	return fileDescriptor_3d1eb6dc904811c3, []int{8}
 }
 func (m *DKGDealMessage) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -810,7 +936,7 @@ func (m *DKGDealRespMessage) Reset()         { *m = DKGDealRespMessage{} }
 func (m *DKGDealRespMessage) String() string { return proto.CompactTextString(m) }
 func (*DKGDealRespMessage) ProtoMessage()    {}
 func (*DKGDealRespMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3d1eb6dc904811c3, []int{8}
+	return fileDescriptor_3d1eb6dc904811c3, []int{9}
 }
 func (m *DKGDealRespMessage) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -880,7 +1006,8 @@ func (m *DKGDealRespMessage) GetRespData() []byte {
 func init() {
 	proto.RegisterEnum("proto.ConsensusMessage_Type", ConsensusMessage_Type_name, ConsensusMessage_Type_value)
 	proto.RegisterType((*ConsensusMessage)(nil), "proto.ConsensusMessage")
-	proto.RegisterType((*PreparePackedMessage)(nil), "proto.PreparePackedMessage")
+	proto.RegisterType((*PreparePackedMessageExe)(nil), "proto.PreparePackedMessageExe")
+	proto.RegisterType((*PreparePackedMessageProp)(nil), "proto.PreparePackedMessageProp")
 	proto.RegisterType((*ProposeMessage)(nil), "proto.ProposeMessage")
 	proto.RegisterType((*VoteMessage)(nil), "proto.VoteMessage")
 	proto.RegisterType((*CommitMessage)(nil), "proto.CommitMessage")
@@ -893,56 +1020,61 @@ func init() {
 func init() { proto.RegisterFile("message_cons.proto", fileDescriptor_3d1eb6dc904811c3) }
 
 var fileDescriptor_3d1eb6dc904811c3 = []byte{
-	// 780 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xdc, 0x96, 0x4f, 0x6b, 0xe3, 0x46,
-	0x18, 0xc6, 0x23, 0x4b, 0xb2, 0xec, 0xd7, 0xff, 0xd4, 0x69, 0x0e, 0x6a, 0x09, 0x1e, 0x23, 0x08,
-	0x98, 0x16, 0x0c, 0xfd, 0x03, 0x3d, 0xf5, 0x50, 0xdb, 0x25, 0x29, 0x21, 0x60, 0xa6, 0x6e, 0x0e,
-	0xbd, 0x14, 0xc5, 0x9e, 0xca, 0x26, 0xb1, 0x46, 0xd5, 0xc8, 0xa9, 0xf3, 0x05, 0xfa, 0x05, 0x7a,
-	0x29, 0xfd, 0x44, 0x3d, 0xf6, 0xd6, 0xf6, 0x22, 0x8a, 0xf7, 0xb2, 0x88, 0xfd, 0x04, 0x7b, 0x58,
-	0x96, 0x99, 0x91, 0x6c, 0x39, 0xac, 0xd9, 0xec, 0x29, 0x9b, 0x9c, 0x8c, 0x7e, 0xcf, 0x33, 0xd6,
-	0xbc, 0xef, 0x33, 0xa3, 0x19, 0x40, 0x0b, 0xca, 0xb9, 0xe7, 0xd3, 0x9f, 0x26, 0x2c, 0xe0, 0xbd,
-	0x30, 0x62, 0x31, 0x43, 0xa6, 0xfc, 0xf9, 0x18, 0x7c, 0xe6, 0x33, 0x85, 0xdc, 0xe7, 0x1a, 0xd8,
-	0x03, 0x16, 0x70, 0x1a, 0xf0, 0x25, 0x3f, 0x57, 0x43, 0xd0, 0x00, 0xac, 0x73, 0xee, 0x8f, 0x6f,
-	0x43, 0xea, 0x68, 0x1d, 0xad, 0xdb, 0xfc, 0xfc, 0x48, 0xb9, 0x7b, 0x77, 0x9d, 0x3d, 0xe1, 0xe9,
-	0xd7, 0xd2, 0x04, 0x5b, 0x0b, 0x35, 0x80, 0xe4, 0x23, 0xd1, 0x11, 0x18, 0x43, 0x2f, 0xf6, 0x9c,
-	0x52, 0x47, 0xeb, 0xd6, 0xfb, 0x95, 0x34, 0xc1, 0xc6, 0xd4, 0x8b, 0x3d, 0x22, 0xa9, 0xfb, 0x0b,
-	0x18, 0xd2, 0x55, 0x03, 0xeb, 0x87, 0xe0, 0x2a, 0x60, 0xbf, 0x06, 0xf6, 0x81, 0x78, 0x18, 0x45,
-	0x34, 0xf4, 0x22, 0x6a, 0x6b, 0xea, 0x81, 0x85, 0x8c, 0x53, 0xbb, 0x84, 0x2a, 0x60, 0x5c, 0xb0,
-	0x98, 0xda, 0x3a, 0x02, 0x28, 0x0f, 0xd8, 0x62, 0x31, 0x8f, 0x6d, 0x03, 0x35, 0x01, 0x46, 0x5e,
-	0x14, 0x8f, 0x96, 0x97, 0x67, 0xf4, 0xd6, 0x36, 0xc5, 0x90, 0xe1, 0xd9, 0xc9, 0x90, 0x7a, 0xd7,
-	0x76, 0x19, 0xb5, 0xa0, 0x96, 0x3d, 0x10, 0xca, 0x43, 0xdb, 0x72, 0xff, 0xd1, 0xe1, 0x30, 0xfb,
-	0xfb, 0x91, 0x37, 0xb9, 0xa2, 0xd3, 0xbc, 0xdc, 0x63, 0xb0, 0x06, 0x33, 0x6f, 0x1e, 0x7c, 0x37,
-	0x94, 0xe5, 0xd6, 0x55, 0x41, 0x13, 0x85, 0x48, 0xae, 0x09, 0xdb, 0x05, 0x8d, 0xf8, 0x9c, 0x05,
-	0xb2, 0xa6, 0x86, 0xb2, 0xdd, 0x28, 0x44, 0x72, 0x0d, 0x61, 0x30, 0xbf, 0x0d, 0xd9, 0x64, 0xe6,
-	0xe8, 0x1d, 0xad, 0x6b, 0xf4, 0xab, 0x69, 0x82, 0x4d, 0x2a, 0x00, 0x51, 0x5c, 0x18, 0x08, 0x5b,
-	0x06, 0x53, 0xc7, 0xd8, 0x1a, 0x22, 0x01, 0x88, 0xe2, 0xe8, 0x53, 0xa8, 0x7e, 0x3f, 0xf7, 0x03,
-	0x2f, 0x5e, 0x46, 0xd4, 0x31, 0xe5, 0x8c, 0x1a, 0x69, 0x82, 0xab, 0x3c, 0x87, 0x64, 0xab, 0x23,
-	0x17, 0xca, 0xaa, 0x7e, 0xa7, 0x2c, 0x9d, 0x90, 0x26, 0xb8, 0x1c, 0x4a, 0x42, 0x32, 0x05, 0x7d,
-	0x0d, 0xad, 0x91, 0x17, 0xd1, 0x20, 0xee, 0x5f, 0xb3, 0xc9, 0xd5, 0xa9, 0xc7, 0x67, 0x8e, 0x25,
-	0xcd, 0x1f, 0xa6, 0x09, 0x6e, 0x85, 0xbb, 0x12, 0xb9, 0xeb, 0x15, 0xaf, 0x18, 0xaf, 0x08, 0x63,
-	0xb1, 0x53, 0xd9, 0xbe, 0x22, 0x96, 0x84, 0x64, 0x0a, 0xfa, 0x12, 0xea, 0xe3, 0x15, 0xa1, 0x7c,
-	0x79, 0x1d, 0x4b, 0x67, 0x55, 0x3a, 0xed, 0x34, 0xc1, 0xf5, 0xb8, 0xc0, 0xc9, 0x8e, 0x0b, 0x7d,
-	0x04, 0xfa, 0x78, 0xc5, 0x1d, 0xe8, 0xe8, 0xdd, 0x7a, 0xdf, 0x4a, 0x13, 0xac, 0xc7, 0x2b, 0x4e,
-	0x04, 0x43, 0x9f, 0x40, 0x35, 0xb7, 0x72, 0xa7, 0x26, 0x0d, 0xf5, 0x34, 0xc1, 0x95, 0xcd, 0xbf,
-	0x6d, 0x65, 0xf7, 0x45, 0x09, 0x9a, 0xd9, 0x5a, 0x79, 0x5f, 0x33, 0xc5, 0x60, 0x8e, 0x22, 0xc6,
-	0x7e, 0xce, 0xf2, 0x94, 0x86, 0x50, 0x00, 0xa2, 0x38, 0xfa, 0x0a, 0x1a, 0x59, 0x09, 0x91, 0x32,
-	0xaa, 0x38, 0x3f, 0x48, 0x13, 0xdc, 0x08, 0x8b, 0x02, 0xd9, 0xf5, 0xed, 0xae, 0x16, 0xeb, 0xde,
-	0xab, 0xa5, 0xb2, 0x77, 0xb5, 0x60, 0x30, 0x65, 0xf6, 0x59, 0x86, 0x72, 0xaa, 0x97, 0x02, 0x10,
-	0xc5, 0xdd, 0xdf, 0x75, 0xa8, 0x89, 0xdd, 0xf8, 0x68, 0x7b, 0xdd, 0x03, 0x10, 0xf3, 0xdf, 0x69,
-	0x74, 0x33, 0x4d, 0x30, 0xdc, 0x6c, 0x28, 0x29, 0x38, 0xd0, 0x67, 0x50, 0xcb, 0x7a, 0x5e, 0xd8,
-	0x3b, 0xad, 0x34, 0xc1, 0xb5, 0x70, 0x8b, 0x49, 0xd1, 0xb3, 0x9b, 0x4a, 0xe5, 0xde, 0xa9, 0x54,
-	0xdf, 0x9e, 0x0a, 0xec, 0x49, 0xe5, 0xbf, 0x12, 0x34, 0xd4, 0x97, 0xf1, 0xd1, 0xe6, 0x72, 0x0c,
-	0xd6, 0x37, 0xbe, 0x2f, 0xfa, 0x92, 0x85, 0x22, 0x67, 0xe2, 0x29, 0x44, 0x72, 0xed, 0x01, 0x56,
-	0xfc, 0x9f, 0x1a, 0x34, 0x37, 0x67, 0x9f, 0x9a, 0xeb, 0x1b, 0xbe, 0xa9, 0xda, 0xbb, 0x7d, 0x53,
-	0x4f, 0xe9, 0xdc, 0x9f, 0xc5, 0xb2, 0xe7, 0x86, 0x9a, 0xd6, 0x4c, 0x12, 0x92, 0x29, 0xc5, 0x76,
-	0xe8, 0xfb, 0xdb, 0xe1, 0xfe, 0x56, 0x82, 0xc3, 0xe1, 0xd9, 0xc9, 0xf6, 0x24, 0x7c, 0xa0, 0xfc,
-	0x77, 0x62, 0x31, 0xee, 0x1d, 0x8b, 0xb9, 0x37, 0x96, 0x5e, 0xf1, 0x78, 0x2f, 0x6e, 0xd3, 0x70,
-	0x43, 0x49, 0xc1, 0xe1, 0xbe, 0xd4, 0xa0, 0x99, 0x1d, 0xf9, 0x4f, 0xa5, 0x05, 0x5d, 0xa8, 0x88,
-	0x72, 0xe4, 0x45, 0x4a, 0x35, 0x40, 0x1e, 0x82, 0xd3, 0x8c, 0x91, 0x8d, 0xea, 0xbe, 0xd2, 0x00,
-	0x15, 0xee, 0x3b, 0x4f, 0xa8, 0x01, 0xa2, 0x9c, 0xbb, 0x0d, 0x88, 0x32, 0x46, 0x36, 0x6a, 0x1f,
-	0xff, 0xb5, 0x6e, 0x6b, 0x7f, 0xaf, 0xdb, 0xda, 0xbf, 0xeb, 0xb6, 0xf6, 0xff, 0xba, 0xad, 0xfd,
-	0xf1, 0xac, 0x7d, 0xf0, 0x63, 0x75, 0x92, 0x6f, 0xdb, 0xcb, 0xb2, 0xbc, 0xc3, 0x7e, 0xf1, 0x3a,
-	0x00, 0x00, 0xff, 0xff, 0x7b, 0x3c, 0x95, 0xd6, 0x1a, 0x0b, 0x00, 0x00,
+	// 854 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x97, 0x41, 0x6f, 0xe3, 0x44,
+	0x14, 0xc7, 0xd7, 0xb1, 0x1d, 0x3b, 0x2f, 0x4e, 0x6a, 0x06, 0x24, 0x0c, 0x5a, 0x65, 0x2a, 0x4b,
+	0x2b, 0x45, 0x20, 0x45, 0x02, 0x56, 0xe2, 0xc4, 0x81, 0x34, 0xd5, 0x2e, 0xaa, 0x56, 0x8a, 0x66,
+	0xc3, 0x1e, 0xb8, 0x20, 0x37, 0x1d, 0x9c, 0xa8, 0x8d, 0xc7, 0xf2, 0x4c, 0x96, 0xec, 0x07, 0x80,
+	0x2f, 0xc0, 0x05, 0x21, 0xf1, 0x15, 0xf8, 0x1c, 0x1c, 0x39, 0xc2, 0xc5, 0x42, 0xe1, 0x66, 0xf1,
+	0x09, 0x90, 0x40, 0x68, 0x66, 0xec, 0xc4, 0xae, 0x36, 0xa2, 0x9c, 0xca, 0x56, 0x9c, 0x5a, 0xff,
+	0xde, 0x7f, 0xa6, 0xef, 0xbd, 0xff, 0xf3, 0x78, 0x0a, 0x68, 0x45, 0x39, 0x8f, 0x62, 0xfa, 0xf9,
+	0x9c, 0x25, 0x7c, 0x94, 0x66, 0x4c, 0x30, 0x64, 0xab, 0x1f, 0x6f, 0x43, 0xcc, 0x62, 0xa6, 0x51,
+	0xf8, 0xa7, 0x01, 0xfe, 0x09, 0x4b, 0x38, 0x4d, 0xf8, 0x9a, 0x3f, 0xd1, 0x4b, 0xd0, 0x09, 0x38,
+	0x4f, 0x78, 0x3c, 0x7b, 0x91, 0xd2, 0xc0, 0x38, 0x36, 0x86, 0xfd, 0xf7, 0xef, 0x6b, 0xf5, 0xe8,
+	0xba, 0x72, 0x24, 0x35, 0xe3, 0x6e, 0x91, 0x63, 0x67, 0xa5, 0x17, 0x90, 0x6a, 0x25, 0xba, 0x0f,
+	0xd6, 0x24, 0x12, 0x51, 0xd0, 0x3a, 0x36, 0x86, 0xde, 0xd8, 0x2d, 0x72, 0x6c, 0x5d, 0x44, 0x22,
+	0x22, 0x8a, 0x86, 0x5f, 0x19, 0x60, 0x29, 0x59, 0x17, 0x9c, 0x4f, 0x93, 0xcb, 0x84, 0x7d, 0x99,
+	0xf8, 0xf7, 0x50, 0x1f, 0x60, 0x9a, 0xd1, 0x34, 0xca, 0xe8, 0xe9, 0x86, 0xfa, 0x06, 0x3a, 0x82,
+	0x6e, 0xf9, 0x3c, 0xcd, 0x58, 0xea, 0xb7, 0xa4, 0x5a, 0xfe, 0xc6, 0x38, 0xf5, 0x4d, 0xe4, 0x82,
+	0xf5, 0x8c, 0x09, 0xea, 0x5b, 0x08, 0xa0, 0x7d, 0xc2, 0x56, 0xab, 0xa5, 0xf0, 0x6d, 0xb5, 0x47,
+	0x94, 0x89, 0xe9, 0xfa, 0xfc, 0x8c, 0xbe, 0xf0, 0xdb, 0x72, 0xc9, 0xe4, 0xec, 0xd1, 0x84, 0x46,
+	0x57, 0xbe, 0x23, 0x37, 0x2c, 0x1f, 0x08, 0xe5, 0xa9, 0xef, 0x86, 0x3f, 0x98, 0xf0, 0x66, 0xf5,
+	0x27, 0xa2, 0xf9, 0x25, 0xbd, 0x28, 0x2b, 0x3b, 0xdd, 0x50, 0xf4, 0x00, 0x9c, 0x93, 0x45, 0xb4,
+	0x4c, 0x3e, 0x99, 0xa8, 0x36, 0x78, 0xba, 0xd0, 0xb9, 0x46, 0xa4, 0x8a, 0x49, 0xd9, 0x33, 0x9a,
+	0xf1, 0x25, 0x4b, 0x54, 0xad, 0x3d, 0x2d, 0x7b, 0xae, 0x11, 0xa9, 0x62, 0x08, 0x83, 0x7d, 0x9a,
+	0xb2, 0xf9, 0x22, 0x30, 0x8f, 0x8d, 0xa1, 0x35, 0xee, 0x14, 0x39, 0xb6, 0xa9, 0x04, 0x44, 0x73,
+	0x29, 0x20, 0x6c, 0x9d, 0x5c, 0x04, 0xd6, 0x5e, 0x90, 0x49, 0x40, 0x34, 0x47, 0xef, 0x42, 0xe7,
+	0xe9, 0x32, 0x4e, 0x22, 0xb1, 0xce, 0x68, 0x60, 0xab, 0x8c, 0x7a, 0x45, 0x8e, 0x3b, 0xbc, 0x82,
+	0x64, 0x1f, 0x47, 0x21, 0xb4, 0x75, 0x0b, 0x82, 0xb6, 0x52, 0x42, 0x91, 0xe3, 0x76, 0xaa, 0x08,
+	0x29, 0x23, 0xe8, 0x23, 0x38, 0x9a, 0x46, 0x19, 0x4d, 0xc4, 0xf8, 0x8a, 0xcd, 0x2f, 0x1f, 0x47,
+	0x7c, 0x11, 0x38, 0x4a, 0xfc, 0x7a, 0x91, 0xe3, 0xa3, 0xb4, 0x19, 0x22, 0xd7, 0xb5, 0xe8, 0x21,
+	0x78, 0x4f, 0x45, 0x24, 0x68, 0x55, 0xbd, 0xab, 0xf2, 0xf6, 0x8b, 0x1c, 0x7b, 0xbc, 0xc6, 0x49,
+	0x43, 0x25, 0x13, 0x9b, 0x6d, 0x08, 0x63, 0x22, 0xe8, 0xec, 0x13, 0x13, 0x8a, 0x90, 0x32, 0x82,
+	0xde, 0x02, 0x73, 0xb6, 0xe1, 0x01, 0x1c, 0x9b, 0x43, 0x6f, 0xec, 0x14, 0x39, 0x36, 0xc5, 0x86,
+	0x13, 0xc9, 0xc2, 0xef, 0x2d, 0x08, 0x5e, 0x66, 0x98, 0x1c, 0x8b, 0xff, 0x1d, 0xbb, 0x35, 0xc7,
+	0x1e, 0x82, 0x37, 0xdb, 0x10, 0xca, 0xd7, 0x57, 0x42, 0x29, 0x41, 0x29, 0xd5, 0xce, 0xa2, 0xc6,
+	0x49, 0x43, 0x25, 0x8d, 0x98, 0x6d, 0x64, 0x66, 0x3c, 0xe8, 0x2a, 0xaf, 0x95, 0x11, 0x42, 0x23,
+	0x52, 0xc5, 0xd0, 0x3b, 0xd0, 0xa9, 0x96, 0xf1, 0xc0, 0x53, 0x42, 0xaf, 0xc8, 0xb1, 0xbb, 0xdb,
+	0x79, 0x1f, 0x0e, 0x7f, 0x6f, 0x41, 0xbf, 0x3c, 0x22, 0xaa, 0xe3, 0xec, 0xbf, 0x36, 0x15, 0x18,
+	0xec, 0x69, 0xc6, 0xd8, 0x17, 0xe5, 0x44, 0x28, 0x41, 0x2a, 0x01, 0xd1, 0x1c, 0x7d, 0x08, 0xbd,
+	0xb2, 0x84, 0x4c, 0x0b, 0xf5, 0x40, 0xbc, 0x56, 0xe4, 0xb8, 0x97, 0xd6, 0x03, 0xa4, 0xa9, 0x6b,
+	0xce, 0x9b, 0x73, 0xe3, 0x79, 0x73, 0x0f, 0xce, 0x1b, 0x06, 0x5b, 0x4d, 0x4f, 0xe9, 0xbc, 0x4a,
+	0xf5, 0x5c, 0x02, 0xa2, 0x79, 0xf8, 0x8d, 0x09, 0x5d, 0x79, 0x08, 0xbf, 0xb2, 0xbd, 0x1e, 0x01,
+	0xc8, 0xfc, 0x1b, 0x8d, 0xee, 0x17, 0x39, 0x86, 0xe7, 0x3b, 0x4a, 0x6a, 0x0a, 0xf4, 0x9e, 0xfc,
+	0x24, 0xa9, 0x9e, 0xd7, 0xde, 0xbe, 0xa3, 0x22, 0xc7, 0xdd, 0x74, 0x8f, 0x49, 0x5d, 0xd3, 0x74,
+	0xc5, 0xbd, 0xb1, 0x2b, 0x9d, 0x7f, 0x76, 0x05, 0x0e, 0xb8, 0xf2, 0x4b, 0x0b, 0x7a, 0xfa, 0x83,
+	0xf8, 0xca, 0xfa, 0xf2, 0x00, 0x9c, 0x8f, 0xe3, 0x58, 0xf6, 0xa5, 0x34, 0x45, 0x65, 0x12, 0x69,
+	0x44, 0xaa, 0xd8, 0x2d, 0x4c, 0xfc, 0x77, 0x06, 0xf4, 0x77, 0xf7, 0x20, 0x9d, 0xeb, 0x4b, 0x4e,
+	0x65, 0xe3, 0x5f, 0x9c, 0xca, 0x21, 0xb4, 0x1f, 0xd3, 0x65, 0xbc, 0x10, 0xaa, 0xe7, 0x96, 0x4e,
+	0x6b, 0xa1, 0x08, 0x29, 0x23, 0xf5, 0x76, 0x98, 0x87, 0xdb, 0x11, 0x7e, 0xdd, 0x82, 0x37, 0x26,
+	0x67, 0x8f, 0xf6, 0x17, 0xa0, 0x5b, 0xf2, 0xbf, 0x61, 0x8b, 0x75, 0x63, 0x5b, 0xec, 0x83, 0xb6,
+	0x8c, 0xea, 0xb7, 0xba, 0xfa, 0x6b, 0x9a, 0xee, 0x28, 0xa9, 0x29, 0xc2, 0x3f, 0x0c, 0xe8, 0x97,
+	0x37, 0xbd, 0xbb, 0xd2, 0x82, 0x21, 0xb8, 0xb2, 0x1c, 0x75, 0xa9, 0xd6, 0x0d, 0x50, 0x1f, 0xc1,
+	0x8b, 0x92, 0x91, 0x5d, 0x34, 0xfc, 0xcb, 0x00, 0x54, 0xbb, 0xe6, 0xde, 0xa1, 0x06, 0xc8, 0x72,
+	0xae, 0x37, 0x20, 0x2b, 0x19, 0xd9, 0x45, 0xc7, 0xf8, 0xc7, 0xed, 0xc0, 0xf8, 0x69, 0x3b, 0x30,
+	0x7e, 0xde, 0x0e, 0x8c, 0x5f, 0xb7, 0x03, 0xe3, 0xdb, 0xdf, 0x06, 0xf7, 0x3e, 0xeb, 0xcc, 0xab,
+	0xd7, 0xf6, 0xbc, 0xad, 0xfe, 0x9f, 0xf9, 0xe0, 0xef, 0x00, 0x00, 0x00, 0xff, 0xff, 0xdb, 0xa2,
+	0xa9, 0x13, 0x26, 0x0d, 0x00, 0x00,
 }
 
 func (m *ConsensusMessage) Marshal() (dAtA []byte, err error) {
@@ -984,7 +1116,7 @@ func (m *ConsensusMessage) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *PreparePackedMessage) Marshal() (dAtA []byte, err error) {
+func (m *PreparePackedMessageExe) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -994,12 +1126,103 @@ func (m *PreparePackedMessage) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *PreparePackedMessage) MarshalTo(dAtA []byte) (int, error) {
+func (m *PreparePackedMessageExe) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *PreparePackedMessage) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *PreparePackedMessageExe) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Txs) > 0 {
+		for iNdEx := len(m.Txs) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Txs[iNdEx])
+			copy(dAtA[i:], m.Txs[iNdEx])
+			i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Txs[iNdEx])))
+			i--
+			dAtA[i] = 0x52
+		}
+	}
+	if len(m.TxRoot) > 0 {
+		i -= len(m.TxRoot)
+		copy(dAtA[i:], m.TxRoot)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.TxRoot)))
+		i--
+		dAtA[i] = 0x4a
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x40
+	}
+	if len(m.ParentBlockHash) > 0 {
+		i -= len(m.ParentBlockHash)
+		copy(dAtA[i:], m.ParentBlockHash)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.ParentBlockHash)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.PubKey) > 0 {
+		i -= len(m.PubKey)
+		copy(dAtA[i:], m.PubKey)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.PubKey)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Signature) > 0 {
+		i -= len(m.Signature)
+		copy(dAtA[i:], m.Signature)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Signature)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.Round != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Round))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Epoch != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Epoch))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Version != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.Version))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.ChainID) > 0 {
+		i -= len(m.ChainID)
+		copy(dAtA[i:], m.ChainID)
+		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.ChainID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *PreparePackedMessageProp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PreparePackedMessageProp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PreparePackedMessageProp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -1014,16 +1237,16 @@ func (m *PreparePackedMessage) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			copy(dAtA[i:], m.TxResults[iNdEx])
 			i = encodeVarintMessageCons(dAtA, i, uint64(len(m.TxResults[iNdEx])))
 			i--
-			dAtA[i] = 0x5a
+			dAtA[i] = 0x62
 		}
 	}
-	if len(m.Txs) > 0 {
-		for iNdEx := len(m.Txs) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Txs[iNdEx])
-			copy(dAtA[i:], m.Txs[iNdEx])
-			i = encodeVarintMessageCons(dAtA, i, uint64(len(m.Txs[iNdEx])))
+	if len(m.TxHashs) > 0 {
+		for iNdEx := len(m.TxHashs) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.TxHashs[iNdEx])
+			copy(dAtA[i:], m.TxHashs[iNdEx])
+			i = encodeVarintMessageCons(dAtA, i, uint64(len(m.TxHashs[iNdEx])))
 			i--
-			dAtA[i] = 0x52
+			dAtA[i] = 0x5a
 		}
 	}
 	if len(m.TxResultRoot) > 0 {
@@ -1031,14 +1254,19 @@ func (m *PreparePackedMessage) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.TxResultRoot)
 		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.TxResultRoot)))
 		i--
-		dAtA[i] = 0x4a
+		dAtA[i] = 0x52
 	}
 	if len(m.TxRoot) > 0 {
 		i -= len(m.TxRoot)
 		copy(dAtA[i:], m.TxRoot)
 		i = encodeVarintMessageCons(dAtA, i, uint64(len(m.TxRoot)))
 		i--
-		dAtA[i] = 0x42
+		dAtA[i] = 0x4a
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageCons(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x40
 	}
 	if len(m.ParentBlockHash) > 0 {
 		i -= len(m.ParentBlockHash)
@@ -1616,7 +1844,7 @@ func (m *ConsensusMessage) Size() (n int) {
 	return n
 }
 
-func (m *PreparePackedMessage) Size() (n int) {
+func (m *PreparePackedMessageExe) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1647,6 +1875,59 @@ func (m *PreparePackedMessage) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovMessageCons(uint64(l))
 	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageCons(uint64(m.StateVersion))
+	}
+	l = len(m.TxRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if len(m.Txs) > 0 {
+		for _, b := range m.Txs {
+			l = len(b)
+			n += 1 + l + sovMessageCons(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *PreparePackedMessageProp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ChainID)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if m.Version != 0 {
+		n += 1 + sovMessageCons(uint64(m.Version))
+	}
+	if m.Epoch != 0 {
+		n += 1 + sovMessageCons(uint64(m.Epoch))
+	}
+	if m.Round != 0 {
+		n += 1 + sovMessageCons(uint64(m.Round))
+	}
+	l = len(m.Signature)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.PubKey)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	l = len(m.ParentBlockHash)
+	if l > 0 {
+		n += 1 + l + sovMessageCons(uint64(l))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageCons(uint64(m.StateVersion))
+	}
 	l = len(m.TxRoot)
 	if l > 0 {
 		n += 1 + l + sovMessageCons(uint64(l))
@@ -1655,8 +1936,8 @@ func (m *PreparePackedMessage) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovMessageCons(uint64(l))
 	}
-	if len(m.Txs) > 0 {
-		for _, b := range m.Txs {
+	if len(m.TxHashs) > 0 {
+		for _, b := range m.TxHashs {
 			l = len(b)
 			n += 1 + l + sovMessageCons(uint64(l))
 		}
@@ -2047,7 +2328,7 @@ func (m *ConsensusMessage) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *PreparePackedMessage) Unmarshal(dAtA []byte) error {
+func (m *PreparePackedMessageExe) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2070,10 +2351,10 @@ func (m *PreparePackedMessage) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: PreparePackedMessage: wiretype end group for non-group")
+			return fmt.Errorf("proto: PreparePackedMessageExe: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: PreparePackedMessage: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: PreparePackedMessageExe: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2270,6 +2551,25 @@ func (m *PreparePackedMessage) Unmarshal(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TxRoot", wireType)
 			}
@@ -2301,40 +2601,6 @@ func (m *PreparePackedMessage) Unmarshal(dAtA []byte) error {
 			m.TxRoot = append(m.TxRoot[:0], dAtA[iNdEx:postIndex]...)
 			if m.TxRoot == nil {
 				m.TxRoot = []byte{}
-			}
-			iNdEx = postIndex
-		case 9:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TxResultRoot", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowMessageCons
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthMessageCons
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return ErrInvalidLengthMessageCons
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.TxResultRoot = append(m.TxResultRoot[:0], dAtA[iNdEx:postIndex]...)
-			if m.TxResultRoot == nil {
-				m.TxResultRoot = []byte{}
 			}
 			iNdEx = postIndex
 		case 10:
@@ -2369,7 +2635,370 @@ func (m *PreparePackedMessage) Unmarshal(dAtA []byte) error {
 			m.Txs = append(m.Txs, make([]byte, postIndex-iNdEx))
 			copy(m.Txs[len(m.Txs)-1], dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageCons(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PreparePackedMessageProp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageCons
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PreparePackedMessageProp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PreparePackedMessageProp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChainID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChainID = append(m.ChainID[:0], dAtA[iNdEx:postIndex]...)
+			if m.ChainID == nil {
+				m.ChainID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Round", wireType)
+			}
+			m.Round = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Round |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Signature", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Signature = append(m.Signature[:0], dAtA[iNdEx:postIndex]...)
+			if m.Signature == nil {
+				m.Signature = []byte{}
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PubKey", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PubKey = append(m.PubKey[:0], dAtA[iNdEx:postIndex]...)
+			if m.PubKey == nil {
+				m.PubKey = []byte{}
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ParentBlockHash", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ParentBlockHash = append(m.ParentBlockHash[:0], dAtA[iNdEx:postIndex]...)
+			if m.ParentBlockHash == nil {
+				m.ParentBlockHash = []byte{}
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TxRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TxRoot = append(m.TxRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.TxRoot == nil {
+				m.TxRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TxResultRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TxResultRoot = append(m.TxResultRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.TxResultRoot == nil {
+				m.TxResultRoot = []byte{}
+			}
+			iNdEx = postIndex
 		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TxHashs", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageCons
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageCons
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TxHashs = append(m.TxHashs, make([]byte, postIndex-iNdEx))
+			copy(m.TxHashs[len(m.TxHashs)-1], dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 12:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TxResults", wireType)
 			}

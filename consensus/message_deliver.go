@@ -24,6 +24,12 @@ const (
 )
 
 type messageDeliverI interface {
+	deliverNetwork() network.Network
+
+	deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error
+
+	deliverPreparePackagedMessageProp(ctx context.Context, msg *PreparePackedMessageProp) error
+
 	deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error
 
 	deliverVoteMessage(ctx context.Context, msg *VoteMessage) error
@@ -61,13 +67,17 @@ func newMessageDeliver(log tplog.Logger, priKey tpcrtypes.PrivateKey, strategy D
 	}
 }
 
-func (md *messageDeliver) deliverPreparePackagedMessage(ctx context.Context, msg *PreparePackedMessage) error {
+func (md *messageDeliver) deliverNetwork() network.Network {
+	return md.network
+}
+
+func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error {
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
-	sigData, pubKey, err := md.dkgBls.Sign(msg.TxRoot)
+	sigData, pubKey, err := md.dkgBls.Sign(msg.TxsData())
 	if err != nil {
-		md.log.Errorf("DKG sign PreparePackedMessage err: %v", err)
+		md.log.Errorf("DKG sign PreparePackedMessageExe err: %v", err)
 		return err
 	}
 	msg.Signature = sigData
@@ -75,27 +85,78 @@ func (md *messageDeliver) deliverPreparePackagedMessage(ctx context.Context, msg
 
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
-		md.log.Errorf("PreparePackedMessage marshal err: %v", err)
+		md.log.Errorf("PreparePackedMessageExe marshal err: %v", err)
 		return err
 	}
 
+	var peerIDsExecutor []string
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetActiveExecutorIDs()
+		peerIDsExecutor, err = csStateRN.GetActiveExecutorIDs()
 		if err != nil {
 			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
 			return err
 		}
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+		if len(peerIDsExecutor) == 0 {
+			err := fmt.Errorf("Zero active executor node")
+			md.log.Errorf("%v", err)
+			return err
+		}
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDsExecutor)
 	}
 
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 	err = md.network.Send(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send prepare packed message to network failed: err=%v", err)
+		md.log.Errorf("Send prepare packed message to execute network failed: err=%v", err)
+		return err
 	}
 
-	return err
+	return nil
+}
+
+func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context, msg *PreparePackedMessageProp) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
+	sigData, pubKey, err := md.dkgBls.Sign(msg.TxHashsData())
+	if err != nil {
+		md.log.Errorf("DKG sign PreparePackedMessageProp err: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("PreparePackedMessageProp marshal err: %v", err)
+		return err
+	}
+
+	var peerIDsProposer []string
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDsProposer, err = csStateRN.GetActiveProposerIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
+			return err
+		}
+		if len(peerIDsProposer) == 0 {
+			err := fmt.Errorf("Zero active proposer node")
+			md.log.Errorf("%v", err)
+			return err
+		}
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDsProposer)
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(ctx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send prepare packed message to propose network failed: err=%v", err)
+		return err
+	}
+
+	return nil
 }
 
 func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {

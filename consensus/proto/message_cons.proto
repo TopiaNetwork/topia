@@ -12,19 +12,20 @@ import "gogo.proto";
 message ConsensusMessage {
   enum Type {
     Unknown = 0;
-    Prepare = 1;
-    Propose = 2;
-    Vote    = 3;
-    Commit  = 4;
-    PartPubKey = 5;
-    DKGDeal = 6;
-    DKGDealResp = 7;
+    PrepareExe = 1;
+    PrepareProp = 2;
+    Propose = 3;
+    Vote    = 4;
+    Commit  = 5;
+    PartPubKey = 6;
+    DKGDeal = 7;
+    DKGDealResp = 8;
   }
   Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
   bytes Data = 2  [(gogoproto.jsontag) = "data"];
 }
 
-message PreparePackedMessage {
+message PreparePackedMessageExe {
   bytes  ChainID           = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version           = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch             = 3  [(gogoproto.jsontag) = "epoch"];
@@ -32,10 +33,24 @@ message PreparePackedMessage {
   bytes  Signature         = 5  [(gogoproto.jsontag) = "signature"];
   bytes  PubKey            = 6  [(gogoproto.jsontag) = "pubKey"];
   bytes  ParentBlockHash   = 7  [(gogoproto.jsontag) = "parentBlockHash"];
-  bytes  TxRoot            = 8  [(gogoproto.jsontag) = "txRoot"];
-  bytes  TxResultRoot      = 9  [(gogoproto.jsontag) = "txResultRoot"];
+  uint64 StateVersion      = 8  [(gogoproto.jsontag) = "stateVersion"];
+  bytes  TxRoot            = 9  [(gogoproto.jsontag) = "txRoot"];
   repeated bytes Txs       = 10 [(gogoproto.jsontag) = "txs"];
-  repeated bytes TxResults = 11 [(gogoproto.jsontag) = "txResult"];
+}
+
+message PreparePackedMessageProp {
+  bytes  ChainID           = 1  [(gogoproto.jsontag)  = "chainID"];
+  uint32 Version           = 2  [(gogoproto.jsontag)  = "version"];
+  uint64 Epoch             = 3  [(gogoproto.jsontag)  = "epoch"];
+  uint64 Round             = 4  [(gogoproto.jsontag)  = "round"];
+  bytes  Signature         = 5  [(gogoproto.jsontag)  = "signature"];
+  bytes  PubKey            = 6  [(gogoproto.jsontag)  = "pubKey"];
+  bytes  ParentBlockHash   = 7  [(gogoproto.jsontag)  = "parentBlockHash"];
+  uint64 StateVersion      = 8  [(gogoproto.jsontag)  = "stateVersion"];
+  bytes  TxRoot            = 9  [(gogoproto.jsontag)  = "txRoot"];
+  bytes  TxResultRoot      = 10  [(gogoproto.jsontag) = "txResultRoot"];
+  repeated bytes TxHashs       = 11 [(gogoproto.jsontag) = "txHashs"];
+  repeated bytes TxResults = 12 [(gogoproto.jsontag)  = "txResult"];
 }
 
 message ProposeMessage {

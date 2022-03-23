@@ -2,14 +2,21 @@ package consensus
 
 import (
 	"context"
+	"fmt"
 	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/state"
 )
 
 type ConsensusHandler interface {
 	VerifyBlock(block *tptypes.Block) error
+
+	ProcessPreparePackedMsgExe(msg *PreparePackedMessageExe) error
+
+	ProcessPreparePackedMsgProp(msg *PreparePackedMessageProp) error
 
 	ProcessPropose(msg *ProposeMessage) error
 
@@ -27,20 +34,24 @@ type ConsensusHandler interface {
 }
 
 type consensusHandler struct {
-	log            tplog.Logger
-	roundCh        chan *RoundInfo
-	proposeMsgChan chan *ProposeMessage
-	partPubKey     chan *DKGPartPubKeyMessage
-	dealMsgCh      chan *DKGDealMessage
-	dealRespMsgCh  chan *DKGDealRespMessage
-	voteCollector  *consensusVoteCollector
-	ledger         ledger.Ledger
-	marshaler      codec.Marshaler
-	deliver        messageDeliverI
+	log                     tplog.Logger
+	roundCh                 chan *RoundInfo
+	preprePackedMsgExeChan  chan *PreparePackedMessageExe
+	preprePackedMsgPropChan chan *PreparePackedMessageProp
+	proposeMsgChan          chan *ProposeMessage
+	partPubKey              chan *DKGPartPubKeyMessage
+	dealMsgCh               chan *DKGDealMessage
+	dealRespMsgCh           chan *DKGDealRespMessage
+	voteCollector           *consensusVoteCollector
+	ledger                  ledger.Ledger
+	marshaler               codec.Marshaler
+	deliver                 messageDeliverI
 }
 
 func NewConsensusHandler(log tplog.Logger,
 	roundCh chan *RoundInfo,
+	preprePackedMsgExeChan chan *PreparePackedMessageExe,
+	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
@@ -49,21 +60,67 @@ func NewConsensusHandler(log tplog.Logger,
 	marshaler codec.Marshaler,
 	deliver messageDeliverI) *consensusHandler {
 	return &consensusHandler{
-		log:            log,
-		roundCh:        roundCh,
-		proposeMsgChan: proposeMsgChan,
-		partPubKey:     partPubKey,
-		dealMsgCh:      dealMsgCh,
-		dealRespMsgCh:  dealRespMsgCh,
-		voteCollector:  newConsensusVoteCollector(log),
-		ledger:         ledger,
-		marshaler:      marshaler,
-		deliver:        deliver,
+		log:                     log,
+		roundCh:                 roundCh,
+		preprePackedMsgExeChan:  preprePackedMsgExeChan,
+		preprePackedMsgPropChan: preprePackedMsgPropChan,
+		proposeMsgChan:          proposeMsgChan,
+		partPubKey:              partPubKey,
+		dealMsgCh:               dealMsgCh,
+		dealRespMsgCh:           dealRespMsgCh,
+		voteCollector:           newConsensusVoteCollector(log),
+		ledger:                  ledger,
+		marshaler:               marshaler,
+		deliver:                 deliver,
 	}
 }
 
 func (handler *consensusHandler) VerifyBlock(block *tptypes.Block) error {
 	panic("implement me")
+}
+
+func (handler *consensusHandler) ProcessPreparePackedMsgExe(msg *PreparePackedMessageExe) error {
+	csStateRN := state.CreateCompositionStateReadonly(handler.log, handler.ledger)
+	defer csStateRN.Stop()
+
+	id := handler.deliver.deliverNetwork().ID()
+
+	activeExeIds, err := csStateRN.GetActiveExecutorIDs()
+	if err != nil {
+		handler.log.Errorf("Can't get active executor ids: %v", err)
+		return err
+	}
+
+	if tpcmm.IsContainString(id, activeExeIds) {
+		handler.preprePackedMsgExeChan <- msg
+	} else {
+		err = fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe", id)
+		handler.log.Errorf("%v", err)
+	}
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessPreparePackedMsgProp(msg *PreparePackedMessageProp) error {
+	csStateRN := state.CreateCompositionStateReadonly(handler.log, handler.ledger)
+	defer csStateRN.Stop()
+
+	id := handler.deliver.deliverNetwork().ID()
+
+	activeeProposeIds, err := csStateRN.GetActiveProposerIDs()
+	if err != nil {
+		handler.log.Errorf("Can't get active proposer ids: %v", err)
+		return err
+	}
+
+	if tpcmm.IsContainString(id, activeeProposeIds) {
+		handler.preprePackedMsgPropChan <- msg
+	} else {
+		err = fmt.Errorf("Node %s not active proposers, so will discard received prepare packed msg prop", id)
+		handler.log.Errorf("%v", err)
+	}
+
+	return nil
 }
 
 func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {

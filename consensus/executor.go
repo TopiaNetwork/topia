@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"time"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -17,17 +20,22 @@ import (
 
 type consensusExecutor struct {
 	log                     tplog.Logger
+	nodeID                  string
+	priKey                  tpcrtypes.PrivateKey
 	txPool                  txpool.TransactionPool
 	marshaler               codec.Marshaler
 	ledger                  ledger.Ledger
-	exeScheduler            execution.Executionscheduler
+	exeScheduler            execution.ExecutionScheduler
 	deliver                 *messageDeliver
 	preparePackedMsgExeChan chan *PreparePackedMessageExe
+	cryptService            tpcrt.CryptService
 }
 
-func newConsensusExecutor(log tplog.Logger, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.Executionscheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe) *consensusExecutor {
+func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.ExecutionScheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe) *consensusExecutor {
 	return &consensusExecutor{
 		log:                     log,
+		nodeID:                  nodeID,
+		priKey:                  priKey,
 		txPool:                  txPool,
 		marshaler:               marshaler,
 		ledger:                  ledger,
@@ -37,7 +45,7 @@ func newConsensusExecutor(log tplog.Logger, txPool txpool.TransactionPool, marsh
 	}
 }
 
-func (e *consensusExecutor) start(ctx context.Context) {
+func (e *consensusExecutor) receivePreparePackedMessageExeLoop(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -87,14 +95,74 @@ func (e *consensusExecutor) start(ctx context.Context) {
 					e.log.Errorf("Execute state version %d packed txs err from remote: %v", txPacked.StateVersion, err)
 				}
 			case <-ctx.Done():
-				e.log.Info("Consensus executor exit")
+				e.log.Info("Consensus executor receiveing prepare packed msg exe exit")
 				return
 			}
 		}
 	}()
 }
 
-func (e *consensusExecutor) makePreparePackedMsg(txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []tx.Transaction, txResultList []tx.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
+func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
+	if schedulerState := e.exeScheduler.State(); schedulerState != execution.SchedulerState_Idle {
+		err := fmt.Errorf("Execution scheduler state %s not idle", schedulerState.String())
+		e.log.Errorf("%v", err)
+		return false, nil, err
+	}
+
+	csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
+	defer csStateRN.Stop()
+
+	roleSelector := newLeaderSelectorVRF(e.log, e.cryptService)
+
+	roundInfo := &RoundInfo{
+		Epoch:       csStateRN.GetCurrentEpoch(),
+		CurRoundNum: csStateRN.GetCurrentRound(),
+	}
+	maxStateVersion, _ := e.exeScheduler.MaxStateVersion(csStateRN)
+
+	candInfo, vrfProof, err := roleSelector.Select(RoleSelector_ExecutionLauncher, roundInfo, maxStateVersion, e.priKey, csStateRN, 1)
+	if err != nil {
+		e.log.Errorf("Select executor err: %v", err)
+		return false, nil, err
+	}
+	if len(candInfo) != 1 {
+		err = fmt.Errorf("Invalid selected executor count: expected 1, actual %d", len(candInfo))
+		return false, nil, err
+	}
+
+	if candInfo[0].nodeID == e.nodeID {
+		return true, vrfProof, nil
+	}
+
+	return false, vrfProof, nil
+
+}
+
+func (e *consensusExecutor) prepareTimer(ctx context.Context, timerDuration time.Duration) {
+	timer := time.NewTimer(timerDuration)
+	defer timer.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-timer.C:
+				isCan, vrfProof, _ := e.canPrepare()
+				if isCan {
+					e.Prepare(ctx, vrfProof)
+				}
+			case <-ctx.Done():
+				e.log.Info("Consensus executor exit prepare timre")
+				return
+			}
+		}
+	}()
+}
+
+func (e *consensusExecutor) start(ctx context.Context) {
+	e.receivePreparePackedMessageExeLoop(ctx)
+}
+
+func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []tx.Transaction, txResultList []tx.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
 	if len(txList) != len(txResultList) {
 		err := fmt.Errorf("Mismatch tx list count %d and tx result count %d", len(txList), len(txResultList))
 		e.log.Errorf("%v", err)
@@ -108,12 +176,17 @@ func (e *consensusExecutor) makePreparePackedMsg(txRoot []byte, txRSRoot []byte,
 	}
 	parentBlockHash, _ := latestBlock.HashBytes(tpcmm.NewBlake2bHasher(0), e.marshaler)
 
+	pubKey, _ := e.cryptService.ConvertToPublic(e.priKey)
+
 	exePPM := &PreparePackedMessageExe{
 		ChainID:         []byte(compState.ChainID()),
 		Version:         CONSENSUS_VER,
 		Epoch:           compState.GetCurrentEpoch(),
 		Round:           compState.GetCurrentRound(),
 		ParentBlockHash: parentBlockHash,
+		VRFProof:        vrfProof,
+		VRFProofPubKey:  pubKey,
+		Launcher:        []byte(e.nodeID),
 		StateVersion:    stateVersion,
 		TxRoot:          txRoot,
 	}
@@ -124,6 +197,9 @@ func (e *consensusExecutor) makePreparePackedMsg(txRoot []byte, txRSRoot []byte,
 		Epoch:           compState.GetCurrentEpoch(),
 		Round:           compState.GetCurrentRound(),
 		ParentBlockHash: parentBlockHash,
+		VRFProof:        vrfProof,
+		VRFProofPubKey:  pubKey,
+		Launcher:        []byte(e.nodeID),
 		StateVersion:    stateVersion,
 		TxRoot:          txRoot,
 		TxResultRoot:    txRSRoot,
@@ -142,7 +218,7 @@ func (e *consensusExecutor) makePreparePackedMsg(txRoot []byte, txRSRoot []byte,
 	return exePPM, proposePPM, nil
 }
 
-func (e *consensusExecutor) Prepare(ctx context.Context) error {
+func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error {
 	pendTxs, err := e.txPool.Pending()
 	if err != nil {
 		e.log.Errorf("Can't get pending txs: %v", err)
@@ -176,7 +252,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context) error {
 	}
 	txRSRoot := tx.TxResultRoot(txsRS.TxsResult, packedTxs.TxList)
 
-	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(txRoot, txRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
+	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {
 		return err
 	}

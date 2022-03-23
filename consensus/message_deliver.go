@@ -3,16 +3,16 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/ledger"
-	"github.com/TopiaNetwork/topia/state"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/network"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
+	"github.com/TopiaNetwork/topia/state"
 )
 
 type DeliverStrategy byte

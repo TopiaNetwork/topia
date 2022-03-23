@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"container/list"
 	"context"
 	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -10,32 +11,38 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
+	"sync"
 )
 
 const defaultLeaderCount = int(3)
 
 type consensusProposer struct {
-	log          tplog.Logger
-	nodeID       string
-	priKey       tpcrtypes.PrivateKey
-	lastRoundNum uint64
-	roundCh      chan *RoundInfo
-	deliver      messageDeliverI
-	marshaler    codec.Marshaler
-	ledger       ledger.Ledger
-	cryptService tpcrt.CryptService
+	log                     tplog.Logger
+	nodeID                  string
+	priKey                  tpcrtypes.PrivateKey
+	lastRoundNum            uint64
+	roundCh                 chan *RoundInfo
+	preprePackedMsgPropChan chan *PreparePackedMessageProp
+	deliver                 messageDeliverI
+	marshaler               codec.Marshaler
+	ledger                  ledger.Ledger
+	cryptService            tpcrt.CryptService
+	syncPPPMPropList        sync.RWMutex
+	ppmPropList             *list.List
 }
 
-func newConsensusProposer(nodeID string, priKey tpcrtypes.PrivateKey, log tplog.Logger, roundCh chan *RoundInfo, crypt tpcrt.CryptService, deliver messageDeliverI, ledger ledger.Ledger, marshaler codec.Marshaler) *consensusProposer {
+func newConsensusProposer(nodeID string, priKey tpcrtypes.PrivateKey, log tplog.Logger, roundCh chan *RoundInfo, preprePackedMsgPropChan chan *PreparePackedMessageProp, crypt tpcrt.CryptService, deliver messageDeliverI, ledger ledger.Ledger, marshaler codec.Marshaler) *consensusProposer {
 	return &consensusProposer{
-		log:          log,
-		nodeID:       nodeID,
-		priKey:       priKey,
-		roundCh:      roundCh,
-		deliver:      deliver,
-		marshaler:    marshaler,
-		ledger:       ledger,
-		cryptService: crypt,
+		log:                     log,
+		nodeID:                  nodeID,
+		priKey:                  priKey,
+		roundCh:                 roundCh,
+		preprePackedMsgPropChan: preprePackedMsgPropChan,
+		deliver:                 deliver,
+		marshaler:               marshaler,
+		ledger:                  ledger,
+		cryptService:            crypt,
+		ppmPropList:             list.New(),
 	}
 }
 
@@ -58,6 +65,42 @@ func (p *consensusProposer) canProposeBlock(roundInfo *RoundInfo) (bool, []byte,
 	}
 
 	return false, nil, nil
+}
+
+func (p *consensusProposer) receivePreparePackedMessagePropLoop(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case ppmProp := <-p.preprePackedMsgPropChan:
+				csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
+				defer csStateRN.Stop()
+
+				p.syncPPPMPropList.Lock()
+				defer p.syncPPPMPropList.Unlock()
+
+				latestBlock, err := csStateRN.GetLatestBlock()
+				if err != nil {
+					p.log.Errorf("Can't get the latest bock when receiving prepare packed msg prop: %v", err)
+					continue
+				}
+				if ppmProp.StateVersion <= latestBlock.Head.Height {
+					p.log.Errorf("Received outdated prepare packed msg prop: %v", err)
+					continue
+				}
+
+				latestPPMProp := p.ppmPropList.Back().Value.(*PreparePackedMessageProp)
+				if ppmProp.StateVersion != latestPPMProp.StateVersion+1 {
+					p.log.Errorf("Received invalid prepare packed msg prop: expected state version %d, actual %d", latestPPMProp.StateVersion+1, ppmProp.StateVersion)
+					continue
+				}
+
+				p.ppmPropList.PushBack(ppmProp)
+			case <-ctx.Done():
+				p.log.Info("Consensus proposer receiveing prepare packed msg prop exit")
+				return
+			}
+		}
+	}()
 }
 
 func (p *consensusProposer) start(ctx context.Context) {
@@ -86,11 +129,13 @@ func (p *consensusProposer) start(ctx context.Context) {
 					p.log.Errorf("Consensus deliver propose message err: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 				}
 			case <-ctx.Done():
-				p.log.Info("Consensus proposer exit")
+				p.log.Info("Consensus proposer round exit")
 				return
 			}
 		}
 	}()
+
+	p.receivePreparePackedMessagePropLoop(ctx)
 }
 
 func (p *consensusProposer) createBlock(roundInfo *RoundInfo) (*types.Block, error) {

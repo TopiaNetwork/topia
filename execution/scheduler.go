@@ -3,6 +3,7 @@ package execution
 import (
 	"container/list"
 	"context"
+	"errors"
 	"fmt"
 	"go.uber.org/atomic"
 	"time"
@@ -130,6 +131,24 @@ func (scheduler *executionScheduler) MaxStateVersion(compState state.Composition
 	}
 
 	return maxStateVersion, nil
+}
+
+func (scheduler *executionScheduler) GetPackedTxForValidity(ctx context.Context, stateVersion uint64) (uint32, []byte, []byte, error) {
+	scheduler.executeMutex.RLock()
+	defer scheduler.executeMutex.RUnlock()
+
+	if scheduler.exePackedTxsList.Len() > 0 {
+		exeTxsF := scheduler.exePackedTxsList.Front().Value.(*executionPackedTxs)
+		if exeTxsF.StateVersion() != stateVersion {
+			err := fmt.Errorf("Invalid state version: expected %d, actual %d", exeTxsF.StateVersion(), stateVersion)
+			scheduler.log.Errorf("%v")
+			return 0, nil, nil, err
+		}
+
+		return uint32(len(exeTxsF.packedTxs.TxList)), exeTxsF.packedTxs.TxRoot, exeTxsF.packedTxsRS.TxRSRoot, nil
+	}
+
+	return 0, nil, nil, errors.New("Not exist packed txs")
 }
 
 func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockStore block.BlockStore) error {

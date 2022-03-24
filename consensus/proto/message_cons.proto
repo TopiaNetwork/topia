@@ -50,8 +50,8 @@ message PreparePackedMessageProp {
   bytes  PubKey            = 6  [(gogoproto.jsontag) = "pubKey"];
   bytes  ParentBlockHash   = 7  [(gogoproto.jsontag) = "parentBlockHash"];
   bytes  VRFProof          = 8  [(gogoproto.jsontag) = "vrfProof"];
-  bytes  VRFProofPubKey    = 9  [(gogoproto.jsontag) = "vrfProof"];
-  bytes  Launcher          = 10 [(gogoproto.jsontag) = "vrfProof"];
+  bytes  VRFProofPubKey    = 9  [(gogoproto.jsontag) = "vrfProofPubKey"];
+  bytes  Launcher          = 10 [(gogoproto.jsontag) = "launcher"];
   uint64 StateVersion      = 11 [(gogoproto.jsontag) = "stateVersion"];
   bytes  TxRoot            = 12 [(gogoproto.jsontag) = "txRoot"];
   bytes  TxResultRoot      = 13 [(gogoproto.jsontag) = "txResultRoot"];
@@ -64,11 +64,14 @@ message ProposeMessage {
   uint32 Version      = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch        = 3  [(gogoproto.jsontag) = "epoch"];
   uint64 Round        = 4  [(gogoproto.jsontag) = "round"];
-  bytes  Proof        = 5  [(gogoproto.jsontag) = "proof"];
-  bytes ProposerProof = 6  [(gogoproto.jsontag) = "proposerProof"];
-  bytes Signature     = 7  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey        = 8  [(gogoproto.jsontag) = "pubKey"];
-  bytes Block         = 9  [(gogoproto.jsontag) = "block"];
+  bytes  Proposer     = 5  [(gogoproto.jsontag) = "proposer"];
+  bytes  Proof        = 6  [(gogoproto.jsontag) = "proof"];
+  bytes ProposerProof = 7  [(gogoproto.jsontag) = "proposerProof"];
+  bytes MaxPri        = 8  [(gogoproto.jsontag) = "maxPri"];
+  bytes Signature     = 9  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey        = 10  [(gogoproto.jsontag) = "pubKey"];
+  uint64 StateVersion = 11 [(gogoproto.jsontag) = "stateVersion"];
+  bytes BlockHead     = 12 [(gogoproto.jsontag) = "block"];
 }
 
 message VoteMessage {

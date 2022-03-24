@@ -3,6 +3,8 @@ package node
 import tplgss "github.com/TopiaNetwork/topia/ledger/state"
 
 type NodeExecutorState interface {
+	GetNodeExecutorStateRoot() ([]byte, error)
+
 	GetActiveExecutorIDs() ([]string, error)
 
 	GetActiveExecutorsTotalWeight() (uint64, error)
@@ -17,6 +19,11 @@ func NewNodeExecutorState(stateStore tplgss.StateStore) NodeExecutorState {
 	return &nodeExecutorState{
 		StateStore: stateStore,
 	}
+}
+
+func (ns *nodeExecutorState) GetNodeExecutorStateRoot() ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (ns *nodeExecutorState) GetActiveExecutorIDs() ([]string, error) {

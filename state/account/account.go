@@ -1,13 +1,16 @@
 package account
 
 import (
+	"math/big"
+
 	"github.com/TopiaNetwork/topia/chain"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
-	"math/big"
 )
 
 type AccountState interface {
+	GetAccountRoot() ([]byte, error)
+
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(symbol chain.TokenSymbol, addr tpcrtypes.Address) (*big.Int, error)
@@ -22,6 +25,11 @@ func NewAccountState(stateStore tplgss.StateStore) AccountState {
 	return &accountState{
 		stateStore,
 	}
+}
+
+func (as *accountState) GetAccountRoot() ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (as *accountState) GetNonce(addr tpcrtypes.Address) (uint64, error) {

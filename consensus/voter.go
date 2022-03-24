@@ -48,6 +48,6 @@ func (v *consensusVoter) produceVoteMsg(msg *ProposeMessage) (*VoteMessage, erro
 		Epoch:   msg.Epoch,
 		Round:   msg.Round,
 		Proof:   msg.Proof,
-		Block:   msg.Block,
+		Block:   msg.BlockHead,
 	}, nil
 }

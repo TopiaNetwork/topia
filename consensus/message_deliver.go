@@ -163,14 +163,6 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
-	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
-	if err != nil {
-		md.log.Errorf("DKG sign ProposeMessage err: %v", err)
-		return err
-	}
-	msg.Signature = sigData
-	msg.PubKey = pubKey
-
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("ProposeMessage marshal err: %v", err)
@@ -179,18 +171,18 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetActiveValidatorIDs()
 		if err != nil {
-			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
 			return err
 		}
 		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
 	}
 
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	err = md.network.Send(ctx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send propose message to network failed: err=%v", err)
+		md.log.Errorf("Send propose message to validator network failed: err=%v", err)
 	}
 
 	return err

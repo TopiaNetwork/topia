@@ -29,9 +29,10 @@ type consensusExecutor struct {
 	deliver                 *messageDeliver
 	preparePackedMsgExeChan chan *PreparePackedMessageExe
 	cryptService            tpcrt.CryptService
+	prepareInterval         time.Duration
 }
 
-func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.ExecutionScheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe) *consensusExecutor {
+func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.ExecutionScheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe, prepareInterval time.Duration) *consensusExecutor {
 	return &consensusExecutor{
 		log:                     log,
 		nodeID:                  nodeID,
@@ -42,6 +43,7 @@ func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.Priv
 		exeScheduler:            exeScheduler,
 		deliver:                 deliver,
 		preparePackedMsgExeChan: preprePackedMsgExeChan,
+		prepareInterval:         prepareInterval,
 	}
 }
 
@@ -138,8 +140,8 @@ func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 
 }
 
-func (e *consensusExecutor) prepareTimer(ctx context.Context, timerDuration time.Duration) {
-	timer := time.NewTimer(timerDuration)
+func (e *consensusExecutor) prepareTimer(ctx context.Context) {
+	timer := time.NewTimer(e.prepareInterval)
 	defer timer.Stop()
 
 	go func() {
@@ -160,6 +162,7 @@ func (e *consensusExecutor) prepareTimer(ctx context.Context, timerDuration time
 
 func (e *consensusExecutor) start(ctx context.Context) {
 	e.receivePreparePackedMessageExeLoop(ctx)
+	e.prepareTimer(ctx)
 }
 
 func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []tx.Transaction, txResultList []tx.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {

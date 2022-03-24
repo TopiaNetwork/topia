@@ -42,36 +42,64 @@ message PreparePackedMessageExe {
 }
 
 message PreparePackedMessageProp {
-  bytes  ChainID           = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version           = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Epoch             = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round             = 4  [(gogoproto.jsontag) = "round"];
-  bytes  Signature         = 5  [(gogoproto.jsontag) = "signature"];
-  bytes  PubKey            = 6  [(gogoproto.jsontag) = "pubKey"];
-  bytes  ParentBlockHash   = 7  [(gogoproto.jsontag) = "parentBlockHash"];
-  bytes  VRFProof          = 8  [(gogoproto.jsontag) = "vrfProof"];
-  bytes  VRFProofPubKey    = 9  [(gogoproto.jsontag) = "vrfProofPubKey"];
-  bytes  Launcher          = 10 [(gogoproto.jsontag) = "launcher"];
-  uint64 StateVersion      = 11 [(gogoproto.jsontag) = "stateVersion"];
-  bytes  TxRoot            = 12 [(gogoproto.jsontag) = "txRoot"];
-  bytes  TxResultRoot      = 13 [(gogoproto.jsontag) = "txResultRoot"];
-  repeated bytes TxHashs   = 14 [(gogoproto.jsontag) = "txHashs"];
-  repeated bytes TxResults = 15 [(gogoproto.jsontag) = "txResult"];
+  bytes  ChainID               = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
+  bytes  Signature             = 5  [(gogoproto.jsontag) = "signature"];
+  bytes  PubKey                = 6  [(gogoproto.jsontag) = "pubKey"];
+  bytes  ParentBlockHash       = 7  [(gogoproto.jsontag) = "parentBlockHash"];
+  bytes  VRFProof              = 8  [(gogoproto.jsontag) = "vrfProof"];
+  bytes  VRFProofPubKey        = 9  [(gogoproto.jsontag) = "vrfProofPubKey"];
+  bytes  Launcher              = 10 [(gogoproto.jsontag) = "launcher"];
+  uint64 StateVersion          = 11 [(gogoproto.jsontag) = "stateVersion"];
+  bytes  TxRoot                = 12 [(gogoproto.jsontag) = "txRoot"];
+  bytes  TxResultRoot          = 13 [(gogoproto.jsontag) = "txResultRoot"];
+  repeated bytes TxHashs       = 14 [(gogoproto.jsontag) = "txHashs"];
+  repeated bytes TxResultHashs = 15 [(gogoproto.jsontag) = "txResultHashs"];
 }
 
 message ProposeMessage {
-  bytes  ChainID      = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version      = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Epoch        = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round        = 4  [(gogoproto.jsontag) = "round"];
-  bytes  Proposer     = 5  [(gogoproto.jsontag) = "proposer"];
-  bytes  Proof        = 6  [(gogoproto.jsontag) = "proof"];
-  bytes ProposerProof = 7  [(gogoproto.jsontag) = "proposerProof"];
-  bytes MaxPri        = 8  [(gogoproto.jsontag) = "maxPri"];
-  bytes Signature     = 9  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey        = 10  [(gogoproto.jsontag) = "pubKey"];
-  uint64 StateVersion = 11 [(gogoproto.jsontag) = "stateVersion"];
-  bytes BlockHead     = 12 [(gogoproto.jsontag) = "block"];
+  bytes  ChainID               = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
+  bytes  Proposer              = 5  [(gogoproto.jsontag) = "proposer"];
+  bytes  Proof                 = 6  [(gogoproto.jsontag) = "proof"];
+  bytes ProposerProof          = 7  [(gogoproto.jsontag) = "proposerProof"];
+  bytes MaxPri                 = 8  [(gogoproto.jsontag) = "maxPri"];
+  bytes Signature              = 9  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey                 = 10  [(gogoproto.jsontag) = "pubKey"];
+  uint64 StateVersion          = 11 [(gogoproto.jsontag) = "stateVersion"];
+  repeated bytes TxHashs       = 12 [(gogoproto.jsontag) = "txHashs"];
+  repeated bytes TxResultHashs = 13 [(gogoproto.jsontag) = "txResultHashs"];
+  bytes BlockHead              = 14 [(gogoproto.jsontag) = "block"];
+}
+
+message ExeResultValidateReqMessage {
+  bytes  ChainID               = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
+  bytes  Validator             = 5  [(gogoproto.jsontag) = "proposer"];
+  bytes Signature              = 6  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey                 = 7  [(gogoproto.jsontag) = "pubKey"];
+  uint64 StateVersion          = 8  [(gogoproto.jsontag) = "stateVersion"];
+  repeated bytes TxHashs       = 9  [(gogoproto.jsontag) = "txHashs"];
+  repeated bytes TxResultHashs = 10 [(gogoproto.jsontag) = "txResultHashs"];
+}
+
+message ExeResultValidateRespMessage {
+  bytes  ChainID               = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
+  bytes  Executor              = 5  [(gogoproto.jsontag) = "executor"];
+  bytes Signature              = 6  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey                 = 7  [(gogoproto.jsontag) = "pubKey"];
+  uint64 StateVersion          = 8  [(gogoproto.jsontag) = "stateVersion"];
+  repeated bytes TxRoofs       = 9  [(gogoproto.jsontag) = "txRoofs"];
+  repeated bytes TxResultRoofs = 10 [(gogoproto.jsontag) = "txResultRoofs"];
 }
 
 message VoteMessage {

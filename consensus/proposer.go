@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TopiaNetwork/topia/chain/types"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
@@ -162,25 +162,10 @@ func (p *consensusProposer) start(ctx context.Context) {
 	p.receivePreparePackedMessagePropLoop(ctx)
 }
 
-func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, csStateRN state.CompositionStateReadonly) (*types.BlockHead, uint64, error) {
-	latestBlock, err := csStateRN.GetLatestBlock()
-	if err != nil {
-		p.log.Errorf("Can't get the latest block: %v", err)
-		return nil, 0, err
-	}
-
+func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, csStateRN state.CompositionStateReadonly) (*tpchaintypes.BlockHead, uint64, error) {
 	blockHashBytes, err := latestBlock.HashBytes(tpcmm.NewBlake2bHasher(0), p.marshaler)
 	if err != nil {
 		p.log.Errorf("Can't get the hash bytes of block height %d: %v", latestBlock.Head.Height, err)
-		return nil, 0, err
-	}
-
-	p.syncPPPMPropList.Lock()
-	defer p.syncPPPMPropList.Unlock()
-
-	frontPPMProp := p.ppmPropList.Front().Value.(*PreparePackedMessageProp)
-	if frontPPMProp.StateVersion != latestBlock.Head.Height+1 {
-		err = fmt.Errorf("Invalid prepare packed message prop: expected front state version %d, actual %d", latestBlock.Head.Height+1, frontPPMProp.StateVersion)
 		return nil, 0, err
 	}
 
@@ -190,9 +175,9 @@ func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, csStateRN stat
 		return nil, 0, err
 	}
 
-	return &types.BlockHead{
+	return &tpchaintypes.BlockHead{
 		ChainID:         []byte(csStateRN.ChainID()),
-		Version:         types.BLOCK_VER,
+		Version:         tpchaintypes.BLOCK_VER,
 		Height:          latestBlock.Head.Height + 1,
 		Epoch:           roundInfo.Epoch,
 		Round:           roundInfo.CurRoundNum,
@@ -209,7 +194,22 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfRoot []
 	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 	defer csStateRN.Stop()
 
-	newBlockHead, stateVersion, err := p.createBlockHead(roundInfo, csStateRN)
+	latestBlock, err := csStateRN.GetLatestBlock()
+	if err != nil {
+		p.log.Errorf("Can't get the latest block: %v", err)
+		return nil, err
+	}
+
+	p.syncPPPMPropList.Lock()
+	frontPPMProp := p.ppmPropList.Front().Value.(*PreparePackedMessageProp)
+	if frontPPMProp.StateVersion != latestBlock.Head.Height+1 {
+		err = fmt.Errorf("Invalid prepare packed message prop: expected front state version %d, actual %d", latestBlock.Head.Height+1, frontPPMProp.StateVersion)
+		defer p.syncPPPMPropList.Unlock()
+		return nil, err
+	}
+	p.syncPPPMPropList.Unlock()
+
+	newBlockHead, stateVersion, err := p.createBlockHead(roundInfo, frontPPMProp, latestBlock, csStateRN)
 	if err != nil {
 		p.log.Errorf("Create block failed: %v", err)
 		return nil, err
@@ -226,7 +226,7 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfRoot []
 		return nil, err
 	}
 
-	sigaData, err := p.cryptService.Sign(p.priKey, newBlockHeadBytes)
+	signData, err := p.cryptService.Sign(p.priKey, newBlockHeadBytes)
 	if err != nil {
 		p.log.Errorf("Sign err for propose msg: %v", err)
 		return nil, err
@@ -247,9 +247,11 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfRoot []
 		Proof:         csProofBytes,
 		ProposerProof: vrfRoot,
 		MaxPri:        maxPri,
-		Signature:     sigaData,
+		Signature:     signData,
 		PubKey:        pubKey,
 		StateVersion:  stateVersion,
+		TxHashs:       frontPPMProp.TxHashs,
+		TxResultHashs: frontPPMProp.TxResultHashs,
 		BlockHead:     newBlockHeadBytes,
 	}, nil
 }

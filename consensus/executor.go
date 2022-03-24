@@ -213,9 +213,9 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		exePPM.Txs = append(exePPM.Txs, txBytes)
 
 		txHashBytes, _ := txList[i].HashBytes()
-		txRSBytes, _ := e.marshaler.Marshal(txResultList[i])
+		txRSHashBytes, _ := txResultList[i].HashBytes(txList[i].FromAddr)
 		proposePPM.TxHashs = append(proposePPM.TxHashs, txHashBytes)
-		proposePPM.TxResults = append(proposePPM.TxResults, txRSBytes)
+		proposePPM.TxResultHashs = append(proposePPM.TxResultHashs, txRSHashBytes)
 	}
 
 	return exePPM, proposePPM, nil

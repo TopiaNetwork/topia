@@ -36,10 +36,6 @@ func init() {
 			1,
 		},
 	}
-	Tx1 = settransaction(1, 10000)
-	Tx2 = settransaction(2, 20000)
-	Tx3 = settransaction(3, 30000)
-	Tx4 = settransaction(4, 40000)
 
 }
 

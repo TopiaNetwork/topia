@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -251,7 +252,7 @@ func (pool *transactionPool) UpdateTx(tx *transaction.Transaction, txKey string)
 	tx2 := pool.allTxsForLook.Get(txKey)
 	if account.Address(tx2.FromAddr) == account.Address(tx.FromAddr) &&
 		account.Address(tx2.TargetAddr) == account.Address(tx.TargetAddr) &&
-		tx2.GasLimit <= tx.GasLimit {
+		tx2.GasPrice <= tx.GasPrice {
 		pool.RemoveTxByKey(txKey)
 		pool.add(tx, false)
 	}
@@ -298,13 +299,14 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 				// Internal shuffle shouldn't touch the lookup set.
 				pool.queueAddTx(txId, tx, false, false)
 			}
-			return nil
 		}
 	}
+
 	pool.pending.Mu.Unlock()
 	// Transaction is in the future queue
 	pool.queue.Mu.Lock()
 	if future := pool.queue.accTxs[addr]; future != nil {
+		future.Remove(tx)
 		if future.Empty() {
 			delete(pool.queue.accTxs, addr)
 			delete(pool.ActivationIntervals, key)
@@ -331,12 +333,14 @@ func (pool *transactionPool) Get(key string) *transaction.Transaction {
 // Note, this method assumes the pool lock is held!
 func (pool *transactionPool) queueAddTx(key string, tx *transaction.Transaction, local bool, addAll bool) (bool, error) {
 	// Try to insert the transaction into the future queue
+	pool.queue.Mu.Lock()
 	from := account.Address(hex.EncodeToString(tx.FromAddr))
 	if pool.queue.accTxs[from] == nil {
 		pool.queue.accTxs[from] = newTxList(false)
 	}
 
 	inserted, old := pool.queue.accTxs[from].Add(tx)
+	pool.queue.Mu.Unlock()
 	if !inserted {
 		// An older transaction was existed
 		return false, ErrReplaceUnderpriced
@@ -516,18 +520,34 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 // replaceTx adds a transaction to the pending (processable) list of transactions
 // and returns whether it was inserted or an older was better.
 // Note, this method assumes the pool lock is held!
-func (pool *transactionPool) replaceTx(addr account.Address, txId string, tx *transaction.Transaction) bool {
+func (pool *transactionPool) turnTx(addr account.Address, txId string, tx *transaction.Transaction) bool {
 	// Try to insert the transaction into the pending queue
 	if pool.pending.accTxs[addr] == nil {
 		pool.pending.accTxs[addr] = newTxList(true)
 	}
+	pool.pending.Mu.Lock()
 	list := pool.pending.accTxs[addr]
-	inserted, _ := list.Add(tx)
+	pool.pending.Mu.Unlock()
+
+	inserted, old := list.Add(tx)
+	fmt.Println("turnTx(addr:", inserted, old)
 	if !inserted {
 		// An older transaction was existed, discard this
 		pool.allTxsForLook.Remove(txId)
 		pool.sortedByPriced.Removed(1)
 		return false
+	} else {
+		pool.queue.Mu.Lock()
+		queuelist := pool.queue.accTxs[addr]
+		queuelist.Remove(tx)
+		pool.queue.Mu.Unlock()
+	}
+
+	if old != nil {
+		oldkey, _ := old.TxID()
+		pool.allTxsForLook.Remove(oldkey)
+		pool.sortedByPriced.Removed(1)
+
 	}
 	// Successful replace tx, bump the ActivationInterval
 	pool.ActivationIntervals[txId] = time.Now()
@@ -600,7 +620,7 @@ func (pool *transactionPool) replaceExecutables(accounts []account.Address) []*t
 		readies := list.Ready(pool.curState.GetNonce(addr))
 		for _, tx := range readies {
 			txId, _ := tx.TxID()
-			if pool.replaceTx(addr, txId, tx) {
+			if pool.turnTx(addr, txId, tx) {
 				replaced = append(replaced, tx)
 			}
 		}

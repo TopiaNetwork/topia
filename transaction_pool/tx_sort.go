@@ -3,7 +3,6 @@ package transactionpool
 import (
 	"container/heap"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -273,7 +272,9 @@ func (l *txList) Add(tx *transaction.Transaction) (bool, *transaction.Transactio
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce)
 	if old != nil {
-		return false, nil
+		if old.GasPrice >= tx.GasPrice {
+			return false, nil
+		}
 	}
 	//txQuery := l.servant
 	l.txs.Put(tx)
@@ -576,7 +577,6 @@ func (t *txLookup) Add(tx *transaction.Transaction, local bool) {
 	if txId, err := tx.TxID(); err == nil {
 		if local {
 			t.locals[txId] = tx
-			fmt.Println("txlookup add tx 00001")
 		} else {
 			t.remotes[txId] = tx
 		}
@@ -587,7 +587,6 @@ func (t *txLookup) Remove(key string) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	tx, ok := t.locals[key]
-	fmt.Println("local:", ok)
 	if !ok {
 		tx, ok = t.remotes[key]
 	}

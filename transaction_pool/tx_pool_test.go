@@ -1,6 +1,7 @@
 package transactionpool
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/codec"
@@ -10,25 +11,34 @@ import (
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/transaction"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
 var (
-	testTxPoolConfig   TransactionPoolConfig
-	Tx1, Tx2, Tx3, Tx4 *transaction.Transaction
-	TestBlock          *types.Block
-	TestBlockHead      *types.BlockHead
-	TestBlockData      *types.BlockData
-	TestBlockHash      string
+	TestTxPoolConfig                                                    TransactionPoolConfig
+	Tx1, Tx2, Tx3, Tx4, TxR1, TxR2, TxR3, TxlowGasPrice, TxHighGasLimit *transaction.Transaction
+	TestBlock                                                           *types.Block
+	TestBlockHead                                                       *types.BlockHead
+	TestBlockData                                                       *types.BlockData
+	TestBlockHash                                                       string
 )
 
 func init() {
-	testTxPoolConfig = DefaultTransactionPoolConfig
-	Tx1 = settransaction(1, 10000)
-	Tx2 = settransaction(2, 20000)
-	Tx3 = settransaction(3, 30000)
-	Tx4 = settransaction(4, 40000)
+	TestTxPoolConfig = DefaultTransactionPoolConfig
+
+	Tx1 = settransactionlocal(1, 10000, 12345)
+	Tx2 = settransactionlocal(2, 20000, 12345)
+	Tx3 = settransactionlocal(3, 9999, 12345)
+	Tx4 = settransactionlocal(4, 40000, 12345)
+
+	TxR1 = settransactionremote(1, 20000, 12345)
+	TxR2 = settransactionremote(2, 3000, 12345)
+	TxR3 = settransactionremote(3, 40000, 12345)
+	TxlowGasPrice = settransactionremote(1, 100, 1000)
+	TxHighGasLimit = settransactionremote(2, 10000, 9987654321)
+
 	TestBlockHash = "0x224111a2131c213b213112d121c1231e"
 
 	TestBlockHead = &types.BlockHead{
@@ -67,11 +77,20 @@ func init() {
 
 }
 
-func settransaction(nonce uint64, gaseLimit uint64) *transaction.Transaction {
+func settransactionlocal(nonce uint64, gaseprice, gaseLimit uint64) *transaction.Transaction {
 	tx := &transaction.Transaction{
 		FromAddr:   []byte{0x00, 0x00, 0x43, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43},
 		TargetAddr: []byte{0x00, 0x00, 0x34, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43}, Version: 1, ChainID: []byte{0x01},
-		Nonce: nonce, Value: []byte{0x12, 0x32}, GasPrice: 10000,
+		Nonce: nonce, Value: []byte{0x12, 0x32}, GasPrice: gaseprice,
+		GasLimit: gaseLimit, Data: []byte{0x32, 0x32, 0x32, 0x65, 0x32, 0x65, 0x32, 0x65},
+		Signature: []byte{0x32, 0x23, 0x42, 0x23, 0x42, 0x23, 0x42}, Options: 0, Time: time.Now()}
+	return tx
+}
+func settransactionremote(nonce uint64, gaseprice, gaseLimit uint64) *transaction.Transaction {
+	tx := &transaction.Transaction{
+		FromAddr:   []byte{0x01, 0x01, 0x43, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43},
+		TargetAddr: []byte{0x01, 0x01, 0x34, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43}, Version: 1, ChainID: []byte{0x01},
+		Nonce: nonce, Value: []byte{0x12, 0x32}, GasPrice: gaseprice,
 		GasLimit: gaseLimit, Data: []byte{0x32, 0x32, 0x32, 0x65, 0x32, 0x65, 0x32, 0x65},
 		Signature: []byte{0x32, 0x23, 0x42, 0x23, 0x42, 0x23, 0x42}, Options: 0, Time: time.Now()}
 	return tx
@@ -161,91 +180,134 @@ func TestInValidateTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
-	testTxPoolConfig.chain = servant
+	TestTxPoolConfig.chain = servant
 	log := NewMockLogger(ctrl)
-	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
-	tx := Tx1
-	if err := pool.ValidateTx(tx, true); err != ErrTxGasLimit {
+	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
+	fmt.Println("test for ErrTxGasLimit:")
+	if err := pool.ValidateTx(TxHighGasLimit, true); err != ErrTxGasLimit {
 		t.Error("expected", ErrTxGasLimit, "got", err)
 	}
+	fmt.Println("test for ErrGasPriceTooLow:")
+	if err := pool.ValidateTx(TxlowGasPrice, false); err != ErrGasPriceTooLow {
+		t.Error("expected", ErrGasPriceTooLow, "got", err)
+	}
 }
 
-func TestTransactionQueue(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
-	//cost := big.NewInt(1234)
-	//servant.EXPECT().EstimateTxCost(gomock.Any()).Return(cost)
-	testTxPoolConfig.chain = servant
-	log := NewMockLogger(ctrl)
-	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
-	fmt.Println("len of queue is 0:", len(pool.queue.accTxs))
+func TestTransactionPool(t *testing.T) {
+	from1 := account.Address(hex.EncodeToString(Tx1.FromAddr))
 	txid1, _ := Tx1.TxID()
+	txid2, _ := Tx2.TxID()
+	//txid3, _ := Tx3.TxID()
+	txid4, _ := Tx4.TxID()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	servant := NewMockTransactionPoolServant(ctrl)
+	TestTxPoolConfig.chain = servant
+	log := NewMockLogger(ctrl)
+	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
+
+	fmt.Println("txPool init queue,pending,allTxs,sortedByPrice are all zero")
+	assert.True(t, len(pool.queue.accTxs) == 0, "len of queue is 0")
+	assert.True(t, len(pool.pending.accTxs) == 0, "len of pending is 0")
+	assert.True(t, pool.allTxsForLook.LocalCount() == 0, "count of local in  allTxsForLook is 0")
+	assert.True(t, pool.allTxsForLook.RemoteCount() == 0, "count of remote in allTxsForLook is 0")
+	assert.True(t, len(pool.sortedByPriced.all.locals) == 0, "count of local in sortedByPriced is 0")
+	assert.True(t, len(pool.sortedByPriced.all.remotes) == 0, "count of remote in sortedByPriced is 0")
+
+	fmt.Println("test for add one local tx")
 	pool.queueAddTx(txid1, Tx1, true, true)
-	if len(pool.queue.accTxs) != 1 {
-		t.Error("except len of queue is 1,got", len(pool.queue.accTxs))
-	}
-}
+	txlist := pool.queue.accTxs[from1]
+	assert.True(t, txlist.Len() == 1, "len txs of queue is 1")
+	assert.True(t, len(pool.pending.accTxs) == 0, "len of pending is 0")
+	assert.True(t, pool.allTxsForLook.LocalCount() == 1, "count of local in  allTxsForLook is 1")
+	assert.True(t, pool.allTxsForLook.RemoteCount() == 0, "count of remote in allTxsForLook is 0")
+	assert.True(t, len(pool.sortedByPriced.all.locals) == 1, "count of local in sortedByPriced is 1")
+	assert.True(t, len(pool.sortedByPriced.all.remotes) == 0, "count of remote in sortedByPriced is 0")
 
-//test pool.add,pool.locals.containsTx(tx),pool.queueAddTx(),pool.locals.contains()
-func TestTxadd1(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
-	testTxPoolConfig.chain = servant
-	log := NewMockLogger(ctrl)
-	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
+	fmt.Println("test for add remote tx ")
+	pool.queueAddTx(txid2, Tx2, false, true)
+	assert.True(t, txlist.Len() == 2, "len txs of queue is 2")
+	assert.True(t, len(pool.pending.accTxs) == 0, "len of pending is 0")
+	assert.True(t, pool.allTxsForLook.LocalCount() == 1, "count of local in  allTxsForLook is 1")
+	assert.True(t, pool.allTxsForLook.RemoteCount() == 1, "count of remote in allTxsForLook is 1")
+	assert.True(t, len(pool.sortedByPriced.all.locals) == 1, "count of local in sortedByPriced is 1")
+	assert.True(t, len(pool.sortedByPriced.all.remotes) == 1, "count of remote in sortedByPriced is 1")
 
-	ok, err := pool.add(Tx1, true)
+	fmt.Println("test for turn tx from queue to pending")
+	ok := pool.turnTx(from1, txid1, Tx1)
 	if !ok {
-		fmt.Println(err)
+		fmt.Println("turn error")
 	}
-	if len(pool.queue.accTxs) != 1 {
-		t.Error("except len of queue is 1,got", len(pool.queue.accTxs))
-	}
-}
+	txlist = pool.queue.accTxs[from1]
+	assert.True(t, txlist.Len() == 1, "len txs of queue is 1")
+	assert.True(t, len(pool.pending.accTxs) == 1, "len of pending is 0")
+	assert.True(t, pool.allTxsForLook.LocalCount() == 1, "count of local in  allTxsForLook is 1")
+	assert.True(t, pool.allTxsForLook.RemoteCount() == 1, "count of remote in allTxsForLook is 1")
+	assert.True(t, len(pool.sortedByPriced.all.locals) == 1, "count of local in sortedByPriced is 1")
+	assert.True(t, len(pool.sortedByPriced.all.remotes) == 1, "count of remote in sortedByPriced is 1")
 
-//pool.AddTx,AddLocal,AddLocals,addTxs,addTxsLocked,AddRemote
-func TestAddTx(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
-	testTxPoolConfig.chain = servant
-	log := NewMockLogger(ctrl)
-	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
-	err := pool.AddTx(Tx1, true)
+	fmt.Println("test for remove tx by key from pending")
+	err := pool.RemoveTxByKey(txid1)
 	if err != nil {
 		fmt.Println(err)
 	}
-	if pool.allTxsForLook.Count() != 1 {
-		t.Error("except len of queue is 1,got", pool.allTxsForLook.Count())
+	txlist = pool.queue.accTxs[from1]
+	assert.True(t, txlist.Len() == 1, "len txs of queue is 1")
+	assert.True(t, len(pool.pending.accTxs) == 0, "len of pending is 0")
+	assert.True(t, pool.allTxsForLook.LocalCount() == 0, "count of local in  allTxsForLook is 0")
+	assert.True(t, pool.allTxsForLook.RemoteCount() == 1, "count of remote in allTxsForLook is 1")
+	assert.True(t, len(pool.sortedByPriced.all.locals) == 0, "count of local in sortedByPriced is 0")
+	assert.True(t, len(pool.sortedByPriced.all.remotes) == 1, "count of remote in sortedByPriced is 1")
+	fmt.Println("test for remove tx by key from queue")
+	err = pool.RemoveTxByKey(txid2)
+	if err != nil {
+		fmt.Println(err)
 	}
-}
+	assert.True(t, txlist.Len() == 0, "len txs of queue is 0")
+	assert.True(t, len(pool.pending.accTxs) == 0, "len of pending is 0")
+	assert.True(t, pool.allTxsForLook.LocalCount() == 0, "count of local in  allTxsForLook is 0")
+	assert.True(t, pool.allTxsForLook.RemoteCount() == 0, "count of remote in allTxsForLook is 0")
+	assert.True(t, len(pool.sortedByPriced.all.locals) == 0, "count of local in sortedByPriced is 0")
+	assert.True(t, len(pool.sortedByPriced.all.remotes) == 0, "count of remote in sortedByPriced is 0")
 
-func TestRemoveTx(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
-	testTxPoolConfig.chain = servant
-	log := NewMockLogger(ctrl)
-	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.add(Tx1, true)
-	fmt.Println(len(pool.pending.accTxs))
-	fmt.Println(len(pool.queue.accTxs))
-	fmt.Println(pool.allTxsForLook.Count())
-	txKey, err := Tx1.TxID()
-	if err != nil {
-		fmt.Println(err)
+	pool.queueAddTx(txid1, Tx1, true, true)
+	pool.queueAddTx(txid2, Tx2, false, true)
+	ok = pool.turnTx(from1, txid1, Tx1)
+	if !ok {
+		fmt.Println("turn error")
 	}
-	err = pool.RemoveTxByKey(txKey)
-	if err != nil {
-		fmt.Println(err)
+	fmt.Println("test for update in queue tx done")
+	txlist = pool.queue.accTxs[from1]
+	assert.True(t, txlist.Len() == 1, "len txs of queue is 1")
+	assert.True(t, len(pool.pending.accTxs) == 1, "len of pending is 0")
+	assert.True(t, pool.allTxsForLook.LocalCount() == 1, "count of local in  allTxsForLook is 1")
+	assert.True(t, pool.allTxsForLook.RemoteCount() == 1, "count of remote in allTxsForLook is 1")
+	assert.True(t, len(pool.sortedByPriced.all.locals) == 1, "count of local in sortedByPriced is 1")
+	assert.True(t, len(pool.sortedByPriced.all.remotes) == 1, "count of remote in sortedByPriced is 1")
+
+	txlist = pool.pending.accTxs[from1]
+	pool.UpdateTx(Tx4, txid1)
+	for _, tx := range txlist.txs.items {
+		txid, _ := tx.TxID()
+		assert.True(t, txid == txid4)
 	}
+	fmt.Println("test for update  in queue tx done")
+	pool.UpdateTx(Tx4, txid2)
+	txlist = pool.queue.accTxs[from1]
+	for _, tx := range txlist.txs.items {
+		txid, _ := tx.TxID()
+		assert.True(t, txid == txid4)
+	}
+	fmt.Println("test for update in queue tx failed")
+	pool.UpdateTx(Tx3, txid2)
+	for _, tx := range txlist.txs.items {
+		txid, _ := tx.TxID()
+		assert.True(t, txid == txid2)
+	}
+
 	if len(pool.queue.accTxs) != 1 {
 		t.Error("except len of queue is 0,got", len(pool.queue.accTxs))
-	}
-	if pool.allTxsForLook.Count() != 0 {
-		t.Error("except len of allTxsForLook is 0,got", pool.allTxsForLook.Count())
 	}
 
 }
@@ -254,10 +316,29 @@ func TestUpdateTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
-	testTxPoolConfig.chain = servant
+	TestTxPoolConfig.chain = servant
 	log := NewMockLogger(ctrl)
-	pool := SetNewTransactionPool(testTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.add(Tx1, true)
-	fmt.Println(pool.allTxsForLook.locals)
+	var key string
+	for k, v := range pool.allTxsForLook.locals {
+		fmt.Println(k, v)
+		key = k
+	}
+	fmt.Println("gasprice lower, no update ")
+	pool.UpdateTx(Tx2, key)
+	for k, _ := range pool.allTxsForLook.locals {
+		if k != key {
+			t.Error("want", key, "got", k)
+		}
+	}
 
+	fmt.Println("gasprice higher ,updated ")
+	key3, _ := Tx3.TxID()
+	pool.UpdateTx(Tx3, key)
+	for k, _ := range pool.allTxsForLook.locals {
+		if k != key3 {
+			t.Error("want", key3, "got", k)
+		}
+	}
 }

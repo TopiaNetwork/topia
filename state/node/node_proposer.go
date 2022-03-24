@@ -3,6 +3,8 @@ package node
 import tplgss "github.com/TopiaNetwork/topia/ledger/state"
 
 type NodeProposerState interface {
+	GetNodeProposerStateRoot() ([]byte, error)
+
 	GetActiveProposerIDs() ([]string, error)
 
 	GetActiveProposersTotalWeight() (uint64, error)
@@ -17,6 +19,11 @@ func NewNodeProposerState(stateStore tplgss.StateStore) NodeProposerState {
 	return &nodeProposerState{
 		StateStore: stateStore,
 	}
+}
+
+func (ns *nodeProposerState) GetNodeProposerStateRoot() ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (ns *nodeProposerState) GetActiveProposerIDs() ([]string, error) {

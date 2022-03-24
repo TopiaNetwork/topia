@@ -1,6 +1,8 @@
 package state
 
 import (
+	"crypto/sha256"
+	"github.com/lazyledger/smt"
 	"math/big"
 
 	"github.com/TopiaNetwork/topia/chain"
@@ -61,6 +63,8 @@ type CompositionStateReadonly interface {
 
 	SetCurrentEpoch(epoch uint64)
 
+	StateRoot() ([]byte, error)
+
 	StateLatestVersion() (uint64, error)
 
 	StateVersions() ([]uint64, error)
@@ -79,6 +83,8 @@ type CompositionState interface {
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
 	staetround.RoundState
+
+	StateRoot() ([]byte, error)
 
 	StateLatestVersion() (uint64, error)
 
@@ -149,6 +155,54 @@ func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) Comp
 
 func (cs *compositionState) PendingStateStore() int32 {
 	return cs.ledger.PendingStateStore()
+}
+
+func (cs *compositionState) StateRoot() ([]byte, error) {
+	accRoot, err := cs.GetAccountRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get account state root: %v", err)
+		return nil, err
+	}
+
+	chainRoot, err := cs.GetChainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get chain state root: %v", err)
+		return nil, err
+	}
+
+	nodeExecutorRoot, err := cs.GetNodeExecutorStateRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node executor state root: %v", err)
+		return nil, err
+	}
+
+	nodeProposerRoot, err := cs.GetNodeProposerStateRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node proposer state root: %v", err)
+		return nil, err
+	}
+
+	nodeValidatorRoot, err := cs.GetNodeValidatorStateRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node validator state root: %v", err)
+		return nil, err
+	}
+
+	roundRoot, err := cs.GetRoundStateRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get round state root: %v", err)
+		return nil, err
+	}
+
+	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+	tree.Update(accRoot, accRoot)
+	tree.Update(chainRoot, chainRoot)
+	tree.Update(nodeExecutorRoot, nodeExecutorRoot)
+	tree.Update(nodeProposerRoot, nodeProposerRoot)
+	tree.Update(nodeValidatorRoot, nodeValidatorRoot)
+	tree.Update(roundRoot, roundRoot)
+
+	return tree.Root(), nil
 }
 
 func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() ([]string, error) {

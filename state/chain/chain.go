@@ -12,6 +12,8 @@ type ChainState interface {
 
 	NetworkType() tpnet.NetworkType
 
+	GetChainRoot() ([]byte, error)
+
 	GetAllConsensusNodes() ([]string, error)
 
 	GetChainTotalWeight() (uint64, error)
@@ -37,6 +39,11 @@ func (cs *chainState) ChainID() chain.ChainID {
 }
 
 func (cs *chainState) NetworkType() tpnet.NetworkType {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cs *chainState) GetChainRoot() ([]byte, error) {
 	//TODO implement me
 	panic("implement me")
 }

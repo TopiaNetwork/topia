@@ -3,6 +3,8 @@ package node
 import tplgss "github.com/TopiaNetwork/topia/ledger/state"
 
 type NodeValidatorState interface {
+	GetNodeValidatorStateRoot() ([]byte, error)
+
 	GetActiveValidatorIDs() ([]string, error)
 
 	GetActiveValidatorsTotalWeight() (uint64, error)
@@ -17,6 +19,11 @@ func NewNodeValidatorState(stateStore tplgss.StateStore) NodeValidatorState {
 	return &nodeValidatorState{
 		StateStore: stateStore,
 	}
+}
+
+func (ns *nodeValidatorState) GetNodeValidatorStateRoot() ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (ns *nodeValidatorState) GetActiveValidatorIDs() ([]string, error) {

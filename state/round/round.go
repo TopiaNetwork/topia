@@ -3,6 +3,8 @@ package round
 import tplgss "github.com/TopiaNetwork/topia/ledger/state"
 
 type RoundState interface {
+	GetRoundStateRoot() ([]byte, error)
+
 	GetCurrentRound() uint64
 
 	SetCurrentRound(round uint64)
@@ -21,6 +23,11 @@ func NewRoundState(stateStore tplgss.StateStore) RoundState {
 	return &roundState{
 		StateStore: stateStore,
 	}
+}
+
+func (rs *roundState) GetRoundStateRoot() ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (rs *roundState) GetCurrentRound() uint64 {

@@ -47,7 +47,7 @@ func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.Priv
 	}
 }
 
-func (e *consensusExecutor) receivePreparePackedMessageExeLoop(ctx context.Context) {
+func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -140,7 +140,7 @@ func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 
 }
 
-func (e *consensusExecutor) prepareTimer(ctx context.Context) {
+func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 	timer := time.NewTimer(e.prepareInterval)
 	defer timer.Stop()
 
@@ -161,8 +161,8 @@ func (e *consensusExecutor) prepareTimer(ctx context.Context) {
 }
 
 func (e *consensusExecutor) start(ctx context.Context) {
-	e.receivePreparePackedMessageExeLoop(ctx)
-	e.prepareTimer(ctx)
+	e.receivePreparePackedMessageExeStart(ctx)
+	e.prepareTimerStart(ctx)
 }
 
 func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []tx.Transaction, txResultList []tx.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {

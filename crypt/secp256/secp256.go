@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	AddressLen      = 20 //20 bytes
 	PublicKeyBytes  = 65 //65 bytes
 	PrivateKeyBytes = 32 //32 bytes
 )
@@ -46,9 +45,9 @@ func (c *CryptServiceSecp256) Verify(pubKey tpcrtypes.PublicKey, msg []byte, sig
 }
 
 func (c *CryptServiceSecp256) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-	addressHash := tpcmm.NewBlake2bHasher(AddressLen).Compute(string(pubKey))
-	if len(addressHash) != AddressLen {
-		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), AddressLen)
+	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_Secp256).Compute(string(pubKey))
+	if len(addressHash) != tpcrtypes.AddressLen_Secp256 {
+		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_Secp256)
 	}
 	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Secp256, addressHash)
 }

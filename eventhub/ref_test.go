@@ -2,7 +2,7 @@ package eventhub
 
 import (
 	"fmt"
-	tptypes "github.com/TopiaNetwork/topia/common/types"
+	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"reflect"
 	"testing"
 )

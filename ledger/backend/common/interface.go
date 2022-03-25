@@ -32,13 +32,10 @@ type Iterator interface {
 	// CONTRACT: start, end readonly []byte
 	Domain() (start []byte, end []byte)
 
-	// Valid returns whether the current iterator is valid. Once invalid, the Iterator remains
-	// invalid forever.
-	Valid() bool
-
-	// Next moves the iterator to the next key in the database, as defined by order of iteration.
-	// If Valid returns false, this method will panic.
-	Next()
+	// Next moves the iterator to the next key in the database, as defined by order of iteration;
+	// returns whether the iterator is valid.
+	// Once this function returns false, the iterator remains invalid forever.
+	Next() bool
 
 	// Key returns the key at the current position. Panics if the iterator is invalid.
 	// CONTRACT: key readonly []byte
@@ -75,4 +72,67 @@ type VersionIterator interface {
 	Next() bool
 	// Value returns the version ID at the current position.
 	Value() uint64
+}
+
+// DBReader is a read-only transaction interface. It is safe for concurrent access.
+// Callers must call Discard when done with the transaction.
+//
+// Keys cannot be nil or empty, while values cannot be nil. Keys and values should be considered
+// read-only, both when returned and when given, and must be copied before they are modified.
+type DBReader interface {
+	// Get fetches the value of the given key, or nil if it does not exist.
+	// CONTRACT: key, value readonly []byte
+	Get([]byte) ([]byte, error)
+
+	// Has checks if a key exists.
+	// CONTRACT: key, value readonly []byte
+	Has(key []byte) (bool, error)
+
+	// Iterator returns an iterator over a domain of keys, in ascending order. The caller must call
+	// Close when done. End is exclusive, and start must be less than end. A nil start iterates
+	// from the first key, and a nil end iterates to the last key (inclusive). Empty keys are not
+	// valid.
+	// CONTRACT: No writes may happen within a domain while an iterator exists over it.
+	// CONTRACT: start, end readonly []byte
+	Iterator(start, end []byte) (Iterator, error)
+
+	// ReverseIterator returns an iterator over a domain of keys, in descending order. The caller
+	// must call Close when done. End is exclusive, and start must be less than end. A nil end
+	// iterates from the last key (inclusive), and a nil start iterates to the first key (inclusive).
+	// Empty keys are not valid.
+	// CONTRACT: No writes may happen within a domain while an iterator exists over it.
+	// CONTRACT: start, end readonly []byte
+	// TODO: replace with an extra argument to Iterator()?
+	ReverseIterator(start, end []byte) (Iterator, error)
+
+	// Discard discards the transaction, invalidating any future operations on it.
+	Discard() error
+}
+
+// DBWriter is a write-only transaction interface.
+// It is safe for concurrent writes, following an optimistic (OCC) strategy, detecting any write
+// conflicts and returning an error on commit, rather than locking the DB.
+// Callers must call Commit or Discard when done with the transaction.
+//
+// This can be used to wrap a write-optimized batch object if provided by the backend implementation.
+type DBWriter interface {
+	// Set sets the value for the given key, replacing it if it already exists.
+	// CONTRACT: key, value readonly []byte
+	Set([]byte, []byte) error
+
+	// Delete deletes the key, or does nothing if the key does not exist.
+	// CONTRACT: key readonly []byte
+	Delete([]byte) error
+
+	// Commit flushes pending writes and discards the transaction.
+	Commit() error
+
+	// Discard discards the transaction, invalidating any future operations on it.
+	Discard() error
+}
+
+// DBReadWriter is a transaction interface that allows both reading and writing.
+type DBReadWriter interface {
+	DBReader
+	DBWriter
 }

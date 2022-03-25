@@ -1,7 +1,7 @@
 package mock
 
 import (
-	tptypes "github.com/TopiaNetwork/topia/common/types"
+	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/consensus"
 	tplog "github.com/TopiaNetwork/topia/log"
 )

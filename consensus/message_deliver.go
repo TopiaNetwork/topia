@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"fmt"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
@@ -47,6 +48,7 @@ type messageDeliverI interface {
 
 type messageDeliver struct {
 	log          tplog.Logger
+	nodeID       string
 	priKey       tpcrtypes.PrivateKey
 	strategy     DeliverStrategy
 	network      network.Network
@@ -56,9 +58,10 @@ type messageDeliver struct {
 	dkgBls       DKGBls
 }
 
-func newMessageDeliver(log tplog.Logger, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network network.Network, marshaler codec.Marshaler, crypt tpcrt.CryptService, ledger ledger.Ledger) *messageDeliver {
+func newMessageDeliver(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network network.Network, marshaler codec.Marshaler, crypt tpcrt.CryptService, ledger ledger.Ledger) *messageDeliver {
 	return &messageDeliver{
 		log:       log,
+		nodeID:    nodeID,
 		priKey:    priKey,
 		strategy:  strategy,
 		network:   network,
@@ -169,18 +172,36 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 		return err
 	}
 
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+
+	ctxProposer := ctx
+	ctxValidator := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetActiveValidatorIDs()
+		peerActiveProposerIDs, err := csStateRN.GetActiveProposerIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
+			return err
+		}
+		peerActiveProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerActiveProposerIDs)
+
+		ctxProposer = context.WithValue(ctxProposer, tpnetcmn.NetContextKey_PeerList, peerActiveProposerIDs)
+
+		peerActiveValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
 		if err != nil {
 			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
 			return err
 		}
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+		ctxValidator = context.WithValue(ctxValidator, tpnetcmn.NetContextKey_PeerList, peerActiveValidatorIDs)
 	}
 
-	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
+	err = md.network.Send(ctxProposer, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send propose message to proposer network failed: err=%v", err)
+		return nil
+	}
+
+	err = md.network.Send(ctxValidator, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send propose message to validator network failed: err=%v", err)
 	}

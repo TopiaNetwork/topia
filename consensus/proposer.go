@@ -148,7 +148,6 @@ func (p *consensusProposer) start(ctx context.Context) {
 					p.log.Errorf("Produce propose block error: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 					continue
 				}
-				proposeBlock.ProposerProof = vrfProof
 				if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
 					p.log.Errorf("Consensus deliver propose message err: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 				}
@@ -162,10 +161,16 @@ func (p *consensusProposer) start(ctx context.Context) {
 	p.receivePreparePackedMessagePropLoop(ctx)
 }
 
-func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, csStateRN state.CompositionStateReadonly) (*tpchaintypes.BlockHead, uint64, error) {
+func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, csStateRN state.CompositionStateReadonly) (*tpchaintypes.BlockHead, uint64, error) {
 	blockHashBytes, err := latestBlock.HashBytes(tpcmm.NewBlake2bHasher(0), p.marshaler)
 	if err != nil {
 		p.log.Errorf("Can't get the hash bytes of block height %d: %v", latestBlock.Head.Height, err)
+		return nil, 0, err
+	}
+
+	csProofBytes, err := p.marshaler.Marshal(roundInfo.Proof)
+	if err != nil {
+		p.log.Errorf("Marshal consensus proof failed: %v", err)
 		return nil, 0, err
 	}
 
@@ -182,6 +187,11 @@ func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, frontPPMProp *
 		Epoch:           roundInfo.Epoch,
 		Round:           roundInfo.CurRoundNum,
 		ParentBlockHash: blockHashBytes,
+		Launcher:        frontPPMProp.Launcher,
+		Proposer:        []byte(p.nodeID),
+		Proof:           csProofBytes,
+		VRFProof:        vrfProof,
+		MaxPri:          maxPri,
 		TxCount:         uint32(len(frontPPMProp.TxHashs)),
 		TxRoot:          frontPPMProp.TxRoot,
 		TxResultRoot:    frontPPMProp.TxResultRoot,
@@ -190,7 +200,7 @@ func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, frontPPMProp *
 	}, frontPPMProp.StateVersion, nil
 }
 
-func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfRoot []byte, maxPri []byte) (*ProposeMessage, error) {
+func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfProof []byte, maxPri []byte) (*ProposeMessage, error) {
 	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 	defer csStateRN.Stop()
 
@@ -209,7 +219,7 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfRoot []
 	}
 	p.syncPPPMPropList.Unlock()
 
-	newBlockHead, stateVersion, err := p.createBlockHead(roundInfo, frontPPMProp, latestBlock, csStateRN)
+	newBlockHead, stateVersion, err := p.createBlockHead(roundInfo, vrfProof, maxPri, frontPPMProp, latestBlock, csStateRN)
 	if err != nil {
 		p.log.Errorf("Create block failed: %v", err)
 		return nil, err
@@ -217,12 +227,6 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfRoot []
 	newBlockHeadBytes, err := p.marshaler.Marshal(newBlockHead)
 	if err != nil {
 		p.log.Errorf("Marshal block head failed: %v", err)
-		return nil, err
-	}
-
-	csProofBytes, err := p.marshaler.Marshal(roundInfo.Proof)
-	if err != nil {
-		p.log.Errorf("Marshal consensus proof failed: %v", err)
 		return nil, err
 	}
 
@@ -243,10 +247,6 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfRoot []
 		Version:       CONSENSUS_VER,
 		Epoch:         roundInfo.Epoch,
 		Round:         roundInfo.CurRoundNum,
-		Proposer:      []byte(p.nodeID),
-		Proof:         csProofBytes,
-		ProposerProof: vrfRoot,
-		MaxPri:        maxPri,
 		Signature:     signData,
 		PubKey:        pubKey,
 		StateVersion:  stateVersion,

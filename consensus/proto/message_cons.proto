@@ -64,16 +64,12 @@ message ProposeMessage {
   uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
   uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
-  bytes  Proposer              = 5  [(gogoproto.jsontag) = "proposer"];
-  bytes  Proof                 = 6  [(gogoproto.jsontag) = "proof"];
-  bytes ProposerProof          = 7  [(gogoproto.jsontag) = "proposerProof"];
-  bytes MaxPri                 = 8  [(gogoproto.jsontag) = "maxPri"];
-  bytes Signature              = 9  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey                 = 10  [(gogoproto.jsontag) = "pubKey"];
-  uint64 StateVersion          = 11 [(gogoproto.jsontag) = "stateVersion"];
-  repeated bytes TxHashs       = 12 [(gogoproto.jsontag) = "txHashs"];
-  repeated bytes TxResultHashs = 13 [(gogoproto.jsontag) = "txResultHashs"];
-  bytes BlockHead              = 14 [(gogoproto.jsontag) = "block"];
+  bytes Signature              = 5  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey                 = 6  [(gogoproto.jsontag) = "pubKey"];
+  uint64 StateVersion          = 7  [(gogoproto.jsontag) = "stateVersion"];
+  repeated bytes TxHashs       = 8  [(gogoproto.jsontag) = "txHashs"];
+  repeated bytes TxResultHashs = 9  [(gogoproto.jsontag) = "txResultHashs"];
+  bytes BlockHead              = 10 [(gogoproto.jsontag) = "blockHead"];
 }
 
 message ExeResultValidateReqMessage {

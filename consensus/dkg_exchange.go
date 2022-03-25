@@ -7,7 +7,9 @@ import (
 	dkg "github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
 	vss "github.com/TopiaNetwork/kyber/v3/share/vss/pedersen"
 
+	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/state"
 )
 
 const (
@@ -26,7 +28,7 @@ type dkgExchange struct {
 	dealMsgCh          chan *DKGDealMessage
 	dealRespMsgCh      chan *DKGDealRespMessage
 	deliver            messageDeliverI
-	csState            consensusStore
+	ledger             ledger.Ledger
 	initDKGPrivKey     string
 	initDKGPartPubKeys []string
 	dkgCrypt           *dkgCrypt
@@ -41,7 +43,7 @@ func newDKGExchange(log tplog.Logger,
 	initDKGPrivKey string,
 	initDKGPartPubKeys []string,
 	deliver messageDeliverI,
-	csState consensusStore) *dkgExchange {
+	ledger ledger.Ledger) *dkgExchange {
 	return &dkgExchange{
 		log:                log,
 		startCh:            make(chan uint64),
@@ -51,7 +53,7 @@ func newDKGExchange(log tplog.Logger,
 		dealMsgCh:          dealMsgCh,
 		dealRespMsgCh:      dealRespMsgCh,
 		deliver:            deliver,
-		csState:            csState,
+		ledger:             ledger,
 		initDKGPrivKey:     initDKGPrivKey,
 		initDKGPartPubKeys: initDKGPartPubKeys,
 	}
@@ -84,6 +86,9 @@ func (ex *dkgExchange) startNewEpochLoop(ctx context.Context) {
 		for {
 			select {
 			case epoch := <-ex.startCh:
+				csStateRN := state.CreateCompositionStateReadonly(ex.log, ex.ledger)
+				defer csStateRN.Stop()
+
 				ex.log.Infof("DKG exchange start %d", ex.index)
 				if ex.dkgCrypt == nil {
 					ex.log.Panicf("dkgCrypt nil at present: epoch=%d")
@@ -104,7 +109,7 @@ func (ex *dkgExchange) startNewEpochLoop(ctx context.Context) {
 					}
 
 					dealMsg := &DKGDealMessage{
-						ChainID:  []byte(ex.csState.ChainID()),
+						ChainID:  []byte(csStateRN.ChainID()),
 						Version:  CONSENSUS_VER,
 						Epoch:    ex.dkgCrypt.epoch,
 						DealData: dealBytes,
@@ -133,6 +138,9 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 		for {
 			select {
 			case dealMsg := <-ex.dealMsgCh:
+				csStateRN := state.CreateCompositionStateReadonly(ex.log, ex.ledger)
+				defer csStateRN.Stop()
+
 				ex.log.Infof("DKG exchange receive deal %d epoch=%d", ex.index, dealMsg.Epoch)
 
 				var deal dkg.Deal
@@ -162,7 +170,7 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 				}
 
 				dealRespMsg := &DKGDealRespMessage{
-					ChainID:  []byte(ex.csState.ChainID()),
+					ChainID:  []byte(csStateRN.ChainID()),
 					Version:  CONSENSUS_VER,
 					Epoch:    ex.dkgCrypt.epoch,
 					RespData: dealRespBytes,

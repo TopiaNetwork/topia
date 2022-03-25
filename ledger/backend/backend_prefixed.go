@@ -2,7 +2,6 @@ package backend
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -32,47 +31,44 @@ func endIter(bz []byte) (ret []byte) {
 	return nil
 }
 
+// IteratePrefix is a convenience function for iterating over a key domain
+// restricted by prefix.
+func IteratePrefix(dbr tplgcmm.DBReader, prefix []byte) (tplgcmm.Iterator, error) {
+	var start, end []byte
+	if len(prefix) != 0 {
+		start = prefix
+		end = endIter(prefix)
+	}
+	itr, err := dbr.Iterator(start, end)
+	if err != nil {
+		return nil, err
+	}
+	return itr, nil
+}
+
 type prefixDBIterator struct {
 	prefix []byte
 	start  []byte
 	end    []byte
 	source tplgcmm.Iterator
-	valid  bool
 	err    error
 }
 
-func newPrefixIterator(prefix, start, end []byte, source tplgcmm.Iterator) (*prefixDBIterator, error) {
-	pitrInvalid := &prefixDBIterator{
-		prefix: prefix,
-		start:  start,
-		end:    end,
-		source: source,
-		valid:  false,
-	}
-
-	if source.Valid() && bytes.Equal(source.Key(), prefix) {
-		source.Next()
-	}
-
-	if !source.Valid() || !bytes.HasPrefix(source.Key(), prefix) {
-		return pitrInvalid, nil
-	}
-
+func newPrefixIterator(prefix, start, end []byte, source tplgcmm.Iterator) *prefixDBIterator {
 	return &prefixDBIterator{
 		prefix: prefix,
 		start:  start,
 		end:    end,
 		source: source,
-		valid:  true,
-	}, nil
+	}
 }
 
-func (itr *prefixDBIterator) Domain() (start []byte, end []byte) {
+func (itr *prefixDBIterator) Domain() (start, end []byte) {
 	return itr.start, itr.end
 }
 
-func (itr *prefixDBIterator) Valid() bool {
-	if !itr.valid || itr.err != nil || !itr.source.Valid() {
+func (itr *prefixDBIterator) valid() bool {
+	if itr.err != nil {
 		return false
 	}
 
@@ -86,17 +82,20 @@ func (itr *prefixDBIterator) Valid() bool {
 	return true
 }
 
-// Next implements Iterator.
-func (itr *prefixDBIterator) Next() {
-	itr.assertIsValid()
-	itr.source.Next()
-
-	if !itr.source.Valid() || !bytes.HasPrefix(itr.source.Key(), itr.prefix) {
-		itr.valid = false
-
-	} else if bytes.Equal(itr.source.Key(), itr.prefix) {
-		itr.Next()
+func (itr *prefixDBIterator) Next() bool {
+	if !itr.source.Next() {
+		return false
 	}
+	key := itr.source.Key()
+	if !bytes.HasPrefix(key, itr.prefix) {
+		return false
+	}
+	// Empty keys are not allowed, so if a key exists in the database that exactly matches the
+	// prefix we need to skip it.
+	if bytes.Equal(key, itr.prefix) {
+		return itr.Next()
+	}
+	return true
 }
 
 func (itr *prefixDBIterator) Key() []byte {
@@ -105,6 +104,7 @@ func (itr *prefixDBIterator) Key() []byte {
 	return key[len(itr.prefix):] // we have checked the key in Valid()
 }
 
+// Value implements Iterator.
 func (itr *prefixDBIterator) Value() []byte {
 	itr.assertIsValid()
 	return itr.source.Value()
@@ -122,125 +122,141 @@ func (itr *prefixDBIterator) Close() error {
 }
 
 func (itr *prefixDBIterator) assertIsValid() {
-	if !itr.Valid() {
+	if !itr.valid() {
 		panic("iterator is invalid")
 	}
 }
 
-type BackendPrefixed struct {
-	prefix  []byte
-	backend Backend
+type BackendRPrefixed struct {
+	prefix   []byte
+	backendR tplgcmm.DBReader
 }
 
-func NewBackendPrefixed(prefix []byte, backend Backend) Backend {
-	return &BackendPrefixed{
-		prefix:  prefix,
-		backend: backend,
+type BackendWPrefixed struct {
+	prefix   []byte
+	backendW tplgcmm.DBWriter
+}
+
+type BackendRWPrefixed struct {
+	prefix    []byte
+	backendRW tplgcmm.DBReadWriter
+}
+
+func NewBackendRPrefixed(prefix []byte, rw tplgcmm.DBReader) tplgcmm.DBReader {
+	return &BackendRPrefixed{
+		prefix:   prefix,
+		backendR: rw,
 	}
 }
 
-func (b *BackendPrefixed) Get(bytes []byte, version *uint64) ([]byte, error) {
-	return b.Get(prefixed(b.prefix, bytes), version)
+func NewBackendWPrefixed(prefix []byte, rw tplgcmm.DBWriter) tplgcmm.DBWriter {
+	return &BackendWPrefixed{
+		prefix:   prefix,
+		backendW: rw,
+	}
 }
 
-func (b *BackendPrefixed) Has(key []byte, version *uint64) (bool, error) {
-	return b.Has(prefixed(b.prefix, key), version)
+func NewBackendRWPrefixed(prefix []byte, rw tplgcmm.DBReadWriter) tplgcmm.DBReadWriter {
+	return &BackendRWPrefixed{
+		prefix:    prefix,
+		backendRW: rw,
+	}
 }
 
-func (b *BackendPrefixed) Set(bytes []byte, bytes2 []byte) error {
-	return b.Set(prefixed(b.prefix, bytes), bytes2)
+func (rp *BackendRPrefixed) Get(key []byte) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, tplgcmm.ErrKeyEmpty
+	}
+	return rp.backendR.Get(prefixed(rp.prefix, key))
 }
 
-func (b *BackendPrefixed) SetSync(bytes []byte, bytes2 []byte) error {
-	return b.SetSync(prefixed(b.prefix, bytes), bytes2)
+func (rp *BackendRPrefixed) Has(key []byte) (bool, error) {
+	if len(key) == 0 {
+		return false, tplgcmm.ErrKeyEmpty
+	}
+	return rp.backendR.Has(prefixed(rp.prefix, key))
 }
 
-func (b *BackendPrefixed) Delete(bytes []byte) error {
-	return b.Delete(prefixed(b.prefix, bytes))
-}
-
-func (b *BackendPrefixed) DeleteSync(bytes []byte) error {
-	return b.DeleteSync(prefixed(b.prefix, bytes))
-}
-
-func (b *BackendPrefixed) Iterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
-	if start == nil || len(start) == 0 || (end != nil && len(end) == 0) {
-		return nil, errors.New("invalid input")
+func (rp *BackendRPrefixed) Iterator(start, end []byte) (tplgcmm.Iterator, error) {
+	if (start != nil && len(start) == 0) || (end != nil && len(end) == 0) {
+		return nil, tplgcmm.ErrKeyEmpty
 	}
 
-	var endN []byte
+	var pend []byte
 	if end == nil {
-		endN = endIter(b.prefix)
+		pend = endIter(rp.prefix)
 	} else {
-		endN = prefixed(b.prefix, end)
+		pend = prefixed(rp.prefix, end)
 	}
-
-	iter, err := b.backend.Iterator(prefixed(b.prefix, start), endN, version)
+	itr, err := rp.backendR.Iterator(prefixed(rp.prefix, start), pend)
 	if err != nil {
 		return nil, err
 	}
-
-	return newPrefixIterator(b.prefix, start, end, iter)
+	return newPrefixIterator(rp.prefix, start, end, itr), nil
 }
 
-func (b *BackendPrefixed) ReverseIterator(start, end []byte, version *uint64) (tplgcmm.Iterator, error) {
-	if start == nil || len(start) == 0 || (end != nil && len(end) == 0) {
-		return nil, errors.New("invalid input")
+func (rp *BackendRPrefixed) ReverseIterator(start, end []byte) (tplgcmm.Iterator, error) {
+	if (start != nil && len(start) == 0) || (end != nil && len(end) == 0) {
+		return nil, tplgcmm.ErrKeyEmpty
 	}
 
-	var endN []byte
+	var pend []byte
 	if end == nil {
-		endN = endIter(b.prefix)
+		pend = endIter(rp.prefix)
 	} else {
-		endN = prefixed(b.prefix, end)
+		pend = prefixed(rp.prefix, end)
 	}
-
-	iter, err := b.backend.ReverseIterator(prefixed(b.prefix, start), endN, version)
+	ritr, err := rp.backendR.ReverseIterator(prefixed(rp.prefix, start), pend)
 	if err != nil {
 		return nil, err
 	}
-
-	return newPrefixIterator(b.prefix, start, end, iter)
+	return newPrefixIterator(rp.prefix, start, end, ritr), nil
 }
 
-func (b *BackendPrefixed) Close() error {
-	return b.backend.Close()
+func (rp *BackendRPrefixed) Discard() error { return rp.backendR.Discard() }
+
+func (wp *BackendWPrefixed) Set(key []byte, value []byte) error {
+	if len(key) == 0 {
+		return tplgcmm.ErrKeyEmpty
+	}
+	return wp.backendW.Set(prefixed(wp.prefix, key), value)
 }
 
-func (b *BackendPrefixed) NewBatch() tplgcmm.Batch {
-	return b.backend.NewBatch()
+func (wp *BackendWPrefixed) Delete(key []byte) error {
+	if len(key) == 0 {
+		return tplgcmm.ErrKeyEmpty
+	}
+	return wp.backendW.Delete(prefixed(wp.prefix, key))
 }
 
-func (b *BackendPrefixed) Print() error {
-	return b.backend.Print()
+func (wp *BackendWPrefixed) Commit() error { return wp.backendW.Commit() }
+
+func (wp *BackendWPrefixed) Discard() error { return wp.backendW.Discard() }
+
+func (rwp *BackendRWPrefixed) Get(bytes []byte) ([]byte, error) {
+	return NewBackendRPrefixed(rwp.prefix, rwp.backendRW).Get(bytes)
 }
 
-func (b *BackendPrefixed) Stats() map[string]string {
-	return b.backend.Stats()
+func (rwp *BackendRWPrefixed) Has(key []byte) (bool, error) {
+	return NewBackendRPrefixed(rwp.prefix, rwp.backendRW).Has(key)
 }
 
-func (b *BackendPrefixed) Versions() (tplgcmm.VersionSet, error) {
-	return b.backend.Versions()
+func (rwp *BackendRWPrefixed) Set(bytes []byte, bytes2 []byte) error {
+	return NewBackendWPrefixed(rwp.prefix, rwp.backendRW).Set(bytes, bytes2)
 }
 
-func (b *BackendPrefixed) SaveNextVersion() (uint64, error) {
-	return b.backend.SaveNextVersion()
+func (rwp *BackendRWPrefixed) Delete(bytes []byte) error {
+	return NewBackendWPrefixed(rwp.prefix, rwp.backendRW).Delete(bytes)
 }
 
-func (b *BackendPrefixed) SaveVersion(version uint64) error {
-	return b.backend.SaveVersion(version)
+func (rwp *BackendRWPrefixed) Iterator(start, end []byte) (tplgcmm.Iterator, error) {
+	return NewBackendRPrefixed(rwp.prefix, rwp.backendRW).Iterator(start, end)
 }
 
-func (b *BackendPrefixed) DeleteVersion(uint64) error {
-	//TODO implement me
-	panic("implement me")
+func (rwp *BackendRWPrefixed) ReverseIterator(start, end []byte) (tplgcmm.Iterator, error) {
+	return NewBackendRPrefixed(rwp.prefix, rwp.backendRW).ReverseIterator(start, end)
 }
 
-func (b *BackendPrefixed) LastVersion() uint64 {
-	//TODO implement me
-	panic("implement me")
-}
+func (wp *BackendRWPrefixed) Commit() error { return wp.backendRW.Commit() }
 
-func (b *BackendPrefixed) Commit() error {
-	return b.backend.Commit()
-}
+func (wp *BackendRWPrefixed) Discard() error { return wp.backendRW.Discard() }

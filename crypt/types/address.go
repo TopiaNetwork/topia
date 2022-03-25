@@ -3,17 +3,17 @@ package types
 import (
 	"bytes"
 	"encoding/base32"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
-type NetworkType = byte
-
 const (
-	NetworkType_Unknown NetworkType = iota
-	NetworkType_Mainnet
-	NetworkType_Testnet
+	AddressLen_ETH      = 20 //20 bytes
+	AddressLen_Secp256  = 20 //20 bytes
+	AddressLen_BLS12381 = 48 //48 bytes
 )
 
 const (
@@ -23,13 +23,11 @@ const (
 
 const checksumHashLength = 4
 
-const encodeStd = "topianetworkqscvghtyeoplkmwcxzah"
+const encodeStd = "topianewrkbcdfghjlmqsuvxyz123456"
 
 var addressEncoding = base32.NewEncoding(encodeStd)
 
 var UndefAddress = Address("<empty>")
-
-var CurrentNetworkType = NetworkType_Testnet
 
 type Address string
 
@@ -42,15 +40,15 @@ func validateChecksum(data, expect []byte) bool {
 	return bytes.Equal(digest, expect)
 }
 
-func encode(network NetworkType, cryptType CryptType, payload []byte) (Address, error) {
+func encode(network tpnet.NetworkType, cryptType CryptType, payload []byte) (Address, error) {
 	if len(payload) == 0 {
 		return UndefAddress, errors.New("Invalid payload: len 0")
 	}
 	var ntwPrefix string
 	switch network {
-	case NetworkType_Mainnet:
+	case tpnet.NetworkType_Mainnet:
 		ntwPrefix = MainnetPrefix
-	case NetworkType_Testnet:
+	case tpnet.NetworkType_Testnet:
 		ntwPrefix = TestnetPrefix
 	default:
 		return UndefAddress, fmt.Errorf("Unknown network type %d", network)
@@ -68,16 +66,16 @@ func encode(network NetworkType, cryptType CryptType, payload []byte) (Address, 
 	return Address(strAddr), nil
 }
 
-func decode(a string) (NetworkType, CryptType, []byte, error) {
+func decode(a string) (tpnet.NetworkType, CryptType, []byte, error) {
 	if len(a) == 0 {
-		return NetworkType_Unknown, CryptType_Unknown, nil, nil
+		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, nil
 	}
 	if a == string(UndefAddress) {
-		return NetworkType_Unknown, CryptType_Unknown, nil, nil
+		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, nil
 	}
 
 	if string(a[0]) != MainnetPrefix && string(a[0]) != TestnetPrefix {
-		return NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown network type %d", a[0])
+		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown network type %d", a[0])
 	}
 
 	var cryptType CryptType
@@ -87,38 +85,42 @@ func decode(a string) (NetworkType, CryptType, []byte, error) {
 	case '2':
 		cryptType = CryptType_Secp256
 	default:
-		return NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown crypt type %d", cryptType)
+		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown crypt type %d", cryptType)
 	}
 
 	raw := a[2:]
 
 	payloadcksm, err := addressEncoding.WithPadding(-1).DecodeString(raw)
 	if err != nil {
-		return NetworkType_Unknown, CryptType_Unknown, nil, err
+		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, err
 	}
 
 	if len(payloadcksm)-checksumHashLength < 0 {
-		return NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid checksum %d", len(payloadcksm))
+		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid checksum %d", len(payloadcksm))
 	}
 
 	payload := payloadcksm[:len(payloadcksm)-checksumHashLength]
 	cksm := payloadcksm[len(payloadcksm)-checksumHashLength:]
 
 	if cryptType == CryptType_Secp256 {
-		if len(payload) != 20 {
-			return NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d", len(payload))
+		if len(payload) != AddressLen_Secp256 {
+			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d", len(payload))
+		}
+	} else if cryptType == CryptType_BLS12381 {
+		if len(payload) != AddressLen_BLS12381 {
+			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d", len(payload))
 		}
 	}
 
 	if !validateChecksum(append([]byte{byte(cryptType)}, payload...), cksm) {
-		return NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid checksum")
+		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid checksum")
 	}
 
-	return a[0], cryptType, payload, nil
+	return tpnet.NetworkType(0).Value(a[0]), cryptType, payload, nil
 }
 
 func NewAddress(cryptType CryptType, payload []byte) (Address, error) {
-	return encode(CurrentNetworkType, cryptType, payload)
+	return encode(tpnet.CurrentNetworkType, cryptType, payload)
 }
 
 func NewFromString(addr string) Address {
@@ -129,14 +131,14 @@ func NewFromBytes(addr []byte) Address {
 	return Address(addr)
 }
 
-func (a Address) NetworkType() (NetworkType, error) {
+func (a Address) NetworkType() (tpnet.NetworkType, error) {
 	if len(a) == 0 {
-		return NetworkType_Unknown, errors.New("Invalid address: len 0")
+		return tpnet.NetworkType_Unknown, errors.New("Invalid address: len 0")
 	}
 
 	netType, _, _, err := decode(string(a))
 	if err != nil {
-		netType = NetworkType_Unknown
+		netType = tpnet.NetworkType_Unknown
 	}
 
 	return netType, err
@@ -153,6 +155,54 @@ func (a Address) CryptType() (CryptType, error) {
 	}
 
 	return cryptType, err
+}
+
+func (a Address) HexString() (string, error) {
+	if !a.IsHexs() {
+		return fmt.Sprintf("%d%d%s", a[0], a[1], hex.EncodeToString([]byte(a[2:]))), nil
+	}
+
+	return string(a), nil
+}
+
+func (a Address) IsValid(netType tpnet.NetworkType, cryptType CryptType) (bool, error) {
+	nType, cType, _, err := decode(string(a))
+	if err != nil {
+		return false, err
+	}
+
+	if nType != netType {
+		return false, fmt.Errorf("Invalid net type: expected %s, actual %s", netType.String(), nType.String())
+	}
+	if cType == cryptType {
+		return false, fmt.Errorf("Invalid crypt type: expected %d, actual %s", cryptType.String(), cType.String())
+	}
+
+	return true, nil
+}
+
+func (a Address) IsHexs() bool {
+	t := string(a)
+	if tpcmm.Has0xPrefix(string(a)) {
+		t = string(a[2:])
+	}
+
+	hexSize := len(t)
+
+	return (hexSize == 2*AddressLen_ETH || hexSize == 2*AddressLen_Secp256 || hexSize == AddressLen_BLS12381) && tpcmm.IsHex(t)
+}
+
+func (a Address) IsEth() bool {
+	t := string(a)
+	if tpcmm.Has0xPrefix(string(a)) {
+		t = string(a[2:])
+	}
+
+	if (len(t) == 2*AddressLen_ETH && tpcmm.IsHex(t)) || (len(t) == AddressLen_ETH) {
+		return true
+	}
+
+	return false
 }
 
 func (a Address) Payload() ([]byte, error) {

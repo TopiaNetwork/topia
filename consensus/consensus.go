@@ -2,14 +2,16 @@ package consensus
 
 import (
 	"context"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/execution"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
+	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
-	tptypes "github.com/TopiaNetwork/topia/common/types"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
@@ -48,6 +50,7 @@ type consensus struct {
 	handler      ConsensusHandler
 	marshaler    codec.Marshaler
 	network      tpnet.Network
+	executor     *consensusExecutor
 	proposer     *consensusProposer
 	voter        *consensusVoter
 	dkgEx        *dkgExchange
@@ -60,11 +63,14 @@ func NewConsensus(nodeID string,
 	log tplog.Logger,
 	codecType codec.CodecType,
 	network tpnet.Network,
+	txPool txpool.TransactionPool,
 	ledger ledger.Ledger,
 	config *tpconfig.ConsensusConfiguration) Consensus {
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
 	roundCh := make(chan *RoundInfo)
+	preprePackedMsgExeChan := make(chan *PreparePackedMessageExe)
+	preprePackedMsgPropChan := make(chan *PreparePackedMessageProp)
 	proposeMsgChan := make(chan *ProposeMessage)
 	partPubKey := make(chan *DKGPartPubKeyMessage, PartPubKeyChannel_Size)
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
@@ -74,12 +80,15 @@ func NewConsensus(nodeID string,
 
 	deliver := newMessageDeliver(log, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
 
-	proposer := newConsensusProposer(nodeID, priKey, log, roundCh, cryptS, deliver, ledger, marshaler)
+	exeScheduler := execution.NewExecutionScheduler(log)
+
+	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, config.ExecutionPrepareInterval)
+	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, cryptS, deliver, ledger, marshaler)
 	voter := newConsensusVoter(log, proposeMsgChan, deliver)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
 
 	epochService := newEpochService(log, roundCh, config.RoundDuration, config.EpochInterval, ledger, dkgEx)
-	csHandler := NewConsensusHandler(log, roundCh, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver)
+	csHandler := NewConsensusHandler(log, roundCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver)
 
 	dkgEx.addDKGBLSUpdater(deliver)
 	dkgEx.addDKGBLSUpdater(csHandler)
@@ -90,6 +99,7 @@ func NewConsensus(nodeID string,
 		handler:      csHandler,
 		marshaler:    codec.CreateMarshaler(codecType),
 		network:      network,
+		executor:     executor,
 		proposer:     proposer,
 		voter:        voter,
 		dkgEx:        dkgEx,
@@ -103,6 +113,14 @@ func (cons *consensus) UpdateHandler(handler ConsensusHandler) {
 
 func (cons *consensus) VerifyBlock(block *tptypes.Block) error {
 	return cons.handler.VerifyBlock(block)
+}
+
+func (cons *consensus) ProcessPreparePackedExe(msg *PreparePackedMessageExe) error {
+	return cons.handler.ProcessPreparePackedMsgExe(msg)
+}
+
+func (cons *consensus) ProcessPreparePackedProp(msg *PreparePackedMessageProp) error {
+	return cons.handler.ProcessPreparePackedMsgProp(msg)
 }
 
 func (cons *consensus) ProcessPropose(msg *ProposeMessage) error {
@@ -137,6 +155,7 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
 	ctx := context.Background()
 
 	cons.epochService.start(ctx)
+	cons.executor.start(ctx)
 	cons.proposer.start(ctx)
 	cons.voter.start(ctx)
 	cons.dkgEx.startLoop(ctx)
@@ -153,6 +172,22 @@ func (cons *consensus) dispatch(context actor.Context, data []byte) {
 	}
 
 	switch consMsg.MsgType {
+	case ConsensusMessage_PrepareExe:
+		var msg PreparePackedMessageExe
+		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+		if err != nil {
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+			return
+		}
+		cons.ProcessPreparePackedExe(&msg)
+	case ConsensusMessage_PrepareProp:
+		var msg PreparePackedMessageProp
+		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+		if err != nil {
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+			return
+		}
+		cons.ProcessPreparePackedProp(&msg)
 	case ConsensusMessage_Propose:
 		var msg ProposeMessage
 		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)

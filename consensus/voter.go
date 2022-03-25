@@ -47,7 +47,7 @@ func (v *consensusVoter) produceVoteMsg(msg *ProposeMessage) (*VoteMessage, erro
 		Version: CONSENSUS_VER,
 		Epoch:   msg.Epoch,
 		Round:   msg.Round,
-		Proof:   msg.Proof,
-		Block:   msg.BlockHead,
+		//Proof:   msg.Proof,
+		Block: msg.BlockHead,
 	}, nil
 }

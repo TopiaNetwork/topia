@@ -90,7 +90,7 @@ func (p *consensusProposer) canProposeBlock(roundInfo *RoundInfo) (bool, []byte,
 	return false, nil, nil, fmt.Errorf("Can't propose block at the round: winCount=%d", winCount)
 }
 
-func (p *consensusProposer) receivePreparePackedMessagePropLoop(ctx context.Context) {
+func (p *consensusProposer) receivePreparePackedMessageProStart(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -126,7 +126,7 @@ func (p *consensusProposer) receivePreparePackedMessagePropLoop(ctx context.Cont
 	}()
 }
 
-func (p *consensusProposer) start(ctx context.Context) {
+func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -157,8 +157,12 @@ func (p *consensusProposer) start(ctx context.Context) {
 			}
 		}
 	}()
+}
 
-	p.receivePreparePackedMessagePropLoop(ctx)
+func (p *consensusProposer) start(ctx context.Context) {
+	p.proposeBlockStart(ctx)
+
+	p.receivePreparePackedMessageProStart(ctx)
 }
 
 func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, csStateRN state.CompositionStateReadonly) (*tpchaintypes.BlockHead, uint64, error) {

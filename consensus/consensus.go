@@ -83,7 +83,7 @@ func NewConsensus(nodeID string,
 	exeScheduler := execution.NewExecutionScheduler(log)
 
 	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, config.ExecutionPrepareInterval)
-	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, cryptS, deliver, ledger, marshaler)
+	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, proposeMsgChan, cryptS, deliver, ledger, marshaler)
 	voter := newConsensusVoter(log, proposeMsgChan, deliver)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
 

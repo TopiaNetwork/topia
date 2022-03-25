@@ -183,8 +183,8 @@ func (pool *transactionPool) Pending() map[account.Address][]*transaction.Transa
 }
 
 func (pool *transactionPool) LocalAccounts() []account.Address {
-	pool.pending.Mu.Lock()
-	defer pool.pending.Mu.Unlock()
+	pool.queue.Mu.Lock()
+	defer pool.queue.Mu.Unlock()
 	return pool.locals.flatten()
 }
 
@@ -207,8 +207,8 @@ func (pool *transactionPool) addTxs(txs []*transaction.Transaction, local, sync 
 	}
 	// Process all the new transaction and merge any errors into the original slice
 	pool.pending.Mu.Lock()
+	newErrs, _ := pool.addTxsLocked(news, local)
 	//newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
-	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
 	pool.pending.Mu.Unlock()
 	var nilSlot = 0
 	for _, err := range newErrs {
@@ -219,11 +219,11 @@ func (pool *transactionPool) addTxs(txs []*transaction.Transaction, local, sync 
 		nilSlot++
 	}
 	// Reorg the pool internals if needed and return
-	done := pool.requestReplaceExecutables(dirtyAddrs)
-	if sync {
-		<-done
-
-	}
+	//done := pool.requestReplaceExecutables(dirtyAddrs)
+	//if sync {
+	//	<-done
+	//}
+	//
 	return errs
 }
 
@@ -250,9 +250,11 @@ func (pool *transactionPool) UpdateTx(tx *transaction.Transaction, txKey string)
 		return err
 	}
 	tx2 := pool.allTxsForLook.Get(txKey)
+
 	if account.Address(tx2.FromAddr) == account.Address(tx.FromAddr) &&
 		account.Address(tx2.TargetAddr) == account.Address(tx.TargetAddr) &&
 		tx2.GasPrice <= tx.GasPrice {
+
 		pool.RemoveTxByKey(txKey)
 		pool.add(tx, false)
 	}

@@ -34,7 +34,6 @@ func (pool *transactionPool) chanRemoveTxHashs() {
 	}
 }
 func (pool *transactionPool) RemoveTxHashs(txHashs []string) []error {
-	defer pool.wg.Done()
 	errs := make([]error, 0)
 	for _, txHash := range txHashs {
 		if err := pool.RemoveTxByKey(txHash); err != nil {

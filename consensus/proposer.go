@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"bytes"
 	"container/list"
 	"context"
 	"encoding/json"
@@ -28,21 +29,25 @@ type consensusProposer struct {
 	lastRoundNum            uint64
 	roundCh                 chan *RoundInfo
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
+	proposeMsgChan          chan *ProposeMessage
 	deliver                 messageDeliverI
 	marshaler               codec.Marshaler
 	ledger                  ledger.Ledger
 	cryptService            tpcrt.CryptService
-	syncPPPMPropList        sync.RWMutex
+	syncPPMPropList         sync.RWMutex
+	syncPropMsgCached       sync.RWMutex
 	ppmPropList             *list.List
+	propMsgCached           *ProposeMessage
 }
 
-func newConsensusProposer(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, roundCh chan *RoundInfo, preprePackedMsgPropChan chan *PreparePackedMessageProp, crypt tpcrt.CryptService, deliver messageDeliverI, ledger ledger.Ledger, marshaler codec.Marshaler) *consensusProposer {
+func newConsensusProposer(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, roundCh chan *RoundInfo, preprePackedMsgPropChan chan *PreparePackedMessageProp, proposeMsgChan chan *ProposeMessage, crypt tpcrt.CryptService, deliver messageDeliverI, ledger ledger.Ledger, marshaler codec.Marshaler) *consensusProposer {
 	return &consensusProposer{
 		log:                     log,
 		nodeID:                  nodeID,
 		priKey:                  priKey,
 		roundCh:                 roundCh,
 		preprePackedMsgPropChan: preprePackedMsgPropChan,
+		proposeMsgChan:          proposeMsgChan,
 		deliver:                 deliver,
 		marshaler:               marshaler,
 		ledger:                  ledger,
@@ -84,13 +89,30 @@ func (p *consensusProposer) canProposeBlock(roundInfo *RoundInfo) (bool, []byte,
 	if winCount >= 1 {
 		maxPri := proposerSel.MaxPriority(vrfProof, winCount)
 
+		p.syncPropMsgCached.RLock()
+		if p.propMsgCached != nil {
+			bhCached, err := p.propMsgCached.BlockHeadInfo()
+			if err != nil {
+				p.log.Errorf("Can't get cached propose msg bock head info: %v", err)
+			}
+			cachedMaxPri := bhCached.MaxPri
+
+			if new(big.Int).SetBytes(maxPri).Cmp(new(big.Int).SetBytes(cachedMaxPri)) <= 0 {
+				err = fmt.Errorf("Cached propose msg bock max pri bigger")
+				p.log.Errorf("%v", err)
+				return false, nil, nil, err
+			}
+
+		}
+		p.syncPropMsgCached.Unlock()
+
 		return true, vrfProof, maxPri, nil
 	}
 
 	return false, nil, nil, fmt.Errorf("Can't propose block at the round: winCount=%d", winCount)
 }
 
-func (p *consensusProposer) receivePreparePackedMessageProStart(ctx context.Context) {
+func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -98,8 +120,8 @@ func (p *consensusProposer) receivePreparePackedMessageProStart(ctx context.Cont
 				csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 				defer csStateRN.Stop()
 
-				p.syncPPPMPropList.Lock()
-				defer p.syncPPPMPropList.Unlock()
+				p.syncPPMPropList.Lock()
+				defer p.syncPPMPropList.Unlock()
 
 				latestBlock, err := csStateRN.GetLatestBlock()
 				if err != nil {
@@ -118,6 +140,59 @@ func (p *consensusProposer) receivePreparePackedMessageProStart(ctx context.Cont
 				}
 
 				p.ppmPropList.PushBack(ppmProp)
+			case <-ctx.Done():
+				p.log.Info("Consensus proposer receiveing prepare packed msg prop exit")
+				return
+			}
+		}
+	}()
+}
+
+func (p *consensusProposer) receiveProposeMessageStart(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case proposeMsg := <-p.proposeMsgChan:
+				csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
+				defer csStateRN.Stop()
+
+				p.syncPropMsgCached.Lock()
+				defer p.syncPropMsgCached.Unlock()
+
+				bh, err := proposeMsg.BlockHeadInfo()
+				if err != nil {
+					p.log.Errorf("Can't get propose block head info: %v", err)
+					continue
+				}
+
+				if p.propMsgCached != nil {
+					if bytes.Compare(proposeMsg.ChainID, p.propMsgCached.ChainID) != 0 ||
+						proposeMsg.Version != p.propMsgCached.Version ||
+						proposeMsg.Epoch != p.propMsgCached.Epoch ||
+						proposeMsg.Round != p.propMsgCached.Round {
+						p.log.Errorf("Difference propose basic info between received and cached, received: chainID=%d, version, epoch=%d, round=%d; cached: chainID=%d, version, epoch=%d, round=%d",
+							string(proposeMsg.ChainID), proposeMsg.Version, proposeMsg.Epoch, proposeMsg.Round,
+							string(p.propMsgCached.ChainID), p.propMsgCached.Version, p.propMsgCached.Epoch, p.propMsgCached.Round)
+						continue
+					}
+
+					propMsgMaxPri := new(big.Int).SetBytes(bh.MaxPri)
+
+					bhCached, err := p.propMsgCached.BlockHeadInfo()
+					if err != nil {
+						p.log.Errorf("Can't get cached propose block head info: %v", err)
+						continue
+					}
+
+					propMsgFMaxPri := new(big.Int).SetBytes(bhCached.MaxPri)
+
+					if propMsgMaxPri.Cmp(propMsgFMaxPri) > 0 {
+						p.propMsgCached = proposeMsg
+					}
+				} else {
+					p.propMsgCached = proposeMsg
+				}
+
 			case <-ctx.Done():
 				p.log.Info("Consensus proposer receiveing prepare packed msg prop exit")
 				return
@@ -162,7 +237,9 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 func (p *consensusProposer) start(ctx context.Context) {
 	p.proposeBlockStart(ctx)
 
-	p.receivePreparePackedMessageProStart(ctx)
+	p.receiveProposeMessageStart(ctx)
+
+	p.receivePreparePackedMessagePropStart(ctx)
 }
 
 func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, csStateRN state.CompositionStateReadonly) (*tpchaintypes.BlockHead, uint64, error) {
@@ -214,14 +291,14 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfProof [
 		return nil, err
 	}
 
-	p.syncPPPMPropList.Lock()
+	p.syncPPMPropList.Lock()
 	frontPPMProp := p.ppmPropList.Front().Value.(*PreparePackedMessageProp)
 	if frontPPMProp.StateVersion != latestBlock.Head.Height+1 {
 		err = fmt.Errorf("Invalid prepare packed message prop: expected front state version %d, actual %d", latestBlock.Head.Height+1, frontPPMProp.StateVersion)
-		defer p.syncPPPMPropList.Unlock()
+		defer p.syncPPMPropList.Unlock()
 		return nil, err
 	}
-	p.syncPPPMPropList.Unlock()
+	p.syncPPMPropList.Unlock()
 
 	newBlockHead, stateVersion, err := p.createBlockHead(roundInfo, vrfProof, maxPri, frontPPMProp, latestBlock, csStateRN)
 	if err != nil {
@@ -234,25 +311,11 @@ func (p *consensusProposer) produceProposeBlock(roundInfo *RoundInfo, vrfProof [
 		return nil, err
 	}
 
-	signData, err := p.cryptService.Sign(p.priKey, newBlockHeadBytes)
-	if err != nil {
-		p.log.Errorf("Sign err for propose msg: %v", err)
-		return nil, err
-	}
-
-	pubKey, err := p.cryptService.ConvertToPublic(p.priKey)
-	if err != nil {
-		p.log.Errorf("Can't get public key from private key: %v", err)
-		return nil, err
-	}
-
 	return &ProposeMessage{
 		ChainID:       []byte(csStateRN.ChainID()),
 		Version:       CONSENSUS_VER,
 		Epoch:         roundInfo.Epoch,
 		Round:         roundInfo.CurRoundNum,
-		Signature:     signData,
-		PubKey:        pubKey,
 		StateVersion:  stateVersion,
 		TxHashs:       frontPPMProp.TxHashs,
 		TxResultHashs: frontPPMProp.TxResultHashs,

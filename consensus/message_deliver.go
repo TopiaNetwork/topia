@@ -195,12 +195,32 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 		ctxValidator = context.WithValue(ctxValidator, tpnetcmn.NetContextKey_PeerList, peerActiveValidatorIDs)
 	}
 
+	sigData, err := md.cryptService.Sign(md.priKey, msg.BlockHead)
+	if err != nil {
+		md.log.Errorf("Sign err for propose msg: %v", err)
+		return err
+	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
 	err = md.network.Send(ctxProposer, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send propose message to proposer network failed: err=%v", err)
 		return nil
 	}
 
+	sigData, pubKey, err = md.dkgBls.Sign(msg.BlockHead)
+	if err != nil {
+		md.log.Errorf("DKG sign propose msg err: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
 	err = md.network.Send(ctxValidator, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send propose message to validator network failed: err=%v", err)

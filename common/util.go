@@ -35,6 +35,17 @@ func IsContainString(target string, str_array []string) bool {
 	return index < len(str_array) && str_array[index] == target
 }
 
+func RemoveIfExistString(target string, str_array []string) []string {
+	for i := 0; i < len(str_array); i++ {
+		if str_array[i] == target {
+			str_array = append(str_array[:i], str_array[i+1:]...)
+			i--
+		}
+	}
+
+	return str_array
+}
+
 func IsContainItem(target interface{}, array []interface{}) bool {
 	return mapset.NewSetFromSlice(array).Contains(target)
 }

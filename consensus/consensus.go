@@ -78,7 +78,7 @@ func NewConsensus(nodeID string,
 
 	cryptS := tpcrt.CreateCryptService(log, config.CrptyType)
 
-	deliver := newMessageDeliver(log, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
+	deliver := newMessageDeliver(log, nodeID, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
 
 	exeScheduler := execution.NewExecutionScheduler(log)
 

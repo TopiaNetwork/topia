@@ -173,9 +173,9 @@ func (pool *transactionPool) requestReset(oldHead *types.BlockHead, newHead *typ
 func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 	//If the old header and the new header do not meet certain conditions,
 	//part of the transaction needs to be injected back into the transaction pool
-	var reInject []transaction.Transaction
+	var reInject []*transaction.Transaction
 
-	if oldHead != nil && types.BlockHash(oldHead.TxHashRoot) != types.BlockHash(newHead.TxHashRoot) {
+	if oldHead != nil && types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)) != types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)) {
 		oldNum := oldHead.GetHeight()
 		newNum := newHead.GetHeight()
 		//If the difference between the old block and the new block is greater than 64
@@ -184,73 +184,73 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 			pool.log.Debugf("Skipping deep transaction reorg", "depth", depth)
 		} else {
 			//The reorganization looks shallow enough to put all the transactions into memory
-			var discarded, included []transaction.Transaction
+			var discarded, included []*transaction.Transaction
 			var (
-				rem = pool.query.GetBlock(types.BlockHash(oldHead.TxHashRoot), oldHead.Height)
-				add = pool.query.GetBlock(types.BlockHash(newHead.TxHashRoot), newHead.Height)
+				rem = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)), oldHead.Height)
+				add = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)), newHead.Height)
 			)
 			if rem == nil {
 				if newNum >= oldNum {
 					pool.log.Warnf("Transcation pool reset with missing oldhead",
-						"old", types.BlockHash(oldHead.TxHashRoot),
-						"new", types.BlockHash(newHead.TxHashRoot))
+						"old", types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)),
+						"new", types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)))
 					return nil
 				}
 				pool.log.Debugf("Skipping transaction reset caused by setHead",
-					"old", types.BlockHash(oldHead.TxHashRoot), "oldnum", oldNum,
-					"new", types.BlockHash(newHead.TxHashRoot), "newnum", newNum)
+					"old", types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)), "oldnum", oldNum,
+					"new", types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)), "newnum", newNum)
 			} else {
 				for rem.Head.Height > add.Head.Height {
 					for _, tx := range rem.Data.Txs {
-						var txType transaction.Transaction
+						var txType *transaction.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
 							discarded = append(discarded, txType)
 						}
 					}
-					if rem = pool.query.GetBlock(types.BlockHash(rem.Head.ParentBlockHash), rem.Head.Height-1); rem == nil {
+					if rem = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(rem.Head.ParentBlockHash)), rem.Head.Height-1); rem == nil {
 						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldHead.Height,
-							"hash", types.BlockHash(oldHead.TxHashRoot))
+							"hash", types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)))
 						return nil
 					}
 				}
 				for add.Head.Height > rem.Head.Height {
 					for _, tx := range add.Data.Txs {
-						var txType transaction.Transaction
+						var txType *transaction.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
 							included = append(included, txType)
 						}
 					}
-					if add = pool.query.GetBlock(types.BlockHash(add.Head.ParentBlockHash), add.Head.Height-1); add == nil {
+					if add = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(add.Head.ParentBlockHash)), add.Head.Height-1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newHead.Height,
-							"hash", types.BlockHash(newHead.TxHashRoot))
+							"hash", types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)))
 						return nil
 					}
 				}
-				for types.BlockHash(rem.Head.TxHashRoot) != types.BlockHash(add.Head.TxHashRoot) {
+				for types.BlockHash(hex.EncodeToString(rem.Head.TxHashRoot)) != types.BlockHash(hex.EncodeToString(add.Head.TxHashRoot)) {
 					for _, tx := range rem.Data.Txs {
-						var txType transaction.Transaction
+						var txType *transaction.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
 							discarded = append(discarded, txType)
 						}
 					}
-					if rem = pool.query.GetBlock(types.BlockHash(rem.Head.ParentBlockHash), rem.Head.Height-1); rem == nil {
+					if rem = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(rem.Head.ParentBlockHash)), rem.Head.Height-1); rem == nil {
 						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldHead.Height,
-							"hash", types.BlockHash(oldHead.TxHashRoot))
+							"hash", types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)))
 						return nil
 					}
 					for _, tx := range add.Data.Txs {
-						var txType transaction.Transaction
+						var txType *transaction.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
 							included = append(included, txType)
 						}
 					}
-					if add = pool.query.GetBlock(types.BlockHash(add.Head.ParentBlockHash), add.Head.Height-1); add == nil {
+					if add = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(add.Head.ParentBlockHash)), add.Head.Height-1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newHead.Height,
-							"hash", types.BlockHash(newHead.TxHashRoot))
+							"hash", types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)))
 						return nil
 					}
 				}
@@ -263,7 +263,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 	if newHead == nil {
 		newHead = pool.query.CurrentBlock().GetHead()
 	}
-	stateDb, err := pool.query.StateAt(types.BlockHash(newHead.TxHashRoot))
+	stateDb, err := pool.query.StateAt(types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)))
 	if err != nil {
 		pool.log.Errorf("Failed to reset txPool state", "err", err)
 		return nil

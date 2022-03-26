@@ -24,10 +24,10 @@ var (
 	Tx1, Tx2, Tx3, Tx4, TxR1, TxR2, TxR3, TxlowGasPrice, TxHighGasLimit *transaction.Transaction
 	Key1, Key2, Key3, Key4, KeyR1, KeyR2, KeyR3                         string
 	From1, From2                                                        account.Address
-	TestBlock                                                           *types.Block
-	TestBlockHead                                                       *types.BlockHead
-	TestBlockData                                                       *types.BlockData
-	TestBlockHash                                                       string
+	OldBlock, NewBlock                                                  *types.Block
+	OldBlockHead, NewBlockHead                                          *types.BlockHead
+	OldBlockData, NewBlockData                                          *types.BlockData
+	OldTx1, OldTx2, OldTx3, OldTx4, NewTx1, NewTx2, NewTx3, NewTx4      *transaction.Transaction
 )
 
 func init() {
@@ -59,86 +59,116 @@ func init() {
 	TxHighGasLimit = settransactionremote(2, 10000, 9987654321)
 
 	From2 = account.Address(hex.EncodeToString(TxR1.FromAddr))
+	OldBlockHead = setBlockHead(10, 5, 1, 4, 1000000)
+	OldBlockHead.ParentBlockHash = []byte{0x09}
+	OldBlockHead.DataHash = []byte{0x0a, 0x0a}
+	OldBlockHead.TxHashRoot = []byte{0x0a, 0x0a}
+	NewBlockHead = setBlockHead(11, 5, 2, 5, 2000000)
+	NewBlockHead.ParentBlockHash = []byte{0x0a, 0x0a}
+	NewBlockHead.DataHash = []byte{0x0b, 0x0b}
+	NewBlockHead.TxHashRoot = []byte{0x0b, 0x0b}
 
-	TestBlockHash = "0x224111a2131c213b213112d121c1231e"
+	OldTx1 = setBlockTransaction([]byte{0xa1}, []byte{0xa2}, 10, 10000, 1000)
+	OldTx2 = setBlockTransaction([]byte{0xa2}, []byte{0xa3}, 10, 10000, 1000)
+	OldTx3 = setBlockTransaction([]byte{0xa3}, []byte{0xa4}, 10, 10000, 1000)
+	OldTx4 = setBlockTransaction([]byte{0xa4}, []byte{0xa5}, 10, 10000, 1000)
+	OldKey1, _ := OldTx1.TxID()
+	OldKey2, _ := OldTx2.TxID()
+	OldKey3, _ := OldTx3.TxID()
+	OldKey4, _ := OldTx4.TxID()
+	OldTxs := make(map[string]*transaction.Transaction, 0)
+	OldTxs[OldKey1] = OldTx1
+	OldTxs[OldKey2] = OldTx2
+	OldTxs[OldKey3] = OldTx3
+	OldTxs[OldKey4] = OldTx4
 
-	TestBlockHead = &types.BlockHead{
-		ChainID:              []byte{0x01},
-		Version:              0,
-		Height:               0,
-		Epoch:                0,
-		Round:                0,
-		ParentBlockHash:      []byte{0x32, 0x54, 0x12, 0x12, 0x87, 0x68, 0x12, 0x62},
-		ProposeSignature:     []byte{0x32, 0x54, 0x12, 0x12, 0x87, 0x13, 0x68, 0x43},
-		VoteAggSignature:     []byte{0x32, 0x54, 0x23, 0x12, 0x12, 0x87, 0x68, 0x12},
-		ResultHash:           []byte{0x12, 0x43, 0x54, 0x23, 0x12, 0x53, 0x12, 0x43},
-		TxCount:              2,
-		TxHashRoot:           []byte{0x12, 0x73, 0x24, 0x23, 0x12, 0x53, 0x12, 0x43},
-		TimeStamp:            0,
-		DataHash:             []byte{0x12, 0x73, 0x24, 0x23, 0x12, 0x53, 0x12, 0x43},
-		Reserved:             []byte{0x12, 0x73, 0x24, 0x23, 0x12, 0x53, 0x12, 0x43},
-		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     []byte{0x12, 0x73, 0x24, 0x23, 0x12, 0x53, 0x12, 0x43},
-		XXX_sizecache:        0,
-	}
-	TestBlockData = &types.BlockData{
-		Version:              0,
-		Txs:                  [][]byte{{0x12, 0x32, 0x12, 0x32, 0x12, 0x32, 0x12, 0x32, 0x12}, {0x12, 0x32, 0x43, 0x32, 0x12, 0x32, 0x12, 0x32, 0x12}},
-		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     nil,
-		XXX_sizecache:        0,
-	}
-	TestBlock = &types.Block{
-		Head:                 TestBlockHead,
-		Data:                 TestBlockData,
-		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     []byte{0x43, 0x12, 0x53, 0x13, 0x12, 0x53, 0x15},
-		XXX_sizecache:        123,
-	}
+	NewTx1 = setBlockTransaction([]byte{0xb1}, []byte{0xb2}, 11, 10000, 1000)
+	NewTx2 = setBlockTransaction([]byte{0xb2}, []byte{0xb3}, 12, 10000, 1000)
+	NewTx3 = setBlockTransaction([]byte{0xb3}, []byte{0xb4}, 13, 10000, 1000)
+	NewTx4 = setBlockTransaction([]byte{0xb4}, []byte{0xb5}, 14, 10000, 1000)
+	NewKey1, _ := NewTx1.TxID()
+	NewKey2, _ := NewTx2.TxID()
+	NewKey3, _ := NewTx3.TxID()
+	NewKey4, _ := NewTx4.TxID()
 
+	NewTxs := make(map[string]*transaction.Transaction, 0)
+	NewTxs[NewKey1] = NewTx1
+	NewTxs[NewKey2] = NewTx2
+	NewTxs[NewKey3] = NewTx3
+	NewTxs[NewKey4] = NewTx4
+
+	OldBlockData = SetBlockData(OldTxs)
+	NewBlockData = SetBlockData(NewTxs)
+	OldBlock = SetBlock(OldBlockHead, OldBlockData)
+	NewBlock = SetBlock(NewBlockHead, NewBlockData)
 }
 
 func settransactionlocal(nonce uint64, gaseprice, gaseLimit uint64) *transaction.Transaction {
 	tx := &transaction.Transaction{
-		FromAddr:   []byte{0x00, 0x00, 0x43, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43},
-		TargetAddr: []byte{0x00, 0x00, 0x34, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43}, Version: 1, ChainID: []byte{0x01},
-		Nonce: nonce, Value: []byte{0x12, 0x32}, GasPrice: gaseprice,
-		GasLimit: gaseLimit, Data: []byte{0x32, 0x32, 0x32, 0x65, 0x32, 0x65, 0x32, 0x65},
-		Signature: []byte{0x32, 0x23, 0x42, 0x23, 0x42, 0x23, 0x42}, Options: 0, Time: time.Now()}
+		FromAddr:   []byte{0x01},
+		TargetAddr: []byte{0x02}, Version: 1, ChainID: []byte{0x01},
+		Nonce: nonce, Value: []byte{0x03}, GasPrice: gaseprice,
+		GasLimit: gaseLimit, Data: []byte{0x04},
+		Signature: []byte{0x05}, Options: 0, Time: time.Now()}
 	return tx
 }
 func settransactionremote(nonce uint64, gaseprice, gaseLimit uint64) *transaction.Transaction {
 	tx := &transaction.Transaction{
-		FromAddr:   []byte{0x01, 0x01, 0x43, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43},
-		TargetAddr: []byte{0x01, 0x01, 0x34, 0x53, 0x23, 0x34, 0x21, 0x12, 0x42, 0x12, 0x43}, Version: 1, ChainID: []byte{0x01},
-		Nonce: nonce, Value: []byte{0x12, 0x32}, GasPrice: gaseprice,
-		GasLimit: gaseLimit, Data: []byte{0x32, 0x32, 0x32, 0x65, 0x32, 0x65, 0x32, 0x65},
-		Signature: []byte{0x32, 0x23, 0x42, 0x23, 0x42, 0x23, 0x42}, Options: 0, Time: time.Now()}
+		FromAddr:   []byte{0x11},
+		TargetAddr: []byte{0x12}, Version: 1, ChainID: []byte{0x01},
+		Nonce: nonce, Value: []byte{0x13}, GasPrice: gaseprice,
+		GasLimit: gaseLimit, Data: []byte{0x14},
+		Signature: []byte{0x15}, Options: 0, Time: time.Now()}
 	return tx
 }
-
-func settxpoolconfig() *TransactionPoolConfig {
-	conf := &TransactionPoolConfig{
-		Locals: []account.Address{
-			account.Address("0x2fadf9192731273"),
-			account.Address("0x3fadfa123123123"),
-			account.Address("0x3131313asa1daaf")},
-		NoLocalFile:           false,
-		NoRemoteFile:          false,
-		NoConfigFile:          false,
-		PathLocal:             "",
-		PathRemote:            "",
-		PathConfig:            "",
-		ReStoredDur:           123,
-		GasPriceLimit:         123,
-		PendingAccountSlots:   123,
-		PendingGlobalSlots:    123,
-		QueueMaxTxsAccount:    123,
-		QueueMaxTxsGlobal:     123,
-		LifetimeForTx:         123,
-		DurationForTxRePublic: 123,
+func setBlockHead(height, epoch, round uint64, txcount uint32, timestamp uint64) *types.BlockHead {
+	blockhead := &types.BlockHead{
+		ChainID:          []byte{0x01},
+		Version:          1,
+		Height:           height,
+		Epoch:            epoch,
+		Round:            round,
+		ParentBlockHash:  nil,
+		ProposeSignature: nil,
+		VoteAggSignature: nil,
+		ResultHash:       nil,
+		TxCount:          txcount,
+		TxHashRoot:       nil,
+		TimeStamp:        timestamp,
+		DataHash:         nil,
+		Reserved:         nil,
 	}
-	return conf
+	return blockhead
+}
+func SetBlock(head *types.BlockHead, data *types.BlockData) *types.Block {
+	block := &types.Block{
+		Head: head,
+		Data: data,
+	}
+	return block
+}
+func SetBlockData(txs map[string]*transaction.Transaction) *types.BlockData {
+	blockdata := &types.BlockData{
+		Version: 1,
+		Txs:     nil,
+	}
+	txsByte := make([][]byte, 0)
+	for _, tx := range txs {
+		txByte, _ := json.Marshal(tx)
+		txsByte = append(txsByte, txByte)
+	}
+	blockdata.Txs = txsByte
+	return blockdata
+}
+
+func setBlockTransaction(from, to []byte, nonce uint64, gaseprice, gaseLimit uint64) *transaction.Transaction {
+	tx := &transaction.Transaction{
+		FromAddr:   from,
+		TargetAddr: to, Version: 1, ChainID: []byte{0x01},
+		Nonce: nonce, Value: []byte{0x03}, GasPrice: gaseprice,
+		GasLimit: gaseLimit, Data: []byte{0x04},
+		Signature: []byte{0x05}, Options: 0, Time: time.Now()}
+	return tx
 }
 
 func SetNewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
@@ -1068,6 +1098,14 @@ func TestTransactionPool_Reset(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
+	servant.EXPECT().GetBlock(gomock.Eq(types.BlockHash(hex.EncodeToString(OldBlockHead.TxHashRoot))), OldBlockHead.Height).
+		Return(OldBlock).AnyTimes()
+	servant.EXPECT().GetBlock(gomock.Eq(types.BlockHash(hex.EncodeToString(NewBlockHead.TxHashRoot))), NewBlockHead.Height).
+		Return(NewBlock).AnyTimes()
+	state := NewMockStatePoolDB(ctrl)
+	servant.EXPECT().StateAt(gomock.Eq(types.BlockHash(hex.EncodeToString(NewBlockHead.TxHashRoot)))).
+		Return(state, nil).AnyTimes()
+
 	log := NewMockLogger(ctrl)
 	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
@@ -1078,6 +1116,9 @@ func TestTransactionPool_Reset(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.locals))
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
+	fmt.Println(types.BlockHash(hex.EncodeToString(OldBlockHead.TxHashRoot)))
+	pool.Reset(OldBlockHead, NewBlockHead)
+
 }
 func TestTransactionPool_Start(t *testing.T) {
 	ctrl := gomock.NewController(t)

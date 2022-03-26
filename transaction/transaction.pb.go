@@ -180,8 +180,8 @@ func (m *Transaction) GetOptions() uint32 {
 }
 
 // TxDifference returns a new set which is the difference between a and b.
-func TxDifference(a, b []Transaction) []Transaction {
-	keep := make([]Transaction, 0, len(a))
+func TxDifference(a, b []*Transaction) []*Transaction {
+	keep := make([]*Transaction, 0, len(a))
 	remove := make(map[string]struct{})
 	for _, tx := range b {
 		if txId, err := tx.TxID(); err != nil {

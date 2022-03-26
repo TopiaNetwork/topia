@@ -142,6 +142,7 @@ func (t *TxsByPriceAndNonce) Shift() {
 		heap.Fix(&t.heads, 0)
 		return
 	}
+
 	heap.Pop(&t.heads)
 }
 

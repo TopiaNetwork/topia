@@ -7,8 +7,6 @@ import (
 	"github.com/TopiaNetwork/topia/transaction"
 )
 
-type AccountTransactions map[string][]*transaction.Transaction
-
 func (pool *transactionPool) SaveLocalTxs() error {
 	locals, err := json.Marshal(pool.allTxsForLook.locals)
 	if err != nil {
@@ -33,13 +31,13 @@ func (pool *transactionPool) LoadLocalTxs() error {
 	if err != nil {
 		return nil
 	}
-	locals := &AccountTransactions{}
+	var locals map[string]*transaction.Transaction
 	err = json.Unmarshal(data, &locals)
 	if err != nil {
 		return nil
 	}
-	for _, txs := range *locals {
-		pool.AddLocals(txs)
+	for _, tx := range locals {
+		pool.AddLocal(tx)
 	}
 	return nil
 }

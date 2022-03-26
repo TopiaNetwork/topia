@@ -12,14 +12,14 @@ import (
 )
 
 type remoteTxs struct {
-	txs                 map[string]*transaction.Transaction
+	Txs                 map[string]*transaction.Transaction
 	ActivationIntervals map[string]time.Time
 }
 
 func (pool *transactionPool) SaveRemoteTxs() error {
 
 	var remotetxs = &remoteTxs{}
-	remotetxs.txs = pool.allTxsForLook.remotes
+	remotetxs.Txs = pool.allTxsForLook.remotes
 	remotetxs.ActivationIntervals = pool.ActivationIntervals
 
 	remotes, err := json.Marshal(remotetxs)
@@ -51,7 +51,7 @@ func (pool *transactionPool) LoadRemoteTxs() error {
 		return nil
 	}
 
-	for _, tx := range remotetxs.txs {
+	for _, tx := range remotetxs.Txs {
 		pool.AddRemote(tx)
 	}
 	for txId, ActivationInterval := range remotetxs.ActivationIntervals {

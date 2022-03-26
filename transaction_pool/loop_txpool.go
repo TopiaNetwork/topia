@@ -70,7 +70,7 @@ func (pool *transactionPool) saveAllIfShutDown() {
 func (pool *transactionPool) resetIfNewHead() {
 	defer pool.wg.Done()
 	// Track the previous head headers for transaction reorgs
-	var head = pool.config.chain.CurrentBlock()
+	var head = pool.query.CurrentBlock()
 	for {
 		select {
 		// Handle ChainHeadEvent

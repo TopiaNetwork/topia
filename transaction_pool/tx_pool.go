@@ -3,7 +3,6 @@ package transactionpool
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -64,7 +63,8 @@ type TransactionPool interface {
 }
 
 type transactionPool struct {
-	config        TransactionPoolConfig
+	config TransactionPoolConfig
+
 	pubSubService p2p.P2PPubSubService
 
 	chanChainHead     chan transaction.ChainHeadEvent
@@ -134,7 +134,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 		}
 	}
 	pool.sortedByPriced = newTxPricedList(pool.allTxsForLook) //done
-	pool.Reset(nil, conf.chain.CurrentBlock().GetHead())
+	pool.Reset(nil, pool.query.CurrentBlock().GetHead())
 
 	pool.wg.Add(1)
 	go pool.scheduleReorgLoop()
@@ -143,7 +143,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 	pool.loadRemote(conf.NoRemoteFile, conf.PathRemote)
 	pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
 
-	pool.pubSubService = pool.config.chain.SubChainHeadEvent(pool.chanChainHead)
+	pool.pubSubService = pool.query.SubChainHeadEvent(pool.chanChainHead)
 
 	go pool.loop()
 	return pool
@@ -523,16 +523,16 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 // and returns whether it was inserted or an older was better.
 // Note, this method assumes the pool lock is held!
 func (pool *transactionPool) turnTx(addr account.Address, txId string, tx *transaction.Transaction) bool {
+	pool.pending.Mu.Lock()
+	defer pool.pending.Mu.Unlock()
 	// Try to insert the transaction into the pending queue
 	if pool.pending.accTxs[addr] == nil {
 		pool.pending.accTxs[addr] = newTxList(true)
 	}
-	pool.pending.Mu.Lock()
+
 	list := pool.pending.accTxs[addr]
-	pool.pending.Mu.Unlock()
 
 	inserted, old := list.Add(tx)
-	fmt.Println("turnTx(addr:", inserted, old)
 	if !inserted {
 		// An older transaction was existed, discard this
 		pool.allTxsForLook.Remove(txId)
@@ -703,10 +703,12 @@ func (pool *transactionPool) demoteUnexecutables() {
 	}
 }
 
+// PickTxs if txsType is 0,pick current pending txs,if 1 pick txs sorted by price and nonce
 func (pool *transactionPool) PickTxs(txsType int) []*transaction.Transaction {
 	switch txsType {
 	case 0:
 		return pool.CommitTxsForPending()
+
 	case 1:
 		return pool.CommitTxsByPriceAndNonce()
 	}
@@ -735,6 +737,7 @@ func (pool *transactionPool) CommitTxsByPriceAndNonce() []*transaction.Transacti
 			break
 		}
 		txs = append(txs, tx)
+		txSet.Pop()
 	}
 	return txs
 }

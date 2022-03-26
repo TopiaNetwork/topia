@@ -9,16 +9,14 @@ import (
 )
 
 type TransactionPoolConfig struct {
-	chain        TransactionPoolServant
 	Locals       []account.Address
 	NoLocalFile  bool
 	NoRemoteFile bool
 	NoConfigFile bool
-
-	PathLocal   string
-	PathRemote  string
-	PathConfig  string
-	ReStoredDur time.Duration
+	PathLocal    string
+	PathRemote   string
+	PathConfig   string
+	ReStoredDur  time.Duration
 
 	GasPriceLimit uint64
 
@@ -32,8 +30,8 @@ type TransactionPoolConfig struct {
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
-	PathLocal:   "localTransactions.rlp",
-	PathRemote:  "remoteTransactions.rlp",
+	PathLocal:   "localTransactions.json",
+	PathRemote:  "remoteTransactions.json",
 	PathConfig:  "txPoolConfigs.json",
 	ReStoredDur: 30 * time.Minute,
 
@@ -108,7 +106,7 @@ func (pool *transactionPool) UpdateTxPoolConfig(conf TransactionPoolConfig) {
 }
 
 func (pool *transactionPool) SaveConfig() error {
-	pool.log.Info("saving tx pool config")
+	//pool.log.Info("saving tx pool config")
 	conf, err := json.Marshal(pool.config)
 	if err != nil {
 		return err

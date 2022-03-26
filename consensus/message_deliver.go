@@ -2,10 +2,14 @@ package consensus
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	tpcmm "github.com/TopiaNetwork/topia/common"
+	"math/big"
+
+	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -32,6 +36,10 @@ type messageDeliverI interface {
 	deliverPreparePackagedMessageProp(ctx context.Context, msg *PreparePackedMessageProp) error
 
 	deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error
+
+	deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error)
+
+	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error
 
 	deliverVoteMessage(ctx context.Context, msg *VoteMessage) error
 
@@ -166,12 +174,6 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
-	msgBytes, err := md.marshaler.Marshal(msg)
-	if err != nil {
-		md.log.Errorf("ProposeMessage marshal err: %v", err)
-		return err
-	}
-
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 
 	ctxProposer := ctx
@@ -208,6 +210,11 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 	}
 	msg.Signature = sigData
 	msg.PubKey = pubKey
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		return err
+	}
 	err = md.network.Send(ctxProposer, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send propose message to proposer network failed: err=%v", err)
@@ -221,12 +228,110 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 	}
 	msg.Signature = sigData
 	msg.PubKey = pubKey
+	msgBytes, err = md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		return err
+	}
 	err = md.network.Send(ctxValidator, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send propose message to validator network failed: err=%v", err)
 	}
 
 	return err
+}
+
+func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error) {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+
+	var randExecutorID string
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDs, err := csStateRN.GetActiveExecutorIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
+			return nil, err
+		}
+
+		maxIndex := big.NewInt(int64(len(peerIDs) - 1))
+		randIndex, err := rand.Int(rand.Reader, maxIndex)
+		if err != nil {
+			md.log.Errorf("Can't get rand active executor nodes index: err=%v", err)
+			return nil, err
+		}
+		randExecutorID = peerIDs[randIndex.Uint64()]
+		md.log.Debugf("Rand active executor nodes: %d, ", randIndex.Uint64(), peerIDs[randIndex.Uint64()])
+
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, randExecutorID)
+	}
+
+	sigData, err := md.cryptService.Sign(md.priKey, msg.TxAndResultHashsData())
+	if err != nil {
+		md.log.Errorf("Sign err for execution result validate request msg: %v", err)
+		return nil, err
+	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return nil, err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ExeResultValidateReqMessage marshal err: %v", err)
+		return nil, err
+	}
+	resp, err := md.network.SendWithResponse(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send execution result validate request message to executor network failed: err=%v", err)
+		return nil, err
+	}
+
+	if len(resp) <= 0 {
+		err = fmt.Errorf("Received execution result validate request resp %d from executor %s", len(resp), randExecutorID)
+		return nil, err
+	}
+
+	var validateResp ExeResultValidateRespMessage
+	err = md.marshaler.Unmarshal(resp[0], &validateResp)
+	if err != nil {
+		err = fmt.Errorf("Can't unmarshal received execution result validate request from executor %s: %v", randExecutorID, err)
+		return nil, err
+	}
+
+	return &validateResp, err
+}
+
+func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error {
+	msg.Executor = []byte(md.nodeID)
+
+	sigData, err := md.cryptService.Sign(md.priKey, msg.TxAndResultProofsData())
+	if err != nil {
+		md.log.Errorf("Sign err for execution result validate response msg: %v", err)
+		return err
+	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ExeResultValidateRespMessage marshal err: %v", err)
+		return err
+	}
+
+	actorCtx.Respond(msgBytes)
+
+	return nil
 }
 
 func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, error) {

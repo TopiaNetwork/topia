@@ -1,8 +1,10 @@
 package consensus
 
 import (
+	"crypto/sha256"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	"github.com/lazyledger/smt"
 )
 
 func (m *PreparePackedMessageExe) TxsData() []byte {
@@ -33,4 +35,46 @@ func (m *ProposeMessage) BlockHeadInfo() (*tpchaintypes.BlockHead, error) {
 	}
 
 	return nil, err
+}
+
+func (m *ProposeMessage) TxRoot() []byte {
+	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+	for _, txHashBytes := range m.TxHashs {
+		tree.Update(txHashBytes, txHashBytes)
+	}
+
+	return tree.Root()
+}
+
+func (m *ProposeMessage) TxResultRoot() []byte {
+	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+	for _, txRSHashBytes := range m.TxResultHashs {
+		tree.Update(txRSHashBytes, txRSHashBytes)
+	}
+
+	return tree.Root()
+}
+
+func (m *ExeResultValidateReqMessage) TxAndResultHashsData() []byte {
+	var hashsData []byte
+	for _, txHashData := range m.TxHashs {
+		hashsData = append(hashsData, txHashData...)
+	}
+	for _, txRSData := range m.TxResultHashs {
+		hashsData = append(hashsData, txRSData...)
+	}
+
+	return hashsData
+}
+
+func (m *ExeResultValidateRespMessage) TxAndResultProofsData() []byte {
+	var proofsData []byte
+	for _, txProofData := range m.TxProofs {
+		proofsData = append(proofsData, txProofData...)
+	}
+	for _, txRSProofData := range m.TxResultProofs {
+		proofsData = append(proofsData, txRSProofData...)
+	}
+
+	return proofsData
 }

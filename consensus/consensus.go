@@ -88,7 +88,7 @@ func NewConsensus(nodeID string,
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
 
 	epochService := newEpochService(log, roundCh, config.RoundDuration, config.EpochInterval, ledger, dkgEx)
-	csHandler := NewConsensusHandler(log, roundCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver)
+	csHandler := NewConsensusHandler(log, roundCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
 
 	dkgEx.addDKGBLSUpdater(deliver)
 	dkgEx.addDKGBLSUpdater(csHandler)
@@ -125,6 +125,10 @@ func (cons *consensus) ProcessPreparePackedProp(msg *PreparePackedMessageProp) e
 
 func (cons *consensus) ProcessPropose(msg *ProposeMessage) error {
 	return cons.handler.ProcessPropose(msg)
+}
+
+func (cons *consensus) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
+	return cons.handler.ProcesExeResultValidateReq(actorCtx, msg)
 }
 
 func (cons *consensus) ProcessVote(msg *VoteMessage) error {

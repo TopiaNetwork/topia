@@ -3,9 +3,11 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"github.com/AsynkronIT/protoactor-go/actor"
 	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
@@ -19,6 +21,8 @@ type ConsensusHandler interface {
 	ProcessPreparePackedMsgProp(msg *PreparePackedMessageProp) error
 
 	ProcessPropose(msg *ProposeMessage) error
+
+	ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error
 
 	ProcessVote(msg *VoteMessage) error
 
@@ -46,6 +50,7 @@ type consensusHandler struct {
 	ledger                  ledger.Ledger
 	marshaler               codec.Marshaler
 	deliver                 messageDeliverI
+	exeScheduler            execution.ExecutionScheduler
 }
 
 func NewConsensusHandler(log tplog.Logger,
@@ -58,7 +63,8 @@ func NewConsensusHandler(log tplog.Logger,
 	dealRespMsgCh chan *DKGDealRespMessage,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
-	deliver messageDeliverI) *consensusHandler {
+	deliver messageDeliverI,
+	exeScheduler execution.ExecutionScheduler) *consensusHandler {
 	return &consensusHandler{
 		log:                     log,
 		roundCh:                 roundCh,
@@ -72,6 +78,7 @@ func NewConsensusHandler(log tplog.Logger,
 		ledger:                  ledger,
 		marshaler:               marshaler,
 		deliver:                 deliver,
+		exeScheduler:            exeScheduler,
 	}
 }
 
@@ -127,6 +134,26 @@ func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {
 	handler.proposeMsgChan <- msg
 
 	return nil
+}
+
+func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
+	txProofs, txRSProofs, err := handler.exeScheduler.PackedTxProofForValidity(context.Background(), msg.StateVersion, msg.TxHashs, msg.TxResultHashs)
+	if err != nil {
+		handler.log.Errorf("Get tx proofs and tx result proof err: %v", err)
+		return err
+	}
+
+	validateResp := &ExeResultValidateRespMessage{
+		ChainID:        msg.ChainID,
+		Version:        msg.Version,
+		Epoch:          msg.Epoch,
+		Round:          msg.Round,
+		StateVersion:   msg.StateVersion,
+		TxProofs:       txProofs,
+		TxResultProofs: txRSProofs,
+	}
+
+	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp)
 }
 
 func (handler *consensusHandler) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {

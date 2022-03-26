@@ -3,12 +3,15 @@ package execution
 import (
 	"container/list"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/atomic"
 	"time"
 
+	"github.com/lazyledger/smt"
 	"github.com/subchen/go-trylock/v2"
+	"go.uber.org/atomic"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger/block"
@@ -35,6 +38,8 @@ type ExecutionScheduler interface {
 	State() SchedulerState
 
 	MaxStateVersion(compState state.CompositionState) (uint64, error)
+
+	PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error)
 
 	ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error)
 
@@ -133,22 +138,59 @@ func (scheduler *executionScheduler) MaxStateVersion(compState state.Composition
 	return maxStateVersion, nil
 }
 
-func (scheduler *executionScheduler) GetPackedTxForValidity(ctx context.Context, stateVersion uint64) (uint32, []byte, []byte, error) {
+func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error) {
 	scheduler.executeMutex.RLock()
 	defer scheduler.executeMutex.RUnlock()
+
+	if len(txHashs) == 0 || len(txResultHashes) == 0 || len(txHashs) != len(txResultHashes) {
+		err := fmt.Errorf("Invalid tx count %d or tx result count %d", len(txHashs), len(txResultHashes))
+		scheduler.log.Errorf("%v", err)
+	}
 
 	if scheduler.exePackedTxsList.Len() > 0 {
 		exeTxsF := scheduler.exePackedTxsList.Front().Value.(*executionPackedTxs)
 		if exeTxsF.StateVersion() != stateVersion {
 			err := fmt.Errorf("Invalid state version: expected %d, actual %d", exeTxsF.StateVersion(), stateVersion)
 			scheduler.log.Errorf("%v")
-			return 0, nil, nil, err
+			return nil, nil, err
 		}
 
-		return uint32(len(exeTxsF.packedTxs.TxList)), exeTxsF.packedTxs.TxRoot, exeTxsF.packedTxsRS.TxRSRoot, nil
+		treeTx := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+		treeTxRS := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+		for i := 0; i < len(exeTxsF.packedTxs.TxList); i++ {
+			txHashBytes, _ := exeTxsF.packedTxs.TxList[i].HashBytes()
+			txRSHashBytes, _ := exeTxsF.packedTxsRS.TxsResult[i].HashBytes(exeTxsF.packedTxs.TxList[i].FromAddr)
+
+			treeTx.Update(txHashBytes, txHashBytes)
+			treeTxRS.Update(txRSHashBytes, txRSHashBytes)
+		}
+
+		var txProofs [][]byte
+		var txRSProofs [][]byte
+		for t := 0; t < len(txHashs); t++ {
+			txProof, err := treeTx.Prove(txHashs[t])
+			if err != nil {
+				scheduler.log.Errorf("Can't get tx proof: t=%d, txHashBytes=v, err=%v", t, txHashs[t], err)
+				return nil, nil, err
+			}
+
+			txRSProof, err := treeTxRS.Prove(txResultHashes[t])
+			if err != nil {
+				scheduler.log.Errorf("Can't get tx result proof: txRSHashBytes=v, err=%v", txResultHashes[t], err)
+				return nil, nil, err
+			}
+
+			txProofBytes, _ := json.Marshal(txProof)
+			txRSProofBytes, _ := json.Marshal(txRSProof)
+
+			txProofs = append(txProofs, txProofBytes)
+			txRSProofs = append(txRSProofs, txRSProofBytes)
+		}
+
+		return txProofs, txRSProofs, nil
 	}
 
-	return 0, nil, nil, errors.New("Not exist packed txs")
+	return nil, nil, errors.New("Not exist packed txs")
 }
 
 func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockStore block.BlockStore) error {

@@ -45,7 +45,7 @@ func (vc *consensusVoteCollector) produceAggSign() (tpcrtypes.Signature, error) 
 		signArr = append(signArr, vote.Signature)
 	}
 
-	return vc.dkgBls.RecoverSig(vc.votes[0].Block, signArr)
+	return vc.dkgBls.RecoverSig(vc.votes[0].BlockHead, signArr)
 }
 
 func (vc *consensusVoteCollector) updateDKGBls(dkgBls DKGBls) {

@@ -2,9 +2,14 @@ package consensus
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
+
+	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -32,7 +37,11 @@ type messageDeliverI interface {
 
 	deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error
 
-	deliverVoteMessage(ctx context.Context, msg *VoteMessage) error
+	deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error)
+
+	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error
+
+	deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error
 
 	deliverCommitMessage(ctx context.Context, msg *CommitMessage) error
 
@@ -47,6 +56,7 @@ type messageDeliverI interface {
 
 type messageDeliver struct {
 	log          tplog.Logger
+	nodeID       string
 	priKey       tpcrtypes.PrivateKey
 	strategy     DeliverStrategy
 	network      network.Network
@@ -56,9 +66,10 @@ type messageDeliver struct {
 	dkgBls       DKGBls
 }
 
-func newMessageDeliver(log tplog.Logger, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network network.Network, marshaler codec.Marshaler, crypt tpcrt.CryptService, ledger ledger.Ledger) *messageDeliver {
+func newMessageDeliver(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network network.Network, marshaler codec.Marshaler, crypt tpcrt.CryptService, ledger ledger.Ledger) *messageDeliver {
 	return &messageDeliver{
 		log:       log,
+		nodeID:    nodeID,
 		priKey:    priKey,
 		strategy:  strategy,
 		network:   network,
@@ -163,29 +174,164 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+
+	ctxProposer := ctx
+	ctxValidator := ctx
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerActiveProposerIDs, err := csStateRN.GetActiveProposerIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
+			return err
+		}
+		peerActiveProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerActiveProposerIDs)
+
+		ctxProposer = context.WithValue(ctxProposer, tpnetcmn.NetContextKey_PeerList, peerActiveProposerIDs)
+
+		peerActiveValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
+			return err
+		}
+		ctxValidator = context.WithValue(ctxValidator, tpnetcmn.NetContextKey_PeerList, peerActiveValidatorIDs)
+	}
+
+	sigData, err := md.cryptService.Sign(md.priKey, msg.BlockHead)
+	if err != nil {
+		md.log.Errorf("Sign err for propose msg: %v", err)
+		return err
+	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("ProposeMessage marshal err: %v", err)
 		return err
 	}
-
-	switch md.strategy {
-	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetActiveValidatorIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
-			return err
-		}
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+	err = md.network.Send(ctxProposer, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send propose message to proposer network failed: err=%v", err)
+		return nil
 	}
 
-	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
+	sigData, pubKey, err = md.dkgBls.Sign(msg.BlockHead)
+	if err != nil {
+		md.log.Errorf("DKG sign propose msg err: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+	msgBytes, err = md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		return err
+	}
+	err = md.network.Send(ctxValidator, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send propose message to validator network failed: err=%v", err)
 	}
 
 	return err
+}
+
+func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error) {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+
+	var randExecutorID string
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDs, err := csStateRN.GetActiveExecutorIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
+			return nil, err
+		}
+
+		maxIndex := big.NewInt(int64(len(peerIDs) - 1))
+		randIndex, err := rand.Int(rand.Reader, maxIndex)
+		if err != nil {
+			md.log.Errorf("Can't get rand active executor nodes index: err=%v", err)
+			return nil, err
+		}
+		randExecutorID = peerIDs[randIndex.Uint64()]
+		md.log.Debugf("Rand active executor nodes: %d, ", randIndex.Uint64(), peerIDs[randIndex.Uint64()])
+
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, randExecutorID)
+	}
+
+	sigData, err := md.cryptService.Sign(md.priKey, msg.TxAndResultHashsData())
+	if err != nil {
+		md.log.Errorf("Sign err for execution result validate request msg: %v", err)
+		return nil, err
+	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return nil, err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ExeResultValidateReqMessage marshal err: %v", err)
+		return nil, err
+	}
+	resp, err := md.network.SendWithResponse(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send execution result validate request message to executor network failed: err=%v", err)
+		return nil, err
+	}
+
+	if len(resp) <= 0 {
+		err = fmt.Errorf("Received execution result validate request resp %d from executor %s", len(resp), randExecutorID)
+		return nil, err
+	}
+
+	var validateResp ExeResultValidateRespMessage
+	err = md.marshaler.Unmarshal(resp[0], &validateResp)
+	if err != nil {
+		err = fmt.Errorf("Can't unmarshal received execution result validate request from executor %s: %v", randExecutorID, err)
+		return nil, err
+	}
+
+	return &validateResp, err
+}
+
+func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error {
+	msg.Executor = []byte(md.nodeID)
+
+	sigData, err := md.cryptService.Sign(md.priKey, msg.TxAndResultProofsData())
+	if err != nil {
+		md.log.Errorf("Sign err for execution result validate response msg: %v", err)
+		return err
+	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ExeResultValidateRespMessage marshal err: %v", err)
+		return err
+	}
+
+	actorCtx.Respond(msgBytes)
+
+	return nil
 }
 
 func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, error) {
@@ -224,8 +370,8 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 	return selVoteColectors[0].nodeID, vrfProof, err
 }
 
-func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage) error {
-	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
+func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error {
+	sigData, pubKey, err := md.dkgBls.Sign(msg.BlockHead)
 	if err != nil {
 		md.log.Errorf("DKG sign VoteMessage err: %v", err)
 		return err
@@ -235,23 +381,15 @@ func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessa
 
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
-		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		md.log.Errorf("VoteMessage marshal err: %v", err)
 		return err
 	}
 
-	peerID, vrfProof, err := md.getVoterCollector(msg.Round)
-	if err != nil {
-		md.log.Errorf("Can't get the next leader: err=%v", err)
-		return err
-	}
-
-	msg.VoterProof = vrfProof
-
-	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerID)
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, proposer)
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	err = md.network.Send(ctx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send vote message to network failed: err=%v", err)
+		md.log.Errorf("Send vote message to proposer network failed: err=%v", err)
 	}
 
 	return err
@@ -261,34 +399,41 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
-	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
+	sigData, err := md.cryptService.Sign(md.priKey, msg.BlockHead)
 	if err != nil {
-		md.log.Errorf("DKG sign CommitMessage err: %v", err)
+		md.log.Errorf("Sign err for commit msg: %v", err)
 		return err
 	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+
 	msg.Signature = sigData
 	msg.PubKey = pubKey
 
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
-		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		md.log.Errorf("CommitMessage marshal err: %v", err)
 		return err
 	}
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetActiveExecutorIDs()
 		if err != nil {
-			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
 			return err
 		}
 		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
 	}
 
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	err = md.network.Send(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send propose message to network failed: err=%v", err)
+		md.log.Errorf("Send propose message to executor network failed: err=%v", err)
 	}
 
 	return err

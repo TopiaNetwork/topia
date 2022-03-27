@@ -16,22 +16,26 @@ message BlockHead {
   uint64 Epoch             = 4  [(gogoproto.jsontag) = "epoch"];
   uint64 Round             = 5  [(gogoproto.jsontag) = "round"];
   bytes  ParentBlockHash   = 6  [(gogoproto.jsontag) = "parentBlockHash"];
-  bytes  Proposer          = 7  [(gogoproto.jsontag) = "proposer"];
-  bytes  VRFProof          = 8  [(gogoproto.jsontag) = "vrfProof"];
-  bytes  VoteAggSignature  = 9  [(gogoproto.jsontag) = "voteAggSignature"];
-  uint32 TxCount           = 10 [(gogoproto.jsontag) = "txCount"];
-  bytes  TxRoot            = 11 [(gogoproto.jsontag) = "txRoot"];
-  bytes  TxResultRoot      = 12 [(gogoproto.jsontag) = "txResultHash"];
-  bytes  StateRoot         = 13 [(gogoproto.jsontag) = "txResultHash"];
-  uint64 TimeStamp         = 14 [(gogoproto.jsontag) = "timeStamp"];
-  uint64 ElapsedSpan       = 15 [(gogoproto.jsontag) = "elaspedSpan"]; //unit ms
-  bytes  Hash              = 16 [(gogoproto.jsontag) = "hash"];
-  bytes  Reserved          = 17 [(gogoproto.jsontag) = "reserved"];
+  bytes  Launcher          = 7  [(gogoproto.jsontag) = "launcher"];
+  bytes  Proposer          = 8  [(gogoproto.jsontag) = "proposer"];
+  bytes  Proof             = 9  [(gogoproto.jsontag) = "proof"];
+  bytes  VRFProof          = 10 [(gogoproto.jsontag) = "vrfProof"];
+  bytes  MaxPri            = 11 [(gogoproto.jsontag) = "maxPri"];
+  bytes  VoteAggSignature  = 12 [(gogoproto.jsontag) = "voteAggSignature"];
+  uint32 TxCount           = 13 [(gogoproto.jsontag) = "txCount"];
+  bytes  TxRoot            = 14 [(gogoproto.jsontag) = "txRoot"];
+  bytes  TxResultRoot      = 15 [(gogoproto.jsontag) = "txResultHash"];
+  bytes  StateRoot         = 16 [(gogoproto.jsontag) = "txResultHash"];
+  bytes  GasFees           = 17 [(gogoproto.jsontag) = "gasFees"];
+  uint64 TimeStamp         = 18 [(gogoproto.jsontag) = "timeStamp"];
+  uint64 ElapsedSpan       = 19 [(gogoproto.jsontag) = "elaspedSpan"]; //unit ms
+  bytes  Hash              = 20 [(gogoproto.jsontag) = "hash"];
+  bytes  Reserved          = 21 [(gogoproto.jsontag) = "reserved"];
 }
 
 message BlockData {
-  uint32 Version     = 1  [(gogoproto.jsontag) = "version"];
-  repeated bytes txs = 2  [(gogoproto.jsontag) = "txs"];
+  uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
+  repeated bytes Txs       = 2  [(gogoproto.jsontag) = "txs"];
 }
 
 message Block {
@@ -39,7 +43,7 @@ message Block {
   BlockData Data = 2  [(gogoproto.jsontag) = "data"];
 }
 
-message BlockResult {
+message BlockResultHead {
   uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
   bytes  PrevBlockResult   = 2  [(gogoproto.jsontag) = "prevBlockResult"];
   bytes  BlockHash         = 3  [(gogoproto.jsontag) = "blockHash"];
@@ -51,4 +55,14 @@ message BlockResult {
   ResultStatus Status    = 5  [(gogoproto.jsontag) = "status"];
   bytes ErrMsg           = 6  [(gogoproto.jsontag) = "errMsg"];
   bytes Reserved         = 7  [(gogoproto.jsontag) = "reserved"];
+}
+
+message BlockResultData {
+  uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
+  repeated bytes TxResults = 2  [(gogoproto.jsontag) = "txResults"];
+}
+
+message BlockResult {
+  BlockResultHead Head = 1  [(gogoproto.jsontag) = "head"];
+  BlockResultData Data = 2  [(gogoproto.jsontag) = "data"];
 }

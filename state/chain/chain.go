@@ -21,6 +21,12 @@ type ChainState interface {
 	GetNodeWeight(nodeID string) (uint64, error)
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
+
+	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
+
+	SetLatestBlock(block *tpchaintypes.Block) error
+
+	SetLatestBlockResult(blockResult *tpchaintypes.BlockResult) error
 }
 
 type chainState struct {
@@ -64,6 +70,21 @@ func (cs *chainState) GetNodeWeight(nodeID string) (uint64, error) {
 }
 
 func (cs *chainState) GetLatestBlock() (*tpchaintypes.Block, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cs *chainState) GetLatestBlockResult() (*tpchaintypes.BlockResult, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cs *chainState) SetLatestBlock(block *tpchaintypes.Block) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (cs *chainState) SetLatestBlockResult(blockResult *tpchaintypes.BlockResult) error {
 	//TODO implement me
 	panic("implement me")
 }

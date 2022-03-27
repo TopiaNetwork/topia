@@ -385,16 +385,6 @@ func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessa
 		return err
 	}
 
-	/*
-		peerID, vrfProof, err := md.getVoterCollector(msg.Round)
-		if err != nil {
-			md.log.Errorf("Can't get the next leader: err=%v", err)
-			return err
-		}
-
-		msg.VoterProof = vrfProof
-	*/
-
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, proposer)
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 	err = md.network.Send(ctx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
@@ -409,34 +399,41 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
-	sigData, pubKey, err := md.dkgBls.Sign(msg.BlockHead)
+	sigData, err := md.cryptService.Sign(md.priKey, msg.BlockHead)
 	if err != nil {
-		md.log.Errorf("DKG sign CommitMessage err: %v", err)
+		md.log.Errorf("Sign err for commit msg: %v", err)
 		return err
 	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+
 	msg.Signature = sigData
 	msg.PubKey = pubKey
 
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
-		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		md.log.Errorf("CommitMessage marshal err: %v", err)
 		return err
 	}
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetActiveExecutorIDs()
 		if err != nil {
-			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
 			return err
 		}
 		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
 	}
 
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	err = md.network.Send(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send propose message to network failed: err=%v", err)
+		md.log.Errorf("Send propose message to executor network failed: err=%v", err)
 	}
 
 	return err

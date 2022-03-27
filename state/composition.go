@@ -37,6 +37,8 @@ type CompositionStateReadonly interface {
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
+	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
+
 	GetAllConsensusNodes() ([]string, error)
 
 	GetChainTotalWeight() (uint64, error)
@@ -57,11 +59,7 @@ type CompositionStateReadonly interface {
 
 	GetCurrentRound() uint64
 
-	SetCurrentRound(round uint64)
-
 	GetCurrentEpoch() uint64
-
-	SetCurrentEpoch(epoch uint64)
 
 	StateRoot() ([]byte, error)
 

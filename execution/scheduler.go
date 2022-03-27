@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"time"
 
 	"github.com/lazyledger/smt"
@@ -43,7 +45,7 @@ type ExecutionScheduler interface {
 
 	ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error)
 
-	CommitPackedTx(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockStore block.BlockStore) error
+	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore) error
 }
 
 type executionScheduler struct {
@@ -193,7 +195,68 @@ func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Contex
 	return nil, nil, errors.New("Not exist packed txs")
 }
 
-func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockStore block.BlockStore) error {
+func (scheduler *executionScheduler) ConstructBlockAndBlockResult(marshaler codec.Marshaler, blockHead *tpchaintypes.BlockHead, compState state.CompositionState, packedTxs *PackedTxs, packedTxsRS *PackedTxsResult) (*tpchaintypes.Block, *tpchaintypes.BlockResult, error) {
+	dstBH, err := blockHead.DeepCopy(blockHead)
+	if err != nil {
+		err := fmt.Errorf("Block head deep copy err: %v", err)
+		return nil, nil, err
+	}
+
+	blockData := &tpchaintypes.BlockData{
+		Version: blockHead.Version,
+	}
+	for i := 0; i < len(packedTxs.TxList); i++ {
+		txBytes, _ := packedTxs.TxList[i].HashBytes()
+		blockData.Txs = append(blockData.Txs, txBytes)
+	}
+
+	block := &tpchaintypes.Block{
+		Head: dstBH,
+		Data: blockData,
+	}
+
+	blockHash, err := block.HashBytes(tpcmm.NewBlake2bHasher(0), marshaler)
+	if err != nil {
+		scheduler.log.Errorf("Can't get current block hash: %v", err)
+		return nil, nil, err
+	}
+
+	latestBlockResult, err := compState.GetLatestBlockResult()
+	if err != nil {
+		scheduler.log.Errorf("Can't get latest block result: %v", err)
+		return nil, nil, err
+	}
+	blockRSHash, err := latestBlockResult.HashBytes(tpcmm.NewBlake2bHasher(0), marshaler)
+	if err != nil {
+		scheduler.log.Errorf("Can't get latest block result hash: %v", err)
+		return nil, nil, err
+	}
+
+	blockResultHead := &tpchaintypes.BlockResultHead{
+		Version:          blockHead.Version,
+		PrevBlockResult:  blockRSHash,
+		BlockHash:        blockHash,
+		TxResultHashRoot: tpcmm.BytesCopy(packedTxsRS.TxRSRoot),
+		Status:           tpchaintypes.BlockResultHead_OK,
+	}
+
+	blockResultData := &tpchaintypes.BlockResultData{
+		Version: blockHead.Version,
+	}
+	for r := 0; r < len(packedTxsRS.TxsResult); r++ {
+		txRSBytes, _ := packedTxsRS.TxsResult[r].HashBytes(packedTxs.TxList[r].FromAddr)
+		blockResultData.TxResults = append(blockResultData.TxResults, txRSBytes)
+	}
+
+	blockResult := &tpchaintypes.BlockResult{
+		Head: blockResultHead,
+		Data: blockResultData,
+	}
+
+	return block, blockResult, nil
+}
+
+func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore) error {
 	if ok := scheduler.executeMutex.TryLockTimeout(1 * time.Second); !ok {
 		err := fmt.Errorf("A packedTxs is commiting, try later again")
 		scheduler.log.Errorf("%v", err)
@@ -214,6 +277,22 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 			return err
 		}
 
+		block, blockRS, err := scheduler.ConstructBlockAndBlockResult(marshaler, blockHead, exeTxsF.compState, exeTxsF.packedTxs, exeTxsF.PackedTxsResult())
+		if err != nil {
+			scheduler.log.Errorf("ConstructBlockAndBlockResult err: %v", err)
+			return err
+		}
+		err = exeTxsF.compState.SetLatestBlock(block)
+		if err != nil {
+			scheduler.log.Errorf("Set latest block err when CommitPackedTx: %v", err)
+			return err
+		}
+		err = exeTxsF.compState.SetLatestBlockResult(blockRS)
+		if err != nil {
+			scheduler.log.Errorf("Set latest block result err when CommitPackedTx: %v", err)
+			return err
+		}
+
 		errCMMState := exeTxsF.compState.Commit()
 		if errCMMState != nil {
 			scheduler.log.Errorf("Commit state version %d err: %s", stateVersion, errCMMState)
@@ -221,9 +300,9 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 		}
 
 		errCMMBlock := blockStore.CommitBlock(block)
-		if errCMMState != nil {
-			scheduler.log.Errorf("Commit block err: state version %d,  err: %s", stateVersion, errCMMBlock)
-			return errCMMState
+		if errCMMBlock != nil {
+			scheduler.log.Errorf("Commit block e: state version %d,  err: %s", stateVersion, errCMMBlock)
+			return errCMMBlock
 		}
 
 		scheduler.exePackedTxsList.Remove(exeTxsItem)

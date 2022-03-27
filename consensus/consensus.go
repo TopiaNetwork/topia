@@ -52,7 +52,7 @@ type consensus struct {
 	network      tpnet.Network
 	executor     *consensusExecutor
 	proposer     *consensusProposer
-	voter        *consensusVoter
+	validator    *consensusValidator
 	dkgEx        *dkgExchange
 	epochService *epochService
 }
@@ -83,8 +83,8 @@ func NewConsensus(nodeID string,
 	exeScheduler := execution.NewExecutionScheduler(log)
 
 	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, config.ExecutionPrepareInterval)
-	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, proposeMsgChan, cryptS, deliver, ledger, marshaler)
-	voter := newConsensusVoter(log, proposeMsgChan, deliver)
+	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
+	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, cryptS, deliver, ledger, marshaler, validator)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
 
 	epochService := newEpochService(log, roundCh, config.RoundDuration, config.EpochInterval, ledger, dkgEx)
@@ -101,7 +101,7 @@ func NewConsensus(nodeID string,
 		network:      network,
 		executor:     executor,
 		proposer:     proposer,
-		voter:        voter,
+		validator:    validator,
 		dkgEx:        dkgEx,
 		epochService: epochService,
 	}
@@ -161,13 +161,13 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
 	cons.epochService.start(ctx)
 	cons.executor.start(ctx)
 	cons.proposer.start(ctx)
-	cons.voter.start(ctx)
+	cons.validator.start(ctx)
 	cons.dkgEx.startLoop(ctx)
 
 	return nil
 }
 
-func (cons *consensus) dispatch(context actor.Context, data []byte) {
+func (cons *consensus) dispatch(actorCtx actor.Context, data []byte) {
 	var consMsg ConsensusMessage
 	err := cons.marshaler.Unmarshal(data, &consMsg)
 	if err != nil {
@@ -200,6 +200,14 @@ func (cons *consensus) dispatch(context actor.Context, data []byte) {
 			return
 		}
 		cons.ProcessPropose(&msg)
+	case ConsensusMessage_ExeRSValidateReq:
+		var msg ExeResultValidateReqMessage
+		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+		if err != nil {
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+			return
+		}
+		cons.ProcesExeResultValidateReq(actorCtx, &msg)
 	case ConsensusMessage_Vote:
 		var msg VoteMessage
 		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)

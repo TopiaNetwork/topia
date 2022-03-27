@@ -158,13 +158,12 @@ func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Conte
 
 func (handler *consensusHandler) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
 	return &CommitMessage{
-		ChainID: msg.ChainID,
-		Version: msg.Version,
-		Epoch:   msg.Epoch,
-		Round:   msg.Round,
-		Proof:   msg.Proof,
-		AggSign: aggSign,
-		Block:   msg.Block,
+		ChainID:      msg.ChainID,
+		Version:      msg.Version,
+		Epoch:        msg.Epoch,
+		Round:        msg.Round,
+		StateVersion: msg.StateVersion,
+		BlockHead:    msg.BlockHead,
 	}, nil
 }
 
@@ -182,18 +181,18 @@ func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
 			handler.log.Panicf("Can't deliver commit message: %v", err)
 		}
 
-		var block tptypes.Block
-		err = handler.marshaler.Unmarshal(msg.Block, &block)
+		var blockHead tptypes.BlockHead
+		err = handler.marshaler.Unmarshal(msg.BlockHead, &blockHead)
 		if err != nil {
 			handler.log.Errorf("Unmarshal block failed: %v", err)
 			return err
 		}
-		block.Head.VoteAggSignature = aggSign
-		err = handler.ledger.GetBlockStore().CommitBlock(&block)
+		blockHead.VoteAggSignature = aggSign
+		/*err = handler.ledger.GetBlockStore().CommitBlock(&block)
 		if err != nil {
 			handler.log.Errorf("Can't commit block height =%d, err=%v", block.Head.Height, err)
 			return err
-		}
+		}*/
 
 		handler.voteCollector.reset()
 
@@ -219,20 +218,20 @@ func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
 }
 
 func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
-	var block tptypes.Block
-	err := handler.marshaler.Unmarshal(msg.Block, &block)
+	var blockHead tptypes.BlockHead
+	err := handler.marshaler.Unmarshal(msg.BlockHead, &blockHead)
 	if err != nil {
 		handler.log.Errorf("Unmarshal block failed: %v", err)
 		return err
 	}
 
-	block.Head.VoteAggSignature = msg.AggSign
-
-	err = handler.ledger.GetBlockStore().CommitBlock(&block)
-	if err != nil {
-		handler.log.Errorf("Can't commit block height =%d, err=%v", block.Head.Height, err)
-		return err
-	}
+	/*
+		err = handler.ledger.GetBlockStore().CommitBlock(&block)
+		if err != nil {
+			handler.log.Errorf("Can't commit block height =%d, err=%v", blockHead.Height, err)
+			return err
+		}
+	*/
 
 	handler.voteCollector.reset()
 

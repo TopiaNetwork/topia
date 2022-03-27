@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"github.com/AsynkronIT/protoactor-go/actor"
 	"sync"
 
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -37,6 +38,16 @@ func (md *messageDeliverMock) deliverPreparePackagedMessageProp(ctx context.Cont
 }
 
 func (md *messageDeliverMock) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (md *messageDeliverMock) deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (md *messageDeliverMock) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error {
 	//TODO implement me
 	panic("implement me")
 }

@@ -41,7 +41,7 @@ type messageDeliverI interface {
 
 	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error
 
-	deliverVoteMessage(ctx context.Context, msg *VoteMessage) error
+	deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error
 
 	deliverCommitMessage(ctx context.Context, msg *CommitMessage) error
 
@@ -370,8 +370,8 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 	return selVoteColectors[0].nodeID, vrfProof, err
 }
 
-func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage) error {
-	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
+func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error {
+	sigData, pubKey, err := md.dkgBls.Sign(msg.BlockHead)
 	if err != nil {
 		md.log.Errorf("DKG sign VoteMessage err: %v", err)
 		return err
@@ -381,23 +381,25 @@ func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessa
 
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
-		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		md.log.Errorf("VoteMessage marshal err: %v", err)
 		return err
 	}
 
-	peerID, vrfProof, err := md.getVoterCollector(msg.Round)
-	if err != nil {
-		md.log.Errorf("Can't get the next leader: err=%v", err)
-		return err
-	}
+	/*
+		peerID, vrfProof, err := md.getVoterCollector(msg.Round)
+		if err != nil {
+			md.log.Errorf("Can't get the next leader: err=%v", err)
+			return err
+		}
 
-	msg.VoterProof = vrfProof
+		msg.VoterProof = vrfProof
+	*/
 
-	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerID)
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, proposer)
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	err = md.network.Send(ctx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send vote message to network failed: err=%v", err)
+		md.log.Errorf("Send vote message to proposer network failed: err=%v", err)
 	}
 
 	return err
@@ -407,7 +409,7 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
-	sigData, pubKey, err := md.dkgBls.Sign(msg.Block)
+	sigData, pubKey, err := md.dkgBls.Sign(msg.BlockHead)
 	if err != nil {
 		md.log.Errorf("DKG sign CommitMessage err: %v", err)
 		return err

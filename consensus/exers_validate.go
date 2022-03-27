@@ -19,6 +19,14 @@ type executionResultValidate struct {
 	deliver messageDeliverI
 }
 
+func newExecutionResultValidate(log tplog.Logger, nodeID string, deliver messageDeliverI) *executionResultValidate {
+	return &executionResultValidate{
+		log:     log,
+		nodeID:  nodeID,
+		deliver: deliver,
+	}
+}
+
 func (ev *executionResultValidate) resultValidateDataRequest(ctx context.Context, propMsg *ProposeMessage) (*ExeResultValidateRespMessage, [][]byte, [][]byte, error) {
 	var randTxHashs [][]byte
 	var randTxRSHashs [][]byte

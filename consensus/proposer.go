@@ -28,6 +28,7 @@ type consensusProposer struct {
 	lastRoundNum            uint64
 	roundCh                 chan *RoundInfo
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
+	voteMsgChan             chan *VoteMessage
 	deliver                 messageDeliverI
 	marshaler               codec.Marshaler
 	ledger                  ledger.Ledger
@@ -35,22 +36,29 @@ type consensusProposer struct {
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
+	voteCollector           *consensusVoteCollector
 }
 
-func newConsensusProposer(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, roundCh chan *RoundInfo, preprePackedMsgPropChan chan *PreparePackedMessageProp, crypt tpcrt.CryptService, deliver messageDeliverI, ledger ledger.Ledger, marshaler codec.Marshaler, validator *consensusValidator) *consensusProposer {
+func newConsensusProposer(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, roundCh chan *RoundInfo, preprePackedMsgPropChan chan *PreparePackedMessageProp, voteMsgChan chan *VoteMessage, crypt tpcrt.CryptService, deliver messageDeliverI, ledger ledger.Ledger, marshaler codec.Marshaler, validator *consensusValidator) *consensusProposer {
 	return &consensusProposer{
 		log:                     log,
 		nodeID:                  nodeID,
 		priKey:                  priKey,
 		roundCh:                 roundCh,
 		preprePackedMsgPropChan: preprePackedMsgPropChan,
+		voteMsgChan:             voteMsgChan,
 		deliver:                 deliver,
 		marshaler:               marshaler,
 		ledger:                  ledger,
 		cryptService:            crypt,
 		ppmPropList:             list.New(),
 		validator:               validator,
+		voteCollector:           newConsensusVoteCollector(log),
 	}
+}
+
+func (p *consensusProposer) updateDKGBls(dkgBls DKGBls) {
+	p.voteCollector.updateDKGBls(dkgBls)
 }
 
 func (p *consensusProposer) canProposeBlock(roundInfo *RoundInfo) (bool, []byte, []byte, error) {
@@ -133,6 +141,64 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 	}()
 }
 
+func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
+	var blockHead tpchaintypes.BlockHead
+	err := p.marshaler.Unmarshal(msg.BlockHead, &blockHead)
+	if err != nil {
+		p.log.Errorf("Unmarshal block failed: %v", err)
+		return nil, err
+	}
+	blockHead.VoteAggSignature = aggSign
+
+	newBlockHeadBytes, err := p.marshaler.Marshal(blockHead)
+	if err != nil {
+		p.log.Errorf("Marshal block head failed: %v", err)
+		return nil, err
+	}
+
+	return &CommitMessage{
+		ChainID:      msg.ChainID,
+		Version:      msg.Version,
+		Epoch:        msg.Epoch,
+		Round:        msg.Round,
+		StateVersion: msg.StateVersion,
+		BlockHead:    newBlockHeadBytes,
+	}, nil
+}
+
+func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case voteMsg := <-p.voteMsgChan:
+				aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
+				if err != nil {
+					p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
+					continue
+				}
+
+				if aggSign == nil {
+					p.log.Debug("Haven't reached threshold at present")
+					continue
+				}
+
+				commitMsg, _ := p.produceCommitMsg(voteMsg, aggSign)
+				err = p.deliver.deliverCommitMessage(context.Background(), commitMsg)
+				if err != nil {
+					p.log.Errorf("Can't deliver commit message: %v", err)
+					continue
+				}
+
+				p.voteCollector.reset()
+
+			case <-ctx.Done():
+				p.log.Info("Consensus proposer receiveing prepare packed msg prop exit")
+				return
+			}
+		}
+	}()
+}
+
 func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 	go func() {
 		for {
@@ -176,6 +242,8 @@ func (p *consensusProposer) start(ctx context.Context) {
 	p.proposeBlockStart(ctx)
 
 	p.receivePreparePackedMessagePropStart(ctx)
+
+	p.receiveVoteMessagStart(ctx)
 }
 
 func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, csStateRN state.CompositionStateReadonly) (*tpchaintypes.BlockHead, uint64, error) {

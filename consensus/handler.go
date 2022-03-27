@@ -33,8 +33,6 @@ type ConsensusHandler interface {
 	ProcessDKGDeal(msg *DKGDealMessage) error
 
 	ProcessDKGDealResp(msg *DKGDealRespMessage) error
-
-	updateDKGBls(dkgBls DKGBls)
 }
 
 type consensusHandler struct {
@@ -43,10 +41,11 @@ type consensusHandler struct {
 	preprePackedMsgExeChan  chan *PreparePackedMessageExe
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
 	proposeMsgChan          chan *ProposeMessage
+	voteMsgChan             chan *VoteMessage
+	commitMsgChan           chan *CommitMessage
 	partPubKey              chan *DKGPartPubKeyMessage
 	dealMsgCh               chan *DKGDealMessage
 	dealRespMsgCh           chan *DKGDealRespMessage
-	voteCollector           *consensusVoteCollector
 	ledger                  ledger.Ledger
 	marshaler               codec.Marshaler
 	deliver                 messageDeliverI
@@ -58,6 +57,7 @@ func NewConsensusHandler(log tplog.Logger,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
+	voteMsgChan chan *VoteMessage,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
@@ -71,10 +71,10 @@ func NewConsensusHandler(log tplog.Logger,
 		preprePackedMsgExeChan:  preprePackedMsgExeChan,
 		preprePackedMsgPropChan: preprePackedMsgPropChan,
 		proposeMsgChan:          proposeMsgChan,
+		voteMsgChan:             voteMsgChan,
 		partPubKey:              partPubKey,
 		dealMsgCh:               dealMsgCh,
 		dealRespMsgCh:           dealRespMsgCh,
-		voteCollector:           newConsensusVoteCollector(log),
 		ledger:                  ledger,
 		marshaler:               marshaler,
 		deliver:                 deliver,
@@ -156,63 +156,8 @@ func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Conte
 	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp)
 }
 
-func (handler *consensusHandler) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
-	return &CommitMessage{
-		ChainID:      msg.ChainID,
-		Version:      msg.Version,
-		Epoch:        msg.Epoch,
-		Round:        msg.Round,
-		StateVersion: msg.StateVersion,
-		BlockHead:    msg.BlockHead,
-	}, nil
-}
-
 func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
-	aggSign, err := handler.voteCollector.tryAggregateSignAndAddVote(msg)
-	if err != nil {
-		handler.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
-		return err
-	}
-
-	if aggSign != nil {
-		commitMsg, _ := handler.produceCommitMsg(msg, aggSign)
-		err := handler.deliver.deliverCommitMessage(context.Background(), commitMsg)
-		if err != nil {
-			handler.log.Panicf("Can't deliver commit message: %v", err)
-		}
-
-		var blockHead tptypes.BlockHead
-		err = handler.marshaler.Unmarshal(msg.BlockHead, &blockHead)
-		if err != nil {
-			handler.log.Errorf("Unmarshal block failed: %v", err)
-			return err
-		}
-		blockHead.VoteAggSignature = aggSign
-		/*err = handler.ledger.GetBlockStore().CommitBlock(&block)
-		if err != nil {
-			handler.log.Errorf("Can't commit block height =%d, err=%v", block.Head.Height, err)
-			return err
-		}*/
-
-		handler.voteCollector.reset()
-
-		/*
-			csProof := ConsensusProof{
-				ParentBlockHash: block.Head.ParentBlockHash,
-				Height:          block.Head.Height,
-				AggSign:         aggSign,
-			}
-
-			roundInfo := &RoundInfo{
-				Epoch:        block.Head.Epoch,
-				LastRoundNum: block.Head.Round,
-				CurRoundNum:  block.Head.Round + 1,
-				Proof:        &csProof,
-			}
-
-			handler.roundCh <- roundInfo
-		*/
-	}
+	handler.voteMsgChan <- msg
 
 	return nil
 }
@@ -232,8 +177,6 @@ func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
 			return err
 		}
 	*/
-
-	handler.voteCollector.reset()
 
 	return nil
 }
@@ -256,6 +199,4 @@ func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) err
 	return nil
 }
 
-func (handler *consensusHandler) updateDKGBls(dkgBls DKGBls) {
-	handler.voteCollector.updateDKGBls(dkgBls)
-}
+

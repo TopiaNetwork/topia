@@ -34,8 +34,8 @@ message BlockHead {
 }
 
 message BlockData {
-  uint32 Version     = 1  [(gogoproto.jsontag) = "version"];
-  repeated bytes txs = 2  [(gogoproto.jsontag) = "txs"];
+  uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
+  repeated bytes Txs       = 2  [(gogoproto.jsontag) = "txs"];
 }
 
 message Block {
@@ -43,7 +43,7 @@ message Block {
   BlockData Data = 2  [(gogoproto.jsontag) = "data"];
 }
 
-message BlockResult {
+message BlockResultHead {
   uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
   bytes  PrevBlockResult   = 2  [(gogoproto.jsontag) = "prevBlockResult"];
   bytes  BlockHash         = 3  [(gogoproto.jsontag) = "blockHash"];
@@ -55,4 +55,14 @@ message BlockResult {
   ResultStatus Status    = 5  [(gogoproto.jsontag) = "status"];
   bytes ErrMsg           = 6  [(gogoproto.jsontag) = "errMsg"];
   bytes Reserved         = 7  [(gogoproto.jsontag) = "reserved"];
+}
+
+message BlockResultData {
+  uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
+  repeated bytes TxResults = 2  [(gogoproto.jsontag) = "txResults"];
+}
+
+message BlockResult {
+  BlockResultHead Head = 1  [(gogoproto.jsontag) = "head"];
+  BlockResultData Data = 2  [(gogoproto.jsontag) = "data"];
 }

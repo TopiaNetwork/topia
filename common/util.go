@@ -1,14 +1,25 @@
 package common
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"fmt"
-	mapset "github.com/deckarep/golang-set"
 	"sort"
+
+	mapset "github.com/deckarep/golang-set"
 )
 
 func panicf(format string, args ...interface{}) {
-	panic(fmt.Sprintf(format, args))
+	panic(fmt.Sprintf(format, args...))
+}
+
+func Clone(dst, src interface{}) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(src); err != nil {
+		return err
+	}
+	return gob.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(dst)
 }
 
 func BytesCopy(src []byte) []byte {

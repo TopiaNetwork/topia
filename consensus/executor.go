@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"time"
@@ -28,11 +29,12 @@ type consensusExecutor struct {
 	exeScheduler            execution.ExecutionScheduler
 	deliver                 *messageDeliver
 	preparePackedMsgExeChan chan *PreparePackedMessageExe
+	commitMsgChan           chan *CommitMessage
 	cryptService            tpcrt.CryptService
 	prepareInterval         time.Duration
 }
 
-func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.ExecutionScheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe, prepareInterval time.Duration) *consensusExecutor {
+func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.ExecutionScheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe, commitMsgChan chan *CommitMessage, prepareInterval time.Duration) *consensusExecutor {
 	return &consensusExecutor{
 		log:                     log,
 		nodeID:                  nodeID,
@@ -43,6 +45,7 @@ func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.Priv
 		exeScheduler:            exeScheduler,
 		deliver:                 deliver,
 		preparePackedMsgExeChan: preprePackedMsgExeChan,
+		commitMsgChan:           commitMsgChan,
 		prepareInterval:         prepareInterval,
 	}
 }
@@ -104,6 +107,33 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 	}()
 }
 
+func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case commitMsg := <-e.commitMsgChan:
+				csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
+				defer csStateRN.Stop()
+
+				var bh tpchaintypes.BlockHead
+				err := e.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
+				if err != nil {
+					e.log.Errorf("Can't unmarshal received block head of commit message: %v", err)
+					continue
+				}
+
+				err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, e.marshaler, e.ledger.GetBlockStore())
+				if err != nil {
+					e.log.Errorf("Commit packed tx err: %v", err)
+				}
+			case <-ctx.Done():
+				e.log.Info("Consensus executor receiveing prepare packed msg exe exit")
+				return
+			}
+		}
+	}()
+}
+
 func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 	if schedulerState := e.exeScheduler.State(); schedulerState != execution.SchedulerState_Idle {
 		err := fmt.Errorf("Execution scheduler state %s not idle", schedulerState.String())
@@ -137,7 +167,6 @@ func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 	}
 
 	return false, vrfProof, nil
-
 }
 
 func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {

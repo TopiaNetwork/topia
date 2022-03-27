@@ -14,6 +14,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
+	"math/big"
 	"reflect"
 	"testing"
 	"time"
@@ -1022,10 +1023,33 @@ func TestTransactionPool_LoadRemoteTxs(t *testing.T) {
 }
 
 func TestTransactionPool_Cost(t *testing.T) {
-	fmt.Println("Waiting for test")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	servant := NewMockTransactionPoolServant(ctrl)
+	servant.EXPECT().EstimateTxCost(gomock.Any()).Return(big.NewInt(90000000000)).AnyTimes()
+	log := NewMockLogger(ctrl)
+	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool.query = servant
+	want := big.NewInt(90000000000)
+	if got := pool.Cost(Tx1); !reflect.DeepEqual(want, got) {
+		t.Error("want", want, "got", got)
+	}
+
 }
 func TestTransactionPool_Gas(t *testing.T) {
-	fmt.Println("Waiting for test")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	servant := NewMockTransactionPoolServant(ctrl)
+	servant.EXPECT().EstimateTxGas(gomock.Any()).Return(uint64(1234567)).AnyTimes()
+	log := NewMockLogger(ctrl)
+	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool.query = servant
+	want := uint64(1234567)
+	if got := pool.Gas(Tx1); !reflect.DeepEqual(want, got) {
+
+		t.Error("want", want, "got", got)
+	}
+
 }
 func TestTransactionPool_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)

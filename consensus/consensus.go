@@ -72,6 +72,7 @@ func NewConsensus(nodeID string,
 	preprePackedMsgExeChan := make(chan *PreparePackedMessageExe)
 	preprePackedMsgPropChan := make(chan *PreparePackedMessageProp)
 	proposeMsgChan := make(chan *ProposeMessage)
+	voteMsgChan := make(chan *VoteMessage)
 	partPubKey := make(chan *DKGPartPubKeyMessage, PartPubKeyChannel_Size)
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
@@ -84,14 +85,14 @@ func NewConsensus(nodeID string,
 
 	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, config.ExecutionPrepareInterval)
 	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
-	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, cryptS, deliver, ledger, marshaler, validator)
+	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, voteMsgChan, cryptS, deliver, ledger, marshaler, validator)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
 
 	epochService := newEpochService(log, roundCh, config.RoundDuration, config.EpochInterval, ledger, dkgEx)
-	csHandler := NewConsensusHandler(log, roundCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
+	csHandler := NewConsensusHandler(log, roundCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
 
 	dkgEx.addDKGBLSUpdater(deliver)
-	dkgEx.addDKGBLSUpdater(csHandler)
+	dkgEx.addDKGBLSUpdater(proposer)
 
 	return &consensus{
 		log:          consLog,

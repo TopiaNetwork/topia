@@ -145,6 +145,7 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 
 	pool.pubSubService = pool.query.SubChainHeadEvent(pool.chanChainHead)
 
+	pool.wg.Add(1)
 	go pool.loop()
 	return pool
 }
@@ -318,6 +319,15 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 	return nil
 }
 
+func (pool *transactionPool) RemoveTxHashs(txHashs []string) []error {
+	errs := make([]error, 0)
+	for _, txHash := range txHashs {
+		if err := pool.RemoveTxByKey(txHash); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
 func (pool *transactionPool) Cost(tx *transaction.Transaction) *big.Int {
 	total := pool.query.EstimateTxCost(tx)
 	return total
@@ -599,7 +609,6 @@ func (pool *transactionPool) replaceExecutables(accounts []account.Address) []*t
 
 		for _, tx := range forwards {
 			if txId, err := tx.TxID(); err != nil {
-				//print err
 			} else {
 				pool.allTxsForLook.Remove(txId)
 			}

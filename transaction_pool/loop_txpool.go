@@ -1,19 +1,24 @@
 package transactionpool
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 )
 
 func (pool *transactionPool) loop() {
-
+	defer pool.wg.Done()
+	fmt.Println("loop001")
 	// Notify tests that the init phase is done
 	close(pool.chanInitDone)
 	pool.wg.Add(1)
+	fmt.Println("loop002")
 	go pool.chanRemoveTxHashs()
 	pool.wg.Add(1)
+	fmt.Println("loop003")
 	go pool.saveAllIfShutDown()
 	pool.wg.Add(1)
+	fmt.Println("loop004")
 	go pool.resetIfNewHead()
 	pool.wg.Add(1)
 	go pool.reportTicks()
@@ -32,15 +37,6 @@ func (pool *transactionPool) chanRemoveTxHashs() {
 			pool.RemoveTxHashs(txHashs)
 		}
 	}
-}
-func (pool *transactionPool) RemoveTxHashs(txHashs []string) []error {
-	errs := make([]error, 0)
-	for _, txHash := range txHashs {
-		if err := pool.RemoveTxByKey(txHash); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errs
 }
 
 func (pool *transactionPool) saveAllIfShutDown() {

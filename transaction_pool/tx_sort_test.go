@@ -1,8 +1,9 @@
 package transactionpool
 
 import (
-	"fmt"
+	"github.com/TopiaNetwork/topia/codec"
 	"github.com/TopiaNetwork/topia/transaction"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -148,8 +149,12 @@ func TestCntAccountHeap_Swap(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			want := tt.pq[1]
 			tt.pq.Swap(0, 1)
-			fmt.Printf("%v,%v", tt.pq[0], tt.pq[1])
+			got := tt.pq[0]
+			if !assert.Equal(t, want, got) {
+				t.Error("want", want, "got", got)
+			}
 		})
 	}
 }
@@ -170,10 +175,11 @@ func TestCntAccountHeap_Push(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			want := tt.pq.Len() + 1
 			tt.pq.Push(&newCntAccountItem)
-			fmt.Printf("%v", tt.pq.Len())
-			for k, _ := range tt.pq {
-				fmt.Printf("%v", tt.pq[k])
+			got := tt.pq.Len()
+			if !assert.Equal(t, want, got) {
+				t.Error("want", want, "got", got)
 			}
 		})
 	}
@@ -195,7 +201,6 @@ func TestCntAccountHeap_Pop(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.pq.Pop(); !reflect.DeepEqual(got, tt.want) {
-
 				t.Errorf("Pop() = %v, want %v", got, tt.want)
 			}
 		})
@@ -238,4 +243,30 @@ func Test_txSortedMap_Get(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_transactionPool_AddLocals(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	servant := NewMockTransactionPoolServant(ctrl)
+	log := TpiaLog
+	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool.query = servant
+	assert.Equal(t, 0, len(pool.queue.accTxs))
+	assert.Equal(t, 0, len(pool.pending.accTxs))
+	assert.Equal(t, 0, pool.allTxsForLook.LocalCount())
+	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
+	assert.Equal(t, 0, len(pool.sortedByPriced.all.locals))
+	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
+	txs := make([]*transaction.Transaction, 0)
+	txs = append(txs, Tx1)
+	txs = append(txs, Tx2)
+	pool.AddLocals(txs)
+	assert.Equal(t, 1, len(pool.queue.accTxs))
+	assert.Equal(t, 2, pool.queue.accTxs[From1].txs.Len())
+	assert.Equal(t, 0, len(pool.pending.accTxs))
+	assert.Equal(t, 2, pool.allTxsForLook.LocalCount())
+	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
+	assert.Equal(t, 2, len(pool.sortedByPriced.all.locals))
+	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
 }

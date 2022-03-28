@@ -2,7 +2,6 @@ package transactionpool
 
 import (
 	"encoding/hex"
-	"fmt"
 	"math"
 
 	"github.com/TopiaNetwork/topia/account"
@@ -175,22 +174,17 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 	//If the old header and the new header do not meet certain conditions,
 	//part of the transaction needs to be injected back into the transaction pool
 	var reInject []*transaction.Transaction
-	fmt.Println("reset 001")
 	if oldHead != nil && types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)) != types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)) {
-		fmt.Println("reset 002")
 
 		oldNum := oldHead.GetHeight()
 		newNum := newHead.GetHeight()
-		fmt.Println("reset 003")
 
 		//If the difference between the old block and the new block is greater than 64
 		//then no recombination is carried out
 		if depth := uint64(math.Abs(float64(oldNum) - float64(newNum))); depth > 64 {
-			fmt.Println("reset 004")
 
 			pool.log.Debugf("Skipping deep transaction reorg", "depth", depth)
 		} else {
-			fmt.Println("reset 005")
 
 			//The reorganization looks shallow enough to put all the transactions into memory
 			var discarded, included []*transaction.Transaction
@@ -199,26 +193,21 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 				add = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)), newHead.Height)
 			)
 			if rem == nil {
-				fmt.Println("reset 006")
 
 				if newNum >= oldNum {
-					fmt.Println("reset 007")
 
 					pool.log.Warnf("Transcation pool reset with missing oldhead",
 						"old", types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)),
 						"new", types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)))
 					return nil
 				}
-				fmt.Println("reset 008")
 
 				pool.log.Debugf("Skipping transaction reset caused by setHead",
 					"old", types.BlockHash(hex.EncodeToString(oldHead.TxHashRoot)), "oldnum", oldNum,
 					"new", types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)), "newnum", newNum)
 			} else {
-				fmt.Println("reset 009")
 
 				for rem.Head.Height > add.Head.Height {
-					fmt.Println("reset 010")
 
 					for _, tx := range rem.Data.Txs {
 						var txType *transaction.Transaction
@@ -233,7 +222,6 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 						return nil
 					}
 				}
-				fmt.Println("reset 011")
 
 				for add.Head.Height > rem.Head.Height {
 					for _, tx := range add.Data.Txs {
@@ -249,10 +237,8 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 						return nil
 					}
 				}
-				fmt.Println("reset 012")
 
 				for types.BlockHash(hex.EncodeToString(rem.Head.TxHashRoot)) != types.BlockHash(hex.EncodeToString(add.Head.TxHashRoot)) {
-					fmt.Println("reset 013")
 					for _, tx := range rem.Data.Txs {
 						var txType *transaction.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
@@ -278,32 +264,26 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 						return nil
 					}
 				}
-				fmt.Println("reset 014")
 
 				reInject = transaction.TxDifference(discarded, included)
 			}
 		}
 	}
-	fmt.Println("reset 015")
 
 	// Initialize the internal state to the current head
 	if newHead == nil {
 		newHead = pool.query.CurrentBlock().GetHead()
 	}
-	fmt.Println("reset 015")
 
 	stateDb, err := pool.query.StateAt(types.BlockHash(hex.EncodeToString(newHead.TxHashRoot)))
 	if err != nil {
 		pool.log.Errorf("Failed to reset txPool state", "err", err)
 		return nil
 	}
-	fmt.Println("reset 016")
 
 	pool.curState = *stateDb
-	fmt.Println("reset 017")
 
-	//pool.log.Debugf("ReInjecting stale transactions", "count", len(reInject))
-	fmt.Println("reset 018 len(reInject)", len(reInject))
+	pool.log.Debugf("ReInjecting stale transactions", "count", len(reInject))
 
 	return nil
 }

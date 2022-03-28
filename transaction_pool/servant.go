@@ -19,8 +19,24 @@ type TransactionPoolServant interface {
 	GetMaxGasLimit() uint64
 }
 
-type StatePoolDB interface {
-	GetAccount(addr account.Address) (*account.Account, error)
-	GetBalance(addr account.Address) *big.Int
-	GetNonce(addr account.Address) uint64
+type StatePoolDB struct {
+}
+
+func (st *StatePoolDB) GetAccount(addr account.Address) (*account.Account, error) {
+	acc := &account.Account{
+		Addr:    "",
+		Name:    "",
+		Nonce:   0,
+		Balance: nil,
+	}
+	return acc, nil
+}
+func (st *StatePoolDB) GetBalance(addr account.Address) *big.Int {
+	balance := big.NewInt(100000000)
+	return balance
+}
+
+func (st *StatePoolDB) GetNonce(addr account.Address) uint64 {
+	nonce := uint64(123456)
+	return nonce
 }

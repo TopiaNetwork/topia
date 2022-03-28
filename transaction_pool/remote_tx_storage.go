@@ -109,7 +109,7 @@ func (pool *transactionPool) processTx(msg *TxMessage) error {
 }
 
 func (pool *transactionPool) BroadCastTx(tx *transaction.Transaction) error {
-	var msg *TxMessage
+	msg := &TxMessage{}
 	data := tx.GetData()
 	msg.Data = data
 	_, err := msg.Marshal()

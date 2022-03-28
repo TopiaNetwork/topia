@@ -557,10 +557,9 @@ func (pool *transactionPool) turnTx(addr account.Address, txId string, tx *trans
 }
 
 func (pool *transactionPool) Stop() {
-
 	// Unsubscribe subscriptions registered from blockchain
 	pool.pubSubService.UnSubscribe(protocol.SyncProtocolID_Msg)
-	pool.log.Info("Transaction pool stopped")
+	//pool.log.Info("Transaction pool stopped")
 }
 
 // requestReplaceExecutables requests transaction promotion checks for the given addresses.

@@ -8,17 +8,12 @@ import (
 
 func (pool *transactionPool) loop() {
 	defer pool.wg.Done()
-	fmt.Println("loop001")
-	// Notify tests that the init phase is done
 	close(pool.chanInitDone)
 	pool.wg.Add(1)
-	fmt.Println("loop002")
 	go pool.chanRemoveTxHashs()
 	pool.wg.Add(1)
-	fmt.Println("loop003")
 	go pool.saveAllIfShutDown()
 	pool.wg.Add(1)
-	fmt.Println("loop004")
 	go pool.resetIfNewHead()
 	pool.wg.Add(1)
 	go pool.reportTicks()
@@ -29,7 +24,9 @@ func (pool *transactionPool) loop() {
 	pool.wg.Add(1)
 	go pool.regularRepublic()
 }
+
 func (pool *transactionPool) chanRemoveTxHashs() {
+	fmt.Println("chanRemoveTxHashs")
 	defer pool.wg.Done()
 	for {
 		select {
@@ -39,12 +36,12 @@ func (pool *transactionPool) chanRemoveTxHashs() {
 	}
 }
 
-func (pool *transactionPool) saveAllIfShutDown() {
+func (pool *transactionPool) saveAllIfShutDown() (a, b, c int) {
 	defer pool.wg.Done()
 	for {
 		select {
 		// System shutdown.  When the system is shut down, save to the files locals/remotes/configs
-		case <-pool.pubSubService.Err():
+		case <-pool.chanSysShutDown:
 			close(pool.chanReorgShutdown)
 			//local txs save
 			if err := pool.SaveLocalTxs(); err != nil {
@@ -64,6 +61,7 @@ func (pool *transactionPool) saveAllIfShutDown() {
 	}
 }
 func (pool *transactionPool) resetIfNewHead() {
+	fmt.Println("resetIfNewHead")
 	defer pool.wg.Done()
 	// Track the previous head headers for transaction reorgs
 	var head = pool.query.CurrentBlock()
@@ -79,6 +77,7 @@ func (pool *transactionPool) resetIfNewHead() {
 	}
 }
 func (pool *transactionPool) reportTicks() {
+	fmt.Println("reportTicks")
 	defer pool.wg.Done()
 	var (
 		prevPending, prevQueued, prevStales int
@@ -100,6 +99,7 @@ func (pool *transactionPool) reportTicks() {
 	}
 }
 func (pool *transactionPool) removeTxForUptoLifeTime() {
+	fmt.Println("removeTxForUptoLifeTime")
 	defer pool.wg.Done()
 	var evict = time.NewTicker(evictionInterval) //200ms report eviction
 	defer evict.Stop()
@@ -127,6 +127,7 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 	}
 }
 func (pool *transactionPool) regularSaveLocalTxs() {
+	fmt.Println("regularSaveLocalTxs")
 	defer pool.wg.Done()
 	var stored = time.NewTicker(pool.config.ReStoredDur)
 	defer stored.Stop()
@@ -141,6 +142,7 @@ func (pool *transactionPool) regularSaveLocalTxs() {
 }
 
 func (pool *transactionPool) regularRepublic() {
+	fmt.Println("regularRepublic")
 	defer pool.wg.Done()
 	var republic = time.NewTicker(republicInterval) //30s check tx lifetime )
 	defer republic.Stop()

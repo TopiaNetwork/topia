@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"encoding/hex"
 	"errors"
+	"github.com/TopiaNetwork/topia/network/p2p"
 	"math/big"
 	"sync"
 	"time"
@@ -16,7 +17,6 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/network"
-	"github.com/TopiaNetwork/topia/network/p2p"
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/transaction"
 )
@@ -67,6 +67,7 @@ type transactionPool struct {
 
 	pubSubService p2p.P2PPubSubService
 
+	chanSysShutDown   chan error
 	chanChainHead     chan transaction.ChainHeadEvent
 	chanReqReset      chan *txPoolResetRequest
 	chanReqPromote    chan *accountSet

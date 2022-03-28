@@ -192,6 +192,7 @@ func SetNewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, 
 		allTxsForLook:       newTxLookup(),
 		ActivationIntervals: make(map[string]time.Time),
 
+		chanSysShutDown:   make(chan error),
 		chanChainHead:     make(chan transaction.ChainHeadEvent, chainHeadChanSize),
 		chanReqReset:      make(chan *txPoolResetRequest),
 		chanReqPromote:    make(chan *accountSet),

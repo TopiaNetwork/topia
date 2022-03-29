@@ -3,6 +3,7 @@ package eventhub
 import (
 	"context"
 	"fmt"
+	tx "github.com/TopiaNetwork/topia/transaction/basic"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tx "github.com/TopiaNetwork/topia/transaction"
 )
 
 func receivedTxCallBack_test(ctx context.Context, data interface{}) error {

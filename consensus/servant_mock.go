@@ -1,17 +1,17 @@
 package consensus
 
 import (
-	tpcmm "github.com/TopiaNetwork/topia/chain"
-	"github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/chain"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 )
 
 type consensusServantMock struct{}
 
-func (cs *consensusServantMock) ChainID() tpcmm.ChainID {
+func (cs *consensusServantMock) ChainID() chain.ChainID {
 	return "TestNet"
 }
 
-func (cs *consensusServantMock) GetLatestBlock() (*types.Block, error) {
+func (cs *consensusServantMock) GetLatestBlock() (*tpchaintypes.Block, error) {
 	//TODO implement me
 	panic("implement me")
 }

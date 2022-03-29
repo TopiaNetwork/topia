@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	tpcmm "github.com/TopiaNetwork/topia/chain"
+	"github.com/TopiaNetwork/topia/chain"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
@@ -54,7 +54,7 @@ func TransactionUniversalGasVerifier() TransactionUniversalVerifier {
 			log.Errorf("Gas estimates error: %v", err)
 			return txbasic.VerifyResult_Reject
 		}
-		balVal, err := txUniServant.GetBalance(tpcmm.TokenSymbol_Native, tpcrtypes.NewFromBytes(txUni.Head.FeePayer))
+		balVal, err := txUniServant.GetBalance(chain.TokenSymbol_Native, tpcrtypes.NewFromBytes(txUni.Head.FeePayer))
 		if err != nil {
 			log.Errorf("Can't get payer %s balance: %v", tpcrtypes.NewFromBytes(txUni.Head.FeePayer), err)
 			return txbasic.VerifyResult_Reject

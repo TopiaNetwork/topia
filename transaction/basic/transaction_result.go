@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/lazyledger/smt"
 
 	"github.com/TopiaNetwork/topia/codec"

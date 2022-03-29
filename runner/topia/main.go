@@ -8,7 +8,7 @@ import (
 	"github.com/TopiaNetwork/topia/cmd"
 )
 
-var mainCmd = &cobra.Command{Use: "topia"}
+var mainCmd = &cobra.Command{Use: "universal"}
 
 func main() {
 	mainCmd.AddCommand(cmd.NodeCmd())

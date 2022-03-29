@@ -1,7 +1,7 @@
 package mock
 
 import (
-	tptypes "github.com/TopiaNetwork/topia/chain/types"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/consensus"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -10,7 +10,7 @@ type MockConsensusHandler struct {
 	log tplog.Logger
 }
 
-func (handler *MockConsensusHandler) VerifyBlock(block *tptypes.Block) error {
+func (handler *MockConsensusHandler) VerifyBlock(block *tpchaintypes.Block) error {
 	handler.log.Info("VerifyBlock")
 	return nil
 }

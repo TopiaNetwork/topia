@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	tx "github.com/TopiaNetwork/topia/transaction/basic"
 	"time"
 
 	"github.com/lazyledger/smt"
@@ -20,7 +21,6 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/state"
-	tx "github.com/TopiaNetwork/topia/transaction"
 )
 
 const (
@@ -161,7 +161,7 @@ func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Contex
 		treeTxRS := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
 		for i := 0; i < len(exeTxsF.packedTxs.TxList); i++ {
 			txHashBytes, _ := exeTxsF.packedTxs.TxList[i].HashBytes()
-			txRSHashBytes, _ := exeTxsF.packedTxsRS.TxsResult[i].HashBytes(exeTxsF.packedTxs.TxList[i].FromAddr)
+			txRSHashBytes, _ := exeTxsF.packedTxsRS.TxsResult[i].HashBytes()
 
 			treeTx.Update(txHashBytes, txHashBytes)
 			treeTxRS.Update(txRSHashBytes, txRSHashBytes)
@@ -244,7 +244,7 @@ func (scheduler *executionScheduler) ConstructBlockAndBlockResult(marshaler code
 		Version: blockHead.Version,
 	}
 	for r := 0; r < len(packedTxsRS.TxsResult); r++ {
-		txRSBytes, _ := packedTxsRS.TxsResult[r].HashBytes(packedTxs.TxList[r].FromAddr)
+		txRSBytes, _ := packedTxsRS.TxsResult[r].HashBytes()
 		blockResultData.TxResults = append(blockResultData.TxResults, txRSBytes)
 	}
 

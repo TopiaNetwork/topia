@@ -4,14 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"reflect"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tx "github.com/TopiaNetwork/topia/transaction"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type EventHub interface {
@@ -34,14 +34,14 @@ func NewEventHub(level tplogcmm.LogLevel, log tplog.Logger) EventHub {
 
 	evManager := newEventManager()
 
-	evManager.registerEvent(EventName_TxReceived, reflect.TypeOf(&tx.Transaction{}).String())
-	evManager.registerEvent(EventName_TxPrepared, reflect.TypeOf(&tx.Transaction{}).String())
-	evManager.registerEvent(EventName_TxRollbacked, reflect.TypeOf(&tx.Transaction{}).String())
-	evManager.registerEvent(EventName_TxCommited, reflect.TypeOf(&tx.Transaction{}).String())
-	evManager.registerEvent(EventName_BlockCreated, reflect.TypeOf(&tptypes.Block{}).String())
-	evManager.registerEvent(EventName_BlockCommited, reflect.TypeOf(&tptypes.Block{}).String())
-	evManager.registerEvent(EventName_BlockVerified, reflect.TypeOf(&tptypes.Block{}).String())
-	evManager.registerEvent(EventName_BlockConfirmed, reflect.TypeOf(&tptypes.Block{}).String())
+	evManager.registerEvent(EventName_TxReceived, reflect.TypeOf(&txbasic.Transaction{}).String())
+	evManager.registerEvent(EventName_TxPrepared, reflect.TypeOf(&txbasic.Transaction{}).String())
+	evManager.registerEvent(EventName_TxRollbacked, reflect.TypeOf(&txbasic.Transaction{}).String())
+	evManager.registerEvent(EventName_TxCommited, reflect.TypeOf(&txbasic.Transaction{}).String())
+	evManager.registerEvent(EventName_BlockCreated, reflect.TypeOf(&tpchaintypes.Block{}).String())
+	evManager.registerEvent(EventName_BlockCommited, reflect.TypeOf(&tpchaintypes.Block{}).String())
+	evManager.registerEvent(EventName_BlockVerified, reflect.TypeOf(&tpchaintypes.Block{}).String())
+	evManager.registerEvent(EventName_BlockConfirmed, reflect.TypeOf(&tpchaintypes.Block{}).String())
 
 	return &eventHub{
 		log:       logEVActor,

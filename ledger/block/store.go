@@ -2,7 +2,7 @@ package block
 
 import (
 	tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
-	tx "github.com/TopiaNetwork/topia/transaction"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 	"path/filepath"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -18,9 +18,9 @@ type BlockStore interface {
 
 	GetBlocksIterator(startBlockNum tpchaintypes.BlockNum) (tplgtypes.ResultsIterator, error)
 
-	TxIDExists(txID tx.TxID) (bool, error)
+	TxIDExists(txID basic.TxID) (bool, error)
 
-	GetTransactionByID(txID tx.TxID) (*tx.Transaction, error)
+	GetTransactionByID(txID basic.TxID) (*basic.Transaction, error)
 
 	GetBlockByHash(blockHash []byte) (*tpchaintypes.Block, error)
 
@@ -59,12 +59,12 @@ func (store *blockStore) GetBlocksIterator(startBlockNum tpchaintypes.BlockNum) 
 	panic("implement me")
 }
 
-func (store *blockStore) TxIDExists(txID tx.TxID) (bool, error) {
+func (store *blockStore) TxIDExists(txID basic.TxID) (bool, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (store *blockStore) GetTransactionByID(txID tx.TxID) (*tx.Transaction, error) {
+func (store *blockStore) GetTransactionByID(txID basic.TxID) (*basic.Transaction, error) {
 	//TODO implement me
 	panic("implement me")
 }

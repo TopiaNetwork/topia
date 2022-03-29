@@ -3,8 +3,10 @@ package consensus
 import (
 	"context"
 	"fmt"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
-	tptypes "github.com/TopiaNetwork/topia/chain/types"
+
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/execution"
@@ -14,7 +16,7 @@ import (
 )
 
 type ConsensusHandler interface {
-	VerifyBlock(block *tptypes.Block) error
+	VerifyBlock(block *tpchaintypes.Block) error
 
 	ProcessPreparePackedMsgExe(msg *PreparePackedMessageExe) error
 
@@ -82,7 +84,7 @@ func NewConsensusHandler(log tplog.Logger,
 	}
 }
 
-func (handler *consensusHandler) VerifyBlock(block *tptypes.Block) error {
+func (handler *consensusHandler) VerifyBlock(block *tpchaintypes.Block) error {
 	panic("implement me")
 }
 
@@ -163,7 +165,7 @@ func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
 }
 
 func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
-	var blockHead tptypes.BlockHead
+	var blockHead tpchaintypes.BlockHead
 	err := handler.marshaler.Unmarshal(msg.BlockHead, &blockHead)
 	if err != nil {
 		handler.log.Errorf("Unmarshal block failed: %v", err)
@@ -198,5 +200,3 @@ func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) err
 
 	return nil
 }
-
-

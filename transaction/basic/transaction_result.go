@@ -1,4 +1,4 @@
-package transaction
+package basic
 
 import (
 	"crypto/sha256"
@@ -9,27 +9,20 @@ import (
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 )
 
 func TxResultRoot(txResults []TransactionResult, txs []Transaction) []byte {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
-	for i, txR := range txResults {
-		txBytes, _ := txR.HashBytes(txs[i].FromAddr)
+	for _, txR := range txResults {
+		txBytes, _ := txR.HashBytes()
 		tree.Update(txBytes, txBytes)
 	}
 
 	return tree.Root()
 }
 
-func (m *TransactionResult) HashBytes(fromAddr []byte) ([]byte, error) {
-	codecType := codec.CodecType_PROTO
-	isEth := tpcrtypes.NewFromBytes(fromAddr).IsEth()
-	if isEth {
-		codecType = codec.CodecType_RLP
-	}
-
-	marshaler := codec.CreateMarshaler(codecType)
+func (m *TransactionResult) HashBytes() ([]byte, error) {
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 
 	blBytes, err := marshaler.Marshal(m)
 	if err != nil {
@@ -41,8 +34,8 @@ func (m *TransactionResult) HashBytes(fromAddr []byte) ([]byte, error) {
 	return hasher.Compute(string(blBytes)), nil
 }
 
-func (m *TransactionResult) HashHex(fromAddr []byte) (string, error) {
-	hashBytes, err := m.HashBytes(fromAddr)
+func (m *TransactionResult) HashHex() (string, error) {
+	hashBytes, err := m.HashBytes()
 	if err != nil {
 		return "", err
 	}

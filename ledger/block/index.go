@@ -2,8 +2,8 @@ package block
 
 import (
 	"fmt"
-	tptypes "github.com/TopiaNetwork/topia/chain/types"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -30,8 +30,8 @@ type txindexInfo struct {
 }
 
 type blockIndexInfo struct {
-	blockNum  tptypes.BlockNum
-	blockHash tptypes.BlockHash
+	blockNum  tpchaintypes.BlockNum
+	blockHash tpchaintypes.BlockHash
 	flp       *fileLocPointer
 	txOffsets []*txindexInfo
 }

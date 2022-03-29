@@ -43,20 +43,20 @@ func TxRoot(txs []Transaction) []byte {
 	return tree.Root()
 }
 
-func NewTransaction(log tplog.Logger, privKey tpcrtypes.PrivateKey, head *TransactionHead, data []byte) *Transaction {
-	if head == nil {
-		panic("Tx head nil")
+func NewTransaction(log tplog.Logger, privKey tpcrtypes.PrivateKey, txFromAddr tpcrtypes.Address, txCategory TransactionCategory, txVersion TransactionVersion, data []byte) *Transaction {
+	if privKey == nil {
+		panic("Tx private key nil")
 	}
 
 	if len(data) == 0 {
 		panic("Tx data size 0")
 	}
 
-	if string(head.Category) == TransactionCategory_Eth && !tpcrtypes.NewFromBytes(head.FromAddr).IsEth() {
+	if txCategory == TransactionCategory_Eth && !txFromAddr.IsEth() {
 		panic("Tx from address is not eth")
 	}
 
-	cryptType, err := tpcrtypes.NewFromBytes(head.FromAddr).CryptType()
+	cryptType, err := txFromAddr.CryptType()
 	if err != nil {
 		panic("Can't get crypt type:" + err.Error())
 	}
@@ -79,9 +79,9 @@ func NewTransaction(log tplog.Logger, privKey tpcrtypes.PrivateKey, head *Transa
 
 	return &Transaction{
 		Head: &TransactionHead{
-			Category:  head.Category,
-			Version:   head.Version,
-			FromAddr:  head.FromAddr,
+			Category:  []byte(txCategory),
+			Version:   uint32(txVersion),
+			FromAddr:  txFromAddr.Bytes(),
 			Signature: signBytes,
 		},
 		Data: &TransactionData{

@@ -1,9 +1,9 @@
 package history
 
 import (
-	tptypes "github.com/TopiaNetwork/topia/chain/types"
 	"path/filepath"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -25,7 +25,7 @@ func NewHistoryStore(log tplog.Logger, rootPath string, backendType backend.Back
 	}
 }
 
-func (store *HistoryStore) Commit(block *tptypes.Block) error {
+func (store *HistoryStore) Commit(block *tpchaintypes.Block) error {
 	panic("implement me")
 }
 

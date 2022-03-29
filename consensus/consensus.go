@@ -2,20 +2,20 @@ package consensus
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/execution"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
-	tptypes "github.com/TopiaNetwork/topia/chain/types"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
 
 const (
@@ -31,7 +31,7 @@ type RoundInfo struct {
 }
 
 type Consensus interface {
-	VerifyBlock(*tptypes.Block) error
+	VerifyBlock(*tpchaintypes.Block) error
 
 	ProcessPropose(*ProposeMessage) error
 
@@ -113,7 +113,7 @@ func (cons *consensus) UpdateHandler(handler ConsensusHandler) {
 	cons.handler = handler
 }
 
-func (cons *consensus) VerifyBlock(block *tptypes.Block) error {
+func (cons *consensus) VerifyBlock(block *tpchaintypes.Block) error {
 	return cons.handler.VerifyBlock(block)
 }
 

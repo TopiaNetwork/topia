@@ -1,6 +1,8 @@
 package execution
 
-import tx "github.com/TopiaNetwork/topia/transaction"
+import (
+	tx "github.com/TopiaNetwork/topia/transaction/basic"
+)
 
 type PackedTxs struct {
 	StateVersion uint64

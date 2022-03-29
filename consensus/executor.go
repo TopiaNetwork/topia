@@ -7,6 +7,7 @@ import (
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 	"time"
 
 	"github.com/TopiaNetwork/topia/codec"
@@ -15,7 +16,6 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
-	tx "github.com/TopiaNetwork/topia/transaction"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
 
@@ -70,9 +70,9 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					continue
 				}
 
-				var receivedTxList []tx.Transaction
+				var receivedTxList []basic.Transaction
 				for i := 0; i < len(perparePMExe.Txs); i++ {
-					var tx tx.Transaction
+					var tx basic.Transaction
 					err = e.marshaler.Unmarshal(perparePMExe.Txs[i], &tx)
 					if err != nil {
 						e.log.Errorf("Invalid tx from pepare packed msg exe: marshal err %v", err)
@@ -83,7 +83,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 				if err != nil {
 					continue
 				}
-				receivedTxRoot := tx.TxRoot(receivedTxList)
+				receivedTxRoot := basic.TxRoot(receivedTxList)
 				if bytes.Compare(receivedTxRoot, perparePMExe.TxRoot) != 0 {
 					e.log.Errorf("Invalid pepare packed msg exe: tx root expected %v, actual %v", perparePMExe.TxRoot, receivedTxRoot)
 					break
@@ -194,7 +194,7 @@ func (e *consensusExecutor) start(ctx context.Context) {
 	e.prepareTimerStart(ctx)
 }
 
-func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []tx.Transaction, txResultList []tx.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
+func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []basic.Transaction, txResultList []basic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
 	if len(txList) != len(txResultList) {
 		err := fmt.Errorf("Mismatch tx list count %d and tx result count %d", len(txList), len(txResultList))
 		e.log.Errorf("%v", err)
@@ -242,7 +242,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		exePPM.Txs = append(exePPM.Txs, txBytes)
 
 		txHashBytes, _ := txList[i].HashBytes()
-		txRSHashBytes, _ := txResultList[i].HashBytes(txList[i].FromAddr)
+		txRSHashBytes, _ := txResultList[i].HashBytes()
 		proposePPM.TxHashs = append(proposePPM.TxHashs, txHashBytes)
 		proposePPM.TxResultHashs = append(proposePPM.TxResultHashs, txRSHashBytes)
 	}
@@ -262,7 +262,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return nil
 	}
 
-	txRoot := tx.TxRoot(pendTxs)
+	txRoot := basic.TxRoot(pendTxs)
 	compState := state.CreateCompositionState(e.log, e.ledger)
 
 	var packedTxs execution.PackedTxs
@@ -282,7 +282,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		e.log.Errorf("Execute state version %d packed txs err from local: %v", packedTxs.StateVersion, err)
 		return err
 	}
-	txRSRoot := tx.TxResultRoot(txsRS.TxsResult, packedTxs.TxList)
+	txRSRoot := basic.TxResultRoot(txsRS.TxsResult, packedTxs.TxList)
 
 	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {

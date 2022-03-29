@@ -1,6 +1,7 @@
 package transactionpool
 
 import (
+	tx "github.com/TopiaNetwork/topia/transaction/basic"
 	"sync"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
@@ -9,7 +10,6 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
-	tx "github.com/TopiaNetwork/topia/transaction"
 )
 
 type TxKey string

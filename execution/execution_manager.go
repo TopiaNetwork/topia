@@ -1,13 +1,16 @@
 package execution
 
-import tx "github.com/TopiaNetwork/topia/transaction"
+import (
+	txaction "github.com/TopiaNetwork/topia/transaction/action"
+	"github.com/TopiaNetwork/topia/transaction/universal"
+)
 
 type executionManager struct {
-	executionMap map[tx.TransactionType]tx.Executable
+	executionMap map[universal.TransactionUniversalType]txaction.Executable
 }
 
 func newExecutionManager() *executionManager {
 	return &executionManager{
-		executionMap: map[tx.TransactionType]tx.Executable{},
+		executionMap: map[universal.TransactionUniversalType]txaction.Executable{},
 	}
 }

@@ -5,13 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	tptypes "github.com/TopiaNetwork/topia/chain/types"
+	tx "github.com/TopiaNetwork/topia/transaction/basic"
 	"reflect"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tx "github.com/TopiaNetwork/topia/transaction"
 )
 
 type EventHub interface {

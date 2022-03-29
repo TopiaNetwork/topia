@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "basic";
+option (gogoproto.stable_marshaler_all) = true;
+
+import "gogo.proto";
+
+//protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.  --gofast_out=. ./transaction.proto
+
+message TransactionHead {
+  bytes  Category  = 1 [(gogoproto.jsontag) = "category"];
+  bytes  ChainID   = 2 [(gogoproto.jsontag) = "chainID"];
+  uint32 Version   = 3 [(gogoproto.jsontag) = "version"];
+  bytes  FromAddr  = 4 [(gogoproto.jsontag) = "fromAddr"];
+  bytes  Signature = 5 [(gogoproto.jsontag) = "signature,omitempty"];
+}
+
+message TransactionData {
+  bytes Specification = 1 [(gogoproto.jsontag) = "specification"];
+}
+
+message Transaction {
+  TransactionHead Head = 1 [(gogoproto.jsontag) = "head"];
+  TransactionData Data = 2 [(gogoproto.jsontag) = "data"];
+}
+
+message TransactionResultHead {
+  bytes  Category = 1 [(gogoproto.jsontag) = "category"];
+  bytes  ChainID  = 2 [(gogoproto.jsontag) = "chainID"];
+  uint32 Version  = 3 [(gogoproto.jsontag) = "version"];
+}
+
+message TransactionResultData {
+  bytes Specification = 1 [(gogoproto.jsontag) = "specification"];
+}
+
+message TransactionResult {
+  TransactionResultHead Head = 1 [(gogoproto.jsontag)   = "head"];
+  TransactionResultData Data   = 2 [(gogoproto.jsontag) = "data"];
+}

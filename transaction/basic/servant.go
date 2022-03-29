@@ -1,4 +1,4 @@
-package transaction
+package basic
 
 import (
 	"math/big"
@@ -22,8 +22,6 @@ type TansactionServant interface {
 
 	GetBalance(symbol chain.TokenSymbol, addr tpcrtypes.Address) (*big.Int, error)
 
-	GetGasEstimator() (GasEstimator, error)
-
 	GetCryptService(log log.Logger, cryptType tpcrtypes.CryptType) (tpcrt.CryptService, error)
 
 	GetGasConfig() *configuration.GasConfiguration
@@ -41,10 +39,6 @@ func NewTansactionServant(chainState statechain.ChainState, accountState stateac
 type tansactionServant struct {
 	statechain.ChainState
 	stateaccount.AccountState
-}
-
-func (ts *tansactionServant) GetGasEstimator() (GasEstimator, error) {
-	return NewGasEstimator(), nil
 }
 
 func (ts *tansactionServant) GetCryptService(log log.Logger, cryptType tpcrtypes.CryptType) (tpcrt.CryptService, error) {

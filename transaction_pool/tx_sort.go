@@ -345,7 +345,7 @@ func (l *txList) Cap(threshold int) []*transaction.Transaction {
 }
 
 // Remove deletes a transaction from the maintained list, returning whether the
-// transaction was found, and also returning any transaction invalidated due to
+// transaction was found, and also returning any transaction invaliated due to
 // the deletion (strict mode only).
 func (l *txList) Remove(tx *transaction.Transaction) (bool, []*transaction.Transaction) {
 	// Remove the transaction from the set
@@ -353,6 +353,7 @@ func (l *txList) Remove(tx *transaction.Transaction) (bool, []*transaction.Trans
 	if removed := l.txs.Remove(nonce); !removed {
 		return false, nil
 	}
+
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
 		return true, l.txs.Filter(func(tx *transaction.Transaction) bool { return tx.Nonce > nonce })
@@ -636,13 +637,11 @@ func (h *priceHeap) Less(i, j int) bool {
 	}
 }
 func (h *priceHeap) cmp(a, b *transaction.Transaction) int {
-	if a.GasPrice == b.GasPrice {
-		return 0
-	}
+
 	if a.GasPrice < b.GasPrice {
-		return 1
-	} else if a.GasPrice > b.GasPrice {
 		return -1
+	} else if a.GasPrice > b.GasPrice {
+		return 1
 	} else {
 		return 0
 	}
@@ -710,20 +709,14 @@ func (l *txPricedList) underpricedFor(h *priceHeap, tx *transaction.Transaction)
 	// Discard stale price points if found at the heap start
 	for len(h.list) > 0 {
 		head := h.list[0]
-		txId, err := head.TxID()
-		if err == nil {
-			if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
-				atomic.AddInt64(&l.stales, -1)
-				heap.Pop(h)
-				continue
-			}
-		}
+		txId, _ := head.TxID()
 		if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
 			atomic.AddInt64(&l.stales, -1)
 			heap.Pop(h)
 			continue
 		}
 		break
+
 	}
 	// Check if the transaction is underpriced or not
 	if len(h.list) == 0 {

@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -69,7 +70,10 @@ func (pool *transactionPool) AddRemotes(txs []*transaction.Transaction) []error 
 	return pool.addTxs(txs, false, false)
 }
 func (pool *transactionPool) AddRemote(tx *transaction.Transaction) error {
+	fmt.Println("AddRemote 001")
 	errs := pool.AddRemotes([]*transaction.Transaction{tx})
+	fmt.Println("AddRemote errs", errs)
+
 	return errs[0]
 }
 

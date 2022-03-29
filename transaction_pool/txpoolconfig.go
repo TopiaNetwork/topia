@@ -35,11 +35,11 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	PathConfig:  "txPoolConfigs.json",
 	ReStoredDur: 30 * time.Minute,
 
-	GasPriceLimit:       1000,
-	PendingAccountSlots: 16,
-	PendingGlobalSlots:  8192, // queue capacity
-	QueueMaxTxsAccount:  64,
-	QueueMaxTxsGlobal:   8192 * 2,
+	GasPriceLimit:       1000,   // 1000
+	PendingAccountSlots: 16,     //16
+	PendingGlobalSlots:  64,     //8192
+	QueueMaxTxsAccount:  32,     //64
+	QueueMaxTxsGlobal:   64 * 2, //PendingGlobalSlots*2
 
 	LifetimeForTx:         30 * time.Minute,
 	DurationForTxRePublic: 30 * time.Second,

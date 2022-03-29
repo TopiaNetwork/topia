@@ -163,9 +163,15 @@ func (pool *transactionPool) AddTx(tx *transaction.Transaction, local bool) erro
 		return err
 	}
 	if local {
-		pool.AddLocal(tx)
+		err = pool.AddLocal(tx)
+		if err != nil {
+			return err
+		}
 	} else {
-		pool.AddRemote(tx)
+		err = pool.AddRemote(tx)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -195,6 +201,7 @@ func (pool *transactionPool) addTxs(txs []*transaction.Transaction, local, sync 
 		errs = make([]error, len(txs))
 		news = make([]*transaction.Transaction, 0, len(txs))
 	)
+
 	for i, tx := range txs {
 		if txId, err := tx.TxID(); err == nil {
 			if pool.allTxsForLook.Get(txId) != nil {
@@ -207,19 +214,29 @@ func (pool *transactionPool) addTxs(txs []*transaction.Transaction, local, sync 
 	if len(news) == 0 {
 		return errs
 	}
+	//fmt.Println("addTxs 001")
+
 	// Process all the new transaction and merge any errors into the original slice
-	pool.pending.Mu.Lock()
 	newErrs, _ := pool.addTxsLocked(news, local)
+
+	//fmt.Println("addTxs 002 newErrs", newErrs)
+
 	//newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
-	pool.pending.Mu.Unlock()
 	var nilSlot = 0
 	for _, err := range newErrs {
+		//fmt.Println("addTxs 003")
+
 		for errs[nilSlot] != nil {
 			nilSlot++
 		}
+		//fmt.Println("addTxs 004")
+
 		errs[nilSlot] = err
+		//fmt.Println("addTxs 005")
 		nilSlot++
 	}
+	//fmt.Println("addTxs 006")
+
 	// Reorg the pool internals if needed and return
 	//done := pool.requestReplaceExecutables(dirtyAddrs)
 	//if sync {
@@ -289,9 +306,9 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 	pool.allTxsForLook.Remove(key)
 	// Remove it from the list of sortedByPriced
 	pool.sortedByPriced.Removed(1)
-
 	// Remove the transaction from the pending lists and reset the account nonce
 	pool.pending.Mu.Lock()
+
 	if pending := pool.pending.accTxs[addr]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {
 			if pending.Empty() {
@@ -469,25 +486,36 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.allTxsForLook.Slots()+numSlots(tx)) > pool.config.PendingGlobalSlots+pool.config.QueueMaxTxsGlobal {
 		// If the new transaction is underpriced, don't accept it
+		//Println("add pool full")
 
 		if !isLocal && pool.sortedByPriced.Underpriced(tx) {
+			//fmt.Println("add pool full 01 and new tx price lower")
+
 			pool.log.Tracef("Discarding underpriced transaction", "hash", txId, "GasPrice", tx.GasPrice)
 			return false, ErrUnderpriced
 		}
 		if pool.changesSinceReorg > int(pool.config.PendingGlobalSlots/4) {
+			//fmt.Println("add pool full 02 and changesSinceReorg:", pool.changesSinceReorg)
 			return false, ErrTxPoolOverflow
 		}
 		drop, success := pool.sortedByPriced.Discard(pool.allTxsForLook.Slots()-int(pool.config.PendingGlobalSlots+pool.config.QueueMaxTxsGlobal)+numSlots(tx), isLocal)
+		//fmt.Println("add pool full 03 and drop, success:", drop, success)
 		// Special case, we still can't make the room for the new remote one.
 		if !isLocal && !success {
+			//fmt.Println("add pool full 04")
+
 			pool.log.Tracef("Discarding overflown transaction", "txId", txId)
 			return false, ErrTxPoolOverflow
 		}
+		//fmt.Println("add pool full 05 len(drop)", len(drop))
+
 		// Bump the counter of rejections-since-reorg
 		pool.changesSinceReorg += len(drop)
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
+			//fmt.Println("add pool full 05 len(drop)", len(drop))
 			txId, _ := tx.TxID()
+			//fmt.Println(txId)
 			pool.log.Tracef("Discarding freshly underpriced transaction", "hash", txId, "gasPrice", tx.GasPrice)
 			pool.RemoveTxByKey(txId)
 		}
@@ -495,7 +523,6 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 
 	// Try to replace an existing transaction in the pending pool
 	from := account.Address(hex.EncodeToString(tx.FromAddr))
-
 	if list := pool.pending.accTxs[from]; list != nil && list.Overlaps(tx) {
 		inserted, old := list.Add(tx)
 		if !inserted {
@@ -537,12 +564,13 @@ func (pool *transactionPool) turnTx(addr account.Address, txId string, tx *trans
 	pool.pending.Mu.Lock()
 	defer pool.pending.Mu.Unlock()
 	// Try to insert the transaction into the pending queue
-	if pool.pending.accTxs[addr] == nil {
-		pool.pending.accTxs[addr] = newTxList(true)
+	if pool.queue.accTxs[addr] == nil || pool.queue.accTxs[addr].txs.Get(tx.Nonce) != tx {
+		return false
 	}
-
+	if pool.pending.accTxs[addr] == nil {
+		pool.pending.accTxs[addr] = newTxList(false)
+	}
 	list := pool.pending.accTxs[addr]
-
 	inserted, old := list.Add(tx)
 	if !inserted {
 		// An older transaction was existed, discard this
@@ -550,10 +578,8 @@ func (pool *transactionPool) turnTx(addr account.Address, txId string, tx *trans
 		pool.sortedByPriced.Removed(1)
 		return false
 	} else {
-		pool.queue.Mu.Lock()
 		queuelist := pool.queue.accTxs[addr]
 		queuelist.Remove(tx)
-		pool.queue.Mu.Unlock()
 	}
 
 	if old != nil {

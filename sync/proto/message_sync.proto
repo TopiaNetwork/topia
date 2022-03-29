@@ -6,7 +6,7 @@ option go_package = "sync";
 option (gogoproto.stable_marshaler_all) = true;
 
 import "gogo.proto";
-import "common/types/proto/block.proto";
+import "chain/types/proto/block.proto";
 
 message SyncMessage {
   enum SyncMessageType {

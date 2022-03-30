@@ -73,7 +73,6 @@ type transactionPool struct {
 	chanReqPromote    chan *accountSet
 	chanReorgDone     chan chan struct{}
 	chanReorgShutdown chan struct{}                 // requests shutdown of scheduleReorgLoop
-	chanInitDone      chan struct{}                 // is closed once the pool is initialized (for tests)
 	chanQueueTxEvent  chan *transaction.Transaction //check new tx insert to txpool
 	chanRmTxs         chan []string
 	query             TransactionPoolServant
@@ -83,7 +82,7 @@ type transactionPool struct {
 	queue               *queueTxs
 	allTxsForLook       *txLookup
 	sortedByPriced      *txPricedList
-	ActivationIntervals map[string]time.Time // ActivationInterval from each tx
+	ActivationIntervals *activationInterval // ActivationInterval from each tx
 
 	curState          StatePoolDB
 	pendingNonces     uint64
@@ -106,13 +105,12 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 		log:                 poolLog,
 		level:               level,
 		allTxsForLook:       newTxLookup(),
-		ActivationIntervals: make(map[string]time.Time),
+		ActivationIntervals: newActivationInterval(),
 		chanChainHead:       make(chan transaction.ChainHeadEvent, chainHeadChanSize),
 		chanReqReset:        make(chan *txPoolResetRequest),
 		chanReqPromote:      make(chan *accountSet),
 		chanReorgDone:       make(chan chan struct{}),
 		chanReorgShutdown:   make(chan struct{}),                 // requests shutdown of scheduleReorgLoop
-		chanInitDone:        make(chan struct{}),                 // is closed once the pool is initialized (for tests)
 		chanQueueTxEvent:    make(chan *transaction.Transaction), //check new tx insert to txpool
 		chanRmTxs:           make(chan []string),
 
@@ -146,8 +144,22 @@ func NewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log
 
 	pool.pubSubService = pool.query.SubChainHeadEvent(pool.chanChainHead)
 
+	//go loops:
 	pool.wg.Add(1)
-	go pool.loop()
+	go pool.chanRemoveTxHashs()
+	pool.wg.Add(1)
+	go pool.saveAllIfShutDown()
+	pool.wg.Add(1)
+	go pool.resetIfNewHead()
+	pool.wg.Add(1)
+	go pool.reportTicks()
+	pool.wg.Add(1)
+	go pool.removeTxForUptoLifeTime()
+	pool.wg.Add(1)
+	go pool.regularSaveLocalTxs()
+	pool.wg.Add(1)
+	go pool.regularRepublic()
+
 	return pool
 }
 
@@ -307,8 +319,9 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 	// Remove it from the list of sortedByPriced
 	pool.sortedByPriced.Removed(1)
 	// Remove the transaction from the pending lists and reset the account nonce
-	pool.pending.Mu.Lock()
 
+	pool.pending.Mu.Lock()
+	defer pool.pending.Mu.Unlock()
 	if pending := pool.pending.accTxs[addr]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {
 			if pending.Empty() {
@@ -323,17 +336,18 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 		}
 	}
 
-	pool.pending.Mu.Unlock()
 	// Transaction is in the future queue
 	pool.queue.Mu.Lock()
+	pool.queue.Mu.Unlock()
 	if future := pool.queue.accTxs[addr]; future != nil {
 		future.Remove(tx)
 		if future.Empty() {
 			delete(pool.queue.accTxs, addr)
-			delete(pool.ActivationIntervals, key)
+			//pool.ActivationIntervals.Mu.RLock()
+			//defer pool.ActivationIntervals.Mu.RUnlock()
+			delete(pool.ActivationIntervals.activ, key)
 		}
 	}
-	pool.queue.Mu.Unlock()
 	return nil
 }
 
@@ -364,13 +378,14 @@ func (pool *transactionPool) Get(key string) *transaction.Transaction {
 func (pool *transactionPool) queueAddTx(key string, tx *transaction.Transaction, local bool, addAll bool) (bool, error) {
 	// Try to insert the transaction into the future queue
 	pool.queue.Mu.Lock()
+	defer pool.queue.Mu.Unlock()
+
 	from := account.Address(hex.EncodeToString(tx.FromAddr))
 	if pool.queue.accTxs[from] == nil {
 		pool.queue.accTxs[from] = newTxList(false)
 	}
 
 	inserted, old := pool.queue.accTxs[from].Add(tx)
-	pool.queue.Mu.Unlock()
 	if !inserted {
 		// An older transaction was existed
 		return false, ErrReplaceUnderpriced
@@ -393,8 +408,10 @@ func (pool *transactionPool) queueAddTx(key string, tx *transaction.Transaction,
 
 	}
 	// If we never record the ActivationInterval, do it right now.
-	if _, exist := pool.ActivationIntervals[key]; !exist {
-		pool.ActivationIntervals[key] = time.Now()
+	//pool.ActivationIntervals.Mu.RLock()
+	//defer pool.ActivationIntervals.Mu.RUnlock()
+	if _, exist := pool.ActivationIntervals.activ[key]; !exist {
+		pool.ActivationIntervals.activ[key] = time.Now()
 	}
 	return old != nil, nil
 }
@@ -534,7 +551,10 @@ func (pool *transactionPool) add(tx *transaction.Transaction, local bool) (repla
 		}
 		pool.allTxsForLook.Add(tx, isLocal)
 		pool.sortedByPriced.Put(tx, isLocal)
-		pool.ActivationIntervals[txId] = time.Now()
+		pool.ActivationIntervals.Mu.RLock()
+		pool.ActivationIntervals.activ[txId] = time.Now()
+		defer pool.ActivationIntervals.Mu.RUnlock()
+
 	}
 	// New transaction isn't replacing a pending one, push into queue
 	replaced, err = pool.queueAddTx(txId, tx, isLocal, true)
@@ -589,7 +609,10 @@ func (pool *transactionPool) turnTx(addr account.Address, txId string, tx *trans
 
 	}
 	// Successful replace tx, bump the ActivationInterval
-	pool.ActivationIntervals[txId] = time.Now()
+	pool.ActivationIntervals.Mu.RLock()
+	pool.ActivationIntervals.activ[txId] = time.Now()
+	defer pool.ActivationIntervals.Mu.RUnlock()
+
 	return true
 }
 
@@ -647,7 +670,10 @@ func (pool *transactionPool) replaceExecutables(accounts []account.Address) []*t
 			txId, err := tx.TxID()
 			if err == nil {
 				pool.allTxsForLook.Remove(txId)
-				delete(pool.ActivationIntervals, txId)
+
+				//pool.ActivationIntervals.Mu.RLock()
+				//defer pool.ActivationIntervals.Mu.RUnlock()
+				delete(pool.ActivationIntervals.activ, txId)
 
 			}
 		}

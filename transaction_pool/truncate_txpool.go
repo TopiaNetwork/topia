@@ -75,7 +75,7 @@ func (pool *transactionPool) truncateQueue() {
 			list := pool.queue.accTxs[addr].Flatten()
 			for _, tx := range list {
 				txId, _ := tx.TxID()
-				txs = append(txs, txByHeartbeat{txId, pool.ActivationIntervals[txId]})
+				txs = append(txs, txByHeartbeat{txId, pool.ActivationIntervals.activ[txId]})
 			}
 		}
 	}

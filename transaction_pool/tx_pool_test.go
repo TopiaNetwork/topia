@@ -190,7 +190,7 @@ func SetNewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, 
 		log:                 poolLog,
 		level:               level,
 		allTxsForLook:       newTxLookup(),
-		ActivationIntervals: make(map[string]time.Time),
+		ActivationIntervals: newActivationInterval(),
 
 		chanSysShutDown:   make(chan error),
 		chanChainHead:     make(chan transaction.ChainHeadEvent, chainHeadChanSize),
@@ -198,7 +198,6 @@ func SetNewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, 
 		chanReqPromote:    make(chan *accountSet),
 		chanReorgDone:     make(chan chan struct{}),
 		chanReorgShutdown: make(chan struct{}),                 // requests shutdown of scheduleReorgLoop
-		chanInitDone:      make(chan struct{}),                 // is closed once the pool is initialized (for tests)
 		chanQueueTxEvent:  make(chan *transaction.Transaction), //check new tx insert to txpool
 		chanRmTxs:         make(chan []string),
 

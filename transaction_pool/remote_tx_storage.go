@@ -2,7 +2,6 @@ package transactionpool
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -21,7 +20,7 @@ func (pool *transactionPool) SaveRemoteTxs() error {
 
 	var remotetxs = &remoteTxs{}
 	remotetxs.Txs = pool.allTxsForLook.remotes
-	remotetxs.ActivationIntervals = pool.ActivationIntervals
+	remotetxs.ActivationIntervals = pool.ActivationIntervals.activ
 
 	remotes, err := json.Marshal(remotetxs)
 	if err != nil {
@@ -56,7 +55,7 @@ func (pool *transactionPool) LoadRemoteTxs() error {
 		pool.AddRemote(tx)
 	}
 	for txId, ActivationInterval := range remotetxs.ActivationIntervals {
-		pool.ActivationIntervals[txId] = ActivationInterval
+		pool.ActivationIntervals.activ[txId] = ActivationInterval
 	}
 	return nil
 }
@@ -70,9 +69,7 @@ func (pool *transactionPool) AddRemotes(txs []*transaction.Transaction) []error 
 	return pool.addTxs(txs, false, false)
 }
 func (pool *transactionPool) AddRemote(tx *transaction.Transaction) error {
-	fmt.Println("AddRemote 001")
 	errs := pool.AddRemotes([]*transaction.Transaction{tx})
-	fmt.Println("AddRemote errs", errs)
 
 	return errs[0]
 }

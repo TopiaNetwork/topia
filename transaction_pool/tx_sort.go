@@ -240,6 +240,7 @@ func (m *txSortedMap) LastElement() *transaction.Transaction {
 // the executable/pending queue; and for storing gapped transactions for the non-
 // executable/future queue, with minor behavioral changes.
 type txList struct {
+	lock    sync.RWMutex
 	strict  bool         // Whether nonces are strictly continuous or not
 	txs     *txSortedMap // Heap indexed sorted hash map of the transactions
 	servant TransactionPoolServant
@@ -260,6 +261,8 @@ func newTxList(strict bool) *txList {
 // Overlaps returns whether the transaction specified has the same nonce as one
 // already contained within the list.
 func (l *txList) Overlaps(tx *transaction.Transaction) bool {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.txs.Get(tx.Nonce) != nil
 }
 
@@ -269,6 +272,8 @@ func (l *txList) Overlaps(tx *transaction.Transaction) bool {
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
 func (l *txList) Add(tx *transaction.Transaction) (bool, *transaction.Transaction) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce)
 	if old != nil {
@@ -293,6 +298,8 @@ func (l *txList) Add(tx *transaction.Transaction) (bool, *transaction.Transactio
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
 func (l *txList) Forward(threshold uint64) []*transaction.Transaction {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.txs.Forward(threshold)
 }
 
@@ -306,6 +313,8 @@ func (l *txList) Forward(threshold uint64) []*transaction.Transaction {
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
 func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*transaction.Transaction, []*transaction.Transaction) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	// If all transactions are below the threshold, short circuit
 	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
@@ -341,6 +350,8 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*transaction.Tra
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
 func (l *txList) Cap(threshold int) []*transaction.Transaction {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.txs.Cap(threshold)
 }
 
@@ -348,8 +359,11 @@ func (l *txList) Cap(threshold int) []*transaction.Transaction {
 // transaction was found, and also returning any transaction invaliated due to
 // the deletion (strict mode only).
 func (l *txList) Remove(tx *transaction.Transaction) (bool, []*transaction.Transaction) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	// Remove the transaction from the set
 	nonce := tx.Nonce
+	//fmt.Println("txList) Remove(tx),nonce:", nonce)
 	if removed := l.txs.Remove(nonce); !removed {
 		return false, nil
 	}
@@ -369,16 +383,22 @@ func (l *txList) Remove(tx *transaction.Transaction) (bool, []*transaction.Trans
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
 func (l *txList) Ready(start uint64) []*transaction.Transaction {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.txs.Ready(start)
 }
 
 // Len returns the length of the transaction list.
 func (l *txList) Len() int {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.txs.Len()
 }
 
 // Empty returns whether the list of transactions is empty or not.
 func (l *txList) Empty() bool {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.Len() == 0
 }
 
@@ -386,12 +406,16 @@ func (l *txList) Empty() bool {
 // sorted internal representation. The result of the sorting is cached in case
 // it's requested again before any modifications are made to the contents.
 func (l *txList) Flatten() []*transaction.Transaction {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.txs.Flatten()
 }
 
 // LastElement returns the last element of a flattened list, thus, the
 // transaction with the highest nonce
 func (l *txList) LastElement() *transaction.Transaction {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 	return l.txs.LastElement()
 }
 
@@ -417,6 +441,18 @@ func newQueueTxs() *queueTxs {
 		accTxs: make(map[account.Address]*txList),
 	}
 	return txs
+}
+
+type activationInterval struct {
+	Mu    sync.RWMutex
+	activ map[string]time.Time
+}
+
+func newActivationInterval() *activationInterval {
+	activ := &activationInterval{
+		activ: make(map[string]time.Time),
+	}
+	return activ
 }
 
 type accountSet struct {

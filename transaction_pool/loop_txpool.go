@@ -7,8 +7,6 @@ import (
 )
 
 func (pool *transactionPool) loop() {
-	defer pool.wg.Done()
-	close(pool.chanInitDone)
 	pool.wg.Add(1)
 	go pool.chanRemoveTxHashs()
 	pool.wg.Add(1)
@@ -26,7 +24,7 @@ func (pool *transactionPool) loop() {
 }
 
 func (pool *transactionPool) chanRemoveTxHashs() {
-	fmt.Println("chanRemoveTxHashs")
+	//fmt.Println("chanRemoveTxHashs")
 	defer pool.wg.Done()
 	for {
 		select {
@@ -108,6 +106,9 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 	// Handle inactive account transaction eviction
 	case <-evict.C:
 		pool.queue.Mu.Lock()
+		defer pool.queue.Mu.Unlock()
+		pool.ActivationIntervals.Mu.Lock()
+		defer pool.ActivationIntervals.Mu.Unlock()
 		for addr := range pool.queue.accTxs {
 			// Skip local transactions from the eviction mechanism
 			if pool.locals.contains(addr) {
@@ -115,10 +116,10 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 			}
 			// Any non-locals old enough should be removed
 			list := pool.queue.accTxs[addr].Flatten()
-			pool.queue.Mu.Unlock()
+
 			for _, tx := range list {
 				txId, _ := tx.TxID()
-				if time.Since(pool.ActivationIntervals[txId]) > pool.config.LifetimeForTx {
+				if time.Since(pool.ActivationIntervals.activ[txId]) > pool.config.LifetimeForTx {
 					pool.RemoveTxByKey(txId)
 				}
 			}
@@ -142,7 +143,7 @@ func (pool *transactionPool) regularSaveLocalTxs() {
 }
 
 func (pool *transactionPool) regularRepublic() {
-	fmt.Println("regularRepublic")
+	//fmt.Println("regularRepublic")
 	defer pool.wg.Done()
 	var republic = time.NewTicker(republicInterval) //30s check tx lifetime )
 	defer republic.Stop()
@@ -150,18 +151,20 @@ func (pool *transactionPool) regularRepublic() {
 		select {
 		case <-republic.C:
 			pool.queue.Mu.Lock()
+			defer pool.queue.Mu.Unlock()
+			pool.ActivationIntervals.Mu.Lock()
+			defer pool.ActivationIntervals.Mu.Unlock()
 			for addr := range pool.queue.accTxs {
 				// republic transactions from the republic mechanism
 				list := pool.queue.accTxs[addr].Flatten()
 				for _, tx := range list {
 					txId, _ := tx.TxID()
-					if time.Since(pool.ActivationIntervals[txId]) > pool.config.DurationForTxRePublic {
+					if time.Since(pool.ActivationIntervals.activ[txId]) > pool.config.DurationForTxRePublic {
 						pool.BroadCastTx(tx)
 					}
 				}
 
 			}
-			pool.queue.Mu.Unlock()
 		}
 	}
 }

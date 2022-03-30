@@ -9,6 +9,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
@@ -460,37 +461,41 @@ func Test_transactionPool_loop(t *testing.T) {
 
 	}
 
-	pool.wg.Add(1)
-	go pool.chanRemoveTxHashs()
-	pool.wg.Add(1)
-	go pool.saveAllIfShutDown()
-	pool.wg.Add(1)
-	go pool.resetIfNewHead()
-	pool.wg.Add(1)
-	go pool.reportTicks()
-	pool.wg.Add(1)
-	go pool.removeTxForUptoLifeTime()
-	pool.wg.Add(1)
-	go pool.regularSaveLocalTxs()
-	pool.wg.Add(1)
-	go pool.regularRepublic()
-	assert.Equal(t, 192, len(pool.queue.accTxs))
+	pool.loop()
+
+	assert.Equal(t, 200, len(pool.queue.accTxs))
 	assert.Equal(t, 0, len(pool.pending.accTxs))
 	assert.Equal(t, 100, pool.allTxsForLook.LocalCount())
-	assert.Equal(t, 92, pool.allTxsForLook.RemoteCount())
+	assert.Equal(t, 100, pool.allTxsForLook.RemoteCount())
 	assert.Equal(t, 100, len(pool.sortedByPriced.all.locals))
-	assert.Equal(t, 92, len(pool.sortedByPriced.all.remotes))
+	assert.Equal(t, 100, len(pool.sortedByPriced.all.remotes))
 
-	pool.chanRmTxs <- keysRemote
+	go func() {
+		pool.chanRmTxs <- keysRemote[:50]
+	}()
+	go func() {
+		pool.chanRmTxs <- keysRemote[50:]
+	}()
+	go func() {
+		pool.chanRmTxs <- keysLocal[:50]
+	}()
+	go func() {
+		pool.chanRmTxs <- keysLocal[50:]
+	}()
 
-	assert.Equal(t, 192, len(pool.queue.accTxs))
-	assert.Equal(t, 0, len(pool.pending.accTxs))
-	assert.Equal(t, 100, pool.allTxsForLook.LocalCount())
-	assert.Equal(t, 92, pool.allTxsForLook.RemoteCount())
-	assert.Equal(t, 100, len(pool.sortedByPriced.all.locals))
-	assert.Equal(t, 23, len(pool.sortedByPriced.all.remotes))
+	waitChannel := make(chan struct{})
+
 	newheadevent := &transaction.ChainHeadEvent{NewBlock}
 	pool.chanChainHead <- *newheadevent
 	pool.chanSysShutDown <- errors.New("shut down")
 
+	<-waitChannel
+	time.Sleep(20 * time.Second)
+
+	assert.Equal(t, 200, len(pool.queue.accTxs))
+	assert.Equal(t, 0, len(pool.pending.accTxs))
+	assert.Equal(t, 100, pool.allTxsForLook.LocalCount())
+	assert.Equal(t, 100, pool.allTxsForLook.RemoteCount())
+	assert.Equal(t, 100, len(pool.sortedByPriced.all.locals))
+	assert.Equal(t, 100, len(pool.sortedByPriced.all.remotes))
 }

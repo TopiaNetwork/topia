@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/codec"
 	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -44,7 +45,7 @@ func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, validat
 	var err error
 	if !found {
 		if ps.topicValidation {
-			topicValidator := message.TopicValidator(validators...)
+			topicValidator := message.TopicValidator(ps.p2pService.ID(), ps.log, validators...)
 			if err := ps.pubSub.RegisterTopicValidator(
 				topic, topicValidator, pubsub.WithValidatorInline(true),
 			); err != nil {
@@ -130,14 +131,29 @@ func (ps *P2PPubSubService) UnSubscribe(topic string) error {
 	return err
 }
 
-func (ps *P2PPubSubService) Publish(ctx context.Context, topic string, data []byte) error {
+func (ps *P2PPubSubService) Publish(ctx context.Context, toModuleName string, topic string, data []byte) error {
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+	pubMsg := &message.NetworkPubSubMessage{
+		FromPeerID: ps.p2pService.ID().String(),
+		Topic:      topic,
+		ModuleName: toModuleName,
+		Data:       data,
+	}
+	pubMsgBytes, err := marshaler.Marshal(pubMsg)
+	if err != nil {
+		ps.log.Errorf("Marshal pubsub message err: %v", err)
+		return err
+	}
+
 	p2pTopic, found := ps.topics[topic]
 	if !found {
 		return fmt.Errorf("could not find topic (%s)", topic)
 	}
-	err := p2pTopic.Publish(ctx, data)
+	err = p2pTopic.Publish(ctx, pubMsgBytes)
 	if err != nil {
-		return fmt.Errorf("could not publish top topic (%s): %w", topic, err)
+		err = fmt.Errorf("could not publish top topic (%s): %w", topic, err)
+		ps.log.Errorf("%v", err)
+		return err
 	}
 	return nil
 }

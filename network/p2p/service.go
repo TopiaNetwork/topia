@@ -706,8 +706,8 @@ func (p2p *P2PService) UnSubscribe(topic string) error {
 	return p2p.pubsubService.UnSubscribe(topic)
 }
 
-func (p2p *P2PService) Publish(ctx context.Context, topic string, data []byte) error {
-	return p2p.pubsubService.Publish(ctx, topic, data)
+func (p2p *P2PService) Publish(ctx context.Context, toModuleName string, topic string, data []byte) error {
+	return p2p.pubsubService.Publish(ctx, toModuleName, topic, data)
 }
 
 func (p2p *P2PService) Start() {

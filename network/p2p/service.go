@@ -164,6 +164,7 @@ func (p2p *P2PService) defaultPubSubOptions() []pubsub.Option {
 		pubsub.WithMaxMessageSize(tpnetprotoc.PubSubMaxMsgSize),
 		pubsub.WithMessageSigning(true),
 		pubsub.WithStrictSignatureVerification(true),
+		pubsub.WithFloodPublish(true),
 	}
 }
 

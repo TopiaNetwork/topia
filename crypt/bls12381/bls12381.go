@@ -1,6 +1,7 @@
 package bls12381
 
 import (
+	"errors"
 	"fmt"
 	"github.com/TopiaNetwork/go-bls"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -31,14 +32,16 @@ func (c *CryptServiceBLS12381) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrty
 	sec := bls.CreateSecretKey()
 	pub := sec.GetPublicKey()
 	if sec == nil || pub == nil {
-		c.log.Error("GeneratePriPubKey priKey or pubKey is nil.")
-		return nil, nil, fmt.Errorf("GeneratePriPubKey err")
+		errStr := "GeneratePriPubKey priKey or pubKey is nil"
+		c.log.Error(errStr)
+		return nil, nil, errors.New(errStr)
 	}
 	secRet := sec.Serialize()
 	pubRet := pub.Serialize()
 	if len(secRet) != PrivateKeyBytes || len(pubRet) != PublicKeyBytes {
-		c.log.Error("GeneratePriPubKey key length incorrect.")
-		return nil, nil, fmt.Errorf("GeneratePriPubKey length err")
+		errStr := "GeneratePriPubKey key length incorrect"
+		c.log.Error(errStr)
+		return nil, nil, errors.New(errStr)
 	}
 	return secRet, pubRet, nil
 }
@@ -46,7 +49,7 @@ func (c *CryptServiceBLS12381) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrty
 func (c *CryptServiceBLS12381) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	var sec bls.SecretKey
 	if priKey == nil {
-		return nil, fmt.Errorf("ConvertToPublic: input PrivateKey err")
+		return nil, errors.New("ConvertToPublic: input PrivateKey err")
 	}
 	if err := sec.Deserialize(priKey); err != nil {
 		return nil, err
@@ -57,7 +60,7 @@ func (c *CryptServiceBLS12381) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpc
 func (c *CryptServiceBLS12381) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrtypes.Signature, error) {
 	var sec bls.SecretKey
 	if priKey == nil || msg == nil {
-		return nil, fmt.Errorf("Sign: input PrivateKey or msg err")
+		return nil, errors.New("Sign: input PrivateKey or msg err")
 	}
 	if err := sec.Deserialize(priKey); err != nil {
 		return nil, err
@@ -67,7 +70,7 @@ func (c *CryptServiceBLS12381) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tp
 
 func (c *CryptServiceBLS12381) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error) {
 	if pubKey == nil || msg == nil || signData == nil {
-		return false, fmt.Errorf("Verify: input err")
+		return false, errors.New("Verify: input err")
 	}
 	var pub bls.PublicKey
 	var sig bls.Signature

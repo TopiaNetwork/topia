@@ -14,7 +14,7 @@ type SyncActor struct {
 }
 
 func CreateSyncActor(level tplogcmm.LogLevel, parentLog tplog.Logger, sysActor *actor.ActorSystem, syncer *syncer) (*actor.PID, error) {
-	log := tplog.CreateModuleLogger(level, "SyncActor", parentLog)
+	log := tplog.CreateModuleLogger(level, MOD_ACTOR_NAME, parentLog)
 	sActor := &SyncActor{
 		log:    log,
 		syncer: syncer,
@@ -22,7 +22,7 @@ func CreateSyncActor(level tplogcmm.LogLevel, parentLog tplog.Logger, sysActor *
 	props := actor.PropsFromProducer(func() actor.Actor {
 		return sActor
 	})
-	pid, err := sysActor.Root.SpawnNamed(props, "sync-actor")
+	pid, err := sysActor.Root.SpawnNamed(props, MOD_ACTOR_NAME)
 
 	sActor.pid = pid
 

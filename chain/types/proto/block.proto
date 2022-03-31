@@ -66,3 +66,8 @@ message BlockResult {
   BlockResultHead Head = 1  [(gogoproto.jsontag) = "head"];
   BlockResultData Data = 2  [(gogoproto.jsontag) = "data"];
 }
+
+message PubSubMessageBlockInfo {
+  bytes Block       = 1  [(gogoproto.jsontag) = "block"];
+  bytes BlockResult = 2  [(gogoproto.jsontag) = "blockResult"];
+}

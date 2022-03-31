@@ -18,8 +18,8 @@ message NetworkMessage {
 }
 
 message NetworkPubSubMessage {
-    string FromPeerID = 1 [(gogoproto.jsontag) = "fromPeerID"];
-    string Topic      = 2 [(gogoproto.jsontag) = "topic"];
-    string ModuleName = 3 [(gogoproto.jsontag) = "moduleName"];
-    bytes Data        = 4 [(gogoproto.jsontag) = "data"];
+    string FromPeerID           = 1 [(gogoproto.jsontag) = "fromPeerID"];
+    string Topic                = 2 [(gogoproto.jsontag) = "topic"];
+    repeated string ModuleNames = 3 [(gogoproto.jsontag) = "moduleNames"];
+    bytes Data                  = 4 [(gogoproto.jsontag) = "data"];
 }

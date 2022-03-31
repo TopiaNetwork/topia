@@ -23,10 +23,22 @@ func Clone(dst, src interface{}) error {
 }
 
 func BytesCopy(src []byte) []byte {
+	if src == nil {
+		return nil
+	}
+
 	dst := make([]byte, len(src))
 	copy(dst, src)
 
 	return dst
+}
+
+func CloneSlice(a [][]byte) [][]byte {
+	other := make([][]byte, len(a))
+	for i := range a {
+		other[i] = BytesCopy(a[i])
+	}
+	return other
 }
 
 func Uint64ToBytes(v uint64) []byte {

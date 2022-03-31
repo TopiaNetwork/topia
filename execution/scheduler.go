@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	tpnet "github.com/TopiaNetwork/topia/network"
+	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
+	"github.com/TopiaNetwork/topia/sync"
 	tx "github.com/TopiaNetwork/topia/transaction/basic"
 	"time"
 
@@ -45,7 +48,7 @@ type ExecutionScheduler interface {
 
 	ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error)
 
-	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore) error
+	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore, network tpnet.Network) error
 }
 
 type executionScheduler struct {
@@ -256,7 +259,7 @@ func (scheduler *executionScheduler) ConstructBlockAndBlockResult(marshaler code
 	return block, blockResult, nil
 }
 
-func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore) error {
+func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore, network tpnet.Network) error {
 	if ok := scheduler.executeMutex.TryLockTimeout(1 * time.Second); !ok {
 		err := fmt.Errorf("A packedTxs is commiting, try later again")
 		scheduler.log.Errorf("%v", err)
@@ -295,22 +298,50 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 
 		errCMMState := exeTxsF.compState.Commit()
 		if errCMMState != nil {
-			scheduler.log.Errorf("Commit state version %d err: %s", stateVersion, errCMMState)
+			scheduler.log.Errorf("Commit state version %d err: %v", stateVersion, errCMMState)
 			return errCMMState
 		}
 
 		errCMMBlock := blockStore.CommitBlock(block)
 		if errCMMBlock != nil {
-			scheduler.log.Errorf("Commit block e: state version %d,  err: %s", stateVersion, errCMMBlock)
+			scheduler.log.Errorf("Commit block err: state version %d, err: %v", stateVersion, errCMMBlock)
 			return errCMMBlock
 		}
 
 		scheduler.exePackedTxsList.Remove(exeTxsItem)
 
+		blockBytes, err := marshaler.Marshal(block)
+		if err != nil {
+			scheduler.log.Errorf("Marshal commited block err: stateVersion=%d, err=%v", stateVersion, err)
+		}
+		blockRSBytes, err := marshaler.Marshal(blockRS)
+		if err != nil {
+			scheduler.log.Errorf("Marshal commited block result err: stateVersion=%d, err=%v", stateVersion, err)
+		}
+
+		pubsubBlockInfo := &tpchaintypes.PubSubMessageBlockInfo{
+			Block:       blockBytes,
+			BlockResult: blockRSBytes,
+		}
+
+		pubsubBlockInfoBytes, err := marshaler.Marshal(pubsubBlockInfo)
+		if err != nil {
+			scheduler.log.Errorf("Marshal pubsub block info err: stateVersion=%d, err=%v", stateVersion, err)
+			return err
+		}
+
+		go func() {
+			err := network.Publish(ctx, []string{sync.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, pubsubBlockInfoBytes)
+			if err != nil {
+				scheduler.log.Errorf("Publish block info err: stateVersion=%d, err=%v", stateVersion, err)
+			}
+		}()
+
 		return nil
 	} else {
 		err := fmt.Errorf("Empty executed packedTxs stateVersion=%d", stateVersion)
 		scheduler.log.Errorf("%v", err)
+
 		return err
 	}
 }

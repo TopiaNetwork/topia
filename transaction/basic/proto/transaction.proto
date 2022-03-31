@@ -40,3 +40,7 @@ message TransactionResult {
   TransactionResultHead Head = 1 [(gogoproto.jsontag)   = "head"];
   TransactionResultData Data   = 2 [(gogoproto.jsontag) = "data"];
 }
+
+message PubSubMessageTxs {
+  repeated Transaction Txs = 1  [(gogoproto.jsontag) = "txs"];
+}

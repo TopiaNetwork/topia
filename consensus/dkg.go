@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/kyber/v3/share"
-	"github.com/TopiaNetwork/kyber/v3/sign/bls"
 	"sync"
 
 	"github.com/TopiaNetwork/kyber/v3"
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
+	"github.com/TopiaNetwork/kyber/v3/share"
 	dkg "github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
+	"github.com/TopiaNetwork/kyber/v3/sign/bls"
 	"github.com/TopiaNetwork/kyber/v3/sign/tbls"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 

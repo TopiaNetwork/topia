@@ -49,8 +49,8 @@ func (TxPoolMessage_TxPoolMessageType) EnumDescriptor() ([]byte, []int) {
 }
 
 type TxPoolMessage struct {
-	MsgType TxPoolMessage_TxPoolMessageType `protobuf:"varint,1,opt,name=MsgType,proto3,enum=proto.TxPoolMessage_TxPoolMessageType" json:"msgType"`
-	Data    []byte                          `protobuf:"bytes,2,opt,name=Data,proto3" json:"data"`
+	MsgType              TxPoolMessage_TxPoolMessageType `protobuf:"varint,1,opt,name=MsgType,proto3,enum=proto.TxPoolMessage_TxPoolMessageType" json:"msgType"`
+	Data                 []byte                          `protobuf:"bytes,2,opt,name=Data,proto3" json:"data"`
 	XXX_NoUnkeyedLiteral struct{}                        `json:"-"`
 	XXX_unrecognized     []byte                          `json:"-"`
 	XXX_sizecache        int32                           `json:"-"`
@@ -100,6 +100,7 @@ func (m *TxPoolMessage) GetData() []byte {
 }
 
 type TxMessage struct {
+	Data                 []byte   `protobuf:"bytes,1,opt,name=Data,proto3" json:"data"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -134,6 +135,13 @@ func (m *TxMessage) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_TxMessage proto.InternalMessageInfo
 
+func (m *TxMessage) GetData() []byte {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterEnum("proto.TxPoolMessage_TxPoolMessageType", TxPoolMessage_TxPoolMessageType_name, TxPoolMessage_TxPoolMessageType_value)
 	proto.RegisterType((*TxPoolMessage)(nil), "proto.TxPoolMessage")
@@ -143,7 +151,7 @@ func init() {
 func init() { proto.RegisterFile("message_txpool.proto", fileDescriptor_9a7af56e6334bfec) }
 
 var fileDescriptor_9a7af56e6334bfec = []byte{
-	// 218 bytes of a gzipped FileDescriptorProto
+	// 224 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0xc9, 0x4d, 0x2d, 0x2e,
 	0x4e, 0x4c, 0x4f, 0x8d, 0x2f, 0xa9, 0x28, 0xc8, 0xcf, 0xcf, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9,
 	0x17, 0x62, 0x05, 0x53, 0x52, 0x5c, 0xe9, 0xf9, 0xe9, 0xf9, 0x10, 0x21, 0xa5, 0x65, 0x8c, 0x5c,
@@ -153,11 +161,11 @@ var fileDescriptor_9a7af56e6334bfec = []byte{
 	0xc1, 0xcc, 0x10, 0x92, 0xe1, 0x62, 0x71, 0x49, 0x2c, 0x49, 0x94, 0x60, 0x52, 0x60, 0xd4, 0xe0,
 	0x71, 0xe2, 0x78, 0x75, 0x4f, 0x9e, 0x25, 0x25, 0xb1, 0x24, 0x31, 0x08, 0x2c, 0xaa, 0xa4, 0xc1,
 	0x25, 0x88, 0x61, 0x90, 0x10, 0x37, 0x17, 0x7b, 0x68, 0x5e, 0x76, 0x5e, 0x7e, 0x79, 0x9e, 0x00,
-	0x83, 0x10, 0x1b, 0x17, 0x53, 0x48, 0x85, 0x00, 0xa3, 0x12, 0x37, 0x17, 0x67, 0x48, 0x05, 0x54,
-	0x95, 0x93, 0xea, 0x89, 0x47, 0x72, 0x8c, 0x17, 0x1e, 0xc9, 0x31, 0xde, 0x78, 0x24, 0xc7, 0xf8,
-	0xe0, 0x91, 0x1c, 0xe3, 0x8c, 0xc7, 0x72, 0x0c, 0x51, 0xfc, 0x25, 0x45, 0x89, 0x79, 0xc5, 0x89,
-	0xc9, 0x25, 0x99, 0xf9, 0x79, 0x20, 0x5f, 0x27, 0xb1, 0x81, 0x1d, 0x6e, 0x0c, 0x08, 0x00, 0x00,
-	0xff, 0xff, 0xc7, 0x59, 0xa9, 0x3e, 0x0e, 0x01, 0x00, 0x00,
+	0x83, 0x10, 0x1b, 0x17, 0x53, 0x48, 0x85, 0x00, 0xa3, 0x92, 0x26, 0x17, 0x67, 0x48, 0x05, 0xcc,
+	0x8d, 0x30, 0x43, 0x19, 0xb1, 0x19, 0xea, 0xa4, 0x7a, 0xe2, 0x91, 0x1c, 0xe3, 0x85, 0x47, 0x72,
+	0x8c, 0x37, 0x1e, 0xc9, 0x31, 0x3e, 0x78, 0x24, 0xc7, 0x38, 0xe3, 0xb1, 0x1c, 0x43, 0x14, 0x7f,
+	0x49, 0x51, 0x62, 0x5e, 0x71, 0x62, 0x72, 0x49, 0x66, 0x7e, 0x1e, 0x28, 0x4c, 0x92, 0xd8, 0xc0,
+	0xde, 0x32, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x34, 0xa8, 0x1d, 0xed, 0x2c, 0x01, 0x00, 0x00,
 }
 
 func (m *TxPoolMessage) Marshal() (dAtA []byte, err error) {
@@ -223,6 +231,13 @@ func (m *TxMessage) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
+	if len(m.Data) > 0 {
+		i -= len(m.Data)
+		copy(dAtA[i:], m.Data)
+		i = encodeVarintMessageTxpool(dAtA, i, uint64(len(m.Data)))
+		i--
+		dAtA[i] = 0xa
+	}
 	return len(dAtA) - i, nil
 }
 
@@ -262,6 +277,10 @@ func (m *TxMessage) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.Data)
+	if l > 0 {
+		n += 1 + l + sovMessageTxpool(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -407,6 +426,40 @@ func (m *TxMessage) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: TxMessage: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageTxpool
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageTxpool
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageTxpool
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
+			if m.Data == nil {
+				m.Data = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipMessageTxpool(dAtA[iNdEx:])

@@ -2,7 +2,7 @@ package bls12381
 
 import (
 	"fmt"
-	bls "github.com/TopiaNetwork/go-bls"
+	"github.com/TopiaNetwork/go-bls"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -11,6 +11,8 @@ const (
 	PublicKeyBytes  = 48 //48 bytes
 	PrivateKeyBytes = 32 //32 bytes
 )
+
+const MCL_BLS12_381 = bls.MCL_BLS12_381
 
 type CryptServiceBLS12381 struct {
 	log tplog.Logger
@@ -25,20 +27,26 @@ func (c *CryptServiceBLS12381) CryptType() tpcrtypes.CryptType {
 }
 
 func (c *CryptServiceBLS12381) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
-	bls.Initialization(bls.MCL_BLS12_381)
+	bls.Initialization(MCL_BLS12_381)
 	sec := bls.CreateSecretKey()
 	pub := sec.GetPublicKey()
 	if sec == nil || pub == nil {
-		err := fmt.Errorf("GeneratePriPubKey err\n")
-		return nil, nil, err
+		c.log.Error("GeneratePriPubKey priKey or pubKey is nil.")
+		return nil, nil, fmt.Errorf("GeneratePriPubKey err")
 	}
-	return sec.Serialize(), pub.Serialize(), nil
+	secRet := sec.Serialize()
+	pubRet := pub.Serialize()
+	if len(secRet) != PrivateKeyBytes || len(pubRet) != PublicKeyBytes {
+		c.log.Error("GeneratePriPubKey key length incorrect.")
+		return nil, nil, fmt.Errorf("GeneratePriPubKey length err")
+	}
+	return secRet, pubRet, nil
 }
 
 func (c *CryptServiceBLS12381) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	var sec bls.SecretKey
 	if priKey == nil {
-		return nil, fmt.Errorf("ConvertToPublic: input PrivateKey err\n")
+		return nil, fmt.Errorf("ConvertToPublic: input PrivateKey err")
 	}
 	if err := sec.Deserialize(priKey); err != nil {
 		return nil, err
@@ -49,7 +57,7 @@ func (c *CryptServiceBLS12381) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpc
 func (c *CryptServiceBLS12381) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrtypes.Signature, error) {
 	var sec bls.SecretKey
 	if priKey == nil || msg == nil {
-		return nil, fmt.Errorf("Sign: input PrivateKey or msg err\n")
+		return nil, fmt.Errorf("Sign: input PrivateKey or msg err")
 	}
 	if err := sec.Deserialize(priKey); err != nil {
 		return nil, err
@@ -59,7 +67,7 @@ func (c *CryptServiceBLS12381) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tp
 
 func (c *CryptServiceBLS12381) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error) {
 	if pubKey == nil || msg == nil || signData == nil {
-		return false, fmt.Errorf("Verify: input err\n")
+		return false, fmt.Errorf("Verify: input err")
 	}
 	var pub bls.PublicKey
 	var sig bls.Signature

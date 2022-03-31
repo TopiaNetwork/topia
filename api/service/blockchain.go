@@ -16,3 +16,4 @@ func (bc *BlockChain) BlockByHeight(ctx context.Context, height uint64) (*tpchai
 func (bc *BlockChain) BlockByHash(ctx context.Context, blockHash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
 	panic("implement me")
 }
+

@@ -1,21 +1,35 @@
 package transactionpool
 
-import tplog "github.com/TopiaNetwork/topia/log"
+import (
+	"github.com/sirupsen/logrus"
+
+	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/transaction"
+)
 
 type TransactionPoolHandler interface {
 	ProcessTx(msg *TxMessage) error
 }
 
 type transactionPoolHandler struct {
-	log tplog.Logger
+	log 		tplog.Logger
+	txPool 		TransactionPool
 }
 
-func NewTransactionPoolHandler(log tplog.Logger) *transactionPoolHandler {
+func NewTransactionPoolHandler(log tplog.Logger, txPool TransactionPool) *transactionPoolHandler {
 	return &transactionPoolHandler{
 		log: log,
+		txPool: txPool,
 	}
 }
 
 func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
-	panic("implement me")
+	var tx *transaction.Transaction
+	err := tx.Unmarshal(msg.Data)
+	if err != nil {
+		logrus.Errorf("txmessage data error")
+		return err
+	}
+	handler.txPool.AddTx(tx,false)
+	return nil
 }

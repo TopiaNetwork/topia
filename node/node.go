@@ -42,7 +42,7 @@ type Node struct {
 
 func NewNode(endPoint string, seed string) *Node {
 	homeDir, _ := os.UserHomeDir()
-	chainRootPath := filepath.Join(homeDir, "topia")
+	chainRootPath := filepath.Join(homeDir, "universal")
 
 	mainLog, err := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 	if err != nil {
@@ -62,7 +62,7 @@ func NewNode(endPoint string, seed string) *Node {
 		CrptyType:     tpcrtypes.CryptType_BLS12381,
 	}
 
-	ledger := ledger.NewLedger(chainRootPath, "topia", mainLog, backend.BackendType_Badger)
+	ledger := ledger.NewLedger(chainRootPath, "universal", mainLog, backend.BackendType_Badger)
 
 	evHub := eventhub.NewEventHub(tplogcmm.InfoLevel, mainLog)
 

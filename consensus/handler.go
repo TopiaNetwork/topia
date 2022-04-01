@@ -3,22 +3,28 @@ package consensus
 import (
 	"context"
 	"fmt"
-	tptypes "github.com/TopiaNetwork/topia/chain/types"
+
+	"github.com/AsynkronIT/protoactor-go/actor"
+
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
 )
 
 type ConsensusHandler interface {
-	VerifyBlock(block *tptypes.Block) error
+	VerifyBlock(block *tpchaintypes.Block) error
 
 	ProcessPreparePackedMsgExe(msg *PreparePackedMessageExe) error
 
 	ProcessPreparePackedMsgProp(msg *PreparePackedMessageProp) error
 
 	ProcessPropose(msg *ProposeMessage) error
+
+	ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error
 
 	ProcessVote(msg *VoteMessage) error
 
@@ -29,8 +35,6 @@ type ConsensusHandler interface {
 	ProcessDKGDeal(msg *DKGDealMessage) error
 
 	ProcessDKGDealResp(msg *DKGDealRespMessage) error
-
-	updateDKGBls(dkgBls DKGBls)
 }
 
 type consensusHandler struct {
@@ -39,13 +43,15 @@ type consensusHandler struct {
 	preprePackedMsgExeChan  chan *PreparePackedMessageExe
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
 	proposeMsgChan          chan *ProposeMessage
+	voteMsgChan             chan *VoteMessage
+	commitMsgChan           chan *CommitMessage
 	partPubKey              chan *DKGPartPubKeyMessage
 	dealMsgCh               chan *DKGDealMessage
 	dealRespMsgCh           chan *DKGDealRespMessage
-	voteCollector           *consensusVoteCollector
 	ledger                  ledger.Ledger
 	marshaler               codec.Marshaler
 	deliver                 messageDeliverI
+	exeScheduler            execution.ExecutionScheduler
 }
 
 func NewConsensusHandler(log tplog.Logger,
@@ -53,29 +59,32 @@ func NewConsensusHandler(log tplog.Logger,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
+	voteMsgChan chan *VoteMessage,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
-	deliver messageDeliverI) *consensusHandler {
+	deliver messageDeliverI,
+	exeScheduler execution.ExecutionScheduler) *consensusHandler {
 	return &consensusHandler{
 		log:                     log,
 		roundCh:                 roundCh,
 		preprePackedMsgExeChan:  preprePackedMsgExeChan,
 		preprePackedMsgPropChan: preprePackedMsgPropChan,
 		proposeMsgChan:          proposeMsgChan,
+		voteMsgChan:             voteMsgChan,
 		partPubKey:              partPubKey,
 		dealMsgCh:               dealMsgCh,
 		dealRespMsgCh:           dealRespMsgCh,
-		voteCollector:           newConsensusVoteCollector(log),
 		ledger:                  ledger,
 		marshaler:               marshaler,
 		deliver:                 deliver,
+		exeScheduler:            exeScheduler,
 	}
 }
 
-func (handler *consensusHandler) VerifyBlock(block *tptypes.Block) error {
+func (handler *consensusHandler) VerifyBlock(block *tpchaintypes.Block) error {
 	panic("implement me")
 }
 
@@ -129,85 +138,47 @@ func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {
 	return nil
 }
 
-func (handler *consensusHandler) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
-	return &CommitMessage{
-		ChainID: msg.ChainID,
-		Version: msg.Version,
-		Epoch:   msg.Epoch,
-		Round:   msg.Round,
-		Proof:   msg.Proof,
-		AggSign: aggSign,
-		Block:   msg.Block,
-	}, nil
-}
-
-func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
-	aggSign, err := handler.voteCollector.tryAggregateSignAndAddVote(msg)
+func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
+	txProofs, txRSProofs, err := handler.exeScheduler.PackedTxProofForValidity(context.Background(), msg.StateVersion, msg.TxHashs, msg.TxResultHashs)
 	if err != nil {
-		handler.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
+		handler.log.Errorf("Get tx proofs and tx result proof err: %v", err)
 		return err
 	}
 
-	if aggSign != nil {
-		commitMsg, _ := handler.produceCommitMsg(msg, aggSign)
-		err := handler.deliver.deliverCommitMessage(context.Background(), commitMsg)
-		if err != nil {
-			handler.log.Panicf("Can't deliver commit message: %v", err)
-		}
-
-		var block tptypes.Block
-		err = handler.marshaler.Unmarshal(msg.Block, &block)
-		if err != nil {
-			handler.log.Errorf("Unmarshal block failed: %v", err)
-			return err
-		}
-		block.Head.VoteAggSignature = aggSign
-		err = handler.ledger.GetBlockStore().CommitBlock(&block)
-		if err != nil {
-			handler.log.Errorf("Can't commit block height =%d, err=%v", block.Head.Height, err)
-			return err
-		}
-
-		handler.voteCollector.reset()
-
-		/*
-			csProof := ConsensusProof{
-				ParentBlockHash: block.Head.ParentBlockHash,
-				Height:          block.Head.Height,
-				AggSign:         aggSign,
-			}
-
-			roundInfo := &RoundInfo{
-				Epoch:        block.Head.Epoch,
-				LastRoundNum: block.Head.Round,
-				CurRoundNum:  block.Head.Round + 1,
-				Proof:        &csProof,
-			}
-
-			handler.roundCh <- roundInfo
-		*/
+	validateResp := &ExeResultValidateRespMessage{
+		ChainID:        msg.ChainID,
+		Version:        msg.Version,
+		Epoch:          msg.Epoch,
+		Round:          msg.Round,
+		StateVersion:   msg.StateVersion,
+		TxProofs:       txProofs,
+		TxResultProofs: txRSProofs,
 	}
+
+	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp)
+}
+
+func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
+	handler.voteMsgChan <- msg
 
 	return nil
 }
 
 func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
-	var block tptypes.Block
-	err := handler.marshaler.Unmarshal(msg.Block, &block)
+	var blockHead tpchaintypes.BlockHead
+	err := handler.marshaler.Unmarshal(msg.BlockHead, &blockHead)
 	if err != nil {
 		handler.log.Errorf("Unmarshal block failed: %v", err)
 		return err
 	}
 
-	block.Head.VoteAggSignature = msg.AggSign
-
-	err = handler.ledger.GetBlockStore().CommitBlock(&block)
-	if err != nil {
-		handler.log.Errorf("Can't commit block height =%d, err=%v", block.Head.Height, err)
-		return err
-	}
-
-	handler.voteCollector.reset()
+	/*
+		err = handler.ledger.GetBlockStore().CommitBlock(&block)
+		if err != nil {
+			handler.log.Errorf("Can't commit block height =%d, err=%v", blockHead.Height, err)
+			return err
+		}
+	*/
 
 	return nil
 }
@@ -228,8 +199,4 @@ func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) err
 	handler.dealRespMsgCh <- msg
 
 	return nil
-}
-
-func (handler *consensusHandler) updateDKGBls(dkgBls DKGBls) {
-	handler.voteCollector.updateDKGBls(dkgBls)
 }

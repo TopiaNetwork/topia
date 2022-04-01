@@ -3,19 +3,27 @@ package execution
 import (
 	"container/list"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/atomic"
+	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
+	tpnet "github.com/TopiaNetwork/topia/network"
+	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
+	"github.com/TopiaNetwork/topia/sync"
+	tx "github.com/TopiaNetwork/topia/transaction/basic"
 	"time"
 
+	"github.com/lazyledger/smt"
 	"github.com/subchen/go-trylock/v2"
+	"go.uber.org/atomic"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger/block"
 	tplog "github.com/TopiaNetwork/topia/log"
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/state"
-	tx "github.com/TopiaNetwork/topia/transaction"
 )
 
 const (
@@ -36,9 +44,11 @@ type ExecutionScheduler interface {
 
 	MaxStateVersion(compState state.CompositionState) (uint64, error)
 
+	PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error)
+
 	ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error)
 
-	CommitPackedTx(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockStore block.BlockStore) error
+	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore, network tpnet.Network) error
 }
 
 type executionScheduler struct {
@@ -133,25 +143,123 @@ func (scheduler *executionScheduler) MaxStateVersion(compState state.Composition
 	return maxStateVersion, nil
 }
 
-func (scheduler *executionScheduler) GetPackedTxForValidity(ctx context.Context, stateVersion uint64) (uint32, []byte, []byte, error) {
+func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error) {
 	scheduler.executeMutex.RLock()
 	defer scheduler.executeMutex.RUnlock()
+
+	if len(txHashs) == 0 || len(txResultHashes) == 0 || len(txHashs) != len(txResultHashes) {
+		err := fmt.Errorf("Invalid tx count %d or tx result count %d", len(txHashs), len(txResultHashes))
+		scheduler.log.Errorf("%v", err)
+	}
 
 	if scheduler.exePackedTxsList.Len() > 0 {
 		exeTxsF := scheduler.exePackedTxsList.Front().Value.(*executionPackedTxs)
 		if exeTxsF.StateVersion() != stateVersion {
 			err := fmt.Errorf("Invalid state version: expected %d, actual %d", exeTxsF.StateVersion(), stateVersion)
 			scheduler.log.Errorf("%v")
-			return 0, nil, nil, err
+			return nil, nil, err
 		}
 
-		return uint32(len(exeTxsF.packedTxs.TxList)), exeTxsF.packedTxs.TxRoot, exeTxsF.packedTxsRS.TxRSRoot, nil
+		treeTx := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+		treeTxRS := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+		for i := 0; i < len(exeTxsF.packedTxs.TxList); i++ {
+			txHashBytes, _ := exeTxsF.packedTxs.TxList[i].HashBytes()
+			txRSHashBytes, _ := exeTxsF.packedTxsRS.TxsResult[i].HashBytes()
+
+			treeTx.Update(txHashBytes, txHashBytes)
+			treeTxRS.Update(txRSHashBytes, txRSHashBytes)
+		}
+
+		var txProofs [][]byte
+		var txRSProofs [][]byte
+		for t := 0; t < len(txHashs); t++ {
+			txProof, err := treeTx.Prove(txHashs[t])
+			if err != nil {
+				scheduler.log.Errorf("Can't get tx proof: t=%d, txHashBytes=v, err=%v", t, txHashs[t], err)
+				return nil, nil, err
+			}
+
+			txRSProof, err := treeTxRS.Prove(txResultHashes[t])
+			if err != nil {
+				scheduler.log.Errorf("Can't get tx result proof: txRSHashBytes=v, err=%v", txResultHashes[t], err)
+				return nil, nil, err
+			}
+
+			txProofBytes, _ := json.Marshal(txProof)
+			txRSProofBytes, _ := json.Marshal(txRSProof)
+
+			txProofs = append(txProofs, txProofBytes)
+			txRSProofs = append(txRSProofs, txRSProofBytes)
+		}
+
+		return txProofs, txRSProofs, nil
 	}
 
-	return 0, nil, nil, errors.New("Not exist packed txs")
+	return nil, nil, errors.New("Not exist packed txs")
 }
 
-func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockStore block.BlockStore) error {
+func (scheduler *executionScheduler) ConstructBlockAndBlockResult(marshaler codec.Marshaler, blockHead *tpchaintypes.BlockHead, compState state.CompositionState, packedTxs *PackedTxs, packedTxsRS *PackedTxsResult) (*tpchaintypes.Block, *tpchaintypes.BlockResult, error) {
+	dstBH, err := blockHead.DeepCopy(blockHead)
+	if err != nil {
+		err := fmt.Errorf("Block head deep copy err: %v", err)
+		return nil, nil, err
+	}
+
+	blockData := &tpchaintypes.BlockData{
+		Version: blockHead.Version,
+	}
+	for i := 0; i < len(packedTxs.TxList); i++ {
+		txBytes, _ := packedTxs.TxList[i].HashBytes()
+		blockData.Txs = append(blockData.Txs, txBytes)
+	}
+
+	block := &tpchaintypes.Block{
+		Head: dstBH,
+		Data: blockData,
+	}
+
+	blockHash, err := block.HashBytes(tpcmm.NewBlake2bHasher(0), marshaler)
+	if err != nil {
+		scheduler.log.Errorf("Can't get current block hash: %v", err)
+		return nil, nil, err
+	}
+
+	latestBlockResult, err := compState.GetLatestBlockResult()
+	if err != nil {
+		scheduler.log.Errorf("Can't get latest block result: %v", err)
+		return nil, nil, err
+	}
+	blockRSHash, err := latestBlockResult.HashBytes(tpcmm.NewBlake2bHasher(0), marshaler)
+	if err != nil {
+		scheduler.log.Errorf("Can't get latest block result hash: %v", err)
+		return nil, nil, err
+	}
+
+	blockResultHead := &tpchaintypes.BlockResultHead{
+		Version:          blockHead.Version,
+		PrevBlockResult:  blockRSHash,
+		BlockHash:        blockHash,
+		TxResultHashRoot: tpcmm.BytesCopy(packedTxsRS.TxRSRoot),
+		Status:           tpchaintypes.BlockResultHead_OK,
+	}
+
+	blockResultData := &tpchaintypes.BlockResultData{
+		Version: blockHead.Version,
+	}
+	for r := 0; r < len(packedTxsRS.TxsResult); r++ {
+		txRSBytes, _ := packedTxsRS.TxsResult[r].HashBytes()
+		blockResultData.TxResults = append(blockResultData.TxResults, txRSBytes)
+	}
+
+	blockResult := &tpchaintypes.BlockResult{
+		Head: blockResultHead,
+		Data: blockResultData,
+	}
+
+	return block, blockResult, nil
+}
+
+func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore, network tpnet.Network) error {
 	if ok := scheduler.executeMutex.TryLockTimeout(1 * time.Second); !ok {
 		err := fmt.Errorf("A packedTxs is commiting, try later again")
 		scheduler.log.Errorf("%v", err)
@@ -172,24 +280,68 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 			return err
 		}
 
+		block, blockRS, err := scheduler.ConstructBlockAndBlockResult(marshaler, blockHead, exeTxsF.compState, exeTxsF.packedTxs, exeTxsF.PackedTxsResult())
+		if err != nil {
+			scheduler.log.Errorf("ConstructBlockAndBlockResult err: %v", err)
+			return err
+		}
+		err = exeTxsF.compState.SetLatestBlock(block)
+		if err != nil {
+			scheduler.log.Errorf("Set latest block err when CommitPackedTx: %v", err)
+			return err
+		}
+		err = exeTxsF.compState.SetLatestBlockResult(blockRS)
+		if err != nil {
+			scheduler.log.Errorf("Set latest block result err when CommitPackedTx: %v", err)
+			return err
+		}
+
 		errCMMState := exeTxsF.compState.Commit()
 		if errCMMState != nil {
-			scheduler.log.Errorf("Commit state version %d err: %s", stateVersion, errCMMState)
+			scheduler.log.Errorf("Commit state version %d err: %v", stateVersion, errCMMState)
 			return errCMMState
 		}
 
 		errCMMBlock := blockStore.CommitBlock(block)
-		if errCMMState != nil {
-			scheduler.log.Errorf("Commit block err: state version %d,  err: %s", stateVersion, errCMMBlock)
-			return errCMMState
+		if errCMMBlock != nil {
+			scheduler.log.Errorf("Commit block err: state version %d, err: %v", stateVersion, errCMMBlock)
+			return errCMMBlock
 		}
 
 		scheduler.exePackedTxsList.Remove(exeTxsItem)
+
+		blockBytes, err := marshaler.Marshal(block)
+		if err != nil {
+			scheduler.log.Errorf("Marshal commited block err: stateVersion=%d, err=%v", stateVersion, err)
+		}
+		blockRSBytes, err := marshaler.Marshal(blockRS)
+		if err != nil {
+			scheduler.log.Errorf("Marshal commited block result err: stateVersion=%d, err=%v", stateVersion, err)
+		}
+
+		pubsubBlockInfo := &tpchaintypes.PubSubMessageBlockInfo{
+			Block:       blockBytes,
+			BlockResult: blockRSBytes,
+		}
+
+		pubsubBlockInfoBytes, err := marshaler.Marshal(pubsubBlockInfo)
+		if err != nil {
+			scheduler.log.Errorf("Marshal pubsub block info err: stateVersion=%d, err=%v", stateVersion, err)
+			return err
+		}
+
+		go func() {
+			err := network.Publish(ctx, []string{sync.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, pubsubBlockInfoBytes)
+			if err != nil {
+				scheduler.log.Errorf("Publish block info err: stateVersion=%d, err=%v", stateVersion, err)
+			}
+		}()
 
 		return nil
 	} else {
 		err := fmt.Errorf("Empty executed packedTxs stateVersion=%d", stateVersion)
 		scheduler.log.Errorf("%v", err)
+
 		return err
 	}
 }

@@ -1,21 +1,44 @@
 package common
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"fmt"
-	mapset "github.com/deckarep/golang-set"
 	"sort"
+
+	mapset "github.com/deckarep/golang-set"
 )
 
 func panicf(format string, args ...interface{}) {
-	panic(fmt.Sprintf(format, args))
+	panic(fmt.Sprintf(format, args...))
+}
+
+func Clone(dst, src interface{}) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(src); err != nil {
+		return err
+	}
+	return gob.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(dst)
 }
 
 func BytesCopy(src []byte) []byte {
+	if src == nil {
+		return nil
+	}
+
 	dst := make([]byte, len(src))
 	copy(dst, src)
 
 	return dst
+}
+
+func CloneSlice(a [][]byte) [][]byte {
+	other := make([][]byte, len(a))
+	for i := range a {
+		other[i] = BytesCopy(a[i])
+	}
+	return other
 }
 
 func Uint64ToBytes(v uint64) []byte {
@@ -33,6 +56,17 @@ func IsContainString(target string, str_array []string) bool {
 	index := sort.SearchStrings(str_array, target)
 	//index：0 ~ (len(str_array)-1), The return value is 1 if target is not present
 	return index < len(str_array) && str_array[index] == target
+}
+
+func RemoveIfExistString(target string, str_array []string) []string {
+	for i := 0; i < len(str_array); i++ {
+		if str_array[i] == target {
+			str_array = append(str_array[:i], str_array[i+1:]...)
+			i--
+		}
+	}
+
+	return str_array
 }
 
 func IsContainItem(target interface{}, array []interface{}) bool {

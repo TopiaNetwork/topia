@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/codec"
 	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -44,7 +45,7 @@ func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, validat
 	var err error
 	if !found {
 		if ps.topicValidation {
-			topicValidator := message.TopicValidator(validators...)
+			topicValidator := message.TopicValidator(ps.p2pService.ID(), ps.log, validators...)
 			if err := ps.pubSub.RegisterTopicValidator(
 				topic, topicValidator, pubsub.WithValidatorInline(true),
 			); err != nil {
@@ -85,9 +86,11 @@ func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, validat
 			}
 
 			if pubMsg, ok := psMsg.ValidatorData.(*message.NetworkPubSubMessage); ok {
-				err := ps.p2pService.dispatch(pubMsg.ModuleName, pubMsg)
-				if err != nil {
-					ps.log.Errorf("can't dispatch the pubsub message from peerID=%s", pubMsg.FromPeerID)
+				for _, pubModName := range pubMsg.ModuleNames {
+					err := ps.p2pService.dispatch(pubModName, pubMsg)
+					if err != nil {
+						ps.log.Errorf("can't dispatch the pubsub message from peerID=%s", pubMsg.FromPeerID)
+					}
 				}
 			} else {
 				ps.log.Errorf("invalid pubsub message from peerID=%s", pubMsg.FromPeerID)
@@ -130,14 +133,29 @@ func (ps *P2PPubSubService) UnSubscribe(topic string) error {
 	return err
 }
 
-func (ps *P2PPubSubService) Publish(ctx context.Context, topic string, data []byte) error {
+func (ps *P2PPubSubService) Publish(ctx context.Context, toModuleNames []string, topic string, data []byte) error {
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+	pubMsg := &message.NetworkPubSubMessage{
+		FromPeerID:  ps.p2pService.ID().String(),
+		Topic:       topic,
+		ModuleNames: toModuleNames,
+		Data:        data,
+	}
+	pubMsgBytes, err := marshaler.Marshal(pubMsg)
+	if err != nil {
+		ps.log.Errorf("Marshal pubsub message err: %v", err)
+		return err
+	}
+
 	p2pTopic, found := ps.topics[topic]
 	if !found {
 		return fmt.Errorf("could not find topic (%s)", topic)
 	}
-	err := p2pTopic.Publish(ctx, data)
+	err = p2pTopic.Publish(ctx, pubMsgBytes)
 	if err != nil {
-		return fmt.Errorf("could not publish top topic (%s): %w", topic, err)
+		err = fmt.Errorf("could not publish top topic (%s): %w", topic, err)
+		ps.log.Errorf("%v", err)
+		return err
 	}
 	return nil
 }

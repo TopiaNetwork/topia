@@ -164,6 +164,7 @@ func (p2p *P2PService) defaultPubSubOptions() []pubsub.Option {
 		pubsub.WithMaxMessageSize(tpnetprotoc.PubSubMaxMsgSize),
 		pubsub.WithMessageSigning(true),
 		pubsub.WithStrictSignatureVerification(true),
+		pubsub.WithFloodPublish(true),
 	}
 }
 
@@ -706,8 +707,8 @@ func (p2p *P2PService) UnSubscribe(topic string) error {
 	return p2p.pubsubService.UnSubscribe(topic)
 }
 
-func (p2p *P2PService) Publish(ctx context.Context, topic string, data []byte) error {
-	return p2p.pubsubService.Publish(ctx, topic, data)
+func (p2p *P2PService) Publish(ctx context.Context, toModuleNames []string, topic string, data []byte) error {
+	return p2p.pubsubService.Publish(ctx, toModuleNames, topic, data)
 }
 
 func (p2p *P2PService) Start() {

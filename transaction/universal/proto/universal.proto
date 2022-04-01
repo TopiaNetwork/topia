@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "universal";
+option (gogoproto.stable_marshaler_all) = true;
+
+import "gogo.proto";
+
+//protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.  --gofast_out=. ./universal.proto
+
+message TransactionUniversalHead {
+  uint32   Version            = 1  [(gogoproto.jsontag) = "version"];
+  bytes    FeePayer           = 2  [(gogoproto.jsontag) = "feePayer,omitempty"];
+  uint64   Nonce              = 3  [(gogoproto.jsontag) = "nonce"];
+  uint64   GasPrice           = 4  [(gogoproto.jsontag) = "gasPrice,omitempty"];
+  uint64   GasLimit           = 5  [(gogoproto.jsontag) = "gasLimit,omitempty"];
+  uint32   Type               = 6  [(gogoproto.jsontag) = "type"];
+  bytes    FeePayerSignature  = 7 [(gogoproto.jsontag) = "feePayerSignature,omitempty"];
+  uint32   Options            = 8 [(gogoproto.jsontag) = "options,omitempty"];
+}
+
+message TransactionUniversalData {
+  bytes Specification = 1 [(gogoproto.jsontag) = "specification"];
+}
+
+message TransactionUniversal {
+  TransactionUniversalHead Head = 1 [(gogoproto.jsontag) = "head"];
+  TransactionUniversalData Data = 2 [(gogoproto.jsontag) = "data"];
+}
+
+message TransactionResultUniversal {
+  uint32 Version      = 1  [(gogoproto.jsontag) = "version"];
+  bytes  TxHash       = 2  [(gogoproto.jsontag) = "txHash"];
+  uint64 GasUsed      = 3  [(gogoproto.jsontag) = "gasUsed"];
+  bytes  ErrString    = 4  [(gogoproto.jsontag) = "errString"];
+  enum ResultStatus {
+    OK = 0;
+    Err = 1;
+  }
+  ResultStatus Status = 5 [(gogoproto.jsontag) = "status"];
+}

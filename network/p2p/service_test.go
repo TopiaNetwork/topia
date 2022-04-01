@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"github.com/TopiaNetwork/topia/network/message"
 	"testing"
 	"time"
 
@@ -136,4 +137,45 @@ func TestSendWithMultiProtocols(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	time.Sleep(30 * time.Second)
+}
+
+func TestPubSub(t *testing.T) {
+	testLog, _ := tplog.CreateMainLogger(tplogcmm.DebugLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
+
+	p2p1 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
+
+	testLog.Infof("p2p1 id=%s", p2p1.ID().String())
+
+	p2p2 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
+
+	testLog.Infof("p2p2 id=%s", p2p2.ID().String())
+
+	p2p1.Connect(p2p2.ListenAddr())
+
+	require.Eventually(t, func() bool {
+		return p2p1.dhtServices[DHTServiceType_General].dht.RoutingTable().Find(p2p2.ID()) != ""
+	}, time.Second*5, ticksForAssertEventually, "dht servers p2p1 failed to connect")
+
+	require.Eventually(t, func() bool {
+		return p2p2.dhtServices[DHTServiceType_General].dht.RoutingTable().Find(p2p1.ID()) != ""
+	}, time.Second*5, ticksForAssertEventually, "dht servers p2p2 failed to connect")
+
+	err := p2p1.Subscribe(context.Background(), "/topia/testing", func(ctx context.Context, isLocal bool, data []byte) message.ValidationResult {
+		t.Logf("Received data: %v, isLocal=%v", string(data), isLocal)
+		assert.Equal(t, false, isLocal)
+		return message.ValidationAccept
+	})
+	assert.Equal(t, nil, err)
+
+	err = p2p2.Subscribe(context.Background(), "/topia/testing", func(ctx context.Context, isLocal bool, data []byte) message.ValidationResult {
+		t.Logf("Received data: %v, isLocal=%v", string(data), isLocal)
+		assert.Equal(t, true, isLocal)
+		return message.ValidationAccept
+	})
+	assert.Equal(t, nil, err)
+
+	err = p2p2.Publish(context.Background(), "", "/topia/testing", []byte("TestData"))
+	assert.Equal(t, nil, err)
+
+	time.Sleep(10 * time.Second)
 }

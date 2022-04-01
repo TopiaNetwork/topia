@@ -1,22 +1,25 @@
 syntax = "proto3";
 
-package message;
+package proto;
 
-// Run protoc --gofast_out=. message.proto to generate message.pb.go
+option go_package = "message";
+option (gogoproto.stable_marshaler_all) = true;
 
-// Message models a single message that is supposed to get exchanged by the
-// gossip network
+import "gogo.proto";
+
+//protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.  --gofast_out=. ./message_network.proto
+
 message NetworkMessage {
-    string FromPeerID = 1;
-    repeated string TargetPeerIDs = 2;
-    string ProtocolID = 3;
-    string ModuleName = 4;
-    bytes Data = 5;
+    string FromPeerID             = 1 [(gogoproto.jsontag) = "fromPeerID"];
+    repeated string TargetPeerIDs = 2 [(gogoproto.jsontag) = "targetPeerIDs"];;
+    string ProtocolID             = 3 [(gogoproto.jsontag) = "protocolID"];
+    string ModuleName             = 4 [(gogoproto.jsontag) = "moduleName"];
+    bytes Data                    = 5 [(gogoproto.jsontag) = "data"];
 }
 
 message NetworkPubSubMessage {
-    string FromPeerID = 1;
-    string Topic = 2;
-    string ModuleName = 3;
-    bytes Data = 4;
+    string FromPeerID           = 1 [(gogoproto.jsontag) = "fromPeerID"];
+    string Topic                = 2 [(gogoproto.jsontag) = "topic"];
+    repeated string ModuleNames = 3 [(gogoproto.jsontag) = "moduleNames"];
+    bytes Data                  = 4 [(gogoproto.jsontag) = "data"];
 }

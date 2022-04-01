@@ -2,20 +2,20 @@ package consensus
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/execution"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
-	tptypes "github.com/TopiaNetwork/topia/chain/types"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
 
 const (
@@ -31,7 +31,7 @@ type RoundInfo struct {
 }
 
 type Consensus interface {
-	VerifyBlock(*tptypes.Block) error
+	VerifyBlock(*tpchaintypes.Block) error
 
 	ProcessPropose(*ProposeMessage) error
 
@@ -52,7 +52,7 @@ type consensus struct {
 	network      tpnet.Network
 	executor     *consensusExecutor
 	proposer     *consensusProposer
-	voter        *consensusVoter
+	validator    *consensusValidator
 	dkgEx        *dkgExchange
 	epochService *epochService
 }
@@ -72,26 +72,28 @@ func NewConsensus(nodeID string,
 	preprePackedMsgExeChan := make(chan *PreparePackedMessageExe)
 	preprePackedMsgPropChan := make(chan *PreparePackedMessageProp)
 	proposeMsgChan := make(chan *ProposeMessage)
+	voteMsgChan := make(chan *VoteMessage)
+	commitMsgChan := make(chan *CommitMessage)
 	partPubKey := make(chan *DKGPartPubKeyMessage, PartPubKeyChannel_Size)
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 
 	cryptS := tpcrt.CreateCryptService(log, config.CrptyType)
 
-	deliver := newMessageDeliver(log, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
+	deliver := newMessageDeliver(log, nodeID, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
 
 	exeScheduler := execution.NewExecutionScheduler(log)
 
-	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, config.ExecutionPrepareInterval)
-	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, cryptS, deliver, ledger, marshaler)
-	voter := newConsensusVoter(log, proposeMsgChan, deliver)
+	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, config.ExecutionPrepareInterval)
+	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
+	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, voteMsgChan, cryptS, deliver, ledger, marshaler, validator)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
 
 	epochService := newEpochService(log, roundCh, config.RoundDuration, config.EpochInterval, ledger, dkgEx)
-	csHandler := NewConsensusHandler(log, roundCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver)
+	csHandler := NewConsensusHandler(log, roundCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
 
 	dkgEx.addDKGBLSUpdater(deliver)
-	dkgEx.addDKGBLSUpdater(csHandler)
+	dkgEx.addDKGBLSUpdater(proposer)
 
 	return &consensus{
 		log:          consLog,
@@ -101,7 +103,7 @@ func NewConsensus(nodeID string,
 		network:      network,
 		executor:     executor,
 		proposer:     proposer,
-		voter:        voter,
+		validator:    validator,
 		dkgEx:        dkgEx,
 		epochService: epochService,
 	}
@@ -111,7 +113,7 @@ func (cons *consensus) UpdateHandler(handler ConsensusHandler) {
 	cons.handler = handler
 }
 
-func (cons *consensus) VerifyBlock(block *tptypes.Block) error {
+func (cons *consensus) VerifyBlock(block *tpchaintypes.Block) error {
 	return cons.handler.VerifyBlock(block)
 }
 
@@ -125,6 +127,10 @@ func (cons *consensus) ProcessPreparePackedProp(msg *PreparePackedMessageProp) e
 
 func (cons *consensus) ProcessPropose(msg *ProposeMessage) error {
 	return cons.handler.ProcessPropose(msg)
+}
+
+func (cons *consensus) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
+	return cons.handler.ProcesExeResultValidateReq(actorCtx, msg)
 }
 
 func (cons *consensus) ProcessVote(msg *VoteMessage) error {
@@ -157,13 +163,13 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
 	cons.epochService.start(ctx)
 	cons.executor.start(ctx)
 	cons.proposer.start(ctx)
-	cons.voter.start(ctx)
+	cons.validator.start(ctx)
 	cons.dkgEx.startLoop(ctx)
 
 	return nil
 }
 
-func (cons *consensus) dispatch(context actor.Context, data []byte) {
+func (cons *consensus) dispatch(actorCtx actor.Context, data []byte) {
 	var consMsg ConsensusMessage
 	err := cons.marshaler.Unmarshal(data, &consMsg)
 	if err != nil {
@@ -196,6 +202,14 @@ func (cons *consensus) dispatch(context actor.Context, data []byte) {
 			return
 		}
 		cons.ProcessPropose(&msg)
+	case ConsensusMessage_ExeRSValidateReq:
+		var msg ExeResultValidateReqMessage
+		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+		if err != nil {
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+			return
+		}
+		cons.ProcesExeResultValidateReq(actorCtx, &msg)
 	case ConsensusMessage_Vote:
 		var msg VoteMessage
 		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)

@@ -73,6 +73,4 @@ func TestBlockRequest(t *testing.T) {
 	err = syncer1.Marshaler().Unmarshal(resp.Data, &blockResp)
 	require.Equal(t, nil, err)
 	require.Equal(t, 100, int(blockResp.Height))
-
-	//time.Sleep(50 * time.Second)
 }

@@ -23,11 +23,11 @@ func TestBlockRequest(t *testing.T) {
 	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 
 	sysActor1 := actor.NewActorSystem()
-	network1 := network.NewNetwork(ctx, testLog, sysActor1, "/ip4/127.0.0.1/tcp/41000", "topia1")
+	network1 := network.NewNetwork(ctx, testLog, sysActor1, "/ip4/127.0.0.1/tcp/41000", "topia1", nil)
 	testLog.Infof("network1 id=%s, addrs=%v", network1.ID(), network1.ListenAddr())
 
 	sysActor2 := actor.NewActorSystem()
-	network2 := network.NewNetwork(ctx, testLog, sysActor2, "/ip4/127.0.0.1/tcp/41001", "topia2")
+	network2 := network.NewNetwork(ctx, testLog, sysActor2, "/ip4/127.0.0.1/tcp/41001", "topia2", nil)
 	testLog.Infof("network1 id=%s, addrs=%v", network2.ID(), network2.ListenAddr())
 
 	err := network1.Connect(network2.ListenAddr())
@@ -73,6 +73,4 @@ func TestBlockRequest(t *testing.T) {
 	err = syncer1.Marshaler().Unmarshal(resp.Data, &blockResp)
 	require.Equal(t, nil, err)
 	require.Equal(t, 100, int(blockResp.Height))
-
-	time.Sleep(50 * time.Second)
 }

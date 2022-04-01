@@ -26,7 +26,7 @@ type TansactionServant interface {
 
 	GetGasConfig() *configuration.GasConfiguration
 
-	GetChainConfig() *configuration.ChainConfig
+	GetChainConfig() *configuration.ChainConfiguration
 }
 
 func NewTansactionServant(chainState statechain.ChainState, accountState stateaccount.AccountState) TansactionServant {
@@ -49,6 +49,6 @@ func (ts *tansactionServant) GetGasConfig() *configuration.GasConfiguration {
 	return configuration.GetConfiguration().GasConfig
 }
 
-func (ts *tansactionServant) GetChainConfig() *configuration.ChainConfig {
+func (ts *tansactionServant) GetChainConfig() *configuration.ChainConfiguration {
 	return configuration.GetConfiguration().ChainConfig
 }

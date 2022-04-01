@@ -7,7 +7,7 @@ var once sync.Once
 
 type Configuration struct {
 	fsPath      string
-	ChainConfig *ChainConfig
+	ChainConfig *ChainConfiguration
 	NodeConfig  *NodeConfiguration
 	CSConfig    *ConsensusConfiguration
 	GasConfig   *GasConfiguration
@@ -15,7 +15,12 @@ type Configuration struct {
 
 func GetConfiguration() *Configuration {
 	once.Do(func() {
-		config = &Configuration{}
+		config = &Configuration{
+			ChainConfig: DefChainConfiguration(),
+			NodeConfig:  DefNodeConfiguration(),
+			CSConfig:    DefConsensusConfiguration(),
+			GasConfig:   DefGasConfiguration(),
+		}
 	})
 
 	return config

@@ -14,6 +14,7 @@ const (
 	AddressLen_ETH      = 20 //20 bytes
 	AddressLen_Secp256  = 20 //20 bytes
 	AddressLen_BLS12381 = 48 //48 bytes
+	AddressLen_ED25519  = 20 //20 bytes
 )
 
 const (
@@ -56,7 +57,7 @@ func encode(network tpnet.NetworkType, cryptType CryptType, payload []byte) (Add
 
 	var strAddr string
 	switch cryptType {
-	case CryptType_BLS12381, CryptType_Secp256:
+	case CryptType_BLS12381, CryptType_Secp256, CryptType_Ed25519:
 		cksm := checksum(append([]byte{byte(cryptType)}, payload...))
 		strAddr = ntwPrefix + fmt.Sprintf("%d", cryptType) + addressEncoding.WithPadding(-1).EncodeToString(append(payload, cksm[:]...))
 	default:
@@ -84,6 +85,8 @@ func decode(a string) (tpnet.NetworkType, CryptType, []byte, error) {
 		cryptType = CryptType_BLS12381
 	case '2':
 		cryptType = CryptType_Secp256
+	case '3':
+		cryptType = CryptType_Ed25519
 	default:
 		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown crypt type %d", cryptType)
 	}
@@ -104,11 +107,15 @@ func decode(a string) (tpnet.NetworkType, CryptType, []byte, error) {
 
 	if cryptType == CryptType_Secp256 {
 		if len(payload) != AddressLen_Secp256 {
-			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d", len(payload))
+			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected %d", len(payload), AddressLen_Secp256)
 		}
 	} else if cryptType == CryptType_BLS12381 {
 		if len(payload) != AddressLen_BLS12381 {
-			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d", len(payload))
+			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected %d", len(payload), AddressLen_BLS12381)
+		}
+	} else if cryptType == CryptType_Ed25519 {
+		if len(payload) != AddressLen_ED25519 {
+			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected=%d", len(payload), AddressLen_ED25519)
 		}
 	}
 

@@ -35,6 +35,7 @@ type consensusExecutor struct {
 }
 
 func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.ExecutionScheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe, commitMsgChan chan *CommitMessage, prepareInterval time.Duration) *consensusExecutor {
+	time.Now().UnixNano()
 	return &consensusExecutor{
 		log:                     log,
 		nodeID:                  nodeID,

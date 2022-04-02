@@ -1,7 +1,6 @@
 package crypt
 
 import (
-	"github.com/TopiaNetwork/topia/crypt/bls12381"
 	"github.com/TopiaNetwork/topia/crypt/secp256"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -25,8 +24,8 @@ type CryptService interface {
 func CreateCryptService(log tplog.Logger, cryptType tpcrtypes.CryptType) CryptService {
 	cryptLog := tplog.CreateModuleLogger(tplogcmm.InfoLevel, "crypt", log)
 	switch cryptType {
-	case tpcrtypes.CryptType_BLS12381:
-		return bls12381.New(cryptLog)
+	/*case tpcrtypes.CryptType_BLS12381:
+	return bls12381.New(cryptLog)*/
 	case tpcrtypes.CryptType_Secp256:
 		return secp256.New(cryptLog)
 	default:

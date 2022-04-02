@@ -13,9 +13,10 @@ message TransactionHead {
   bytes  Category  = 1 [(gogoproto.jsontag) = "category"];
   bytes  ChainID   = 2 [(gogoproto.jsontag) = "chainID"];
   uint32 Version   = 3 [(gogoproto.jsontag) = "version"];
-  uint64 Index     = 4 [(gogoproto.jsontag) = "index"];
-  bytes  FromAddr  = 5 [(gogoproto.jsontag) = "fromAddr"];
-  bytes  Signature = 6 [(gogoproto.jsontag) = "signature,omitempty"];
+  uint64 TimeStamp = 4 [(gogoproto.jsontag) = "timeStamp"];
+  uint64 Index     = 5 [(gogoproto.jsontag) = "index"];
+  bytes  FromAddr  = 6 [(gogoproto.jsontag) = "fromAddr"];
+  bytes  Signature = 7 [(gogoproto.jsontag) = "signature,omitempty"];
 }
 
 message TransactionData {

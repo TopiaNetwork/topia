@@ -29,7 +29,7 @@ type NodeNetWorkStateWapper interface {
 type CompositionStateReadonly interface {
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
-	GetBalance(symbol chain.TokenSymbol, addr tpcrtypes.Address) (*big.Int, error)
+	GetBalance(addr tpcrtypes.Address, symbol chain.TokenSymbol) (*big.Int, error)
 
 	ChainID() chain.ChainID
 
@@ -39,9 +39,9 @@ type CompositionStateReadonly interface {
 
 	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
 
-	GetAllConsensusNodes() ([]string, error)
+	GetAllConsensusNodeIDs() ([]string, error)
 
-	GetChainTotalWeight() (uint64, error)
+	GetTotalWeight() (uint64, error)
 
 	GetActiveExecutorIDs() ([]string, error)
 
@@ -77,6 +77,7 @@ type CompositionStateReadonly interface {
 type CompositionState interface {
 	stateaccount.AccountState
 	statechain.ChainState
+	statenode.NodeState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
@@ -103,6 +104,8 @@ type compositionState struct {
 	tplgss.StateStore
 	stateaccount.AccountState
 	statechain.ChainState
+	statenode.NodeState
+	statenode.NodeInactiveState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
@@ -125,29 +128,45 @@ func NewNodeNetWorkStateWapper(log tplog.Logger, ledger ledger.Ledger) NodeNetWo
 
 func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger) CompositionState {
 	stateStore, _ := ledger.CreateStateStore()
+
+	inactiveState := statenode.NewNodeInactiveState(stateStore)
+	executorState := statenode.NewNodeExecutorState(stateStore)
+	proposerState := statenode.NewNodeProposerState(stateStore)
+	validatorState := statenode.NewNodeValidatorState(stateStore)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
 	return &compositionState{
 		log:                log,
 		ledger:             ledger,
 		StateStore:         stateStore,
 		AccountState:       stateaccount.NewAccountState(stateStore),
 		ChainState:         statechain.NewChainStore(stateStore),
-		NodeExecutorState:  statenode.NewNodeExecutorState(stateStore),
-		NodeProposerState:  statenode.NewNodeProposerState(stateStore),
-		NodeValidatorState: statenode.NewNodeValidatorState(stateStore),
+		NodeState:          nodeState,
+		NodeInactiveState:  inactiveState,
+		NodeExecutorState:  executorState,
+		NodeProposerState:  proposerState,
+		NodeValidatorState: validatorState,
 	}
 }
 
 func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) CompositionState {
 	stateStore, _ := ledger.CreateStateStoreReadonly()
+
+	inactiveState := statenode.NewNodeInactiveState(stateStore)
+	executorState := statenode.NewNodeExecutorState(stateStore)
+	proposerState := statenode.NewNodeProposerState(stateStore)
+	validatorState := statenode.NewNodeValidatorState(stateStore)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
 	return &compositionState{
 		log:                log,
 		ledger:             ledger,
 		StateStore:         stateStore,
 		AccountState:       stateaccount.NewAccountState(stateStore),
 		ChainState:         statechain.NewChainStore(stateStore),
-		NodeExecutorState:  statenode.NewNodeExecutorState(stateStore),
-		NodeProposerState:  statenode.NewNodeProposerState(stateStore),
-		NodeValidatorState: statenode.NewNodeValidatorState(stateStore),
+		NodeState:          nodeState,
+		NodeInactiveState:  inactiveState,
+		NodeExecutorState:  executorState,
+		NodeProposerState:  proposerState,
+		NodeValidatorState: validatorState,
 	}
 }
 
@@ -165,6 +184,18 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 	chainRoot, err := cs.GetChainRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get chain state root: %v", err)
+		return nil, err
+	}
+
+	inactiveRoot, err := cs.GetNodeInactiveStateRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get inactive node state root: %v", err)
+		return nil, err
+	}
+
+	nodeRoot, err := cs.GetNodeStateRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node state root: %v", err)
 		return nil, err
 	}
 
@@ -195,6 +226,8 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
 	tree.Update(accRoot, accRoot)
 	tree.Update(chainRoot, chainRoot)
+	tree.Update(inactiveRoot, inactiveRoot)
+	tree.Update(nodeRoot, nodeRoot)
 	tree.Update(nodeExecutorRoot, nodeExecutorRoot)
 	tree.Update(nodeProposerRoot, nodeProposerRoot)
 	tree.Update(nodeValidatorRoot, nodeValidatorRoot)

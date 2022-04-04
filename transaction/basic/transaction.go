@@ -43,7 +43,7 @@ func TxRoot(txs []Transaction) []byte {
 	return tree.Root()
 }
 
-func NewTransaction(log tplog.Logger, privKey tpcrtypes.PrivateKey, txFromAddr tpcrtypes.Address, txCategory TransactionCategory, txVersion TransactionVersion, data []byte) *Transaction {
+func NewTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey tpcrtypes.PrivateKey, txCategory TransactionCategory, txVersion TransactionVersion, data []byte) *Transaction {
 	if privKey == nil {
 		panic("Tx private key nil")
 	}
@@ -52,15 +52,19 @@ func NewTransaction(log tplog.Logger, privKey tpcrtypes.PrivateKey, txFromAddr t
 		panic("Tx data size 0")
 	}
 
+	txFromPubKey, err := cryptService.ConvertToPublic(privKey)
+	if err != nil {
+		panic("Can't convert public key from fromPriKey: " + err.Error())
+	}
+	txFromAddr, err := cryptService.CreateAddress(txFromPubKey)
+	if err != nil {
+		panic("Can't convert public key from fromPubKey: " + err.Error())
+	}
+
 	if txCategory == TransactionCategory_Eth && !txFromAddr.IsEth() {
 		panic("Tx from address is not eth")
 	}
 
-	cryptType, err := txFromAddr.CryptType()
-	if err != nil {
-		panic("Can't get crypt type:" + err.Error())
-	}
-	cryptService := tpcrt.CreateCryptService(log, cryptType)
 	signData, err := cryptService.Sign(privKey, data)
 	if err != nil {
 		panic("Sign err:" + err.Error())

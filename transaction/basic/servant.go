@@ -20,7 +20,7 @@ type TansactionServant interface {
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
-	GetBalance(symbol chain.TokenSymbol, addr tpcrtypes.Address) (*big.Int, error)
+	GetBalance(addr tpcrtypes.Address, symbol chain.TokenSymbol) (*big.Int, error)
 
 	GetCryptService(log log.Logger, cryptType tpcrtypes.CryptType) (tpcrt.CryptService, error)
 

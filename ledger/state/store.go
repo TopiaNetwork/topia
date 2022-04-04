@@ -65,6 +65,10 @@ func newStateStoreCompositionReadOnly(log tplog.Logger, backendR tplgcmm.DBReade
 	}
 }
 
+func (store *StateStoreComposition) Root() []byte {
+	return store.proofS.Root()
+}
+
 func (store *StateStoreComposition) Put(key []byte, value []byte) error {
 	if store.backendR != nil {
 		return errors.New("Can't put because of read only state store composition")
@@ -127,6 +131,30 @@ func (store *StateStoreComposition) GetState(key []byte) ([]byte, []byte, error)
 	}
 
 	return value, proof, rError
+}
+
+func (store *StateStoreComposition) GetAllState() ([][]byte, [][]byte, [][]byte, error) {
+	var keys [][]byte
+	var values [][]byte
+	var proofs [][]byte
+
+	dataIt, err := store.dataS.Iterator(nil, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	for dataIt.Next() {
+		keys = append(keys, dataIt.Key())
+		values = append(values, dataIt.Value())
+
+		proof, _, err := store.GetState(dataIt.Key())
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		proofs = append(proofs, proof)
+	}
+
+	return keys, values, proofs, err
 }
 
 func (store *StateStoreComposition) Commit() error {

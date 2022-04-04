@@ -73,14 +73,5 @@ func ConstructTransactionWithUniversalTransfer(
 		panic("Marshal tx universal err: " + err.Error())
 	}
 
-	fromPubKey, err := cryptService.ConvertToPublic(fromPriKey)
-	if err != nil {
-		panic("Can't convert public key from fromPriKey: " + err.Error())
-	}
-	fromAddr, err := cryptService.CreateAddress(fromPubKey)
-	if err != nil {
-		panic("Can't convert public key from fromPubKey: " + err.Error())
-	}
-
-	return txbasic.NewTransaction(log, fromPriKey, fromAddr, txbasic.TransactionCategory_Topia_Universal, txbasic.Transaction_Topia_Universal_V1, txDataBytes)
+	return txbasic.NewTransaction(log, cryptService, fromPriKey, txbasic.TransactionCategory_Topia_Universal, txbasic.Transaction_Topia_Universal_V1, txDataBytes)
 }

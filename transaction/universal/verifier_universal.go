@@ -54,7 +54,7 @@ func TransactionUniversalGasVerifier() TransactionUniversalVerifier {
 			log.Errorf("Gas estimates error: %v", err)
 			return txbasic.VerifyResult_Reject
 		}
-		balVal, err := txUniServant.GetBalance(chain.TokenSymbol_Native, tpcrtypes.NewFromBytes(txUni.Head.FeePayer))
+		balVal, err := txUniServant.GetBalance(tpcrtypes.NewFromBytes(txUni.Head.FeePayer), chain.TokenSymbol_Native)
 		if err != nil {
 			log.Errorf("Can't get payer %s balance: %v", tpcrtypes.NewFromBytes(txUni.Head.FeePayer), err)
 			return txbasic.VerifyResult_Reject

@@ -451,7 +451,7 @@ func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetAllConsensusNodeIDs()
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err
@@ -510,7 +510,7 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetAllConsensusNodeIDs()
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err

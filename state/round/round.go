@@ -1,6 +1,16 @@
 package round
 
-import tplgss "github.com/TopiaNetwork/topia/ledger/state"
+import (
+	"encoding/binary"
+	tplgss "github.com/TopiaNetwork/topia/ledger/state"
+)
+
+const StateStore_Name_Round = "round"
+
+const (
+	LatestEpoch_Key = "latestepoch"
+	LatestRound_Key = "latestround"
+)
 
 type RoundState interface {
 	GetRoundStateRoot() ([]byte, error)
@@ -26,26 +36,47 @@ func NewRoundState(stateStore tplgss.StateStore) RoundState {
 }
 
 func (rs *roundState) GetRoundStateRoot() ([]byte, error) {
-	//TODO implement me
-	panic("implement me")
+	return rs.Root(StateStore_Name_Round)
 }
 
 func (rs *roundState) GetCurrentRound() uint64 {
-	//TODO implement me
-	panic("implement me")
+	latestRoundBytes, _, err := rs.GetState(StateStore_Name_Round, []byte(LatestRound_Key))
+	if err != nil || latestRoundBytes == nil {
+		return 0
+	}
+
+	return binary.BigEndian.Uint64(latestRoundBytes)
 }
 
 func (rs *roundState) SetCurrentRound(round uint64) {
-	//TODO implement me
-	panic("implement me")
+	roundBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(roundBytes, round)
+
+	isExist, _ := rs.Exists(StateStore_Name_Round, []byte(LatestRound_Key))
+	if isExist {
+		rs.Update(StateStore_Name_Round, []byte(LatestRound_Key), roundBytes)
+	} else {
+		rs.Put(StateStore_Name_Round, []byte(LatestRound_Key), roundBytes)
+	}
 }
 
 func (rs *roundState) GetCurrentEpoch() uint64 {
-	//TODO implement me
-	panic("implement me")
+	latestEpochBytes, _, err := rs.GetState(StateStore_Name_Round, []byte(LatestEpoch_Key))
+	if err != nil || latestEpochBytes == nil {
+		return 0
+	}
+
+	return binary.BigEndian.Uint64(latestEpochBytes)
 }
 
 func (rs *roundState) SetCurrentEpoch(epoch uint64) {
-	//TODO implement me
-	panic("implement me")
+	epochBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(epochBytes, epoch)
+
+	isExist, _ := rs.Exists(StateStore_Name_Round, []byte(LatestEpoch_Key))
+	if isExist {
+		rs.Update(StateStore_Name_Round, []byte(LatestEpoch_Key), epochBytes)
+	} else {
+		rs.Put(StateStore_Name_Round, []byte(LatestEpoch_Key), epochBytes)
+	}
 }

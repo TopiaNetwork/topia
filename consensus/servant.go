@@ -10,7 +10,7 @@ type consensusServant interface {
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
-	GetAllConsensusNodes() ([]string, error)
+	GetAllConsensusNodeIDs() ([]string, error)
 
 	GetActiveExecutorIDs() ([]string, error)
 
@@ -18,7 +18,7 @@ type consensusServant interface {
 
 	GetActiveValidatorIDs() ([]string, error)
 
-	GetChainTotalWeight() (uint64, error)
+	GetTotalWeight() (uint64, error)
 
 	GetActiveExecutorsTotalWeight() (uint64, error)
 

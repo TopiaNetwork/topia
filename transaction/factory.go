@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"github.com/TopiaNetwork/topia/codec"
+	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	txaction "github.com/TopiaNetwork/topia/transaction/action"
@@ -9,8 +10,8 @@ import (
 	"github.com/TopiaNetwork/topia/transaction/universal"
 )
 
-func CreatTransaction(log tplog.Logger, privKey tpcrtypes.PrivateKey, txFromAddr tpcrtypes.Address, txCategory txbasic.TransactionCategory, txVersion txbasic.TransactionVersion, data []byte) *txbasic.Transaction {
-	return txbasic.NewTransaction(log, privKey, txFromAddr, txCategory, txVersion, data)
+func CreatTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey tpcrtypes.PrivateKey, txCategory txbasic.TransactionCategory, txVersion txbasic.TransactionVersion, data []byte) *txbasic.Transaction {
+	return txbasic.NewTransaction(log, cryptService, privKey, txCategory, txVersion, data)
 }
 
 func CreatTransactionAction(tx *txbasic.Transaction) txaction.TransactionAction {

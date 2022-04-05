@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 )
@@ -49,5 +50,10 @@ func (cs *CryptServiceMock) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signD
 }
 
 func (cs *CryptServiceMock) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-	return tpcrtypes.UndefAddress, nil
+	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_ED25519).Compute(string(pubKey))
+	if len(addressHash) != tpcrtypes.AddressLen_ED25519 {
+		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_ED25519)
+	}
+
+	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Ed25519, addressHash)
 }

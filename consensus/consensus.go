@@ -78,7 +78,12 @@ func NewConsensus(nodeID string,
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 
-	cryptS := tpcrt.CreateCryptService(log, config.CrptyType)
+	var cryptS tpcrt.CryptService
+	if config.CrptyType == tpcrtypes.CryptType_Ed25519 {
+		cryptS = &CryptServiceMock{}
+	} else {
+		cryptS = tpcrt.CreateCryptService(log, config.CrptyType)
+	}
 
 	deliver := newMessageDeliver(log, nodeID, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
 

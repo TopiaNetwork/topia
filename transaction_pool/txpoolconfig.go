@@ -2,14 +2,13 @@ package transactionpool
 
 import (
 	"encoding/json"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"io/ioutil"
 	"time"
-
-	"github.com/TopiaNetwork/topia/account"
 )
 
 type TransactionPoolConfig struct {
-	Locals       []account.Address
+	Locals       []tpcrtypes.Address
 	NoLocalFile  bool
 	NoRemoteFile bool
 	NoConfigFile bool

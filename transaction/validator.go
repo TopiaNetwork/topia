@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"context"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -15,39 +16,39 @@ const (
 	ValidationResult_Ignore
 )
 
-type TransactionValidator func(ctx context.Context, log tplog.Logger, tx *Transaction) ValidationResult
+type TransactionValidator func(ctx context.Context, log tplog.Logger, tx *basic.Transaction) ValidationResult
 
 func TransactionValidatorWithGas() TransactionValidator {
-	return func(ctx context.Context, log tplog.Logger, tx *Transaction) ValidationResult {
+	return func(ctx context.Context, log tplog.Logger, tx *basic.Transaction) ValidationResult {
 		panic("implement me")
 	}
 }
 
 func TransactionValidatorWithBalance() TransactionValidator {
-	return func(ctx context.Context, log tplog.Logger, tx *Transaction) ValidationResult {
+	return func(ctx context.Context, log tplog.Logger, tx *basic.Transaction) ValidationResult {
 		panic("implement me")
 	}
 }
 
 func TransactionValidatorWithAddress() TransactionValidator {
-	return func(ctx context.Context, log tplog.Logger, tx *Transaction) ValidationResult {
+	return func(ctx context.Context, log tplog.Logger, tx *basic.Transaction) ValidationResult {
 		panic("implement me")
 	}
 }
 
 func TransactionValidatorWithNonce() TransactionValidator {
-	return func(ctx context.Context, log tplog.Logger, tx *Transaction) ValidationResult {
+	return func(ctx context.Context, log tplog.Logger, tx *basic.Transaction) ValidationResult {
 		panic("implement me")
 	}
 }
 
 func TransactionValidatorWithSignature() TransactionValidator {
-	return func(ctx context.Context, log tplog.Logger, tx *Transaction) ValidationResult {
+	return func(ctx context.Context, log tplog.Logger, tx *basic.Transaction) ValidationResult {
 		panic("implement me")
 	}
 }
 
-func ApplyTransactionValidator(ctx context.Context, log tplog.Logger, tx *Transaction, validators ...TransactionValidator) ValidationResult {
+func ApplyTransactionValidator(ctx context.Context, log tplog.Logger, tx *basic.Transaction, validators ...TransactionValidator) ValidationResult {
 	valResult := ValidationResult_Accecpt
 	for _, validator := range validators {
 		valR := validator(ctx, log, tx)

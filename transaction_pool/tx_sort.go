@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/TopiaNetwork/topia/account"
-	"github.com/TopiaNetwork/topia/transaction"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 const (
@@ -42,28 +42,29 @@ func (h *nonceHeap) Pop() interface{} {
 // txSortedMap is a nonce->transaction hash map with a heap based index to allow
 // iterating over the contents in a nonce-incrementing way.
 type txSortedMap struct {
-	items map[uint64]*transaction.Transaction // Hash map storing the transaction data
-	index *nonceHeap                          // Heap of nonces of all the stored transactions (non-strict mode)
-	cache []*transaction.Transaction          // Cache of the transactions already sorted
+	items map[uint64]*basic.Transaction // Hash map storing the transaction data
+	index *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
+	cache []*basic.Transaction          // Cache of the transactions already sorted
 }
 
 // newTxSortedMap creates a new nonce-sorted transaction map.
 func newTxSortedMap() *txSortedMap {
 	return &txSortedMap{
-		items: make(map[uint64]*transaction.Transaction),
+		items: make(map[uint64]*basic.Transaction),
 		index: new(nonceHeap),
 	}
 }
 
 // Get retrieves the current transactions associated with the given nonce.
-func (m *txSortedMap) Get(nonce uint64) *transaction.Transaction {
+func (m *txSortedMap) Get(nonce uint64) *basic.Transaction {
 	return m.items[nonce]
 }
 
 // Put inserts a new transaction into the map, also updating the map's nonce
 // index. If a transaction already exists with the same nonce, it's overwritten.
-func (m *txSortedMap) Put(tx *transaction.Transaction) {
-	nonce := tx.Nonce
+func (m *txSortedMap) Put(tx *basic.Transaction) {
+
+	nonce := GetNonce(tx)
 	if m.items[nonce] == nil {
 		heap.Push(m.index, nonce)
 	}
@@ -73,8 +74,8 @@ func (m *txSortedMap) Put(tx *transaction.Transaction) {
 // Forward removes all transactions from the map with a nonce lower than the
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
-func (m *txSortedMap) Forward(threshold uint64) []*transaction.Transaction {
-	var removed []*transaction.Transaction
+func (m *txSortedMap) Forward(threshold uint64) []*basic.Transaction {
+	var removed []*basic.Transaction
 
 	// Pop off heap items until the threshold is reached
 	for m.index.Len() > 0 && (*m.index)[0] < threshold {
@@ -94,7 +95,7 @@ func (m *txSortedMap) Forward(threshold uint64) []*transaction.Transaction {
 // Filter, as opposed to 'filter', re-initialises the heap after the operation is done.
 // If you want to do several consecutive filterings, it's therefore better to first
 // do a .filter(func1) followed by .Filter(func2) or reheap()
-func (m *txSortedMap) Filter(filter func(*transaction.Transaction) bool) []*transaction.Transaction {
+func (m *txSortedMap) Filter(filter func(*basic.Transaction) bool) []*basic.Transaction {
 	removed := m.filter(filter)
 	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
@@ -114,8 +115,8 @@ func (m *txSortedMap) reheap() {
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
 // should only be used if followed immediately by a call to Filter or reheap()
-func (m *txSortedMap) filter(filter func(*transaction.Transaction) bool) []*transaction.Transaction {
-	var removed []*transaction.Transaction
+func (m *txSortedMap) filter(filter func(*basic.Transaction) bool) []*basic.Transaction {
+	var removed []*basic.Transaction
 
 	// Collect all the transactions to filter out
 	for nonce, tx := range m.items {
@@ -132,13 +133,13 @@ func (m *txSortedMap) filter(filter func(*transaction.Transaction) bool) []*tran
 
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
-func (m *txSortedMap) Cap(threshold int) []*transaction.Transaction {
+func (m *txSortedMap) Cap(threshold int) []*basic.Transaction {
 	// Short circuit if the number of items is under the limit
 	if len(m.items) <= threshold {
 		return nil
 	}
 	// Otherwise gather and drop the highest nonce'd transactions
-	var drops []*transaction.Transaction
+	var drops []*basic.Transaction
 
 	sort.Sort(*m.index)
 	for size := len(m.items); size > threshold; size-- {
@@ -183,13 +184,13 @@ func (m *txSortedMap) Remove(nonce uint64) bool {
 // Note, all transactions with nonces lower than start will also be returned to
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
-func (m *txSortedMap) Ready(start uint64) []*transaction.Transaction {
+func (m *txSortedMap) Ready(start uint64) []*basic.Transaction {
 	// Short circuit if no transactions are available
 	if m.index.Len() == 0 || (*m.index)[0] > start {
 		return nil
 	}
 	// Otherwise start accumulating incremental transactions
-	var ready []*transaction.Transaction
+	var ready []*basic.Transaction
 	for next := (*m.index)[0]; m.index.Len() > 0 && (*m.index)[0] == next; next++ {
 		ready = append(ready, m.items[next])
 		delete(m.items, next)
@@ -205,10 +206,10 @@ func (m *txSortedMap) Len() int {
 	return len(m.items)
 }
 
-func (m *txSortedMap) flatten() []*transaction.Transaction {
+func (m *txSortedMap) flatten() []*basic.Transaction {
 	// If the sorting was not cached yet, create and cache it
 	if m.cache == nil {
-		m.cache = make([]*transaction.Transaction, 0, len(m.items))
+		m.cache = make([]*basic.Transaction, 0, len(m.items))
 		for _, tx := range m.items {
 			m.cache = append(m.cache, tx)
 		}
@@ -220,17 +221,17 @@ func (m *txSortedMap) flatten() []*transaction.Transaction {
 // Flatten creates a nonce-sorted slice of transactions based on the loosely
 // sorted internal representation. The result of the sorting is cached in case
 // it's requested again before any modifications are made to the contents.
-func (m *txSortedMap) Flatten() []*transaction.Transaction {
+func (m *txSortedMap) Flatten() []*basic.Transaction {
 	// Copy the cache to prevent accidental modifications
 	cache := m.flatten()
-	txs := make([]*transaction.Transaction, len(cache))
+	txs := make([]*basic.Transaction, len(cache))
 	copy(txs, cache)
 	return txs
 }
 
 // LastElement returns the last element of a flattened list, thus, the
 // transaction with the highest nonce
-func (m *txSortedMap) LastElement() *transaction.Transaction {
+func (m *txSortedMap) LastElement() *basic.Transaction {
 	cache := m.flatten()
 	return cache[len(cache)-1]
 }
@@ -260,10 +261,11 @@ func newTxList(strict bool) *txList {
 
 // Overlaps returns whether the transaction specified has the same nonce as one
 // already contained within the list.
-func (l *txList) Overlaps(tx *transaction.Transaction) bool {
+func (l *txList) Overlaps(tx *basic.Transaction) bool {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	return l.txs.Get(tx.Nonce) != nil
+	Nonce := GetNonce(tx)
+	return l.txs.Get(Nonce) != nil
 }
 
 // Add tries to insert a new transaction into the list, returning whether the
@@ -271,13 +273,15 @@ func (l *txList) Overlaps(tx *transaction.Transaction) bool {
 //
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
-func (l *txList) Add(tx *transaction.Transaction) (bool, *transaction.Transaction) {
+func (l *txList) Add(tx *basic.Transaction) (bool, *basic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	// If there's an older better transaction, abort
-	old := l.txs.Get(tx.Nonce)
+	Nonce := GetNonce(tx)
+
+	old := l.txs.Get(Nonce)
 	if old != nil {
-		if old.GasPrice >= tx.GasPrice {
+		if GasPrice(old) >= GasPrice(tx) {
 			return false, nil
 		}
 	}
@@ -297,7 +301,7 @@ func (l *txList) Add(tx *transaction.Transaction) (bool, *transaction.Transactio
 // Forward removes all transactions from the list with a nonce lower than the
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
-func (l *txList) Forward(threshold uint64) []*transaction.Transaction {
+func (l *txList) Forward(threshold uint64) []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Forward(threshold)
@@ -312,7 +316,7 @@ func (l *txList) Forward(threshold uint64) []*transaction.Transaction {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*transaction.Transaction, []*transaction.Transaction) {
+func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*basic.Transaction, []*basic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	// If all transactions are below the threshold, short circuit
@@ -323,7 +327,7 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*transaction.Tra
 	l.gascap = gasLimit
 	txQuery := l.servant
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *transaction.Transaction) bool {
+	removed := l.txs.Filter(func(tx *basic.Transaction) bool {
 		gas := txQuery.EstimateTxGas(tx)
 		cost := txQuery.EstimateTxCost(tx)
 		return gas > gasLimit || cost.Cmp(costLimit) > 0
@@ -332,16 +336,21 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*transaction.Tra
 	if len(removed) == 0 {
 		return nil, nil
 	}
-	var invalids []*transaction.Transaction
+	var invalids []*basic.Transaction
 	// If the list was strict, filter anything above the lowest nonce
 	if l.strict {
 		lowest := uint64(math.MaxUint64)
 		for _, tx := range removed {
-			if nonce := tx.Nonce; lowest > nonce {
+			Nonce := GetNonce(tx)
+			if nonce := Nonce; lowest > nonce {
 				lowest = nonce
 			}
 		}
-		invalids = l.txs.filter(func(tx *transaction.Transaction) bool { return tx.Nonce > lowest })
+
+		invalids = l.txs.filter(func(tx *basic.Transaction) bool {
+			Nonce := GetNonce(tx)
+			return Nonce > lowest
+		})
 	}
 	l.txs.reheap()
 	return removed, invalids
@@ -349,7 +358,7 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*transaction.Tra
 
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
-func (l *txList) Cap(threshold int) []*transaction.Transaction {
+func (l *txList) Cap(threshold int) []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Cap(threshold)
@@ -358,11 +367,12 @@ func (l *txList) Cap(threshold int) []*transaction.Transaction {
 // Remove deletes a transaction from the maintained list, returning whether the
 // transaction was found, and also returning any transaction invaliated due to
 // the deletion (strict mode only).
-func (l *txList) Remove(tx *transaction.Transaction) (bool, []*transaction.Transaction) {
+func (l *txList) Remove(tx *basic.Transaction) (bool, []*basic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	// Remove the transaction from the set
-	nonce := tx.Nonce
+	Nonce := GetNonce(tx)
+	nonce := Nonce
 	//fmt.Println("txList) Remove(tx),nonce:", nonce)
 	if removed := l.txs.Remove(nonce); !removed {
 		return false, nil
@@ -370,7 +380,10 @@ func (l *txList) Remove(tx *transaction.Transaction) (bool, []*transaction.Trans
 
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
-		return true, l.txs.Filter(func(tx *transaction.Transaction) bool { return tx.Nonce > nonce })
+		return true, l.txs.Filter(func(tx *basic.Transaction) bool {
+			Noncei := GetNonce(tx)
+			return Noncei > nonce
+		})
 	}
 	return true, nil
 }
@@ -382,7 +395,7 @@ func (l *txList) Remove(tx *transaction.Transaction) (bool, []*transaction.Trans
 // Note, all transactions with nonces lower than start will also be returned to
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
-func (l *txList) Ready(start uint64) []*transaction.Transaction {
+func (l *txList) Ready(start uint64) []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Ready(start)
@@ -405,7 +418,7 @@ func (l *txList) Empty() bool {
 // Flatten creates a nonce-sorted slice of transactions based on the loosely
 // sorted internal representation. The result of the sorting is cached in case
 // it's requested again before any modifications are made to the contents.
-func (l *txList) Flatten() []*transaction.Transaction {
+func (l *txList) Flatten() []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Flatten()
@@ -413,7 +426,7 @@ func (l *txList) Flatten() []*transaction.Transaction {
 
 // LastElement returns the last element of a flattened list, thus, the
 // transaction with the highest nonce
-func (l *txList) LastElement() *transaction.Transaction {
+func (l *txList) LastElement() *basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.LastElement()
@@ -421,24 +434,24 @@ func (l *txList) LastElement() *transaction.Transaction {
 
 type pendingTxs struct {
 	Mu     sync.RWMutex
-	accTxs map[account.Address]*txList
+	accTxs map[tpcrtypes.Address]*txList
 }
 
 func newPendingTxs() *pendingTxs {
 	txs := &pendingTxs{
-		accTxs: make(map[account.Address]*txList),
+		accTxs: make(map[tpcrtypes.Address]*txList),
 	}
 	return txs
 }
 
 type queueTxs struct {
 	Mu     sync.RWMutex
-	accTxs map[account.Address]*txList
+	accTxs map[tpcrtypes.Address]*txList
 }
 
 func newQueueTxs() *queueTxs {
 	txs := &queueTxs{
-		accTxs: make(map[account.Address]*txList),
+		accTxs: make(map[tpcrtypes.Address]*txList),
 	}
 	return txs
 }
@@ -456,13 +469,13 @@ func newActivationInterval() *activationInterval {
 }
 
 type accountSet struct {
-	accounts map[account.Address]uint8
-	cache    *[]account.Address
+	accounts map[tpcrtypes.Address]uint8
+	cache    *[]tpcrtypes.Address
 }
 
-func newAccountSet(addrs ...account.Address) *accountSet {
+func newAccountSet(addrs ...tpcrtypes.Address) *accountSet {
 	as := &accountSet{
-		accounts: make(map[account.Address]uint8),
+		accounts: make(map[tpcrtypes.Address]uint8),
 	}
 	for _, addr := range addrs {
 		as.add(addr)
@@ -470,13 +483,13 @@ func newAccountSet(addrs ...account.Address) *accountSet {
 	return as
 }
 
-func (accSet *accountSet) contains(addr account.Address) bool {
+func (accSet *accountSet) contains(addr tpcrtypes.Address) bool {
 
 	_, exist := accSet.accounts[addr]
 	return exist
 }
-func (accSet *accountSet) containsTx(tx *transaction.Transaction) bool {
-	addr := account.Address(hex.EncodeToString(tx.FromAddr))
+func (accSet *accountSet) containsTx(tx *basic.Transaction) bool {
+	addr := tpcrtypes.Address(hex.EncodeToString(tx.Head.FromAddr))
 	return accSet.contains(addr)
 }
 
@@ -487,12 +500,12 @@ func (accSet *accountSet) len() int {
 	return len(accSet.accounts)
 }
 
-func (accSet *accountSet) add(addr account.Address) {
+func (accSet *accountSet) add(addr tpcrtypes.Address) {
 	accSet.accounts[addr] = 1
 	accSet.cache = nil
 }
-func (accSet *accountSet) addTx(tx *transaction.Transaction) {
-	addr := account.Address(hex.EncodeToString(tx.FromAddr))
+func (accSet *accountSet) addTx(tx *basic.Transaction) {
+	addr := tpcrtypes.Address(hex.EncodeToString(tx.Head.FromAddr))
 	accSet.add(addr)
 }
 func (accSet *accountSet) merge(other *accountSet) {
@@ -502,15 +515,15 @@ func (accSet *accountSet) merge(other *accountSet) {
 	accSet.cache = nil
 }
 
-func (accSet *accountSet) RemoveAccount(addr account.Address) {
+func (accSet *accountSet) RemoveAccount(addr tpcrtypes.Address) {
 	delete(accSet.accounts, addr)
 }
 
 // flatten returns the list of addresses within this set, also caching it for later
 // reuse. The returned slice should not be changed!
-func (accSet *accountSet) flatten() []account.Address {
+func (accSet *accountSet) flatten() []tpcrtypes.Address {
 	if accSet.cache == nil {
-		accounts := make([]account.Address, 0, len(accSet.accounts))
+		accounts := make([]tpcrtypes.Address, 0, len(accSet.accounts))
 		for acc := range accSet.accounts {
 			accounts = append(accounts, acc)
 		}
@@ -522,11 +535,11 @@ func (accSet *accountSet) flatten() []account.Address {
 type txLookup struct {
 	slots   int
 	lock    sync.RWMutex
-	locals  map[string]*transaction.Transaction
-	remotes map[string]*transaction.Transaction
+	locals  map[string]*basic.Transaction
+	remotes map[string]*basic.Transaction
 }
 
-func (t *txLookup) Range(f func(key string, tx *transaction.Transaction, local bool) bool, local bool, remote bool) {
+func (t *txLookup) Range(f func(key string, tx *basic.Transaction, local bool) bool, local bool, remote bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -548,11 +561,11 @@ func (t *txLookup) Range(f func(key string, tx *transaction.Transaction, local b
 
 func newTxLookup() *txLookup {
 	return &txLookup{
-		locals:  make(map[string]*transaction.Transaction),
-		remotes: make(map[string]*transaction.Transaction),
+		locals:  make(map[string]*basic.Transaction),
+		remotes: make(map[string]*basic.Transaction),
 	}
 }
-func (t *txLookup) Get(key string) *transaction.Transaction {
+func (t *txLookup) Get(key string) *basic.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	if tx := t.locals[key]; tx != nil {
@@ -562,7 +575,7 @@ func (t *txLookup) Get(key string) *transaction.Transaction {
 }
 
 // GetLocalTx returns a transaction if it exists in the lookup, or nil if not found.
-func (t *txLookup) GetLocalTx(key string) *transaction.Transaction {
+func (t *txLookup) GetLocalTx(key string) *basic.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -570,7 +583,7 @@ func (t *txLookup) GetLocalTx(key string) *transaction.Transaction {
 }
 
 // GetRemoteTx returns a transaction if it exists in the lookup, or nil if not found.
-func (t *txLookup) GetRemoteTx(key string) *transaction.Transaction {
+func (t *txLookup) GetRemoteTx(key string) *basic.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -607,11 +620,11 @@ func (t *txLookup) Slots() int {
 	return t.slots
 }
 
-func (t *txLookup) Add(tx *transaction.Transaction, local bool) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (t *txLookup) Add(tx *basic.Transaction, local bool) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
 	t.slots += numSlots(tx)
-	if txId, err := tx.TxID(); err == nil {
+	if txId, err := tx.HashHex(); err == nil {
 		if local {
 			t.locals[txId] = tx
 		} else {
@@ -621,8 +634,8 @@ func (t *txLookup) Add(tx *transaction.Transaction, local bool) {
 
 }
 func (t *txLookup) Remove(key string) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+	t.lock.RLock()
+	defer t.lock.RUnlock()
 	tx, ok := t.locals[key]
 	if !ok {
 		tx, ok = t.remotes[key]
@@ -639,8 +652,8 @@ func (t *txLookup) Remove(key string) {
 // RemoteToLocals migrates the transactions belongs to the given locals to locals
 // set. The assumption is held the locals set is thread-safe to be used.
 func (t *txLookup) RemoteToLocals(locals *accountSet) int {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+	t.lock.RLock()
+	defer t.lock.RUnlock()
 
 	var migrated int
 	for key, tx := range t.remotes {
@@ -656,7 +669,7 @@ func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 // priceHeap is a heap.Interface implementation over transactions for retrieving
 // price-sorted transactions to discard when the pool fills up.
 type priceHeap struct {
-	list []*transaction.Transaction
+	list []*basic.Transaction
 }
 
 func (h *priceHeap) Len() int      { return len(h.list) }
@@ -669,14 +682,17 @@ func (h *priceHeap) Less(i, j int) bool {
 	case 1:
 		return false
 	default:
-		return h.list[i].Nonce > h.list[j].Nonce
+		var Noncei, Noncej uint64
+		Noncei = GetNonce(h.list[i])
+		Noncej = GetNonce(h.list[j])
+		return Noncei > Noncej
 	}
 }
-func (h *priceHeap) cmp(a, b *transaction.Transaction) int {
+func (h *priceHeap) cmp(a, b *basic.Transaction) int {
 
-	if a.GasPrice < b.GasPrice {
+	if GasPrice(a) < GasPrice(b) {
 		return -1
-	} else if a.GasPrice > b.GasPrice {
+	} else if GasPrice(a) > GasPrice(b) {
 		return 1
 	} else {
 		return 0
@@ -684,7 +700,7 @@ func (h *priceHeap) cmp(a, b *transaction.Transaction) int {
 }
 
 func (h *priceHeap) Push(x interface{}) {
-	tx := x.(*transaction.Transaction)
+	tx := x.(*basic.Transaction)
 	h.list = append(h.list, tx)
 }
 
@@ -712,7 +728,7 @@ func newTxPricedList(all *txLookup) *txPricedList {
 }
 
 // Put inserts a new transaction into the heap.
-func (l *txPricedList) Put(tx *transaction.Transaction, local bool) {
+func (l *txPricedList) Put(tx *basic.Transaction, local bool) {
 	if local {
 		return
 	}
@@ -732,7 +748,7 @@ func (l *txPricedList) Removed(count int) {
 
 // Underpriced checks whether a transaction is cheaper than (or as cheap as) the
 // lowest priced (remote) transaction currently being tracked.
-func (l *txPricedList) Underpriced(tx *transaction.Transaction) bool {
+func (l *txPricedList) Underpriced(tx *basic.Transaction) bool {
 	// Note: with two queues, being underpriced is defined as being worse than the worst item
 	// in all non-empty queues if there is any. If both queues are empty then nothing is underpriced.
 	return (l.underpricedFor(&l.remoteTxs, tx) || len(l.remoteTxs.list) == 0) &&
@@ -741,11 +757,11 @@ func (l *txPricedList) Underpriced(tx *transaction.Transaction) bool {
 
 // underpricedFor checks whether a transaction is cheaper than (or as cheap as) the
 // lowest priced (remote) transaction in the given heap.
-func (l *txPricedList) underpricedFor(h *priceHeap, tx *transaction.Transaction) bool {
+func (l *txPricedList) underpricedFor(h *priceHeap, tx *basic.Transaction) bool {
 	// Discard stale price points if found at the heap start
 	for len(h.list) > 0 {
 		head := h.list[0]
-		txId, _ := head.TxID()
+		txId, _ := head.HashHex()
 		if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
 			atomic.AddInt64(&l.stales, -1)
 			heap.Pop(h)
@@ -766,12 +782,12 @@ func (l *txPricedList) underpricedFor(h *priceHeap, tx *transaction.Transaction)
 // Discard finds a number of most underpriced transactions, removes them from the
 // priced list and returns them for further removal from the entire pool.
 // Note local transaction won't be considered for eviction.
-func (l *txPricedList) Discard(slots int, force bool) ([]*transaction.Transaction, bool) {
-	drop := make([]*transaction.Transaction, 0, slots) // Remote underpriced transactions to drop
+func (l *txPricedList) Discard(slots int, force bool) ([]*basic.Transaction, bool) {
+	drop := make([]*basic.Transaction, 0, slots) // Remote underpriced transactions to drop
 	for slots > 0 {
 		// Discard stale transactions if found during cleanup
-		tx := heap.Pop(&l.remoteTxs).(*transaction.Transaction)
-		if txId, err := tx.TxID(); err == nil {
+		tx := heap.Pop(&l.remoteTxs).(*basic.Transaction)
+		if txId, err := tx.HashHex(); err == nil {
 			if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
 				atomic.AddInt64(&l.stales, -1)
 				continue
@@ -795,8 +811,8 @@ func (l *txPricedList) Reheap() {
 	l.reheapMu.Lock()
 	defer l.reheapMu.Unlock()
 	atomic.StoreInt64(&l.stales, 0)
-	l.remoteTxs.list = make([]*transaction.Transaction, 0, l.all.RemoteCount())
-	l.all.Range(func(key string, tx *transaction.Transaction, local bool) bool {
+	l.remoteTxs.list = make([]*basic.Transaction, 0, l.all.RemoteCount())
+	l.all.Range(func(key string, tx *basic.Transaction, local bool) bool {
 		l.remoteTxs.list = append(l.remoteTxs.list, tx)
 		return true
 	}, false, true) // Only iterate remotes
@@ -804,19 +820,24 @@ func (l *txPricedList) Reheap() {
 }
 
 // numSlots calculates the number of slots needed for a single transaction.
-func numSlots(tx *transaction.Transaction) int {
+func numSlots(tx *basic.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
 }
 
-type TxByNonce []*transaction.Transaction
+type TxByNonce []*basic.Transaction
 
-func (s TxByNonce) Len() int           { return len(s) }
-func (s TxByNonce) Less(i, j int) bool { return s[i].Nonce < s[j].Nonce }
-func (s TxByNonce) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s TxByNonce) Len() int { return len(s) }
+func (s TxByNonce) Less(i, j int) bool {
+	var Noncei, Noncej uint64
+	Noncei = GetNonce(s[i])
+	Noncej = GetNonce(s[j])
+	return Noncei < Noncej
+}
+func (s TxByNonce) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // CntAccountItem is an item  we manage in a priority queue for cnt.
 type CntAccountItem struct {
-	accountAddr account.Address
+	accountAddr tpcrtypes.Address
 	cnt         int // The priority of CntAccountItem in the queue is counts of account in txPool.
 	// The index is needed by update and is maintained by the heap.Interface methods.
 	index int // The index of the CntAccountItem item in the heap.
@@ -867,3 +888,75 @@ func (t txsByHeartbeat) Less(i, j int) bool {
 	return t[i].ActivationInterval.Before(t[j].ActivationInterval)
 }
 func (t txsByHeartbeat) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
+
+type TxByPriceAndTime []*basic.Transaction
+
+func (s TxByPriceAndTime) Len() int { return len(s) }
+func (s TxByPriceAndTime) Less(i, j int) bool {
+	if GasPrice(s[i]) < GasPrice(s[j]) {
+		return true
+	}
+	if GasPrice(s[i]) == GasPrice(s[j]) {
+		//		return s[i].Time.Before(s[j].Time)
+		return time.Unix(int64(s[i].Head.TimeStamp), 0).Before(time.Unix(int64(s[j].Head.TimeStamp), 0))
+	}
+	return false
+}
+func (s TxByPriceAndTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s *TxByPriceAndTime) Push(x interface{}) {
+	*s = append(*s, x.(*basic.Transaction))
+}
+func (s *TxByPriceAndTime) Pop() interface{} {
+	old := *s
+	n := len(old)
+	x := old[n-1]
+	*s = old[0 : n-1]
+	return x
+}
+
+type TxsByPriceAndNonce struct {
+	txs   map[tpcrtypes.Address][]*basic.Transaction
+	heads TxByPriceAndTime
+}
+
+func NewTxsByPriceAndNonce(txs map[tpcrtypes.Address][]*basic.Transaction) *TxsByPriceAndNonce {
+	heads := make(TxByPriceAndTime, 0, len(txs))
+	for from, accTxs := range txs {
+		tx := accTxs[0]
+		heads = append(heads, tx)
+		txs[from] = accTxs[1:]
+	}
+	heap.Init(&heads)
+	return &TxsByPriceAndNonce{
+		txs:   txs,
+		heads: heads,
+	}
+}
+
+// Peek returns the next transaction by price.
+func (t *TxsByPriceAndNonce) Peek() *basic.Transaction {
+	if len(t.heads) == 0 {
+		return nil
+	}
+	return t.heads[0]
+}
+
+// Shift replaces the current best head with the next one from the same account.
+func (t *TxsByPriceAndNonce) Shift() {
+	acc := tpcrtypes.Address(hex.EncodeToString(t.heads[0].Head.FromAddr))
+	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
+		wrapped := txs[0]
+		t.heads[0], t.txs[acc] = wrapped, txs[1:]
+		heap.Fix(&t.heads, 0)
+		return
+	}
+
+	heap.Pop(&t.heads)
+}
+
+// Pop removes the best transaction, *not* replacing it with the next one from
+// the same account. This should be used when a transaction cannot be executed
+// and hence all subsequent ones should be discarded from the same account.
+func (t *TxsByPriceAndNonce) Pop() {
+	heap.Pop(&t.heads)
+}

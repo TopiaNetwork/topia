@@ -2,11 +2,11 @@ package transactionpool
 
 import (
 	"encoding/hex"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"math"
 
-	"github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/transaction"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type txPoolResetRequest struct {
@@ -24,7 +24,7 @@ func (pool *transactionPool) scheduleReorgLoop() {
 		launchNextRun bool
 		reset         *txPoolResetRequest
 		dirtyAccounts *accountSet
-		queuedEvents  = make(map[account.Address]*txSortedMap)
+		queuedEvents  = make(map[tpcrtypes.Address]*txSortedMap)
 	)
 	for {
 		// Launch next background reorg if needed
@@ -37,7 +37,7 @@ func (pool *transactionPool) scheduleReorgLoop() {
 			launchNextRun = false
 
 			reset, dirtyAccounts = nil, nil
-			queuedEvents = make(map[account.Address]*txSortedMap)
+			queuedEvents = make(map[tpcrtypes.Address]*txSortedMap)
 		}
 
 		select {
@@ -64,7 +64,7 @@ func (pool *transactionPool) scheduleReorgLoop() {
 		case tx := <-pool.chanQueueTxEvent:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
 			// request one later if they want the events sent.
-			addr := account.Address(hex.EncodeToString(tx.FromAddr))
+			addr := tpcrtypes.Address(hex.EncodeToString(tx.Head.FromAddr))
 			if _, ok := queuedEvents[addr]; !ok {
 				queuedEvents[addr] = newTxSortedMap()
 			}
@@ -85,9 +85,9 @@ func (pool *transactionPool) scheduleReorgLoop() {
 }
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
-func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet, events map[account.Address]*txSortedMap) {
+func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet, events map[tpcrtypes.Address]*txSortedMap) {
 	defer close(done)
-	var replaceAddrs []account.Address
+	var replaceAddrs []tpcrtypes.Address
 	if dirtyAccounts != nil && reset == nil {
 		// Only dirty accounts need to be promoted, unless we're resetting.
 		// For resets, all addresses in the tx queue will be promoted and
@@ -108,7 +108,7 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 			}
 		}
 		// Reset needs promote for all addresses
-		replaceAddrs = make([]account.Address, 0, len(pool.queue.accTxs))
+		replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queue.accTxs))
 		for addr := range pool.queue.accTxs {
 			replaceAddrs = append(replaceAddrs, addr)
 		}
@@ -125,10 +125,11 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 			pool.sortedByPriced.Reheap()
 		}
 		// Update all accounts to the latest known pending nonce
-		nonces := make(map[account.Address]uint64, len(pool.pending.accTxs))
+		nonces := make(map[tpcrtypes.Address]uint64, len(pool.pending.accTxs))
 		for addr, list := range pool.pending.accTxs {
 			highestPending := list.LastElement()
-			nonces[addr] = highestPending.Nonce + 1
+			Noncei := GetNonce(highestPending)
+			nonces[addr] = Noncei + 1
 		}
 	}
 	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
@@ -141,17 +142,16 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 
 	// Notify subsystems for newly added transactions
 	for _, tx := range promoted {
-		addr := account.Address(hex.EncodeToString(tx.FromAddr))
+		addr := tpcrtypes.Address(hex.EncodeToString(tx.Head.FromAddr))
 		if _, ok := events[addr]; !ok {
 			events[addr] = newTxSortedMap()
 		}
 		events[addr].Put(tx)
 	}
 	if len(events) > 0 {
-		var txs []*transaction.Transaction
+		var txs []*basic.Transaction
 		for _, set := range events {
 			txs = append(txs, set.Flatten()...)
-
 		}
 		for _, tx := range txs {
 			pool.BroadCastTx(tx)
@@ -173,7 +173,7 @@ func (pool *transactionPool) requestReset(oldHead *types.BlockHead, newHead *typ
 func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 	//If the old header and the new header do not meet certain conditions,
 	//part of the transaction needs to be injected back into the transaction pool
-	var reInject []*transaction.Transaction
+	var reInject []*basic.Transaction
 	if oldHead != nil && types.BlockHash(hex.EncodeToString(oldHead.Hash)) != types.BlockHash(hex.EncodeToString(newHead.Hash)) {
 
 		oldNum := oldHead.GetHeight()
@@ -187,7 +187,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 		} else {
 
 			//The reorganization looks shallow enough to put all the transactions into memory
-			var discarded, included []*transaction.Transaction
+			var discarded, included []*basic.Transaction
 			var (
 				rem = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(oldHead.Hash)), oldHead.Height)
 				add = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(newHead.Hash)), newHead.Height)
@@ -210,7 +210,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 				for rem.Head.Height > add.Head.Height {
 
 					for _, tx := range rem.Data.Txs {
-						var txType *transaction.Transaction
+						var txType *basic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
 							discarded = append(discarded, txType)
@@ -225,7 +225,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 
 				for add.Head.Height > rem.Head.Height {
 					for _, tx := range add.Data.Txs {
-						var txType *transaction.Transaction
+						var txType *basic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
 							included = append(included, txType)
@@ -240,7 +240,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 
 				for types.BlockHash(hex.EncodeToString(rem.Head.Hash)) != types.BlockHash(hex.EncodeToString(add.Head.Hash)) {
 					for _, tx := range rem.Data.Txs {
-						var txType *transaction.Transaction
+						var txType *basic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
 							discarded = append(discarded, txType)
@@ -252,7 +252,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 						return nil
 					}
 					for _, tx := range add.Data.Txs {
-						var txType *transaction.Transaction
+						var txType *basic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
 							included = append(included, txType)
@@ -265,7 +265,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 					}
 				}
 
-				reInject = transaction.TxDifference(discarded, included)
+				reInject = TxDifference(discarded, included)
 			}
 		}
 	}
@@ -286,4 +286,23 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 	pool.log.Debugf("ReInjecting stale transactions", "count", len(reInject))
 
 	return nil
+}
+
+// TxDifference returns a new set which is the difference between a and b.
+func TxDifference(a, b []*basic.Transaction) []*basic.Transaction {
+	keep := make([]*basic.Transaction, 0, len(a))
+	remove := make(map[string]struct{})
+	for _, tx := range b {
+		if txId, err := tx.HashHex(); err != nil {
+			remove[txId] = struct{}{}
+		}
+	}
+	for _, tx := range a {
+		if txId, err := tx.HashHex(); err != nil {
+			if _, ok := remove[txId]; !ok {
+				keep = append(keep, tx)
+			}
+		}
+	}
+	return keep
 }

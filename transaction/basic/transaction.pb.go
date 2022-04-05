@@ -28,10 +28,15 @@ type TransactionHead struct {
 	ChainID              []byte   `protobuf:"bytes,2,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,3,opt,name=Version,proto3" json:"version"`
 	TimeStamp            uint64   `protobuf:"varint,4,opt,name=TimeStamp,proto3" json:"timeStamp"`
+<<<<<<< HEAD
 	Index                uint64   `protobuf:"varint,5,opt,name=Index,proto3" json:"index"`
 	FromAddr             []byte   `protobuf:"bytes,6,opt,name=FromAddr,proto3" json:"fromAddr"`
 	Nonce                uint64   `protobuf:"varint,7,opt,name=Nonce,proto3" json:"nonce"`
 	Signature            []byte   `protobuf:"bytes,8,opt,name=Signature,proto3" json:"signature,omitempty"`
+=======
+	FromAddr             []byte   `protobuf:"bytes,4,opt,name=FromAddr,proto3" json:"fromAddr"`
+	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature,omitempty"`
+>>>>>>> 34b56a9 (develop merge txpool Resolve the conflict)
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

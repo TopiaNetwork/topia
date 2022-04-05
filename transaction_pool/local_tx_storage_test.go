@@ -2,9 +2,9 @@ package transactionpool
 
 import (
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/transaction"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
@@ -47,15 +47,16 @@ func Test_transactionPool_LocalAccounts(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.locals))
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
-	txs := make([]*transaction.Transaction, 0)
+	txs := make([]*basic.Transaction, 0)
 	txs = append(txs, Tx1)
 	txs = append(txs, TxR1)
 	pool.AddLocals(txs)
-	accounts := make([]account.Address, 0)
+	accounts := make([]tpcrtypes.Address, 0)
 	accounts = append(accounts, From1)
 	accounts = append(accounts, From2)
 	want := accounts
 	got := pool.LocalAccounts()
+
 	if !assert.Equal(t, want, got) {
 		t.Error("want:", want, "got:", got)
 	}
@@ -103,7 +104,6 @@ func Test_transactionPool_UpdateTxPoolConfig(t *testing.T) {
 	if !assert.Equal(t, want, got) {
 		t.Error("want", *conf, "got", pool.config)
 	}
-
 }
 
 func Test_transactionPool_SaveLocalTxs(t *testing.T) {
@@ -132,26 +132,28 @@ func Test_transactionPool_SaveLocalTxs(t *testing.T) {
 	if err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	var locals map[string]*transaction.Transaction
+	var locals map[string]*basic.Transaction
 	err = json.Unmarshal(data, &locals)
 	if err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	want := make(map[string]*transaction.Transaction, 0)
-	got := make(map[string]*transaction.Transaction, 0)
+	wants := make(map[string]*basic.Transaction, 0)
+	gots := make(map[string]*basic.Transaction, 0)
 
 	for k, v := range pool.allTxsForLook.locals {
-		want[k] = v
+		wants[k] = v
 	}
 	for k, v := range locals {
-		got[k] = v
-	}
-	for k, v := range want {
-		if reflect.DeepEqual(got[k], v) {
-			t.Error("want", v, "got", got[k])
-		}
+		gots[k] = v
 	}
 
+	for k, v := range wants {
+		got := gots[k]
+		want := v
+		if !reflect.DeepEqual(got, want) {
+			t.Error("want", want, "got", got)
+		}
+	}
 }
 
 func Test_transactionPool_LoadLocalTxs(t *testing.T) {

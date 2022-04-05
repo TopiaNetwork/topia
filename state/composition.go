@@ -145,6 +145,7 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger) CompositionS
 		NodeExecutorState:  executorState,
 		NodeProposerState:  proposerState,
 		NodeValidatorState: validatorState,
+		RoundState:         staetround.NewRoundState(stateStore),
 	}
 }
 
@@ -167,6 +168,7 @@ func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) Comp
 		NodeExecutorState:  executorState,
 		NodeProposerState:  proposerState,
 		NodeValidatorState: validatorState,
+		RoundState:         staetround.NewRoundState(stateStore),
 	}
 }
 

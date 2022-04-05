@@ -42,7 +42,7 @@ type Node struct {
 
 func NewNode(endPoint string, seed string) *Node {
 	homeDir, _ := os.UserHomeDir()
-	chainRootPath := filepath.Join(homeDir, "universal")
+	chainRootPath := filepath.Join(homeDir, "topia")
 
 	mainLog, err := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 	if err != nil {

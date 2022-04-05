@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
-	"github.com/TopiaNetwork/topia/transaction"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func (pool *transactionPool) SaveLocalTxs() error {
@@ -31,10 +31,10 @@ func (pool *transactionPool) LoadLocalTxs() error {
 	if err != nil {
 		return nil
 	}
-	var locals map[string]*transaction.Transaction
+	var locals map[string]*basic.Transaction
 	err = json.Unmarshal(data, &locals)
 	if err != nil {
-		return nil
+		return err
 	}
 	for _, tx := range locals {
 		pool.AddLocal(tx)
@@ -47,13 +47,13 @@ func (pool *transactionPool) LoadLocalTxs() error {
 //
 // This method is used to add transactions from the RPC API and performs synchronous pool
 // reorganization and event propagation.
-func (pool *transactionPool) AddLocals(txs []*transaction.Transaction) []error {
+func (pool *transactionPool) AddLocals(txs []*basic.Transaction) []error {
 	return pool.addTxs(txs, !pool.config.NoLocalFile, true)
 }
 
 // AddLocal enqueues a single local transaction into the pool if it is valid. This is
 // a convenience wrapper aroundd AddLocals.
-func (pool *transactionPool) AddLocal(tx *transaction.Transaction) error {
-	errs := pool.AddLocals([]*transaction.Transaction{tx})
+func (pool *transactionPool) AddLocal(tx *basic.Transaction) error {
+	errs := pool.AddLocals([]*basic.Transaction{tx})
 	return errs[0]
 }

@@ -4,13 +4,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/AsynkronIT/protoactor-go/actor"
-	"github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	"github.com/TopiaNetwork/topia/transaction"
+	"github.com/TopiaNetwork/topia/transaction/basic"
+	"github.com/TopiaNetwork/topia/transaction/universal"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -20,51 +21,74 @@ import (
 )
 
 var (
-	TestTxPoolConfig                                                    TransactionPoolConfig
-	Tx1, Tx2, Tx3, Tx4, TxR1, TxR2, TxR3, TxlowGasPrice, TxHighGasLimit *transaction.Transaction
-	Key1, Key2, Key3, Key4, KeyR1, KeyR2, KeyR3                         string
-	From1, From2                                                        account.Address
-	OldBlock, NewBlock                                                  *types.Block
-	OldBlockHead, NewBlockHead                                          *types.BlockHead
-	OldBlockData, NewBlockData                                          *types.BlockData
-	OldTx1, OldTx2, OldTx3, OldTx4, NewTx1, NewTx2, NewTx3, NewTx4      *transaction.Transaction
-	sysActor                                                            *actor.ActorSystem
-	newcontext                                                          actor.Context
-	State                                                               *StatePoolDB
-	TpiaLog                                                             tplog.Logger
+	TestTxPoolConfig                                                                 TransactionPoolConfig
+	TxlowGasPrice, TxHighGasLimit, txlocal, txremote, Tx1, Tx2, Tx3, Tx4, TxR1, TxR2 *basic.Transaction
+	txHead                                                                           *basic.TransactionHead
+	txData                                                                           *basic.TransactionData
+	keylocal, keyremote, Key1, Key2, Key3, Key4, KeyR1, KeyR2                        string
+	from, to, From1, From2                                                           tpcrtypes.Address
+	txLocals, txRemotes                                                              []*basic.Transaction
+	keyLocals, keyRemotes                                                            []string
+	fromLocals, fromRemotes, toLocals, toRemotes                                     []tpcrtypes.Address
+
+	OldBlock, NewBlock                                             *types.Block
+	OldBlockHead, NewBlockHead                                     *types.BlockHead
+	OldBlockData, NewBlockData                                     *types.BlockData
+	OldTx1, OldTx2, OldTx3, OldTx4, NewTx1, NewTx2, NewTx3, NewTx4 *basic.Transaction
+	sysActor                                                       *actor.ActorSystem
+	newcontext                                                     actor.Context
+	State                                                          *StatePoolDB
+	TpiaLog                                                        tplog.Logger
+	starttime                                                      uint64
 )
 
 func init() {
 	TpiaLog, _ = tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
-
 	TestTxPoolConfig = DefaultTransactionPoolConfig
+	starttime = uint64(time.Now().Unix() - 105)
 
-	Tx1 = settransactionlocal(1, 10000, 12345)
-	time.Sleep(100 * time.Millisecond)
-	Tx2 = settransactionlocal(2, 20000, 12345)
-	time.Sleep(100 * time.Millisecond)
-	Tx3 = settransactionlocal(3, 9999, 12345)
-	time.Sleep(100 * time.Millisecond)
-	Tx4 = settransactionlocal(4, 40000, 12345)
-	time.Sleep(100 * time.Millisecond)
-	Key1, _ = Tx1.TxID()
-	Key2, _ = Tx2.TxID()
-	Key3, _ = Tx3.TxID()
-	Key4, _ = Tx4.TxID()
-	From1 = account.Address(hex.EncodeToString(Tx1.FromAddr))
-	TxR1 = settransactionremote(1, 50000, 12345)
-	time.Sleep(100 * time.Millisecond)
-	TxR2 = settransactionremote(2, 48888, 12345)
-	time.Sleep(100 * time.Millisecond)
-	TxR3 = settransactionremote(3, 46666, 12345)
-	KeyR1, _ = TxR1.TxID()
-	KeyR2, _ = TxR2.TxID()
-	KeyR3, _ = TxR3.TxID()
+	for i := 1; i <= 100; i++ {
+		nonce := uint64(i)
+		gasprice := uint64(i * 1000)
+		gaslimit := uint64(i * 1000000)
+		txlocal = setTxLocal(nonce, gasprice, gaslimit)
+		txlocal.Head.TimeStamp = starttime + uint64(i)
+		if i > 1 {
+			txlocal.Head.FromAddr = append(txlocal.Head.FromAddr, byte(i))
+		}
+		keylocal, _ = txlocal.HashHex()
+		keyLocals = append(keyLocals, keylocal)
+		txLocals = append(txLocals, txlocal)
 
-	TxlowGasPrice = settransactionremote(1, 100, 1000)
-	TxHighGasLimit = settransactionremote(2, 10000, 9987654321)
+		txremote = setTxRemote(nonce, gasprice, gaslimit)
+		txremote.Head.TimeStamp = starttime + uint64(i)
+		if i > 1 {
+			txremote.Head.FromAddr = append(txremote.Head.FromAddr, byte(i))
+		}
+		keyremote, _ = txremote.HashHex()
+		keyRemotes = append(keyRemotes, keyremote)
+		txRemotes = append(txRemotes, txremote)
+	}
+	Tx1 = setTxLocal(1, 11000, 123456)
+	Tx2 = setTxLocal(2, 12000, 123456)
+	Tx3 = setTxLocal(2, 10000, 123456)
+	Tx4 = setTxLocal(2, 14000, 123456)
 
-	From2 = account.Address(hex.EncodeToString(TxR1.FromAddr))
+	From1 = tpcrtypes.Address(hex.EncodeToString(Tx1.Head.FromAddr))
+	Key1, _ = Tx1.HashHex()
+	Key2, _ = Tx2.HashHex()
+	Key3, _ = Tx3.HashHex()
+	Key4, _ = Tx4.HashHex()
+
+	TxR1 = setTxRemote(1, 11000, 123456)
+	TxR2 = setTxRemote(2, 12000, 123456)
+	From2 = tpcrtypes.Address(hex.EncodeToString(TxR1.Head.FromAddr))
+	KeyR1, _ = TxR1.HashHex()
+	KeyR2, _ = TxR2.HashHex()
+
+	TxlowGasPrice = setTxRemote(1, 100, 1000)
+	TxHighGasLimit = setTxRemote(2, 10000, 9987654321)
+
 	OldBlockHead = setBlockHead(10, 5, 1, 4, 1000000)
 	OldBlockHead.ParentBlockHash = []byte{0x09}
 	OldBlockHead.Hash = []byte{0x0a, 0x0a}
@@ -72,30 +96,30 @@ func init() {
 	NewBlockHead.ParentBlockHash = []byte{0x0a, 0x0a}
 	NewBlockHead.Hash = []byte{0x0b, 0x0b}
 
-	OldTx1 = setBlockTransaction([]byte{0xa1}, []byte{0xa2}, 10, 10000, 1000)
-	OldTx2 = setBlockTransaction([]byte{0xa2}, []byte{0xa3}, 10, 10000, 1000)
-	OldTx3 = setBlockTransaction([]byte{0xa3}, []byte{0xa4}, 10, 10000, 1000)
-	OldTx4 = setBlockTransaction([]byte{0xa4}, []byte{0xa5}, 10, 10000, 1000)
-	OldKey1, _ := OldTx1.TxID()
-	OldKey2, _ := OldTx2.TxID()
-	OldKey3, _ := OldTx3.TxID()
-	OldKey4, _ := OldTx4.TxID()
-	OldTxs := make(map[string]*transaction.Transaction, 0)
+	OldTx1 = txLocals[50]
+	OldTx2 = txLocals[51]
+	OldTx3 = txRemotes[52]
+	OldTx4 = txRemotes[53]
+	OldKey1, _ := OldTx1.HashHex()
+	OldKey2, _ := OldTx2.HashHex()
+	OldKey3, _ := OldTx3.HashHex()
+	OldKey4, _ := OldTx4.HashHex()
+	OldTxs := make(map[string]*basic.Transaction, 0)
 	OldTxs[OldKey1] = OldTx1
 	OldTxs[OldKey2] = OldTx2
 	OldTxs[OldKey3] = OldTx3
 	OldTxs[OldKey4] = OldTx4
 
-	NewTx1 = setBlockTransaction([]byte{0xb1}, []byte{0xb2}, 11, 10000, 1000)
-	NewTx2 = setBlockTransaction([]byte{0xb2}, []byte{0xb3}, 12, 10000, 1000)
-	NewTx3 = setBlockTransaction([]byte{0xb3}, []byte{0xb4}, 13, 10000, 1000)
-	NewTx4 = setBlockTransaction([]byte{0xb4}, []byte{0xb5}, 14, 10000, 1000)
-	NewKey1, _ := NewTx1.TxID()
-	NewKey2, _ := NewTx2.TxID()
-	NewKey3, _ := NewTx3.TxID()
-	NewKey4, _ := NewTx4.TxID()
+	NewTx1 = txLocals[51]
+	NewTx2 = txLocals[52]
+	NewTx3 = txRemotes[53]
+	NewTx4 = txRemotes[54]
+	NewKey1, _ := NewTx1.HashHex()
+	NewKey2, _ := NewTx2.HashHex()
+	NewKey3, _ := NewTx3.HashHex()
+	NewKey4, _ := NewTx4.HashHex()
 
-	NewTxs := make(map[string]*transaction.Transaction, 0)
+	NewTxs := make(map[string]*basic.Transaction, 0)
 	NewTxs[NewKey1] = NewTx1
 	NewTxs[NewKey2] = NewTx2
 	NewTxs[NewKey3] = NewTx3
@@ -111,31 +135,159 @@ func init() {
 
 }
 
-func settransactionlocal(nonce uint64, gaseprice, gaseLimit uint64) *transaction.Transaction {
-	tx := &transaction.Transaction{
-		FromAddr:   []byte{0x01},
-		TargetAddr: []byte{0x02}, Version: 1, ChainID: []byte{0x01},
-		Nonce: nonce, Value: []byte{0x03}, GasPrice: gaseprice,
-		GasLimit: gaseLimit, Data: []byte{0xaa, 0xbb, 0xbc},
-		Signature: []byte{0x05}, Options: 0, Time: time.Now()}
-	return tx
+func setTxHeadLocal() *basic.TransactionHead {
+	Category, _ := json.Marshal(basic.TransactionCategory_Topia_Universal)
+	txhead := &basic.TransactionHead{
+		Category:  Category,
+		ChainID:   []byte{0x01},
+		Version:   1,
+		FromAddr:  []byte{0x01, 0x01, 0x01},
+		Signature: []byte{0x01, 0x01, 0x01},
+	}
+	return txhead
 }
-func settransactionremote(nonce uint64, gaseprice, gaseLimit uint64) *transaction.Transaction {
-	tx := &transaction.Transaction{
-		FromAddr:   []byte{0x11},
-		TargetAddr: []byte{0x12}, Version: 1, ChainID: []byte{0x01},
-		Nonce: nonce, Value: []byte{0x13}, GasPrice: gaseprice,
-		GasLimit: gaseLimit, Data: []byte{0xcc, 0xdd, 0xde},
-		Signature: []byte{0x15}, Options: 0, Time: time.Now()}
-	return tx
+func setTxHeadRemote() *basic.TransactionHead {
+	Category, _ := json.Marshal(basic.TransactionCategory_Topia_Universal)
+	txhead := &basic.TransactionHead{
+		Category:  Category,
+		ChainID:   []byte{0x01},
+		Version:   1,
+		FromAddr:  []byte{0x02, 0x02, 0x02},
+		Signature: []byte{0x02, 0x02, 0x02},
+	}
+	return txhead
+}
+func setTxDataLocal(nonce, gasprice, gaslimit uint64) *basic.TransactionData {
+	txdatauniversal := setTxUniversalLocal(nonce, gasprice, gaslimit)
+	byteSpecification, _ := json.Marshal(txdatauniversal)
+	txdata := &basic.TransactionData{
+		Specification: byteSpecification,
+	}
+
+	return txdata
+}
+func setTxDataRemote(nonce, gasprice, gaslimit uint64) *basic.TransactionData {
+	txdatauniversal := setTxUniversalRemote(nonce, gasprice, gaslimit)
+	bytesSpecification, _ := json.Marshal(txdatauniversal)
+	txdata := &basic.TransactionData{
+		Specification: bytesSpecification,
+	}
+
+	return txdata
+}
+func setTxLocal(nonce, gasPrice, gasLimit uint64) *basic.Transaction {
+	head := setTxHeadLocal()
+	data := setTxDataLocal(nonce, gasPrice, gasLimit)
+	local := &basic.Transaction{
+		Head: head,
+		Data: data,
+	}
+
+	return local
+}
+func setTxRemote(nonce, gasPrice, gasLimit uint64) *basic.Transaction {
+	head := setTxHeadRemote()
+	data := setTxDataRemote(nonce, gasPrice, gasLimit)
+	remote := &basic.Transaction{
+		Head: head,
+		Data: data,
+	}
+
+	return remote
+}
+
+func setTxUniversalLocalHead(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversalHead {
+	txuniversalhead := &universal.TransactionUniversalHead{
+		Version:           1,
+		FeePayer:          []byte{0x01, 0x01},
+		Nonce:             nonce,
+		GasPrice:          gasPrice,
+		GasLimit:          gasLimit,
+		FeePayerSignature: []byte{0x01, 0x01},
+		Type:              1,
+		Options:           1,
+	}
+	return txuniversalhead
+}
+func setTxUniversalRemoteHead(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversalHead {
+	txuniversalhead := &universal.TransactionUniversalHead{
+		Version:           1,
+		FeePayer:          []byte{0x01, 0x01},
+		Nonce:             nonce,
+		GasPrice:          gasPrice,
+		GasLimit:          gasLimit,
+		FeePayerSignature: []byte{0x01, 0x01},
+		Type:              1,
+		Options:           1,
+	}
+	return txuniversalhead
+}
+
+func setTxUniversalLocalData(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversalData {
+	txtranserferlocal := setTxUniversalTransferLocal(nonce, gasPrice, gasLimit)
+	byteSpecification, _ := json.Marshal(txtranserferlocal)
+	txuniversaldata := &universal.TransactionUniversalData{
+		Specification: byteSpecification,
+	}
+
+	return txuniversaldata
+}
+func setTxUniversalRemoteData(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversalData {
+	txtranserferremote := setTxUniversalTransferRemote(nonce, gasPrice, gasLimit)
+	byteSpecification, _ := json.Marshal(txtranserferremote)
+	txuniversaldata := &universal.TransactionUniversalData{
+		Specification: byteSpecification,
+	}
+
+	return txuniversaldata
+}
+func setTxUniversalLocal(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversal {
+	head := setTxUniversalLocalHead(nonce, gasPrice, gasLimit)
+	data := setTxUniversalLocalData(nonce, gasPrice, gasLimit)
+	txuniversal := &universal.TransactionUniversal{
+		Head: head,
+		Data: data,
+	}
+
+	return txuniversal
+}
+func setTxUniversalRemote(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversal {
+	head := setTxUniversalRemoteHead(nonce, gasPrice, gasLimit)
+	data := setTxUniversalRemoteData(nonce, gasPrice, gasLimit)
+	txuniversal := &universal.TransactionUniversal{
+		Head: head,
+		Data: data,
+	}
+	return txuniversal
+
+}
+func setTxUniversalTransferLocal(nonce, gasprice, gaslimit uint64) *universal.TransactionUniversalTransfer {
+	basicHead := setTxHeadLocal()
+	headUniversal := setTxUniversalLocalHead(nonce, gasprice, gaslimit)
+	txuniversaltransfer := &universal.TransactionUniversalTransfer{
+		TransactionHead:          *basicHead,
+		TransactionUniversalHead: *headUniversal,
+		TargetAddr:               tpcrtypes.Address("0x01a1a1a"),
+	}
+	return txuniversaltransfer
+}
+func setTxUniversalTransferRemote(nonce, gasprice, gaslimit uint64) *universal.TransactionUniversalTransfer {
+	basicHead := setTxHeadRemote()
+	headUniversal := setTxUniversalRemoteHead(nonce, gasprice, gaslimit)
+	txuniversaltransfer := &universal.TransactionUniversalTransfer{
+		TransactionHead:          *basicHead,
+		TransactionUniversalHead: *headUniversal,
+		TargetAddr:               tpcrtypes.Address("0x02b2b2b"),
+	}
+	return txuniversaltransfer
 }
 
 func setBlockHead(height, epoch, round uint64, txcount uint32, timestamp uint64) *types.BlockHead {
-	blockhead := &types.BlockHead{ChainID: []byte{0x01},Version: 1,Height: height,Epoch: epoch,Round: round,
-		ParentBlockHash: nil,Launcher: nil,Proposer: nil,Proof: nil,VRFProof: nil,
-	MaxPri: nil,VoteAggSignature: nil,TxCount: txcount,TxRoot: nil,
-	TxResultRoot: nil,StateRoot: nil,GasFees: nil,TimeStamp: timestamp,ElapsedSpan: 0,Hash: nil,
-	Reserved: nil,}
+	blockhead := &types.BlockHead{ChainID: []byte{0x01}, Version: 1, Height: height, Epoch: epoch, Round: round,
+		ParentBlockHash: nil, Launcher: nil, Proposer: nil, Proof: nil, VRFProof: nil,
+		MaxPri: nil, VoteAggSignature: nil, TxCount: txcount, TxRoot: nil,
+		TxResultRoot: nil, StateRoot: nil, GasFees: nil, TimeStamp: timestamp, ElapsedSpan: 0, Hash: nil,
+		Reserved: nil}
 	return blockhead
 }
 func SetBlock(head *types.BlockHead, data *types.BlockData) *types.Block {
@@ -145,7 +297,7 @@ func SetBlock(head *types.BlockHead, data *types.BlockData) *types.Block {
 	}
 	return block
 }
-func SetBlockData(txs map[string]*transaction.Transaction) *types.BlockData {
+func SetBlockData(txs map[string]*basic.Transaction) *types.BlockData {
 	blockdata := &types.BlockData{
 		Version: 1,
 		Txs:     nil,
@@ -159,19 +311,19 @@ func SetBlockData(txs map[string]*transaction.Transaction) *types.BlockData {
 	return blockdata
 }
 
-func setBlockTransaction(from, to []byte, nonce uint64, gaseprice, gaseLimit uint64) *transaction.Transaction {
-	tx := &transaction.Transaction{
-		FromAddr:   from,
-		TargetAddr: to, Version: 1, ChainID: []byte{0x01},
-		Nonce: nonce, Value: []byte{0x03}, GasPrice: gaseprice,
-		GasLimit: gaseLimit, Data: []byte{0x04},
-		Signature: []byte{0x05}, Options: 0, Time: time.Now()}
+func setBlockTransaction(from, to []byte, nonce uint64, gaseprice, gaseLimit uint64) *basic.Transaction {
+	tx := &basic.Transaction{}
+
 	return tx
 }
 
 func SetNewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 
 	conf = (&conf).check()
+	conf.PendingAccountSlots = 16
+	conf.PendingGlobalSlots = 128
+	conf.QueueMaxTxsAccount = 32
+	conf.QueueMaxTxsGlobal = 256
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
 		config:              conf,
@@ -181,12 +333,12 @@ func SetNewTransactionPool(conf TransactionPoolConfig, level tplogcmm.LogLevel, 
 		ActivationIntervals: newActivationInterval(),
 
 		chanSysShutDown:   make(chan error),
-		chanChainHead:     make(chan transaction.ChainHeadEvent, chainHeadChanSize),
+		chanChainHead:     make(chan ChainHeadEvent, chainHeadChanSize),
 		chanReqReset:      make(chan *txPoolResetRequest),
 		chanReqPromote:    make(chan *accountSet),
 		chanReorgDone:     make(chan chan struct{}),
-		chanReorgShutdown: make(chan struct{}),                 // requests shutdown of scheduleReorgLoop
-		chanQueueTxEvent:  make(chan *transaction.Transaction), //check new tx insert to txpool
+		chanReorgShutdown: make(chan struct{}),           // requests shutdown of scheduleReorgLoop
+		chanQueueTxEvent:  make(chan *basic.Transaction), //check new tx insert to txpool
 		chanRmTxs:         make(chan []string),
 
 		marshaler: codec.CreateMarshaler(codecType),
@@ -253,10 +405,9 @@ func Test_transactionPool_GetLocalTxs(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.locals))
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
-	txs := make([]*transaction.Transaction, 0)
+	txs := make([]*basic.Transaction, 0)
 	txs = append(txs, Tx1)
-	txs = append(txs, Tx2)
-	txsMap := make(map[account.Address][]*transaction.Transaction)
+	txsMap := make(map[tpcrtypes.Address][]*basic.Transaction)
 	txsMap[From1] = txs
 	pool.AddLocals(txs)
 	want := txsMap
@@ -389,6 +540,7 @@ func Test_transactionPool_RemoveTxHashs(t *testing.T) {
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
 
 }
+
 func Test_transactionPool_turnTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -443,16 +595,16 @@ func Test_transactionPool_UpdateTx(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
 	assert.Equal(t, 2, len(pool.sortedByPriced.all.locals))
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
-
+	//update failed for low gasprice
 	pool.UpdateTx(Tx3, Key1)
 	for _, tx := range pool.pending.accTxs[From1].txs.items {
-		txid, _ := tx.TxID()
+		txid, _ := tx.HashHex()
 		assert.Equal(t, txid, Key1)
 	}
-
+	//updated for higher gasprice
 	pool.UpdateTx(Tx4, Key2)
 	for _, tx := range pool.queue.accTxs[From1].txs.items {
-		txid, _ := tx.TxID()
+		txid, _ := tx.HashHex()
 		assert.Equal(t, txid, Key4)
 	}
 }
@@ -485,6 +637,7 @@ func Test_transactionPool_Pending(t *testing.T) {
 		}
 	}
 }
+
 func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -509,8 +662,8 @@ func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 	_ = pool.turnTx(From2, KeyR1, TxR1)
 	_ = pool.turnTx(From2, KeyR2, TxR2)
 	pending := pool.Pending()
-	txs := make([]*transaction.Transaction, 0)
-	txSet := transaction.NewTxsByPriceAndNonce(pending)
+	txs := make([]*basic.Transaction, 0)
+	txSet := NewTxsByPriceAndNonce(pending)
 	var cnt int
 	for {
 		tx := txSet.Peek()
@@ -525,8 +678,8 @@ func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 	if got := pool.CommitTxsByPriceAndNonce(); !reflect.DeepEqual(got, txs) {
 		t.Errorf("CommitTxsByPriceAndNonce() = %v, want %v", got, txs)
 	}
-
 }
+
 func Test_transactionPool_CommitTxsForPending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -543,7 +696,7 @@ func Test_transactionPool_CommitTxsForPending(t *testing.T) {
 	pool.AddTx(Tx1, true)
 	pool.turnTx(From1, Key1, Tx1)
 	txls := pool.pending.accTxs
-	var txs = make([]*transaction.Transaction, 0)
+	var txs = make([]*basic.Transaction, 0)
 	for _, txlist := range txls {
 		for _, tx := range txlist.txs.cache {
 			txs = append(txs, tx)
@@ -553,8 +706,8 @@ func Test_transactionPool_CommitTxsForPending(t *testing.T) {
 	if got := pool.CommitTxsForPending(); !reflect.DeepEqual(got, txs) {
 		t.Errorf("CommitTxsForPending() = %v, want %v", got, txs)
 	}
-
 }
+
 func Test_transactionPool_PickTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -579,18 +732,18 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	_ = pool.turnTx(From2, KeyR1, TxR1)
 	_ = pool.turnTx(From2, KeyR2, TxR2)
 	pending := pool.Pending()
-	txs := make([]*transaction.Transaction, 0)
+	txs := make([]*basic.Transaction, 0)
 	for _, v := range pending {
 		for _, tx := range v {
 			txs = append(txs, tx)
 		}
 	}
 	if got := pool.PickTxs(0); !reflect.DeepEqual(got, txs) {
-		t.Errorf("PickTxs(0) = %v, want %v", got, txs)
+		t.Errorf("PickTxs(0) = %v\n, want %v", got, txs)
 	}
 
-	txs2 := make([]*transaction.Transaction, 0)
-	txSet := transaction.NewTxsByPriceAndNonce(pending)
+	txs2 := make([]*basic.Transaction, 0)
+	txSet := NewTxsByPriceAndNonce(pending)
 	for {
 
 		tx := txSet.Peek()
@@ -602,7 +755,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	}
 
 	if got := pool.PickTxs(1); !reflect.DeepEqual(got, txs2) {
-		t.Errorf("CommitTxsByPriceAndNonce() = %v, want %v", got, txs)
+		t.Errorf("CommitTxsByPriceAndNonce() = %v\n, want %v", got, txs)
 	}
 }
 
@@ -618,8 +771,8 @@ func Test_transactionPool_Cost(t *testing.T) {
 	if got := pool.Cost(Tx1); !reflect.DeepEqual(want, got) {
 		t.Error("want", want, "got", got)
 	}
-
 }
+
 func Test_transactionPool_Gas(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -632,8 +785,8 @@ func Test_transactionPool_Gas(t *testing.T) {
 	if got := pool.Gas(Tx1); !reflect.DeepEqual(want, got) {
 		t.Error("want", want, "got", got)
 	}
-
 }
+
 func Test_transactionPool_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -654,14 +807,14 @@ func Test_transactionPool_Get(t *testing.T) {
 
 	want := Tx1
 	if got := pool.Get(Key1); !reflect.DeepEqual(want, got) {
-		t.Error("want", want, "got", got)
+		t.Errorf("want:%v\n got:%v\n", want, got)
 	}
-	want = Tx3
-	if got := pool.Get(Key3); !reflect.DeepEqual(want, got) {
-		t.Error("want", want, "got", got)
+	want = TxR1
+	if got := pool.Get(KeyR1); !reflect.DeepEqual(want, got) {
+		t.Errorf("want:%v\n got:%v\n", want, got)
 	}
-
 }
+
 func Test_transactionPool_Size(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -703,8 +856,8 @@ func Test_transactionPool_Start(t *testing.T) {
 	if err := pool.Start(sysActor, network); err != nil {
 		t.Error("want", nil, "got", err)
 	}
-
 }
+
 func Test_transactionPool_Stop(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -722,5 +875,4 @@ func Test_transactionPool_Stop(t *testing.T) {
 	if 1 != 1 {
 		t.Error("stop error")
 	}
-
 }

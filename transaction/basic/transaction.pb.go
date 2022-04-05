@@ -27,6 +27,7 @@ type TransactionHead struct {
 	Category             []byte   `protobuf:"bytes,1,opt,name=Category,proto3" json:"category"`
 	ChainID              []byte   `protobuf:"bytes,2,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,3,opt,name=Version,proto3" json:"version"`
+	TimeStamp            uint64   `protobuf:"varint,4,opt,name=TimeStamp,proto3" json:"timeStamp"`
 	FromAddr             []byte   `protobuf:"bytes,4,opt,name=FromAddr,proto3" json:"fromAddr"`
 	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`

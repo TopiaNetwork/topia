@@ -1,16 +1,13 @@
 package account
 
 import (
-	"math/big"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"math/big"
 )
 
-type Address string
-
 type Account struct {
-	Addr tpcrtypes.Address
-	Name string
+	Addr    tpcrtypes.Address
+	Name    string
 	Nonce   uint64
 	Balance *big.Int
 }
-

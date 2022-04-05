@@ -2,9 +2,8 @@ package transactionpool
 
 import (
 	"container/heap"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"sort"
-
-	"github.com/TopiaNetwork/topia/account"
 )
 
 // truncatePending removes transactions from the pending queue if the pool is above the
@@ -19,7 +18,7 @@ func (pool *transactionPool) truncatePending() {
 		return
 	}
 
-	var greyAccounts map[account.Address]int
+	var greyAccounts map[tpcrtypes.Address]int
 	// Assemble a spam order to penalize large transactors first
 
 	for addr, list := range pool.pending.accTxs {
@@ -47,7 +46,7 @@ func (pool *transactionPool) truncatePending() {
 			list := pool.pending.accTxs[bePunished.accountAddr]
 			caps := list.Cap(list.Len() - 1)
 			for _, tx := range caps {
-				txId, _ := tx.TxID()
+				txId, _ := tx.HashHex()
 				pool.allTxsForLook.Remove(txId)
 				pool.log.Tracef("Removed fairness-exceeding pending transaction", "txKey", txId)
 			}
@@ -74,7 +73,7 @@ func (pool *transactionPool) truncateQueue() {
 		if !pool.locals.contains(addr) { // don't drop locals
 			list := pool.queue.accTxs[addr].Flatten()
 			for _, tx := range list {
-				txId, _ := tx.TxID()
+				txId, _ := tx.HashHex()
 				txs = append(txs, txByHeartbeat{txId, pool.ActivationIntervals.activ[txId]})
 			}
 		}

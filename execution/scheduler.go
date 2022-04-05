@@ -218,7 +218,7 @@ func (scheduler *executionScheduler) ConstructBlockAndBlockResult(marshaler code
 		Data: blockData,
 	}
 
-	blockHash, err := block.HashBytes(tpcmm.NewBlake2bHasher(0), marshaler)
+	blockHash, err := block.HashBytes()
 	if err != nil {
 		scheduler.log.Errorf("Can't get current block hash: %v", err)
 		return nil, nil, err

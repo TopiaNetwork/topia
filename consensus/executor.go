@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/TopiaNetwork/topia/codec"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -64,7 +63,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					continue
 				}
 
-				latestBlockHash, _ := latestBlock.HashBytes(tpcmm.NewBlake2bHasher(0), e.marshaler)
+				latestBlockHash, _ := latestBlock.HashBytes()
 
 				if bytes.Compare(latestBlockHash, perparePMExe.ParentBlockHash) != 0 {
 					e.log.Errorf("Invalid parent block ref: expected %v, actual %v", latestBlockHash, perparePMExe.ParentBlockHash)
@@ -207,7 +206,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		e.log.Errorf("Can't get the latest bock when making prepare packed msg: %v", err)
 		return nil, nil, err
 	}
-	parentBlockHash, _ := latestBlock.HashBytes(tpcmm.NewBlake2bHasher(0), e.marshaler)
+	parentBlockHash, _ := latestBlock.HashBytes()
 
 	pubKey, _ := e.cryptService.ConvertToPublic(e.priKey)
 

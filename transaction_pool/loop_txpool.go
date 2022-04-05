@@ -10,8 +10,6 @@ func (pool *transactionPool) loop() {
 	pool.wg.Add(1)
 	go pool.chanRemoveTxHashs()
 	pool.wg.Add(1)
-	go pool.saveAllIfShutDown()
-	pool.wg.Add(1)
 	go pool.resetIfNewHead()
 	pool.wg.Add(1)
 	go pool.reportTicks()
@@ -30,6 +28,21 @@ func (pool *transactionPool) chanRemoveTxHashs() {
 		select {
 		case txHashs := <-pool.chanRmTxs:
 			pool.RemoveTxHashs(txHashs)
+		case <-pool.chanSysShutDown:
+			close(pool.chanReorgShutdown)
+			//local txs save
+			if err := pool.SaveLocalTxs(); err != nil {
+				pool.log.Warnf("Failed to save local transaction", "err", err)
+			}
+			//remote txs save
+			if err := pool.SaveRemoteTxs(); err != nil {
+				pool.log.Warnf("Failed to save remote transaction", "err", err)
+			}
+			//txPool configs save
+			if err := pool.SaveConfig(); err != nil {
+				pool.log.Warnf("Failed to save transaction pool configs", "err", err)
+			}
+			return
 		}
 	}
 }
@@ -71,6 +84,21 @@ func (pool *transactionPool) resetIfNewHead() {
 				pool.requestReset(head.Head, ev.Block.Head)
 				head = ev.Block
 			}
+		case <-pool.chanSysShutDown:
+			close(pool.chanReorgShutdown)
+			//local txs save
+			if err := pool.SaveLocalTxs(); err != nil {
+				pool.log.Warnf("Failed to save local transaction", "err", err)
+			}
+			//remote txs save
+			if err := pool.SaveRemoteTxs(); err != nil {
+				pool.log.Warnf("Failed to save remote transaction", "err", err)
+			}
+			//txPool configs save
+			if err := pool.SaveConfig(); err != nil {
+				pool.log.Warnf("Failed to save transaction pool configs", "err", err)
+			}
+			return
 		}
 	}
 }
@@ -93,11 +121,25 @@ func (pool *transactionPool) reportTicks() {
 				pool.log.Debugf("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
 				prevPending, prevQueued, prevStales = pending, queued, stales
 			}
+		case <-pool.chanSysShutDown:
+			close(pool.chanReorgShutdown)
+			//local txs save
+			if err := pool.SaveLocalTxs(); err != nil {
+				pool.log.Warnf("Failed to save local transaction", "err", err)
+			}
+			//remote txs save
+			if err := pool.SaveRemoteTxs(); err != nil {
+				pool.log.Warnf("Failed to save remote transaction", "err", err)
+			}
+			//txPool configs save
+			if err := pool.SaveConfig(); err != nil {
+				pool.log.Warnf("Failed to save transaction pool configs", "err", err)
+			}
+			return
 		}
 	}
 }
 func (pool *transactionPool) removeTxForUptoLifeTime() {
-	fmt.Println("removeTxForUptoLifeTime")
 	defer pool.wg.Done()
 	var evict = time.NewTicker(evictionInterval) //200ms report eviction
 	defer evict.Stop()
@@ -118,13 +160,27 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 			list := pool.queue.accTxs[addr].Flatten()
 
 			for _, tx := range list {
-				txId, _ := tx.TxID()
+				txId, _ := tx.HashHex()
 				if time.Since(pool.ActivationIntervals.activ[txId]) > pool.config.LifetimeForTx {
 					pool.RemoveTxByKey(txId)
 				}
 			}
 		}
-
+	case <-pool.chanSysShutDown:
+		close(pool.chanReorgShutdown)
+		//local txs save
+		if err := pool.SaveLocalTxs(); err != nil {
+			pool.log.Warnf("Failed to save local transaction", "err", err)
+		}
+		//remote txs save
+		if err := pool.SaveRemoteTxs(); err != nil {
+			pool.log.Warnf("Failed to save remote transaction", "err", err)
+		}
+		//txPool configs save
+		if err := pool.SaveConfig(); err != nil {
+			pool.log.Warnf("Failed to save transaction pool configs", "err", err)
+		}
+		return
 	}
 }
 func (pool *transactionPool) regularSaveLocalTxs() {
@@ -139,6 +195,21 @@ func (pool *transactionPool) regularSaveLocalTxs() {
 		if err := pool.SaveLocalTxs(); err != nil {
 			pool.log.Warnf("Failed to save local tx ", "err", err)
 		}
+	case <-pool.chanSysShutDown:
+		close(pool.chanReorgShutdown)
+		//local txs save
+		if err := pool.SaveLocalTxs(); err != nil {
+			pool.log.Warnf("Failed to save local transaction", "err", err)
+		}
+		//remote txs save
+		if err := pool.SaveRemoteTxs(); err != nil {
+			pool.log.Warnf("Failed to save remote transaction", "err", err)
+		}
+		//txPool configs save
+		if err := pool.SaveConfig(); err != nil {
+			pool.log.Warnf("Failed to save transaction pool configs", "err", err)
+		}
+		return
 	}
 }
 
@@ -158,13 +229,28 @@ func (pool *transactionPool) regularRepublic() {
 				// republic transactions from the republic mechanism
 				list := pool.queue.accTxs[addr].Flatten()
 				for _, tx := range list {
-					txId, _ := tx.TxID()
+					txId, _ := tx.HashHex()
 					if time.Since(pool.ActivationIntervals.activ[txId]) > pool.config.DurationForTxRePublic {
 						pool.BroadCastTx(tx)
 					}
 				}
 
 			}
+		case <-pool.chanSysShutDown:
+			close(pool.chanReorgShutdown)
+			//local txs save
+			if err := pool.SaveLocalTxs(); err != nil {
+				pool.log.Warnf("Failed to save local transaction", "err", err)
+			}
+			//remote txs save
+			if err := pool.SaveRemoteTxs(); err != nil {
+				pool.log.Warnf("Failed to save remote transaction", "err", err)
+			}
+			//txPool configs save
+			if err := pool.SaveConfig(); err != nil {
+				pool.log.Warnf("Failed to save transaction pool configs", "err", err)
+			}
+			return
 		}
 	}
 }

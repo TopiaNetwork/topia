@@ -8,11 +8,11 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/network/protocol"
-	"github.com/TopiaNetwork/topia/transaction"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type remoteTxs struct {
-	Txs                 map[string]*transaction.Transaction
+	Txs                 map[string]*basic.Transaction
 	ActivationIntervals map[string]time.Time
 }
 
@@ -65,11 +65,11 @@ func (pool *transactionPool) LoadRemoteTxs() error {
 //
 // This method is used to add transactions from the p2p network and does not wait for pool
 // reorganization and internal event propagation.
-func (pool *transactionPool) AddRemotes(txs []*transaction.Transaction) []error {
+func (pool *transactionPool) AddRemotes(txs []*basic.Transaction) []error {
 	return pool.addTxs(txs, false, false)
 }
-func (pool *transactionPool) AddRemote(tx *transaction.Transaction) error {
-	errs := pool.AddRemotes([]*transaction.Transaction{tx})
+func (pool *transactionPool) AddRemote(tx *basic.Transaction) error {
+	errs := pool.AddRemotes([]*basic.Transaction{tx})
 
 	return errs[0]
 }
@@ -109,19 +109,22 @@ func (pool *transactionPool) processTx(msg *TxMessage) error {
 	return nil
 }
 
-func (pool *transactionPool) BroadCastTx(tx *transaction.Transaction) error {
+func (pool *transactionPool) BroadCastTx(tx *basic.Transaction) error {
 	if tx == nil {
 		return nil
 	}
 	msg := &TxMessage{}
-	data := tx.GetData()
+	data, err := tx.GetData().Marshal()
+	if err != nil {
+		return err
+	}
 	msg.Data = data
-	_, err := msg.Marshal()
+	_, err = msg.Marshal()
 	if err != nil {
 		return err
 	}
 	var toModuleName string
-	toModuleName = "BroadCastTransaction"
+	toModuleName = MOD_NAME
 	pool.network.Publish(pool.ctx, toModuleName, protocol.SyncProtocolID_Msg, data)
 	return nil
 }

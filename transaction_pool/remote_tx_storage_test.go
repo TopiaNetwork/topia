@@ -2,9 +2,9 @@ package transactionpool
 
 import (
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/transaction"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
@@ -47,10 +47,10 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.locals))
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
-	txs := make([]*transaction.Transaction, 0)
+	txs := make([]*basic.Transaction, 0)
 	txs = append(txs, TxR1)
 	txs = append(txs, TxR2)
-	txsMap := make(map[account.Address][]*transaction.Transaction)
+	txsMap := make(map[tpcrtypes.Address][]*basic.Transaction)
 	txsMap[From2] = txs
 	pool.AddRemotes(txs)
 	assert.Equal(t, 1, len(pool.queue.accTxs))

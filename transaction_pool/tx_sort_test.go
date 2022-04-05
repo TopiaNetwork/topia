@@ -2,7 +2,7 @@ package transactionpool
 
 import (
 	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/transaction"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"reflect"
@@ -208,12 +208,12 @@ func TestCntAccountHeap_Pop(t *testing.T) {
 }
 
 func Test_txSortedMap_Get(t *testing.T) {
-	testitem := make(map[uint64]*transaction.Transaction, 0)
+	testitem := make(map[uint64]*basic.Transaction, 0)
 	testitem[uint64(1)] = Tx1
 	type fields struct {
-		items map[uint64]*transaction.Transaction
+		items map[uint64]*basic.Transaction
 		index *nonceHeap
-		cache []*transaction.Transaction
+		cache []*basic.Transaction
 	}
 	type args struct {
 		nonce uint64
@@ -222,7 +222,7 @@ func Test_txSortedMap_Get(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		want   *transaction.Transaction
+		want   *basic.Transaction
 	}{
 		// TODO: Add test cases.
 		{"test get", fields{
@@ -258,7 +258,7 @@ func Test_transactionPool_AddLocals(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.locals))
 	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
-	txs := make([]*transaction.Transaction, 0)
+	txs := make([]*basic.Transaction, 0)
 	txs = append(txs, Tx1)
 	txs = append(txs, Tx2)
 	pool.AddLocals(txs)

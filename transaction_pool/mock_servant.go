@@ -8,10 +8,9 @@ import (
 	big "math/big"
 	reflect "reflect"
 
-	account "github.com/TopiaNetwork/topia/account"
 	types "github.com/TopiaNetwork/topia/chain/types"
 	p2p "github.com/TopiaNetwork/topia/network/p2p"
-	transaction "github.com/TopiaNetwork/topia/transaction"
+	basic "github.com/TopiaNetwork/topia/transaction/basic"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -53,7 +52,7 @@ func (mr *MockTransactionPoolServantMockRecorder) CurrentBlock() *gomock.Call {
 }
 
 // EstimateTxCost mocks base method.
-func (m *MockTransactionPoolServant) EstimateTxCost(tx *transaction.Transaction) *big.Int {
+func (m *MockTransactionPoolServant) EstimateTxCost(tx *basic.Transaction) *big.Int {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EstimateTxCost", tx)
 	ret0, _ := ret[0].(*big.Int)
@@ -67,7 +66,7 @@ func (mr *MockTransactionPoolServantMockRecorder) EstimateTxCost(tx interface{})
 }
 
 // EstimateTxGas mocks base method.
-func (m *MockTransactionPoolServant) EstimateTxGas(tx *transaction.Transaction) uint64 {
+func (m *MockTransactionPoolServant) EstimateTxGas(tx *basic.Transaction) uint64 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EstimateTxGas", tx)
 	ret0, _ := ret[0].(uint64)
@@ -124,7 +123,7 @@ func (mr *MockTransactionPoolServantMockRecorder) StateAt(root interface{}) *gom
 }
 
 // SubChainHeadEvent mocks base method.
-func (m *MockTransactionPoolServant) SubChainHeadEvent(ch chan<- transaction.ChainHeadEvent) p2p.P2PPubSubService {
+func (m *MockTransactionPoolServant) SubChainHeadEvent(ch chan<- ChainHeadEvent) p2p.P2PPubSubService {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubChainHeadEvent", ch)
 	ret0, _ := ret[0].(p2p.P2PPubSubService)
@@ -135,70 +134,4 @@ func (m *MockTransactionPoolServant) SubChainHeadEvent(ch chan<- transaction.Cha
 func (mr *MockTransactionPoolServantMockRecorder) SubChainHeadEvent(ch interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubChainHeadEvent", reflect.TypeOf((*MockTransactionPoolServant)(nil).SubChainHeadEvent), ch)
-}
-
-// MockStatePoolDB is a mock of StatePoolDB interface.
-type MockStatePoolDB struct {
-	ctrl     *gomock.Controller
-	recorder *MockStatePoolDBMockRecorder
-}
-
-// MockStatePoolDBMockRecorder is the mock recorder for MockStatePoolDB.
-type MockStatePoolDBMockRecorder struct {
-	mock *MockStatePoolDB
-}
-
-// NewMockStatePoolDB creates a new mock instance.
-func NewMockStatePoolDB(ctrl *gomock.Controller) *MockStatePoolDB {
-	mock := &MockStatePoolDB{ctrl: ctrl}
-	mock.recorder = &MockStatePoolDBMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockStatePoolDB) EXPECT() *MockStatePoolDBMockRecorder {
-	return m.recorder
-}
-
-// GetAccount mocks base method.
-func (m *MockStatePoolDB) GetAccount(addr account.Address) (*account.Account, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccount", addr)
-	ret0, _ := ret[0].(*account.Account)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAccount indicates an expected call of GetAccount.
-func (mr *MockStatePoolDBMockRecorder) GetAccount(addr interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccount", reflect.TypeOf((*MockStatePoolDB)(nil).GetAccount), addr)
-}
-
-// GetBalance mocks base method.
-func (m *MockStatePoolDB) GetBalance(addr account.Address) *big.Int {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBalance", addr)
-	ret0, _ := ret[0].(*big.Int)
-	return ret0
-}
-
-// GetBalance indicates an expected call of GetBalance.
-func (mr *MockStatePoolDBMockRecorder) GetBalance(addr interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalance", reflect.TypeOf((*MockStatePoolDB)(nil).GetBalance), addr)
-}
-
-// GetNonce mocks base method.
-func (m *MockStatePoolDB) GetNonce(addr account.Address) uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNonce", addr)
-	ret0, _ := ret[0].(uint64)
-	return ret0
-}
-
-// GetNonce indicates an expected call of GetNonce.
-func (mr *MockStatePoolDBMockRecorder) GetNonce(addr interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockStatePoolDB)(nil).GetNonce), addr)
 }

@@ -11,7 +11,6 @@ import (
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -102,7 +101,7 @@ func (p *consensusProposer) canProposeBlock(roundInfo *RoundInfo) (bool, []byte,
 		return true, vrfProof, maxPri, nil
 	}
 
-	return false, nil, nil, fmt.Errorf("Can't propose block at the round: winCount=%d", winCount)
+	return false, nil, nil, fmt.Errorf("Can't propose block at the epoch: winCount=%d", winCount)
 }
 
 func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Context) {
@@ -211,27 +210,27 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 
 				canPropose, vrfProof, maxPri, err := p.canProposeBlock(roundInfo)
 				if !canPropose {
-					p.log.Infof("Can't propose block at the round : epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
+					p.log.Infof("Can't propose block at the epoch : epoch =%d, new epoch=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 					continue
 				}
 
 				p.lastRoundNum = roundInfo.LastRoundNum
 				proposeBlock, err := p.produceProposeBlock(roundInfo, vrfProof, maxPri)
 				if err != nil {
-					p.log.Errorf("Produce propose block error: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
+					p.log.Errorf("Produce propose block error: epoch =%d, new epoch=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 					continue
 				}
 
 				if can := p.validator.canProcessForwardProposeMsg(ctx, maxPri, proposeBlock); !can {
-					p.log.Errorf("Can't delive propose message: epoch =%d, new round=%d", roundInfo.Epoch, roundInfo.CurRoundNum)
+					p.log.Errorf("Can't delive propose message: epoch =%d, new epoch=%d", roundInfo.Epoch, roundInfo.CurRoundNum)
 					continue
 				}
 
 				if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
-					p.log.Errorf("Consensus deliver propose message err: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
+					p.log.Errorf("Consensus deliver propose message err: epoch =%d, new epoch=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
 				}
 			case <-ctx.Done():
-				p.log.Info("Consensus proposer round exit")
+				p.log.Info("Consensus proposer epoch exit")
 				return
 			}
 		}
@@ -247,7 +246,7 @@ func (p *consensusProposer) start(ctx context.Context) {
 }
 
 func (p *consensusProposer) createBlockHead(roundInfo *RoundInfo, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, csStateRN state.CompositionStateReadonly) (*tpchaintypes.BlockHead, uint64, error) {
-	blockHashBytes, err := latestBlock.HashBytes(tpcmm.NewBlake2bHasher(0), p.marshaler)
+	blockHashBytes, err := latestBlock.HashBytes()
 	if err != nil {
 		p.log.Errorf("Can't get the hash bytes of block height %d: %v", latestBlock.Head.Height, err)
 		return nil, 0, err

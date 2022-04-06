@@ -8,9 +8,11 @@ import (
 type consensusServant interface {
 	ChainID() chain.ChainID
 
+	GetLatestEpoch() (*chain.EpochInfo, error)
+
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
-	GetAllConsensusNodes() ([]string, error)
+	GetAllConsensusNodeIDs() ([]string, error)
 
 	GetActiveExecutorIDs() ([]string, error)
 
@@ -18,7 +20,7 @@ type consensusServant interface {
 
 	GetActiveValidatorIDs() ([]string, error)
 
-	GetChainTotalWeight() (uint64, error)
+	GetTotalWeight() (uint64, error)
 
 	GetActiveExecutorsTotalWeight() (uint64, error)
 

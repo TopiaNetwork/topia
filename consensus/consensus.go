@@ -39,7 +39,7 @@ type Consensus interface {
 
 	UpdateHandler(handler ConsensusHandler)
 
-	Start(*actor.ActorSystem) error
+	Start(*actor.ActorSystem, uint64, uint64) error
 
 	Stop()
 }
@@ -163,7 +163,7 @@ func (cons *consensus) ProcessDKGDealResp(msg *DKGDealRespMessage) error {
 	return cons.handler.ProcessDKGDealResp(msg)
 }
 
-func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
+func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, height uint64) error {
 	actorPID, err := CreateConsensusActor(cons.level, cons.log, sysActor, cons)
 	if err != nil {
 		cons.log.Panicf("CreateConsensusActor error: %v", err)

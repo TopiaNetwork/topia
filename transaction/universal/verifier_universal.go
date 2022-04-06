@@ -75,8 +75,8 @@ func TransactionUniversalNonceVerifier() TransactionUniversalVerifier {
 			log.Errorf("Can't get from address %s nonce: %v", tpcrtypes.NewFromBytes(txUni.FromAddr), err)
 			return txbasic.VerifyResult_Reject
 		}
-		if txUni.Head.Nonce != latestNonce+1 {
-			log.Errorf("Invalid txUni nonce: expected %d, actual %d", latestNonce+1, txUni.Head.Nonce)
+		if txUni.Nonce != latestNonce+1 {
+			log.Errorf("Invalid txUni nonce: expected %d, actual %d", latestNonce+1, txUni.Nonce)
 			return txbasic.VerifyResult_Reject
 		}
 

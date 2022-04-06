@@ -57,7 +57,6 @@ func ConstructTransactionWithUniversalTransfer(
 		Head: &TransactionUniversalHead{
 			Version:           txbasic.Transaction_Topia_Universal_V1,
 			FeePayer:          []byte(feePayerAddr),
-			Nonce:             nonce,
 			GasPrice:          gasPrice,
 			GasLimit:          gasLimit,
 			Type:              uint32(TransactionUniversalType_Transfer),
@@ -73,5 +72,5 @@ func ConstructTransactionWithUniversalTransfer(
 		panic("Marshal tx universal err: " + err.Error())
 	}
 
-	return txbasic.NewTransaction(log, cryptService, fromPriKey, txbasic.TransactionCategory_Topia_Universal, txbasic.Transaction_Topia_Universal_V1, txDataBytes)
+	return txbasic.NewTransaction(log, cryptService, fromPriKey, nonce, txbasic.TransactionCategory_Topia_Universal, txbasic.Transaction_Topia_Universal_V1, txDataBytes)
 }

@@ -43,7 +43,7 @@ func TxRoot(txs []Transaction) []byte {
 	return tree.Root()
 }
 
-func NewTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey tpcrtypes.PrivateKey, txCategory TransactionCategory, txVersion TransactionVersion, data []byte) *Transaction {
+func NewTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey tpcrtypes.PrivateKey, nonce uint64, txCategory TransactionCategory, txVersion TransactionVersion, data []byte) *Transaction {
 	if privKey == nil {
 		panic("Tx private key nil")
 	}
@@ -86,6 +86,7 @@ func NewTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey t
 			Category:  []byte(txCategory),
 			Version:   uint32(txVersion),
 			FromAddr:  txFromAddr.Bytes(),
+			Nonce:     nonce,
 			Signature: signBytes,
 		},
 		Data: &TransactionData{

@@ -16,7 +16,8 @@ message TransactionHead {
   uint64 TimeStamp = 4 [(gogoproto.jsontag) = "timeStamp"];
   uint64 Index     = 5 [(gogoproto.jsontag) = "index"];
   bytes  FromAddr  = 6 [(gogoproto.jsontag) = "fromAddr"];
-  bytes  Signature = 7 [(gogoproto.jsontag) = "signature,omitempty"];
+  uint64 Nonce     = 7  [(gogoproto.jsontag) = "nonce"];
+  bytes  Signature = 8 [(gogoproto.jsontag) = "signature,omitempty"];
 }
 
 message TransactionData {

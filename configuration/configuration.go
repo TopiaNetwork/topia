@@ -11,15 +11,22 @@ type Configuration struct {
 	NodeConfig  *NodeConfiguration
 	CSConfig    *ConsensusConfiguration
 	GasConfig   *GasConfiguration
+	Genesis     *GenesisData
 }
 
 func GetConfiguration() *Configuration {
 	once.Do(func() {
+		genData := new(GenesisData)
+		err := genData.Load("./genesis.json")
+		if err != nil {
+			panic("Load genesis data err: " + err.Error())
+		}
 		config = &Configuration{
 			ChainConfig: DefChainConfiguration(),
 			NodeConfig:  DefNodeConfiguration(),
 			CSConfig:    DefConsensusConfiguration(),
 			GasConfig:   DefGasConfiguration(),
+			Genesis:     genData,
 		}
 	})
 

@@ -21,6 +21,8 @@ type Ledger interface {
 	PendingStateStore() int32
 
 	GetBlockStore() block.BlockStore
+
+	IsGenesisState() bool
 }
 
 type ledger struct {
@@ -62,4 +64,20 @@ func (l *ledger) PendingStateStore() int32 {
 
 func (l *ledger) GetBlockStore() block.BlockStore {
 	return l.blockStore
+}
+
+func (l *ledger) IsGenesisState() bool {
+	reader := l.backendStateDB.Reader()
+	defer reader.Discard()
+
+	it, err := reader.Iterator(nil, nil)
+	defer it.Close()
+	if err != nil {
+		l.log.Panicf("Backend state db reads iterator err: %v", err.Error())
+	}
+	if it.Next() {
+		return true
+	}
+
+	return false
 }

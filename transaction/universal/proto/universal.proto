@@ -12,12 +12,11 @@ import "gogo.proto";
 message TransactionUniversalHead {
   uint32   Version            = 1  [(gogoproto.jsontag) = "version"];
   bytes    FeePayer           = 2  [(gogoproto.jsontag) = "feePayer,omitempty"];
-  uint64   Nonce              = 3  [(gogoproto.jsontag) = "nonce"];
-  uint64   GasPrice           = 4  [(gogoproto.jsontag) = "gasPrice,omitempty"];
-  uint64   GasLimit           = 5  [(gogoproto.jsontag) = "gasLimit,omitempty"];
-  uint32   Type               = 6  [(gogoproto.jsontag) = "type"];
-  bytes    FeePayerSignature  = 7 [(gogoproto.jsontag) = "feePayerSignature,omitempty"];
-  uint32   Options            = 8 [(gogoproto.jsontag) = "options,omitempty"];
+  uint64   GasPrice           = 3  [(gogoproto.jsontag) = "gasPrice,omitempty"];
+  uint64   GasLimit           = 4  [(gogoproto.jsontag) = "gasLimit,omitempty"];
+  uint32   Type               = 5  [(gogoproto.jsontag) = "type"];
+  bytes    FeePayerSignature  = 6 [(gogoproto.jsontag) = "feePayerSignature,omitempty"];
+  uint32   Options            = 7 [(gogoproto.jsontag) = "options,omitempty"];
 }
 
 message TransactionUniversalData {

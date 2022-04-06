@@ -4,9 +4,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+
 	"github.com/TopiaNetwork/topia/chain"
 	tpcmm "github.com/TopiaNetwork/topia/common"
-
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 

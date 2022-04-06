@@ -89,7 +89,7 @@ func (ex *dkgExchange) stop() {
 	ex.stopCh <- struct{}{}
 }
 
-func (ex *dkgExchange) startNewEpochLoop(ctx context.Context) {
+func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -240,7 +240,7 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 
 func (ex *dkgExchange) startLoop(ctx context.Context) {
 	ex.log.Info("Start DKG exchange loop")
-	ex.startNewEpochLoop(ctx)
+	ex.startSendDealLoop(ctx)
 	ex.startReceiveDealLoop(ctx)
 	ex.startReceiveDealRespLoop(ctx)
 }

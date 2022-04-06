@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/TopiaNetwork/topia/chain"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -36,6 +38,7 @@ type Node struct {
 	consensus consensus.Consensus
 	txPool    txpool.TransactionPool
 	syncer    sync.Syncer
+	config    *tpconfig.Configuration
 }
 
 func NewNode(endPoint string, seed string) *Node {
@@ -54,7 +57,7 @@ func NewNode(endPoint string, seed string) *Node {
 	nodeID := "TestNode"
 	var priKey tpcrtypes.PrivateKey
 
-	csConfig := tpconfig.DefConsensusConfiguration()
+	config := tpconfig.GetConfiguration()
 
 	ledger := ledger.NewLedger(chainRootPath, "universal", mainLog, backend.BackendType_Badger)
 
@@ -62,7 +65,7 @@ func NewNode(endPoint string, seed string) *Node {
 
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
 	txPool := txpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
-	cons := consensus.NewConsensus(nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, csConfig)
+	cons := consensus.NewConsensus(nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, config.CSConfig)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 
 	return &Node{
@@ -77,6 +80,7 @@ func NewNode(endPoint string, seed string) *Node {
 		consensus: cons,
 		txPool:    txPool,
 		syncer:    syncer,
+		config:    config,
 	}
 }
 
@@ -111,9 +115,54 @@ func (n *Node) Start() {
 
 	n.network.RegisterModule("node", actorPID, n.marshaler)
 
+	var latestEpochInfo *chain.EpochInfo
+	var latestBlock *tpchaintypes.Block
+	if n.ledger.IsGenesisState() {
+		compState := state.GetStateBuilder().CompositionState(1)
+		err = compState.SetLatestEpoch(n.config.Genesis.Epon)
+		if err != nil {
+			n.log.Panicf("Set latest epoch of genesis error: %v", err)
+			compState.Stop()
+			return
+		}
+		err = compState.SetLatestBlock(n.config.Genesis.Block)
+		if err != nil {
+			n.log.Panicf("Set latest block of genesis error: %v", err)
+			compState.Stop()
+			return
+		}
+
+		err = compState.SetLatestBlockResult(n.config.Genesis.BlockResult)
+		if err != nil {
+			n.log.Panicf("Set latest block result of genesis error: %v", err)
+			compState.Stop()
+			return
+		}
+
+		compState.Commit()
+
+		latestEpochInfo = n.config.Genesis.Epon
+		latestBlock = n.config.Genesis.Block
+	} else {
+		csStateRN := state.CreateCompositionStateReadonly(n.log, n.ledger)
+		defer csStateRN.Stop()
+
+		latestEpochInfo, err = csStateRN.GetLatestEpoch()
+		if err != nil {
+			n.log.Panicf("Can't get the latest epoch info error: %v", err)
+			return
+		}
+
+		latestBlock, err = csStateRN.GetLatestBlock()
+		if err != nil {
+			n.log.Panicf("Can't get he latest block info error: %v", err)
+			return
+		}
+	}
+
 	n.evHub.Start(n.sysActor)
 	n.network.Start()
-	n.consensus.Start(n.sysActor)
+	n.consensus.Start(n.sysActor, latestEpochInfo.Epoch, latestBlock.Head.Height)
 	n.txPool.Start(n.sysActor, n.network)
 	n.syncer.Start(n.sysActor, n.network)
 

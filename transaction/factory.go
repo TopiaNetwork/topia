@@ -10,8 +10,8 @@ import (
 	"github.com/TopiaNetwork/topia/transaction/universal"
 )
 
-func CreatTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey tpcrtypes.PrivateKey, txCategory txbasic.TransactionCategory, txVersion txbasic.TransactionVersion, data []byte) *txbasic.Transaction {
-	return txbasic.NewTransaction(log, cryptService, privKey, txCategory, txVersion, data)
+func CreatTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey tpcrtypes.PrivateKey, nonce uint64, txCategory txbasic.TransactionCategory, txVersion txbasic.TransactionVersion, data []byte) *txbasic.Transaction {
+	return txbasic.NewTransaction(log, cryptService, privKey, nonce, txCategory, txVersion, data)
 }
 
 func CreatTransactionAction(tx *txbasic.Transaction) txaction.TransactionAction {

@@ -127,7 +127,7 @@ type PreparePackedMessageExe struct {
 	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
-	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"epoch"`
 	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature"`
 	PubKey               []byte   `protobuf:"bytes,6,opt,name=PubKey,proto3" json:"pubKey"`
 	ParentBlockHash      []byte   `protobuf:"bytes,7,opt,name=ParentBlockHash,proto3" json:"parentBlockHash"`
@@ -266,7 +266,7 @@ type PreparePackedMessageProp struct {
 	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
-	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"epoch"`
 	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature"`
 	PubKey               []byte   `protobuf:"bytes,6,opt,name=PubKey,proto3" json:"pubKey"`
 	ParentBlockHash      []byte   `protobuf:"bytes,7,opt,name=ParentBlockHash,proto3" json:"parentBlockHash"`
@@ -421,7 +421,7 @@ type ProposeMessage struct {
 	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
-	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"epoch"`
 	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature"`
 	PubKey               []byte   `protobuf:"bytes,6,opt,name=PubKey,proto3" json:"pubKey"`
 	StateVersion         uint64   `protobuf:"varint,7,opt,name=StateVersion,proto3" json:"stateVersion"`
@@ -536,7 +536,7 @@ type ExeResultValidateReqMessage struct {
 	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
-	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"epoch"`
 	Validator            []byte   `protobuf:"bytes,5,opt,name=Validator,proto3" json:"proposer"`
 	Signature            []byte   `protobuf:"bytes,6,opt,name=Signature,proto3" json:"signature"`
 	PubKey               []byte   `protobuf:"bytes,7,opt,name=PubKey,proto3" json:"pubKey"`
@@ -651,7 +651,7 @@ type ExeResultValidateRespMessage struct {
 	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
-	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"epoch"`
 	Executor             []byte   `protobuf:"bytes,5,opt,name=Executor,proto3" json:"executor"`
 	Signature            []byte   `protobuf:"bytes,6,opt,name=Signature,proto3" json:"signature"`
 	PubKey               []byte   `protobuf:"bytes,7,opt,name=PubKey,proto3" json:"pubKey"`
@@ -766,7 +766,7 @@ type VoteMessage struct {
 	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
-	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"epoch"`
 	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature"`
 	PubKey               []byte   `protobuf:"bytes,6,opt,name=PubKey,proto3" json:"pubKey"`
 	StateVersion         uint64   `protobuf:"varint,7,opt,name=StateVersion,proto3" json:"stateVersion"`
@@ -865,7 +865,7 @@ type CommitMessage struct {
 	ChainID              []byte   `protobuf:"bytes,1,opt,name=ChainID,proto3" json:"chainID"`
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Epoch                uint64   `protobuf:"varint,3,opt,name=Epoch,proto3" json:"epoch"`
-	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"round"`
+	Round                uint64   `protobuf:"varint,4,opt,name=Round,proto3" json:"epoch"`
 	Signature            []byte   `protobuf:"bytes,5,opt,name=Signature,proto3" json:"signature"`
 	PubKey               []byte   `protobuf:"bytes,6,opt,name=PubKey,proto3" json:"pubKey"`
 	StateVersion         uint64   `protobuf:"varint,7,opt,name=StateVersion,proto3" json:"stateVersion"`

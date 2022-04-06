@@ -3,13 +3,11 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/AsynkronIT/protoactor-go/actor"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
-
-	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
@@ -56,11 +54,7 @@ func NewNode(endPoint string, seed string) *Node {
 	nodeID := "TestNode"
 	var priKey tpcrtypes.PrivateKey
 
-	csConfig := &tpconfig.ConsensusConfiguration{
-		RoundDuration: time.Duration(500 * time.Millisecond),
-		EpochInterval: uint64(5 * 24 * 3600 * 1000 / 500),
-		CrptyType:     tpcrtypes.CryptType_BLS12381,
-	}
+	csConfig := tpconfig.DefConsensusConfiguration()
 
 	ledger := ledger.NewLedger(chainRootPath, "universal", mainLog, backend.BackendType_Badger)
 

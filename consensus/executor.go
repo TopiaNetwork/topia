@@ -34,7 +34,6 @@ type consensusExecutor struct {
 }
 
 func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.ExecutionScheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe, commitMsgChan chan *CommitMessage, prepareInterval time.Duration) *consensusExecutor {
-	time.Now().UnixNano()
 	return &consensusExecutor{
 		log:                     log,
 		nodeID:                  nodeID,
@@ -55,7 +54,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 		for {
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
-				compState := state.CreateCompositionState(e.log, e.ledger)
+				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.ledger, perparePMExe.StateVersion)
 
 				latestBlock, err := compState.GetLatestBlock()
 				if err != nil {
@@ -146,13 +145,9 @@ func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 
 	roleSelector := newLeaderSelectorVRF(e.log, e.cryptService)
 
-	roundInfo := &RoundInfo{
-		Epoch:       csStateRN.GetCurrentEpoch(),
-		CurRoundNum: csStateRN.GetCurrentRound(),
-	}
-	maxStateVersion, _ := e.exeScheduler.MaxStateVersion(csStateRN)
+	maxStateVersion, _ := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
 
-	candInfo, vrfProof, err := roleSelector.Select(RoleSelector_ExecutionLauncher, roundInfo, maxStateVersion, e.priKey, csStateRN, 1)
+	candInfo, vrfProof, err := roleSelector.Select(RoleSelector_ExecutionLauncher, maxStateVersion, e.priKey, csStateRN, 1)
 	if err != nil {
 		e.log.Errorf("Select executor err: %v", err)
 		return false, nil, err
@@ -201,6 +196,12 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		return nil, nil, err
 	}
 
+	epochInfo, err := compState.GetLatestEpoch()
+	if err != nil {
+		e.log.Errorf("Can't get the latest epoch info when making prepare packed msg: %v", err)
+		return nil, nil, err
+	}
+
 	latestBlock, err := compState.GetLatestBlock()
 	if err != nil {
 		e.log.Errorf("Can't get the latest bock when making prepare packed msg: %v", err)
@@ -213,8 +214,8 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 	exePPM := &PreparePackedMessageExe{
 		ChainID:         []byte(compState.ChainID()),
 		Version:         CONSENSUS_VER,
-		Epoch:           compState.GetCurrentEpoch(),
-		Round:           compState.GetCurrentRound(),
+		Epoch:           epochInfo.Epoch,
+		Round:           latestBlock.Head.Height,
 		ParentBlockHash: parentBlockHash,
 		VRFProof:        vrfProof,
 		VRFProofPubKey:  pubKey,
@@ -226,8 +227,8 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 	proposePPM := &PreparePackedMessageProp{
 		ChainID:         []byte(compState.ChainID()),
 		Version:         CONSENSUS_VER,
-		Epoch:           compState.GetCurrentEpoch(),
-		Round:           compState.GetCurrentRound(),
+		Epoch:           epochInfo.Epoch,
+		Round:           latestBlock.Head.Height,
 		ParentBlockHash: parentBlockHash,
 		VRFProof:        vrfProof,
 		VRFProofPubKey:  pubKey,
@@ -263,15 +264,15 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 	}
 
 	txRoot := basic.TxRoot(pendTxs)
-	compState := state.CreateCompositionState(e.log, e.ledger)
-
-	var packedTxs execution.PackedTxs
-
-	maxStateVer, err := e.exeScheduler.MaxStateVersion(compState)
+	maxStateVer, err := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
 	if err != nil {
 		e.log.Errorf("Can't get max state version: %v", err)
 		return err
 	}
+
+	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.ledger, maxStateVer+1)
+
+	var packedTxs execution.PackedTxs
 
 	packedTxs.StateVersion = maxStateVer + 1
 	packedTxs.TxRoot = txRoot

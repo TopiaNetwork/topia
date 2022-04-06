@@ -2,6 +2,9 @@ package consensus
 
 import (
 	"context"
+	"github.com/TopiaNetwork/topia/chain"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/state"
 	"time"
@@ -10,102 +13,70 @@ import (
 )
 
 type epochService struct {
-	log           tplog.Logger
-	currentEpoch  uint64
-	currentRound  uint64
-	roundCh       chan *RoundInfo
-	roundDuration time.Duration //unit: ms
-	epochInterval uint64        //the round number between two epochs
-	ledger        ledger.Ledger
-	dkgExchange   *dkgExchange
+	log                 tplog.Logger
+	blockAddedCh        chan *tpchaintypes.Block
+	epochInterval       uint64 //the height number between two epochs
+	dkgStartBeforeEpoch uint64 //the starting height number of DKG before an epoch
+	exeScheduler        execution.ExecutionScheduler
+	ledger              ledger.Ledger
+	dkgExchange         *dkgExchange
 }
 
 func newEpochService(log tplog.Logger,
-	roundCh chan *RoundInfo,
-	roundDuration time.Duration,
+	blockAddedCh chan *tpchaintypes.Block,
 	epochInterval uint64,
+	dkgStartBeforeEpoch uint64,
+	exeScheduler execution.ExecutionScheduler,
 	ledger ledger.Ledger,
 	dkgExchange *dkgExchange) *epochService {
 	if ledger == nil || dkgExchange == nil {
 		panic("Invalid input parameter and can't create epoch service!")
 	}
 
-	csStateRN := state.CreateCompositionStateReadonly(log, ledger)
-	defer csStateRN.Stop()
-
-	currentEpoch := csStateRN.GetCurrentEpoch()
-	currentRound := csStateRN.GetCurrentRound()
-
 	return &epochService{
-		log:           log,
-		currentEpoch:  currentEpoch,
-		currentRound:  currentRound,
-		roundCh:       roundCh,
-		roundDuration: roundDuration,
-		epochInterval: epochInterval,
-		ledger:        ledger,
-		dkgExchange:   dkgExchange,
+		log:                 log,
+		blockAddedCh:        blockAddedCh,
+		epochInterval:       epochInterval,
+		dkgStartBeforeEpoch: dkgStartBeforeEpoch,
+		exeScheduler:        exeScheduler,
+		ledger:              ledger,
+		dkgExchange:         dkgExchange,
 	}
 }
 
 func (es *epochService) start(ctx context.Context) {
-	startRound := uint64(0)
-
-	csStateRN := state.CreateCompositionStateReadonly(es.log, es.ledger)
-	defer csStateRN.Stop()
-
-	es.currentEpoch = csStateRN.GetCurrentEpoch()
-	es.currentRound = csStateRN.GetCurrentRound()
-
-	if es.currentEpoch != 0 {
-		startRound = es.currentRound
-	}
-
-	nextEpochDuration := int64(es.epochInterval-startRound) * es.roundDuration.Nanoseconds()
-
-	nextEpochTimer := time.After(time.Duration(nextEpochDuration))
-
-	roundTimer := time.After(es.roundDuration)
-
 	for {
 		select {
-		case <-nextEpochTimer:
-			csStateEpoch := state.CreateCompositionState(es.log, es.ledger)
-			defer csStateEpoch.Commit()
-
-			es.currentEpoch = es.currentEpoch + 1
-			csStateEpoch.SetCurrentEpoch(es.currentEpoch)
-			es.dkgExchange.start(es.currentEpoch)
-		case <-roundTimer:
-			csStateRound := state.CreateCompositionState(es.log, es.ledger)
-			defer csStateRound.Commit()
-
-			es.currentRound = es.currentRound + 1
-			csStateRound.SetCurrentRound(es.currentRound)
-			if !es.dkgExchange.dkgCrypt.finished() || es.dkgExchange.dkgCrypt.epoch < es.currentEpoch {
-				es.log.Warnf("Current epoch %d DKG unfinished and ignore the round %d", es.currentEpoch, es.currentRound)
-				continue
-			}
-			latestBlock, err := csStateRN.GetLatestBlock()
+		case newBh := <-es.blockAddedCh:
+			maxStateVer, err := es.exeScheduler.MaxStateVersion(es.log, es.ledger)
 			if err != nil {
-				es.log.Errorf("Can't get the latest block: err=%v", err)
+				es.log.Errorf("Can't get max state version: %v", err)
+				continue
+			}
+			csStateEpoch := state.GetStateBuilder().CreateCompositionState(es.log, es.ledger, maxStateVer+1)
+
+			epochInfo, err := csStateEpoch.GetLatestEpoch()
+			if err != nil {
+				es.log.Errorf("Can't get the latest epoch: err=%v", err)
 				continue
 			}
 
-			csProof := &ConsensusProof{
-				ParentBlockHash: latestBlock.Head.ParentBlockHash,
-				Height:          latestBlock.Head.Height,
-				AggSign:         latestBlock.Head.VoteAggSignature,
-			}
+			deltaH := int(newBh.Head.Height) - int(epochInfo.StartHeight)
+			if deltaH == int(es.epochInterval)-int(es.dkgStartBeforeEpoch) {
+				es.dkgExchange.start(epochInfo.Epoch + 1)
+			} else if deltaH == int(es.epochInterval) {
+				csStateEpoch.SetLatestEpoch(&chain.EpochInfo{
+					Epoch:          epochInfo.Epoch + 1,
+					StartTimeStamp: uint64(time.Now().UnixNano()),
+					StartHeight:    newBh.Head.Height,
+				})
 
-			roundInfo := &RoundInfo{
-				Epoch:        es.currentEpoch,
-				LastRoundNum: es.currentRound - 1,
-				CurRoundNum:  es.currentRound,
-				Proof:        csProof,
+				if !es.dkgExchange.dkgCrypt.finished() {
+					es.log.Warnf("Current epoch %d DKG unfinished and still use the old, height %d", epochInfo.Epoch, newBh.Head.Height)
+				} else {
+					es.dkgExchange.notifyUpdater()
+				}
 			}
-
-			es.roundCh <- roundInfo
 		case <-ctx.Done():
 			es.log.Info("Exit epoch cycle")
 			return

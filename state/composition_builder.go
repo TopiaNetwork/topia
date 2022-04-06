@@ -1,11 +1,9 @@
 package state
 
 import (
-	"bytes"
 	"sync"
 	"time"
 
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -29,44 +27,50 @@ func GetStateBuilder() *CompositionStateBuilder {
 }
 
 type CompositionStateBuilder struct {
-	sync               sync.RWMutex
-	lastBlockHashBytes []byte
-	lastBlock          *tpchaintypes.Block
-	compStateCurrent   CompositionState
+	sync         sync.RWMutex
+	compStateMap map[uint64]CompositionState //StateVersion->CompositionState
 }
 
-func (builder *CompositionStateBuilder) UpdateCompositionStateWhenNewBlockAdded(log tplog.Logger, ledger ledger.Ledger, block *tpchaintypes.Block) error {
+func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
 	builder.sync.Lock()
 	defer builder.sync.Unlock()
 
-	hashBytes, err := block.HashBytes()
-	if err != nil {
-		log.Panic("Can't get new added block hash bytes")
+	if compState, ok := builder.compStateMap[stateVersion]; ok {
+		log.Infof("Exist CompositionState for stateVersion %d", stateVersion)
+		return compState
 	}
 
-	if builder.lastBlockHashBytes != nil {
-		if bytes.Compare(hashBytes, builder.lastBlockHashBytes) == 0 {
-			log.Warnf("Received the same new added block")
-			return nil
+	if stateVersion > 1 {
+		compState, ok := builder.compStateMap[stateVersion-1]
+		if ok {
+			i := 1
+			for ; compState.PendingStateStore() > 0 && i <= 3; i++ {
+				log.Warnf("Last CompositionState hasn't been commited, need waiting for %d ms, no. %d ", Wait_StateStore_Time, i)
+				time.Sleep(Wait_StateStore_Time * time.Millisecond)
+			}
+			if i > 3 {
+				log.Errorf("Can't create new CompositionState because of last state version not been commited: stateVersion %d", stateVersion)
+				return nil
+			}
+
+			delete(builder.compStateMap, stateVersion-1)
 		}
 	}
 
-	for i := 1; builder.compStateCurrent.PendingStateStore() > 0 && i <= 3; i++ {
-		log.Warnf("Haven't been commited state store, need waiting for %d ms, no. %d ", Wait_StateStore_Time, i)
-		time.Sleep(Wait_StateStore_Time * time.Millisecond)
-	}
+	compState := CreateCompositionState(log, ledger)
 
-	builder.compStateCurrent = CreateCompositionState(log, ledger)
+	builder.compStateMap[stateVersion] = compState
 
-	builder.lastBlockHashBytes = hashBytes
-	builder.lastBlock = block
-
-	return nil
+	return compState
 }
 
-func (builder *CompositionStateBuilder) CompositionState() CompositionState {
+func (builder *CompositionStateBuilder) CompositionState(stateVersion uint64) CompositionState {
 	builder.sync.RLock()
 	defer builder.sync.RUnlock()
 
-	return builder.compStateCurrent
+	if compState, ok := builder.compStateMap[stateVersion]; ok {
+		return compState
+	}
+
+	return nil
 }

@@ -2,8 +2,8 @@ package consensus
 
 import (
 	"context"
-
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/TopiaNetwork/topia/eventhub"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -74,6 +74,7 @@ func NewConsensus(nodeID string,
 	proposeMsgChan := make(chan *ProposeMessage)
 	voteMsgChan := make(chan *VoteMessage)
 	commitMsgChan := make(chan *CommitMessage)
+	blockAddedCh := make(chan *tpchaintypes.Block)
 	partPubKey := make(chan *DKGPartPubKeyMessage, PartPubKeyChannel_Size)
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
@@ -94,8 +95,8 @@ func NewConsensus(nodeID string,
 	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, voteMsgChan, cryptS, deliver, ledger, marshaler, validator)
 	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
 
-	epochService := newEpochService(log, roundCh, config.RoundDuration, config.EpochInterval, ledger, dkgEx)
-	csHandler := NewConsensusHandler(log, roundCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
+	epService := newEpochService(log, blockAddedCh, config.EpochInterval, config.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
+	csHandler := NewConsensusHandler(log, blockAddedCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
 
 	dkgEx.addDKGBLSUpdater(deliver)
 	dkgEx.addDKGBLSUpdater(proposer)
@@ -110,7 +111,7 @@ func NewConsensus(nodeID string,
 		proposer:     proposer,
 		validator:    validator,
 		dkgEx:        dkgEx,
-		epochService: epochService,
+		epochService: epService,
 	}
 }
 
@@ -142,6 +143,14 @@ func (cons *consensus) ProcessVote(msg *VoteMessage) error {
 	return cons.handler.ProcessVote(msg)
 }
 
+func (cons *consensus) ProcessSubEvent(ctx context.Context, data interface{}) error {
+	if block, ok := data.(*tpchaintypes.Block); ok {
+		return cons.handler.ProcessBlockAdded(block)
+	}
+
+	panic("Unknown sub event data")
+}
+
 func (cons *consensus) ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error {
 	return cons.handler.ProcessDKGPartPubKey(msg)
 }
@@ -164,6 +173,8 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem) error {
 	cons.network.RegisterModule(MOD_NAME, actorPID, cons.marshaler)
 
 	ctx := context.Background()
+
+	eventhub.GetEventHub().Observe(ctx, eventhub.EventName_BlockAdded, cons.ProcessSubEvent)
 
 	cons.epochService.start(ctx)
 	cons.executor.start(ctx)

@@ -13,7 +13,10 @@ type BlockNum uint64
 
 const BLOCK_VER = uint32(1)
 
-func (m *Block) HashBytes(hasher tpcmm.Hasher, marshaler codec.Marshaler) ([]byte, error) {
+func (m *Block) HashBytes() ([]byte, error) {
+	hasher := tpcmm.NewBlake2bHasher(0)
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+
 	blBytes, err := marshaler.Marshal(m)
 	if err != nil {
 		return nil, err
@@ -22,8 +25,8 @@ func (m *Block) HashBytes(hasher tpcmm.Hasher, marshaler codec.Marshaler) ([]byt
 	return hasher.Compute(string(blBytes)), nil
 }
 
-func (m *Block) HashHex(hasher tpcmm.Hasher, marshaler codec.Marshaler) (string, error) {
-	hashBytes, err := m.HashBytes(hasher, marshaler)
+func (m *Block) HashHex() (string, error) {
+	hashBytes, err := m.HashBytes()
 	if err != nil {
 		return "", err
 	}

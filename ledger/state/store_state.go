@@ -21,6 +21,8 @@ const (
 type StateStore interface {
 	AddNamedStateStore(name string) error
 
+	Root(name string) ([]byte, error)
+
 	Put(name string, key []byte, value []byte) error
 
 	Delete(name string, key []byte) error
@@ -30,6 +32,8 @@ type StateStore interface {
 	Update(name string, key []byte, value []byte) error
 
 	GetState(name string, key []byte) ([]byte, []byte, error)
+
+	GetAllState(name string) ([][]byte, [][]byte, [][]byte, error)
 
 	StateLatestVersion() (uint64, error)
 
@@ -93,6 +97,14 @@ func (m *stateStore) AddNamedStateStore(name string) error {
 	return nil
 }
 
+func (m *stateStore) Root(name string) ([]byte, error) {
+	if ss, ok := m.storeMap[name]; ok {
+		return ss.Root(), nil
+	}
+
+	return nil, fmt.Errorf("Can't find the responding state store: name=%s", name)
+}
+
 func (m *stateStore) Put(name string, key []byte, value []byte) error {
 	if m.backendR != nil {
 		return errors.New("Can't put because of read only state store")
@@ -100,7 +112,6 @@ func (m *stateStore) Put(name string, key []byte, value []byte) error {
 
 	m.lock.Lock()
 	defer m.lock.Unlock()
-
 	if ss, ok := m.storeMap[name]; ok {
 		return ss.Put(key, value)
 	}
@@ -158,6 +169,17 @@ func (m *stateStore) GetState(name string, key []byte) ([]byte, []byte, error) {
 	}
 
 	return nil, nil, fmt.Errorf("Can't find the responding state store: name=%s", name)
+}
+
+func (m *stateStore) GetAllState(name string) ([][]byte, [][]byte, [][]byte, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	if ss, ok := m.storeMap[name]; ok {
+		return ss.GetAllState()
+	}
+
+	return nil, nil, nil, fmt.Errorf("Can't find the responding state store: name=%s", name)
 }
 
 func (m *stateStore) StateLatestVersion() (uint64, error) {

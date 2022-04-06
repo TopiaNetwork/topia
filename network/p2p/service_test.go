@@ -174,7 +174,7 @@ func TestPubSub(t *testing.T) {
 	})
 	assert.Equal(t, nil, err)
 
-	err = p2p2.Publish(context.Background(), "", "/topia/testing", []byte("TestData"))
+	err = p2p2.Publish(context.Background(), []string{""}, "/topia/testing", []byte("TestData"))
 	assert.Equal(t, nil, err)
 
 	time.Sleep(10 * time.Second)

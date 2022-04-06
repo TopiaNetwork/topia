@@ -54,7 +54,7 @@ func TransactionUniversalGasVerifier() TransactionUniversalVerifier {
 			log.Errorf("Gas estimates error: %v", err)
 			return txbasic.VerifyResult_Reject
 		}
-		balVal, err := txUniServant.GetBalance(chain.TokenSymbol_Native, tpcrtypes.NewFromBytes(txUni.Head.FeePayer))
+		balVal, err := txUniServant.GetBalance(tpcrtypes.NewFromBytes(txUni.Head.FeePayer), chain.TokenSymbol_Native)
 		if err != nil {
 			log.Errorf("Can't get payer %s balance: %v", tpcrtypes.NewFromBytes(txUni.Head.FeePayer), err)
 			return txbasic.VerifyResult_Reject
@@ -75,8 +75,8 @@ func TransactionUniversalNonceVerifier() TransactionUniversalVerifier {
 			log.Errorf("Can't get from address %s nonce: %v", tpcrtypes.NewFromBytes(txUni.FromAddr), err)
 			return txbasic.VerifyResult_Reject
 		}
-		if txUni.Head.Nonce != latestNonce+1 {
-			log.Errorf("Invalid txUni nonce: expected %d, actual %d", latestNonce+1, txUni.Head.Nonce)
+		if txUni.Nonce != latestNonce+1 {
+			log.Errorf("Invalid txUni nonce: expected %d, actual %d", latestNonce+1, txUni.Nonce)
 			return txbasic.VerifyResult_Reject
 		}
 

@@ -345,22 +345,12 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 	}
 
 	if lastBlock.Head.Round != voterRound-1 {
-		err := fmt.Errorf("Stale vote round: %d", voterRound)
+		err := fmt.Errorf("Stale vote epoch: %d", voterRound)
 		md.log.Errorf(err.Error())
 		return "", nil, err
 	}
-	roundInfo := &RoundInfo{
-		Epoch:        lastBlock.Head.Epoch,
-		LastRoundNum: lastBlock.Head.Round,
-		CurRoundNum:  voterRound,
-		Proof: &ConsensusProof{
-			ParentBlockHash: lastBlock.Head.ParentBlockHash,
-			Height:          lastBlock.Head.Height,
-			AggSign:         lastBlock.Head.VoteAggSignature,
-		},
-	}
 
-	selVoteColectors, vrfProof, err := newLeaderSelectorVRF(md.log, md.cryptService).Select(RoleSelector_VoteCollector, roundInfo, 0, md.priKey, csStateRN, 1)
+	selVoteColectors, vrfProof, err := newLeaderSelectorVRF(md.log, md.cryptService).Select(RoleSelector_VoteCollector, 0, md.priKey, csStateRN, 1)
 	if len(selVoteColectors) != 1 {
 		err := fmt.Errorf("Expect vote collector count 1, got %d", len(selVoteColectors))
 		md.log.Errorf("%v", err)
@@ -451,7 +441,7 @@ func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetAllConsensusNodeIDs()
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err
@@ -510,7 +500,7 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodes()
+		peerIDs, err := csStateRN.GetAllConsensusNodeIDs()
 		if err != nil {
 			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
 			return err

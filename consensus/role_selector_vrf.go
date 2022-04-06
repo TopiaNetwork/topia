@@ -119,23 +119,23 @@ func (selector *roleSelectorVRF) makeVRFHash(role RoleSelector, epoch uint64, ro
 	return hasher.Bytes()
 }
 
-func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, roundInfo *RoundInfo, stateVersion uint64) ([]byte, error) {
+func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64, height uint64, csProof *ConsensusProof, stateVersion uint64) ([]byte, error) {
 	hasher := tpcmm.NewBlake2bHasher(0)
 
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, role); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(hasher.Writer(), binary.BigEndian, roundInfo.Epoch); err != nil {
+	if err := binary.Write(hasher.Writer(), binary.BigEndian, epoch); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(hasher.Writer(), binary.BigEndian, roundInfo.CurRoundNum); err != nil {
+	if err := binary.Write(hasher.Writer(), binary.BigEndian, stateVersion); err != nil {
 		return nil, err
 	}
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, stateVersion); err != nil {
 		return nil, err
 	}
 
-	csProofBytes, err := roundInfo.Proof.Marshal()
+	csProofBytes, err := csProof.Marshal()
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,6 @@ func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, csServ
 }
 
 func (selector *roleSelectorVRF) Select(role RoleSelector,
-	roundInfo *RoundInfo,
 	stateVersion uint64,
 	priKey tpcrtypes.PrivateKey,
 	csServant consensusServant,
@@ -210,9 +209,25 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		return nil, nil, err
 	}
 
-	vrfInputData, err := selector.getVrfInputData(role, roundInfo, stateVersion)
+	eponInfo, err := csServant.GetLatestEpoch()
 	if err != nil {
-		selector.log.Errorf("Can't get vrf inputing data: epoch =%d, new round=%d, err=%v", roundInfo.Epoch, roundInfo.CurRoundNum, err)
+		return nil, nil, err
+	}
+
+	latestBlock, err := csServant.GetLatestBlock()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	csProof := &ConsensusProof{
+		ParentBlockHash: latestBlock.Head.ParentBlockHash,
+		Height:          latestBlock.Head.Height,
+		AggSign:         latestBlock.Head.VoteAggSignature,
+	}
+
+	vrfInputData, err := selector.getVrfInputData(role, eponInfo.Epoch, latestBlock.Head.Height, csProof, stateVersion)
+	if err != nil {
+		selector.log.Errorf("Can't get vrf inputing data: epoch=%d, height=%d, err=%v", eponInfo.Epoch, latestBlock.Head.Height, err)
 		return nil, nil, err
 	}
 
@@ -221,7 +236,7 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		return nil, nil, err
 	}
 
-	vrfHash := selector.makeVRFHash(role, roundInfo.Epoch, roundInfo.CurRoundNum, vrfProof)
+	vrfHash := selector.makeVRFHash(role, eponInfo.Epoch, latestBlock.Head.Height, vrfProof)
 	seed := selector.hashToSeed(vrfHash)
 
 	for i := 0; i < count; i++ {

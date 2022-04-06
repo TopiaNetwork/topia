@@ -7,12 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/topia/codec"
-	tpcmm "github.com/TopiaNetwork/topia/common"
-	tpnet "github.com/TopiaNetwork/topia/network"
-	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
-	"github.com/TopiaNetwork/topia/sync"
-	tx "github.com/TopiaNetwork/topia/transaction/basic"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"time"
 
 	"github.com/lazyledger/smt"
@@ -20,10 +15,17 @@ import (
 	"go.uber.org/atomic"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/block"
 	tplog "github.com/TopiaNetwork/topia/log"
 	logcomm "github.com/TopiaNetwork/topia/log/common"
+	tpnet "github.com/TopiaNetwork/topia/network"
+	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
+	"github.com/TopiaNetwork/topia/sync"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 const (
@@ -42,7 +44,7 @@ const (
 type ExecutionScheduler interface {
 	State() SchedulerState
 
-	MaxStateVersion(compState state.CompositionState) (uint64, error)
+	MaxStateVersion(log tplog.Logger, ledger ledger.Ledger) (uint64, error)
 
 	PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error)
 
@@ -118,7 +120,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 	exePackedTxs := newExecutionPackedTxs(txPacked, compState)
 	scheduler.exePackedTxsList.PushBack(exePackedTxs)
 
-	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, tx.NewTansactionServant(compState, compState))
+	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txbasic.NewTansactionServant(compState, compState))
 	if err != nil {
 		scheduler.lastStateVersion.Store(txPacked.StateVersion)
 	}
@@ -126,15 +128,21 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 	return packedTxsRS, err
 }
 
-func (scheduler *executionScheduler) MaxStateVersion(compState state.CompositionState) (uint64, error) {
+func (scheduler *executionScheduler) MaxStateVersion(log tplog.Logger, ledger ledger.Ledger) (uint64, error) {
 	scheduler.executeMutex.RLock()
 	defer scheduler.executeMutex.RUnlock()
 
-	maxStateVersion, err := compState.StateLatestVersion()
+	compStatRN := state.CreateCompositionStateReadonly(log, ledger)
+	defer compStatRN.Stop()
+
+	latestBlock, err := compStatRN.GetLatestBlock()
 	if err != nil {
-		scheduler.log.Errorf("Can't get the latest state version: %v", err)
-		return 0, err
+		scheduler.log.Errorf("Can't get the latest block: %v", err)
+		return 0, nil
 	}
+
+	maxStateVersion := latestBlock.Head.Height
+
 	if scheduler.exePackedTxsList.Len() > 0 {
 		exeTxsL := scheduler.exePackedTxsList.Back().Value.(*executionPackedTxs)
 		maxStateVersion = exeTxsL.StateVersion()
@@ -307,6 +315,8 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 			scheduler.log.Errorf("Commit block err: state version %d, err: %v", stateVersion, errCMMBlock)
 			return errCMMBlock
 		}
+
+		eventhub.GetEventHub().Trig(ctx, eventhub.EventName_BlockAdded, block)
 
 		scheduler.exePackedTxsList.Remove(exeTxsItem)
 

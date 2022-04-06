@@ -53,7 +53,7 @@ type BlockHead struct {
 	Version              uint32   `protobuf:"varint,2,opt,name=Version,proto3" json:"version"`
 	Height               uint64   `protobuf:"varint,3,opt,name=Height,proto3" json:"height"`
 	Epoch                uint64   `protobuf:"varint,4,opt,name=Epoch,proto3" json:"epoch"`
-	Round                uint64   `protobuf:"varint,5,opt,name=Round,proto3" json:"round"`
+	Round                uint64   `protobuf:"varint,5,opt,name=Round,proto3" json:"epoch"`
 	ParentBlockHash      []byte   `protobuf:"bytes,6,opt,name=ParentBlockHash,proto3" json:"parentBlockHash"`
 	Launcher             []byte   `protobuf:"bytes,7,opt,name=Launcher,proto3" json:"launcher"`
 	Proposer             []byte   `protobuf:"bytes,8,opt,name=Proposer,proto3" json:"proposer"`

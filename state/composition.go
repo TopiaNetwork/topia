@@ -14,8 +14,8 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
+	staetround "github.com/TopiaNetwork/topia/state/epoch"
 	statenode "github.com/TopiaNetwork/topia/state/node"
-	staetround "github.com/TopiaNetwork/topia/state/round"
 )
 
 type NodeNetWorkStateWapper interface {
@@ -57,9 +57,7 @@ type CompositionStateReadonly interface {
 
 	GetActiveValidatorsTotalWeight() (uint64, error)
 
-	GetCurrentRound() uint64
-
-	GetCurrentEpoch() uint64
+	GetLatestEpoch() (*chain.EpochInfo, error)
 
 	StateRoot() ([]byte, error)
 
@@ -81,7 +79,7 @@ type CompositionState interface {
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
-	staetround.RoundState
+	staetround.EpochState
 
 	StateRoot() ([]byte, error)
 
@@ -109,7 +107,7 @@ type compositionState struct {
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
-	staetround.RoundState
+	staetround.EpochState
 	log    tplog.Logger
 	ledger ledger.Ledger
 }
@@ -145,11 +143,11 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger) CompositionS
 		NodeExecutorState:  executorState,
 		NodeProposerState:  proposerState,
 		NodeValidatorState: validatorState,
-		RoundState:         staetround.NewRoundState(stateStore),
+		EpochState:         staetround.NewRoundState(stateStore),
 	}
 }
 
-func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) CompositionState {
+func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) CompositionStateReadonly {
 	stateStore, _ := ledger.CreateStateStoreReadonly()
 
 	inactiveState := statenode.NewNodeInactiveState(stateStore)
@@ -168,7 +166,7 @@ func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) Comp
 		NodeExecutorState:  executorState,
 		NodeProposerState:  proposerState,
 		NodeValidatorState: validatorState,
-		RoundState:         staetround.NewRoundState(stateStore),
+		EpochState:         staetround.NewRoundState(stateStore),
 	}
 }
 
@@ -221,7 +219,7 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 
 	roundRoot, err := cs.GetRoundStateRoot()
 	if err != nil {
-		cs.log.Errorf("Can't get round state root: %v", err)
+		cs.log.Errorf("Can't get epoch state root: %v", err)
 		return nil, err
 	}
 

@@ -70,6 +70,14 @@ func (ex *dkgExchange) addDKGBLSUpdater(updater DKGBLSUpdater) {
 	ex.dkgBLSUpdaters = append(ex.dkgBLSUpdaters, updater)
 }
 
+func (ex *dkgExchange) notifyUpdater() {
+	ex.updatersSync.RLock()
+	defer ex.updatersSync.RUnlock()
+	for _, updater := range ex.dkgBLSUpdaters {
+		updater.updateDKGBls(ex.dkgCrypt)
+	}
+}
+
 func (ex *dkgExchange) start(epoch uint64) {
 	nParticipant := len(ex.initDKGPartPubKeys)
 	dkgCrypt := newDKGCrypt(ex.log, epoch, ex.initDKGPrivKey, ex.initDKGPartPubKeys, 2*nParticipant/3+1, nParticipant)
@@ -217,11 +225,6 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 
 				if ex.dkgCrypt.finished() {
 					ex.log.Info("DKG exchange finished")
-					ex.updatersSync.RLock()
-					defer ex.updatersSync.RUnlock()
-					for _, updater := range ex.dkgBLSUpdaters {
-						updater.updateDKGBls(ex.dkgCrypt)
-					}
 					ex.finishedCh <- true
 				}
 			case <-ex.stopCh:

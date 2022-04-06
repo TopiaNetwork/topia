@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
@@ -20,6 +22,32 @@ type EventHub interface {
 	Trig(ctx context.Context, name string, data interface{}) error
 	Observe(ctx context.Context, evName string, evHandler EventHandler) (string, error) //return observation id
 	UnObserve(ctx context.Context, obsID string, evName string) error
+}
+
+var once sync.Once
+
+var eventHubG EventHub
+
+func GetEventHub(params ...interface{}) EventHub {
+	once.Do(func() {
+		if len(params) != 2 {
+			panic("Invalid params size: " + fmt.Sprintf("expected 2, actual %d", len(params)))
+		}
+
+		var level tplogcmm.LogLevel
+		var log tplog.Logger
+		ok := true
+		if level, ok = params[0].(tplogcmm.LogLevel); !ok {
+			panic("Invalid params 0 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[0]).Name()))
+		}
+		if log, ok = params[1].(tplog.Logger); !ok {
+			panic("Invalid params 1 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[1]).Name()))
+		}
+
+		eventHubG = NewEventHub(level, log)
+	})
+
+	return eventHubG
 }
 
 type eventHub struct {
@@ -42,6 +70,7 @@ func NewEventHub(level tplogcmm.LogLevel, log tplog.Logger) EventHub {
 	evManager.registerEvent(EventName_BlockCommited, reflect.TypeOf(&tpchaintypes.Block{}).String())
 	evManager.registerEvent(EventName_BlockVerified, reflect.TypeOf(&tpchaintypes.Block{}).String())
 	evManager.registerEvent(EventName_BlockConfirmed, reflect.TypeOf(&tpchaintypes.Block{}).String())
+	evManager.registerEvent(EventName_BlockAdded, reflect.TypeOf(&tpchaintypes.Block{}).String())
 
 	return &eventHub{
 		log:       logEVActor,

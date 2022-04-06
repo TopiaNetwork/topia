@@ -7,8 +7,8 @@ import (
 )
 
 type ConsensusConfiguration struct {
-	RoundDuration            time.Duration
-	EpochInterval            uint64 //the round number between two epochs
+	EpochInterval            uint64 //the height number between two epochs
+	DKGStartBeforeEpoch      uint64 //the starting height number of DKG before an epoch
 	CrptyType                tpcrtypes.CryptType
 	InitDKGPrivKey           string
 	InitDKGPartPubKeys       []string
@@ -17,8 +17,8 @@ type ConsensusConfiguration struct {
 
 func DefConsensusConfiguration() *ConsensusConfiguration {
 	return &ConsensusConfiguration{
-		RoundDuration:            500 * time.Millisecond,
 		EpochInterval:            172800,
+		DKGStartBeforeEpoch:      10,
 		CrptyType:                tpcrtypes.CryptType_Ed25519,
 		ExecutionPrepareInterval: 500 * time.Millisecond,
 	}

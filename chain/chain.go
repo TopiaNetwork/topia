@@ -40,3 +40,9 @@ type NodeInfo struct {
 	Role   NodeRole
 	State  NodeState
 }
+
+type EpochInfo struct {
+	Epoch          uint64
+	StartTimeStamp uint64
+	StartHeight    uint64
+}

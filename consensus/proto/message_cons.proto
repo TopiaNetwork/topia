@@ -30,7 +30,7 @@ message PreparePackedMessageExe {
   bytes  ChainID           = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version           = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch             = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round             = 4  [(gogoproto.jsontag) = "round"];
+  uint64 Round             = 4  [(gogoproto.jsontag) = "epoch"];
   bytes  Signature         = 5  [(gogoproto.jsontag) = "signature"];
   bytes  PubKey            = 6  [(gogoproto.jsontag) = "pubKey"];
   bytes  ParentBlockHash   = 7  [(gogoproto.jsontag) = "parentBlockHash"];
@@ -46,7 +46,7 @@ message PreparePackedMessageProp {
   bytes  ChainID               = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
+  uint64 Round                 = 4  [(gogoproto.jsontag) = "epoch"];
   bytes  Signature             = 5  [(gogoproto.jsontag) = "signature"];
   bytes  PubKey                = 6  [(gogoproto.jsontag) = "pubKey"];
   bytes  ParentBlockHash       = 7  [(gogoproto.jsontag) = "parentBlockHash"];
@@ -64,7 +64,7 @@ message ProposeMessage {
   bytes  ChainID               = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
+  uint64 Round                 = 4  [(gogoproto.jsontag) = "epoch"];
   bytes Signature              = 5  [(gogoproto.jsontag) = "signature"];
   bytes PubKey                 = 6  [(gogoproto.jsontag) = "pubKey"];
   uint64 StateVersion          = 7  [(gogoproto.jsontag) = "stateVersion"];
@@ -77,7 +77,7 @@ message ExeResultValidateReqMessage {
   bytes  ChainID               = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
+  uint64 Round                 = 4  [(gogoproto.jsontag) = "epoch"];
   bytes  Validator             = 5  [(gogoproto.jsontag) = "proposer"];
   bytes Signature              = 6  [(gogoproto.jsontag) = "signature"];
   bytes PubKey                 = 7  [(gogoproto.jsontag) = "pubKey"];
@@ -90,7 +90,7 @@ message ExeResultValidateRespMessage {
   bytes  ChainID                = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version                = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch                  = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round                  = 4  [(gogoproto.jsontag) = "round"];
+  uint64 Round                  = 4  [(gogoproto.jsontag) = "epoch"];
   bytes  Executor               = 5  [(gogoproto.jsontag) = "executor"];
   bytes Signature               = 6  [(gogoproto.jsontag) = "signature"];
   bytes PubKey                  = 7  [(gogoproto.jsontag) = "pubKey"];
@@ -103,7 +103,7 @@ message VoteMessage {
   bytes  ChainID      = 1 [(gogoproto.jsontag) = "chainID"];
   uint32 Version      = 2 [(gogoproto.jsontag) = "version"];
   uint64 Epoch        = 3 [(gogoproto.jsontag) = "epoch"];
-  uint64 Round        = 4 [(gogoproto.jsontag) = "round"];
+  uint64 Round        = 4 [(gogoproto.jsontag) = "epoch"];
   bytes Signature     = 5 [(gogoproto.jsontag) = "signature"];
   bytes PubKey        = 6 [(gogoproto.jsontag) = "pubKey"];
   uint64 StateVersion = 7 [(gogoproto.jsontag) = "stateVersion"];
@@ -114,7 +114,7 @@ message CommitMessage {
   bytes  ChainID      = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version      = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch        = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round        = 4  [(gogoproto.jsontag) = "round"];
+  uint64 Round        = 4  [(gogoproto.jsontag) = "epoch"];
   bytes Signature     = 5  [(gogoproto.jsontag) = "signature"];
   bytes PubKey        = 6  [(gogoproto.jsontag) = "pubKey"];
   uint64 StateVersion = 7 [(gogoproto.jsontag) = "stateVersion"];

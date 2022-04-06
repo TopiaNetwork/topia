@@ -8,6 +8,8 @@ import (
 type consensusServant interface {
 	ChainID() chain.ChainID
 
+	GetLatestEpoch() (*chain.EpochInfo, error)
+
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
 	GetAllConsensusNodeIDs() ([]string, error)

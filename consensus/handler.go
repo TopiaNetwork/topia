@@ -30,6 +30,8 @@ type ConsensusHandler interface {
 
 	ProcessCommit(msg *CommitMessage) error
 
+	ProcessBlockAdded(block *tpchaintypes.Block) error
+
 	ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error
 
 	ProcessDKGDeal(msg *DKGDealMessage) error
@@ -39,7 +41,7 @@ type ConsensusHandler interface {
 
 type consensusHandler struct {
 	log                     tplog.Logger
-	roundCh                 chan *RoundInfo
+	blockAddedCh            chan *tpchaintypes.Block
 	preprePackedMsgExeChan  chan *PreparePackedMessageExe
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
 	proposeMsgChan          chan *ProposeMessage
@@ -55,7 +57,7 @@ type consensusHandler struct {
 }
 
 func NewConsensusHandler(log tplog.Logger,
-	roundCh chan *RoundInfo,
+	blockAddedCh chan *tpchaintypes.Block,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
@@ -69,7 +71,7 @@ func NewConsensusHandler(log tplog.Logger,
 	exeScheduler execution.ExecutionScheduler) *consensusHandler {
 	return &consensusHandler{
 		log:                     log,
-		roundCh:                 roundCh,
+		blockAddedCh:            blockAddedCh,
 		preprePackedMsgExeChan:  preprePackedMsgExeChan,
 		preprePackedMsgPropChan: preprePackedMsgPropChan,
 		proposeMsgChan:          proposeMsgChan,
@@ -179,6 +181,12 @@ func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
 			return err
 		}
 	*/
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessBlockAdded(block *tpchaintypes.Block) error {
+	handler.blockAddedCh <- block
 
 	return nil
 }

@@ -14,7 +14,7 @@ message BlockHead {
   uint32 Version           = 2  [(gogoproto.jsontag) = "version"];
   uint64 Height            = 3  [(gogoproto.jsontag) = "height"];
   uint64 Epoch             = 4  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round             = 5  [(gogoproto.jsontag) = "round"];
+  uint64 Round             = 5  [(gogoproto.jsontag) = "epoch"];
   bytes  ParentBlockHash   = 6  [(gogoproto.jsontag) = "parentBlockHash"];
   bytes  Launcher          = 7  [(gogoproto.jsontag) = "launcher"];
   bytes  Proposer          = 8  [(gogoproto.jsontag) = "proposer"];

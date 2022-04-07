@@ -54,7 +54,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 		for {
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
-				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.ledger, perparePMExe.StateVersion)
+				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
 
 				latestBlock, err := compState.GetLatestBlock()
 				if err != nil {
@@ -270,7 +270,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return err
 	}
 
-	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.ledger, maxStateVer+1)
+	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, maxStateVer+1)
 
 	var packedTxs execution.PackedTxs
 

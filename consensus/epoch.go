@@ -14,6 +14,7 @@ import (
 
 type epochService struct {
 	log                 tplog.Logger
+	nodeID              string
 	blockAddedCh        chan *tpchaintypes.Block
 	epochInterval       uint64 //the height number between two epochs
 	dkgStartBeforeEpoch uint64 //the starting height number of DKG before an epoch
@@ -23,6 +24,7 @@ type epochService struct {
 }
 
 func newEpochService(log tplog.Logger,
+	nodeID string,
 	blockAddedCh chan *tpchaintypes.Block,
 	epochInterval uint64,
 	dkgStartBeforeEpoch uint64,
@@ -35,6 +37,7 @@ func newEpochService(log tplog.Logger,
 
 	return &epochService{
 		log:                 log,
+		nodeID:              nodeID,
 		blockAddedCh:        blockAddedCh,
 		epochInterval:       epochInterval,
 		dkgStartBeforeEpoch: dkgStartBeforeEpoch,
@@ -53,7 +56,7 @@ func (es *epochService) start(ctx context.Context) {
 				es.log.Errorf("Can't get max state version: %v", err)
 				continue
 			}
-			csStateEpoch := state.GetStateBuilder().CreateCompositionState(es.log, es.ledger, maxStateVer+1)
+			csStateEpoch := state.GetStateBuilder().CreateCompositionState(es.log, es.nodeID, es.ledger, maxStateVer+1)
 
 			epochInfo, err := csStateEpoch.GetLatestEpoch()
 			if err != nil {

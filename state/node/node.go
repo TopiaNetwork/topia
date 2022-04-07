@@ -23,9 +23,13 @@ type NodeState interface {
 
 	GetNodeWeight(nodeID string) (uint64, error)
 
+	GetDKGPartPubKeysForVerify() (map[string]string, error) //nodeID->DKGPartPubKey
+
 	AddNode(nodeInfo *chain.NodeInfo) error
 
 	UpdateWeight(nodeID string, weight uint64) error
+
+	UpdateDKGPartPubKey(nodeID string, pubKey string) error
 }
 
 type nodeStateMetaInfo struct {
@@ -203,6 +207,29 @@ func (ns *nodeState) AddNode(nodeInfo *chain.NodeInfo) error {
 	return ns.Put(StateStore_Name_Node, []byte(nodeInfo.NodeID), nodeMetaInfoBytes)
 }
 
+func (ns *nodeState) GetDKGPartPubKeysForVerify() (map[string]string, error) {
+	dkgPartKeyPubs := make(map[string]string)
+
+	propNodeInfos, err := ns.GetAllActiveProposers()
+	if err != nil {
+		return nil, err
+	}
+	for _, nodeInfo := range propNodeInfos {
+		dkgPartKeyPubs[nodeInfo.NodeID] = nodeInfo.DKGPartPubKey
+	}
+
+	valNodeInfos, err := ns.GetAllActiveValidators()
+	if err != nil {
+		return nil, err
+	}
+	for _, nodeInfo := range valNodeInfos {
+		dkgPartKeyPubs[nodeInfo.NodeID] = nodeInfo.DKGPartPubKey
+	}
+
+	return dkgPartKeyPubs, nil
+
+}
+
 func (ns *nodeState) UpdateWeight(nodeID string, weight uint64) error {
 	nodeMetaInfoBytes, _, err := ns.GetState(StateStore_Name_Node, []byte(nodeID))
 	if err != nil {
@@ -226,15 +253,52 @@ func (ns *nodeState) UpdateWeight(nodeID string, weight uint64) error {
 			case chain.NodeRole_Executor:
 				return ns.updateActiveExecutorWeight(nodeID, weight)
 			case chain.NodeRole_Proposer:
-				return ns.UpdateActiveProposerWeight(nodeID, weight)
+				return ns.updateActiveProposerWeight(nodeID, weight)
 			case chain.NodeRole_Validator:
-				return ns.UpdateActiveValidatorWeight(nodeID, weight)
+				return ns.updateActiveValidatorWeight(nodeID, weight)
 			default:
 				return fmt.Errorf("Invalid node role from %s", nodeID)
 			}
 		}
 	case chain.NodeState_Inactive:
-		return ns.UpdateInactiveNodeWeight(nodeID, weight)
+		return ns.updateInactiveNodeWeight(nodeID, weight)
+	default:
+		return fmt.Errorf("Invalid node state from %s", nodeID)
+	}
+}
+
+func (ns *nodeState) UpdateDKGPartPubKey(nodeID string, pubKey string) error {
+	nodeMetaInfoBytes, _, err := ns.GetState(StateStore_Name_Node, []byte(nodeID))
+	if err != nil {
+		return err
+	}
+
+	if nodeMetaInfoBytes == nil { //means that there is no node info
+		return nil
+	}
+
+	var nodeMetaInfo nodeStateMetaInfo
+	err = json.Unmarshal(nodeMetaInfoBytes, &nodeMetaInfo)
+	if err != nil {
+		return err
+	}
+
+	switch nodeMetaInfo.State {
+	case chain.NodeState_Active:
+		{
+			switch nodeMetaInfo.Role {
+			case chain.NodeRole_Executor:
+				return ns.updateActiveExecutorDKGPartPubKey(nodeID, pubKey)
+			case chain.NodeRole_Proposer:
+				return ns.updateActiveProposerDKGPartPubKey(nodeID, pubKey)
+			case chain.NodeRole_Validator:
+				return ns.updateActiveValidatorDKGPartPubKey(nodeID, pubKey)
+			default:
+				return fmt.Errorf("Invalid node role from %s", nodeID)
+			}
+		}
+	case chain.NodeState_Inactive:
+		return ns.updateInactiveNodeDKGPartPubKey(nodeID, pubKey)
 	default:
 		return fmt.Errorf("Invalid node state from %s", nodeID)
 	}

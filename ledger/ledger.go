@@ -76,8 +76,8 @@ func (l *ledger) IsGenesisState() bool {
 		l.log.Panicf("Backend state db reads iterator err: %v", err.Error())
 	}
 	if it.Next() {
-		return true
+		return false
 	}
 
-	return false
+	return true
 }

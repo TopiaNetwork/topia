@@ -37,6 +37,7 @@ func newStateProof(nodes tplgcmm.DBReadWriter, values tplgcmm.DBReadWriter) *sta
 	hasher := sha256.New()
 	smTree := smt.NewSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, hasher)
 	stateIt, err := values.Iterator(nil, nil)
+	defer stateIt.Close()
 	if err != nil {
 		return nil
 	}

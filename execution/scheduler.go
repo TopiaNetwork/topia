@@ -54,6 +54,7 @@ type ExecutionScheduler interface {
 }
 
 type executionScheduler struct {
+	nodeID           string
 	log              tplog.Logger
 	manager          *executionManager
 	executeMutex     trylock.TryLocker
@@ -62,9 +63,10 @@ type executionScheduler struct {
 	exePackedTxsList *list.List
 }
 
-func NewExecutionScheduler(log tplog.Logger) *executionScheduler {
+func NewExecutionScheduler(nodeID string, log tplog.Logger) *executionScheduler {
 	exeLog := tplog.CreateModuleLogger(logcomm.InfoLevel, MOD_NAME, log)
 	return &executionScheduler{
+		nodeID:           nodeID,
 		log:              exeLog,
 		manager:          newExecutionManager(),
 		executeMutex:     trylock.New(),
@@ -316,7 +318,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 			return errCMMBlock
 		}
 
-		eventhub.GetEventHub().Trig(ctx, eventhub.EventName_BlockAdded, block)
+		eventhub.GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 
 		scheduler.exePackedTxsList.Remove(exeTxsItem)
 

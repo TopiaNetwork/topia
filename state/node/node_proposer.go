@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 
 	"github.com/TopiaNetwork/topia/chain"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
@@ -26,11 +27,15 @@ type NodeProposerState interface {
 
 	GetActiveProposersTotalWeight() (uint64, error)
 
+	GetAllActiveProposers() ([]*chain.NodeInfo, error)
+
 	AddActiveProposer(nodeInfo *chain.NodeInfo) error
 
-	UpdateActiveProposerWeight(nodeID string, weight uint64) error
+	updateActiveProposerWeight(nodeID string, weight uint64) error
 
-	RemoveActiveProposer(nodeID string) error
+	updateActiveProposerDKGPartPubKey(nodeID string, pubKey string) error
+
+	removeActiveProposer(nodeID string) error
 }
 
 type nodeProposerState struct {
@@ -56,6 +61,10 @@ func (ns *nodeProposerState) GetActiveProposerIDs() ([]string, error) {
 	totolAEIdsBytes, _, err := ns.GetState(StateStore_Name_Prop, []byte(TotalActiveProposerNodeIDs_Key))
 	if err != nil {
 		return nil, err
+	}
+
+	if totolAEIdsBytes == nil {
+		return nil, nil
 	}
 
 	var nodeAEIDs []string
@@ -84,15 +93,46 @@ func (ns *nodeProposerState) GetActiveProposersTotalWeight() (uint64, error) {
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
 }
 
+func (ns *nodeProposerState) GetAllActiveProposers() ([]*chain.NodeInfo, error) {
+	keys, vals, _, err := ns.GetAllState(StateStore_Name_Prop)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) != len(vals) {
+		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
+	}
+
+	var nodes []*chain.NodeInfo
+	for i, val := range vals {
+		if string(keys[i]) == TotalActiveProposerNodeIDs_Key || string(keys[i]) == TotalActiveProposerWeight_Key {
+			continue
+		}
+
+		var nodeInfo chain.NodeInfo
+		err = json.Unmarshal(val, &nodeInfo)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, &nodeInfo)
+	}
+
+	return nodes, nil
+}
+
 func (ns *nodeProposerState) AddActiveProposer(nodeInfo *chain.NodeInfo) error {
 	return addNode(ns.StateStore, StateStore_Name_Prop, TotalActiveProposerNodeIDs_Key, TotalActiveProposerWeight_Key, nodeInfo)
 }
 
-func (ns *nodeProposerState) UpdateActiveProposerWeight(nodeID string, weight uint64) error {
+func (ns *nodeProposerState) updateActiveProposerWeight(nodeID string, weight uint64) error {
 	return uppdateWeight(ns.StateStore, StateStore_Name_Prop, nodeID, TotalActiveProposerWeight_Key, weight)
 }
 
-func (ns *nodeProposerState) RemoveActiveProposer(nodeID string) error {
+func (ns *nodeProposerState) updateActiveProposerDKGPartPubKey(nodeID string, pubKey string) error {
+	return uppdateDKGPartPubKey(ns.StateStore, StateStore_Name_Prop, nodeID, pubKey)
+}
+
+func (ns *nodeProposerState) removeActiveProposer(nodeID string) error {
 	nodeInfo, err := ns.GetActiveProposer(nodeID)
 	if err != nil {
 		return nil

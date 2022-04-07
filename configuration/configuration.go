@@ -1,6 +1,9 @@
 package configuration
 
-import "sync"
+import (
+	"os"
+	"sync"
+)
 
 var config *Configuration
 var once sync.Once
@@ -17,9 +20,10 @@ type Configuration struct {
 func GetConfiguration() *Configuration {
 	once.Do(func() {
 		genData := new(GenesisData)
-		err := genData.Load("./genesis.json")
+		err := genData.Load("genesis.json")
 		if err != nil {
-			panic("Load genesis data err: " + err.Error())
+			curDir, _ := os.Getwd()
+			panic("Load genesis data err: " + err.Error() + ";Current Dir: " + curDir)
 		}
 		config = &Configuration{
 			ChainConfig: DefChainConfiguration(),

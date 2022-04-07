@@ -51,6 +51,8 @@ type CompositionStateReadonly interface {
 
 	GetNodeWeight(nodeID string) (uint64, error)
 
+	GetDKGPartPubKeysForVerify() (map[string]string, error)
+
 	GetActiveExecutorsTotalWeight() (uint64, error)
 
 	GetActiveProposersTotalWeight() (uint64, error)

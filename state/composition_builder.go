@@ -20,7 +20,9 @@ const Wait_StateStore_Time = 50 //ms
 
 func GetStateBuilder() *CompositionStateBuilder {
 	once.Do(func() {
-		stateBuilder = &CompositionStateBuilder{}
+		stateBuilder = &CompositionStateBuilder{
+			compStateMap: make(map[string]map[uint64]CompositionState),
+		}
 	})
 
 	return stateBuilder
@@ -28,20 +30,26 @@ func GetStateBuilder() *CompositionStateBuilder {
 
 type CompositionStateBuilder struct {
 	sync         sync.RWMutex
-	compStateMap map[uint64]CompositionState //StateVersion->CompositionState
+	compStateMap map[string]map[uint64]CompositionState //nodeID->map[uint64]CompositionState(StateVersion->CompositionState)
 }
 
-func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
+func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger, nodeID string, ledger ledger.Ledger, stateVersion uint64) CompositionState {
 	builder.sync.Lock()
 	defer builder.sync.Unlock()
 
-	if compState, ok := builder.compStateMap[stateVersion]; ok {
+	compStateVerMap, ok := builder.compStateMap[nodeID]
+	if !ok {
+		compStateVerMap = make(map[uint64]CompositionState)
+		builder.compStateMap[nodeID] = compStateVerMap
+	}
+
+	if compState, ok := compStateVerMap[stateVersion]; ok {
 		log.Infof("Exist CompositionState for stateVersion %d", stateVersion)
 		return compState
 	}
 
 	if stateVersion > 1 {
-		compState, ok := builder.compStateMap[stateVersion-1]
+		compState, ok := compStateVerMap[stateVersion-1]
 		if ok {
 			i := 1
 			for ; compState.PendingStateStore() > 0 && i <= 3; i++ {
@@ -53,22 +61,27 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 				return nil
 			}
 
-			delete(builder.compStateMap, stateVersion-1)
+			delete(compStateVerMap, stateVersion-1)
 		}
 	}
 
 	compState := CreateCompositionState(log, ledger)
 
-	builder.compStateMap[stateVersion] = compState
+	compStateVerMap[stateVersion] = compState
 
 	return compState
 }
 
-func (builder *CompositionStateBuilder) CompositionState(stateVersion uint64) CompositionState {
+func (builder *CompositionStateBuilder) CompositionState(nodeID string, stateVersion uint64) CompositionState {
 	builder.sync.RLock()
 	defer builder.sync.RUnlock()
 
-	if compState, ok := builder.compStateMap[stateVersion]; ok {
+	compStateVerMap, ok := builder.compStateMap[nodeID]
+	if !ok {
+		return nil
+	}
+
+	if compState, ok := compStateVerMap[stateVersion]; ok {
 		return compState
 	}
 

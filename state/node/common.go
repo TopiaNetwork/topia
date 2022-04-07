@@ -135,12 +135,28 @@ func uppdateWeight(stateStore tplgss.StateStore, name string, nodeID string, tot
 		return err
 	}
 
-	err = stateStore.Put(name, []byte(nodeInfo.NodeID), nodeInfoBytes)
+	err = stateStore.Update(name, []byte(nodeInfo.NodeID), nodeInfoBytes)
 	if err != nil {
 		return err
 	}
 
 	return updateTotalWeight(stateStore, name, totalWeightKey, deltaWeight)
+}
+
+func uppdateDKGPartPubKey(stateStore tplgss.StateStore, name string, nodeID string, pubKey string) error {
+	nodeInfo, err := getNode(stateStore, name, nodeID)
+	if err != nil {
+		return err
+	}
+
+	nodeInfo.DKGPartPubKey = pubKey
+
+	nodeInfoBytes, err := json.Marshal(nodeInfo)
+	if err != nil {
+		return err
+	}
+
+	return stateStore.Update(name, []byte(nodeInfo.NodeID), nodeInfoBytes)
 }
 
 func removeNode(stateStore tplgss.StateStore, name string, totalNodeIDsKey string, toalWeightKey string, nodeID string, wieght uint64) error {

@@ -16,32 +16,32 @@ type remoteTxs struct {
 	ActivationIntervals map[string]time.Time
 }
 
-func (pool *transactionPool) SaveRemoteTxs() error {
+func (pool *transactionPool) SaveRemoteTxs(category basic.TransactionCategory) error {
 
 	var remotetxs = &remoteTxs{}
-	remotetxs.Txs = pool.allTxsForLook.remotes
+	remotetxs.Txs = pool.allTxsForLook[category].remotes
 	remotetxs.ActivationIntervals = pool.ActivationIntervals.activ
 
 	remotes, err := json.Marshal(remotetxs)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(pool.config.PathRemote, remotes, 0664)
+	err = ioutil.WriteFile(pool.config.PathRemote[category], remotes, 0664)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (pool *transactionPool) loadRemote(nofile bool, path string) {
+func (pool *transactionPool) loadRemote(category basic.TransactionCategory, nofile bool, path string) {
 	if !nofile && path != "" {
-		if err := pool.LoadRemoteTxs(); err != nil {
+		if err := pool.LoadRemoteTxs(category); err != nil {
 			pool.log.Warnf("Failed to load remote transactions", "err", err)
 		}
 	}
 }
-func (pool *transactionPool) LoadRemoteTxs() error {
-	data, err := ioutil.ReadFile(pool.config.PathRemote)
+func (pool *transactionPool) LoadRemoteTxs(category basic.TransactionCategory) error {
+	data, err := ioutil.ReadFile(pool.config.PathRemote[category])
 	if err != nil {
 		return nil
 	}

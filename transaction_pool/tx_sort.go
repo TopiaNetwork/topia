@@ -2,7 +2,6 @@ package transactionpool
 
 import (
 	"container/heap"
-	"encoding/hex"
 	"math"
 	"math/big"
 	"sort"
@@ -64,7 +63,7 @@ func (m *txSortedMap) Get(nonce uint64) *basic.Transaction {
 // index. If a transaction already exists with the same nonce, it's overwritten.
 func (m *txSortedMap) Put(tx *basic.Transaction) {
 
-	nonce := GetNonce(tx)
+	nonce := tx.Head.Nonce
 	if m.items[nonce] == nil {
 		heap.Push(m.index, nonce)
 	}
@@ -264,7 +263,7 @@ func newTxList(strict bool) *txList {
 func (l *txList) Overlaps(tx *basic.Transaction) bool {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	Nonce := GetNonce(tx)
+	Nonce := tx.Head.Nonce
 	return l.txs.Get(Nonce) != nil
 }
 
@@ -277,11 +276,14 @@ func (l *txList) Add(tx *basic.Transaction) (bool, *basic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	// If there's an older better transaction, abort
-	Nonce := GetNonce(tx)
-
+	Nonce := tx.Head.Nonce
+	//fmt.Println("Nonce", Nonce)
 	old := l.txs.Get(Nonce)
+	//fmt.Println("old:", old)
 	if old != nil {
-		if GasPrice(old) >= GasPrice(tx) {
+		gaspriceOld := GasPrice(old)
+		gaspriceTx := GasPrice(tx)
+		if gaspriceOld >= gaspriceTx && old.Head.Nonce == tx.Head.Nonce {
 			return false, nil
 		}
 	}
@@ -341,14 +343,14 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*basic.Transacti
 	if l.strict {
 		lowest := uint64(math.MaxUint64)
 		for _, tx := range removed {
-			Nonce := GetNonce(tx)
+			Nonce := tx.Head.Nonce
 			if nonce := Nonce; lowest > nonce {
 				lowest = nonce
 			}
 		}
 
 		invalids = l.txs.filter(func(tx *basic.Transaction) bool {
-			Nonce := GetNonce(tx)
+			Nonce := tx.Head.Nonce
 			return Nonce > lowest
 		})
 	}
@@ -371,7 +373,7 @@ func (l *txList) Remove(tx *basic.Transaction) (bool, []*basic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	// Remove the transaction from the set
-	Nonce := GetNonce(tx)
+	Nonce := tx.Head.Nonce
 	nonce := Nonce
 	//fmt.Println("txList) Remove(tx),nonce:", nonce)
 	if removed := l.txs.Remove(nonce); !removed {
@@ -381,7 +383,7 @@ func (l *txList) Remove(tx *basic.Transaction) (bool, []*basic.Transaction) {
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
 		return true, l.txs.Filter(func(tx *basic.Transaction) bool {
-			Noncei := GetNonce(tx)
+			Noncei := tx.Head.Nonce
 			return Noncei > nonce
 		})
 	}
@@ -432,6 +434,13 @@ func (l *txList) LastElement() *basic.Transaction {
 	return l.txs.LastElement()
 }
 
+func newPendingsTxs() map[basic.TransactionCategory]*pendingTxs {
+	pendingstxs := make(map[basic.TransactionCategory]*pendingTxs, 0)
+	pendingstxs[basic.TransactionCategory_Topia_Universal] = newPendingTxs()
+	pendingstxs[basic.TransactionCategory_Eth] = newPendingTxs()
+	return pendingstxs
+}
+
 type pendingTxs struct {
 	Mu     sync.RWMutex
 	accTxs map[tpcrtypes.Address]*txList
@@ -442,6 +451,13 @@ func newPendingTxs() *pendingTxs {
 		accTxs: make(map[tpcrtypes.Address]*txList),
 	}
 	return txs
+}
+
+func newQueuesTxs() map[basic.TransactionCategory]*queueTxs {
+	queuestxs := make(map[basic.TransactionCategory]*queueTxs, 0)
+	queuestxs[basic.TransactionCategory_Topia_Universal] = newQueueTxs()
+	queuestxs[basic.TransactionCategory_Eth] = newQueueTxs()
+	return queuestxs
 }
 
 type queueTxs struct {
@@ -469,13 +485,13 @@ func newActivationInterval() *activationInterval {
 }
 
 type accountSet struct {
-	accounts map[tpcrtypes.Address]uint8
+	accounts map[tpcrtypes.Address]struct{}
 	cache    *[]tpcrtypes.Address
 }
 
 func newAccountSet(addrs ...tpcrtypes.Address) *accountSet {
 	as := &accountSet{
-		accounts: make(map[tpcrtypes.Address]uint8),
+		accounts: make(map[tpcrtypes.Address]struct{}),
 	}
 	for _, addr := range addrs {
 		as.add(addr)
@@ -489,7 +505,7 @@ func (accSet *accountSet) contains(addr tpcrtypes.Address) bool {
 	return exist
 }
 func (accSet *accountSet) containsTx(tx *basic.Transaction) bool {
-	addr := tpcrtypes.Address(hex.EncodeToString(tx.Head.FromAddr))
+	addr := tpcrtypes.Address(tx.Head.FromAddr)
 	return accSet.contains(addr)
 }
 
@@ -501,16 +517,16 @@ func (accSet *accountSet) len() int {
 }
 
 func (accSet *accountSet) add(addr tpcrtypes.Address) {
-	accSet.accounts[addr] = 1
+	accSet.accounts[addr] = struct{}{}
 	accSet.cache = nil
 }
 func (accSet *accountSet) addTx(tx *basic.Transaction) {
-	addr := tpcrtypes.Address(hex.EncodeToString(tx.Head.FromAddr))
+	addr := tpcrtypes.Address(tx.Head.FromAddr)
 	accSet.add(addr)
 }
 func (accSet *accountSet) merge(other *accountSet) {
 	for addr := range other.accounts {
-		accSet.accounts[addr] = 1
+		accSet.accounts[addr] = struct{}{}
 	}
 	accSet.cache = nil
 }
@@ -683,8 +699,8 @@ func (h *priceHeap) Less(i, j int) bool {
 		return false
 	default:
 		var Noncei, Noncej uint64
-		Noncei = GetNonce(h.list[i])
-		Noncej = GetNonce(h.list[j])
+		Noncei = h.list[i].Head.Nonce
+		Noncej = h.list[j].Head.Nonce
 		return Noncei > Noncej
 	}
 }
@@ -711,6 +727,17 @@ func (h *priceHeap) Pop() interface{} {
 	old[n-1] = nil
 	h.list = old[0 : n-1]
 	return x
+}
+
+type txSortedList struct {
+	Pricedlist map[basic.TransactionCategory]*txPricedList
+	//add other sorted list
+}
+
+func newTxSortedList(all *txLookup) *txSortedList {
+	txSorted := &txSortedList{Pricedlist: make(map[basic.TransactionCategory]*txPricedList, 0)}
+	txSorted.Pricedlist[basic.TransactionCategory_Topia_Universal] = newTxPricedList(all)
+	return txSorted
 }
 
 type txPricedList struct {
@@ -829,8 +856,8 @@ type TxByNonce []*basic.Transaction
 func (s TxByNonce) Len() int { return len(s) }
 func (s TxByNonce) Less(i, j int) bool {
 	var Noncei, Noncej uint64
-	Noncei = GetNonce(s[i])
-	Noncej = GetNonce(s[j])
+	Noncei = s[i].Head.Nonce
+	Noncej = s[j].Head.Nonce
 	return Noncei < Noncej
 }
 func (s TxByNonce) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
@@ -943,7 +970,7 @@ func (t *TxsByPriceAndNonce) Peek() *basic.Transaction {
 
 // Shift replaces the current best head with the next one from the same account.
 func (t *TxsByPriceAndNonce) Shift() {
-	acc := tpcrtypes.Address(hex.EncodeToString(t.heads[0].Head.FromAddr))
+	acc := tpcrtypes.Address(t.heads[0].Head.FromAddr)
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
 		wrapped := txs[0]
 		t.heads[0], t.txs[acc] = wrapped, txs[1:]

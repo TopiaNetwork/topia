@@ -1,7 +1,6 @@
 package transactionpool
 
 import (
-	"encoding/hex"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"math"
 
@@ -64,7 +63,7 @@ func (pool *transactionPool) scheduleReorgLoop() {
 		case tx := <-pool.chanQueueTxEvent:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
 			// request one later if they want the events sent.
-			addr := tpcrtypes.Address(hex.EncodeToString(tx.Head.FromAddr))
+			addr := tpcrtypes.Address(tx.Head.FromAddr)
 			if _, ok := queuedEvents[addr]; !ok {
 				queuedEvents[addr] = newTxSortedMap()
 			}
@@ -87,74 +86,77 @@ func (pool *transactionPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet, events map[tpcrtypes.Address]*txSortedMap) {
 	defer close(done)
-	var replaceAddrs []tpcrtypes.Address
-	if dirtyAccounts != nil && reset == nil {
-		// Only dirty accounts need to be promoted, unless we're resetting.
-		// For resets, all addresses in the tx queue will be promoted and
-		// the flatten operation can be avoided.
-		replaceAddrs = dirtyAccounts.flatten()
-	}
-	pool.pending.Mu.Lock()
-	pool.queue.Mu.Lock()
-	if reset != nil {
-		// Reset from the old head to the new, rescheduling any reorged transactions
-		pool.Reset(reset.oldHead, reset.newHead)
+	for category, _ := range pool.pendings {
+		var replaceAddrs []tpcrtypes.Address
+		if dirtyAccounts != nil && reset == nil {
+			// Only dirty accounts need to be promoted, unless we're resetting.
+			// For resets, all addresses in the tx queue will be promoted and
+			// the flatten operation can be avoided.
+			replaceAddrs = dirtyAccounts.flatten()
+		}
 
-		// Nonces were reset, discard any events that became stale
-		for addr := range events {
-			events[addr].Forward(pool.curState.GetNonce(addr))
-			if events[addr].Len() == 0 {
-				delete(events, addr)
+		pool.pendings[category].Mu.Lock()
+		pool.queues[category].Mu.Lock()
+		if reset != nil {
+			// Reset from the old head to the new, rescheduling any reorged transactions
+			pool.Reset(reset.oldHead, reset.newHead)
+
+			// Nonces were reset, discard any events that became stale
+			for addr := range events {
+				events[addr].Forward(pool.curState.GetNonce(addr))
+				if events[addr].Len() == 0 {
+					delete(events, addr)
+				}
+			}
+			// Reset needs promote for all addresses
+			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues[category].accTxs))
+			for addr := range pool.queues[category].accTxs {
+				replaceAddrs = append(replaceAddrs, addr)
 			}
 		}
-		// Reset needs promote for all addresses
-		replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queue.accTxs))
-		for addr := range pool.queue.accTxs {
-			replaceAddrs = append(replaceAddrs, addr)
-		}
-	}
-	// Check for pending transactions for every account that sent new ones
-	promoted := pool.replaceExecutables(replaceAddrs)
+		// Check for pending transactions for every account that sent new ones
+		promoted := pool.replaceExecutables(category, replaceAddrs)
 
-	// If a new block appeared, validate the pool of pending transactions. This will
-	// remove any transaction that has been included in the block or was invalidated
-	// because of another transaction (e.g. higher gas price).
-	if reset != nil {
-		pool.demoteUnexecutables() //demote transactions
-		if reset.newHead != nil {
-			pool.sortedByPriced.Reheap()
+		// If a new block appeared, validate the pool of pending transactions. This will
+		// remove any transaction that has been included in the block or was invalidated
+		// because of another transaction (e.g. higher gas price).
+		if reset != nil {
+			pool.demoteUnexecutables(category) //demote transactions
+			if reset.newHead != nil {
+				pool.sortedLists.Pricedlist[category].Reheap()
+			}
+			// Update all accounts to the latest known pending nonce
+			nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings[category].accTxs))
+			for addr, list := range pool.pendings[category].accTxs {
+				highestPending := list.LastElement()
+				Noncei := highestPending.Head.Nonce
+				nonces[addr] = Noncei + 1
+			}
 		}
-		// Update all accounts to the latest known pending nonce
-		nonces := make(map[tpcrtypes.Address]uint64, len(pool.pending.accTxs))
-		for addr, list := range pool.pending.accTxs {
-			highestPending := list.LastElement()
-			Noncei := GetNonce(highestPending)
-			nonces[addr] = Noncei + 1
-		}
-	}
-	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
-	pool.truncatePending()
-	pool.truncateQueue()
+		// Ensure pool.queue and pool.pending sizes stay within the configured limits.
+		pool.truncatePending(category)
+		pool.truncateQueue(category)
 
-	pool.changesSinceReorg = 0 // Reset change counter
-	pool.pending.Mu.Unlock()
-	pool.queue.Mu.Unlock()
+		pool.changesSinceReorg = 0 // Reset change counter
+		pool.pendings[category].Mu.Unlock()
+		pool.queues[category].Mu.Unlock()
 
-	// Notify subsystems for newly added transactions
-	for _, tx := range promoted {
-		addr := tpcrtypes.Address(hex.EncodeToString(tx.Head.FromAddr))
-		if _, ok := events[addr]; !ok {
-			events[addr] = newTxSortedMap()
+		// Notify subsystems for newly added transactions
+		for _, tx := range promoted {
+			addr := tpcrtypes.Address(tx.Head.FromAddr)
+			if _, ok := events[addr]; !ok {
+				events[addr] = newTxSortedMap()
+			}
+			events[addr].Put(tx)
 		}
-		events[addr].Put(tx)
-	}
-	if len(events) > 0 {
-		var txs []*basic.Transaction
-		for _, set := range events {
-			txs = append(txs, set.Flatten()...)
-		}
-		for _, tx := range txs {
-			pool.BroadCastTx(tx)
+		if len(events) > 0 {
+			var txs []*basic.Transaction
+			for _, set := range events {
+				txs = append(txs, set.Flatten()...)
+			}
+			for _, tx := range txs {
+				pool.BroadCastTx(tx)
+			}
 		}
 	}
 }
@@ -174,7 +176,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 	//If the old header and the new header do not meet certain conditions,
 	//part of the transaction needs to be injected back into the transaction pool
 	var reInject []*basic.Transaction
-	if oldHead != nil && types.BlockHash(hex.EncodeToString(oldHead.Hash)) != types.BlockHash(hex.EncodeToString(newHead.Hash)) {
+	if oldHead != nil && types.BlockHash(oldHead.Hash) != types.BlockHash(newHead.Hash) {
 
 		oldNum := oldHead.GetHeight()
 		newNum := newHead.GetHeight()
@@ -189,22 +191,22 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 			//The reorganization looks shallow enough to put all the transactions into memory
 			var discarded, included []*basic.Transaction
 			var (
-				rem = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(oldHead.Hash)), oldHead.Height)
-				add = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(newHead.Hash)), newHead.Height)
+				rem = pool.query.GetBlock(types.BlockHash(oldHead.Hash), oldHead.Height)
+				add = pool.query.GetBlock(types.BlockHash(newHead.Hash), newHead.Height)
 			)
 			if rem == nil {
 
 				if newNum >= oldNum {
 
 					pool.log.Warnf("Transcation pool reset with missing oldhead",
-						"old", types.BlockHash(hex.EncodeToString(oldHead.Hash)),
-						"new", types.BlockHash(hex.EncodeToString(newHead.Hash)))
+						"old", types.BlockHash(oldHead.Hash),
+						"new", types.BlockHash(newHead.Hash))
 					return nil
 				}
 
 				pool.log.Debugf("Skipping transaction reset caused by setHead",
-					"old", types.BlockHash(hex.EncodeToString(oldHead.Hash)), "oldnum", oldNum,
-					"new", types.BlockHash(hex.EncodeToString(newHead.Hash)), "newnum", newNum)
+					"old", types.BlockHash(oldHead.Hash), "oldnum", oldNum,
+					"new", types.BlockHash(newHead.Hash), "newnum", newNum)
 			} else {
 
 				for rem.Head.Height > add.Head.Height {
@@ -216,9 +218,9 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 							discarded = append(discarded, txType)
 						}
 					}
-					if rem = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(rem.Head.ParentBlockHash)), rem.Head.Height-1); rem == nil {
+					if rem = pool.query.GetBlock(types.BlockHash(rem.Head.ParentBlockHash), rem.Head.Height-1); rem == nil {
 						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldHead.Height,
-							"hash", types.BlockHash(hex.EncodeToString(oldHead.Hash)))
+							"hash", types.BlockHash(oldHead.Hash))
 						return nil
 					}
 				}
@@ -231,14 +233,14 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 							included = append(included, txType)
 						}
 					}
-					if add = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(add.Head.ParentBlockHash)), add.Head.Height-1); add == nil {
+					if add = pool.query.GetBlock(types.BlockHash(add.Head.ParentBlockHash), add.Head.Height-1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newHead.Height,
-							"hash", types.BlockHash(hex.EncodeToString(newHead.Hash)))
+							"hash", types.BlockHash(newHead.Hash))
 						return nil
 					}
 				}
 
-				for types.BlockHash(hex.EncodeToString(rem.Head.Hash)) != types.BlockHash(hex.EncodeToString(add.Head.Hash)) {
+				for types.BlockHash(rem.Head.Hash) != types.BlockHash(add.Head.Hash) {
 					for _, tx := range rem.Data.Txs {
 						var txType *basic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
@@ -246,9 +248,9 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 							discarded = append(discarded, txType)
 						}
 					}
-					if rem = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(rem.Head.ParentBlockHash)), rem.Head.Height-1); rem == nil {
+					if rem = pool.query.GetBlock(types.BlockHash(rem.Head.ParentBlockHash), rem.Head.Height-1); rem == nil {
 						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldHead.Height,
-							"hash", types.BlockHash(hex.EncodeToString(oldHead.Hash)))
+							"hash", types.BlockHash(oldHead.Hash))
 						return nil
 					}
 					for _, tx := range add.Data.Txs {
@@ -258,9 +260,9 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 							included = append(included, txType)
 						}
 					}
-					if add = pool.query.GetBlock(types.BlockHash(hex.EncodeToString(add.Head.ParentBlockHash)), add.Head.Height-1); add == nil {
+					if add = pool.query.GetBlock(types.BlockHash(add.Head.ParentBlockHash), add.Head.Height-1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newHead.Height,
-							"hash", types.BlockHash(hex.EncodeToString(newHead.Hash)))
+							"hash", types.BlockHash(newHead.Hash))
 						return nil
 					}
 				}
@@ -275,7 +277,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 		newHead = pool.query.CurrentBlock().GetHead()
 	}
 
-	stateDb, err := pool.query.StateAt(types.BlockHash(hex.EncodeToString(newHead.Hash)))
+	stateDb, err := pool.query.StateAt(types.BlockHash(newHead.Hash))
 	if err != nil {
 		pool.log.Errorf("Failed to reset txPool state", "err", err)
 		return nil

@@ -2,14 +2,14 @@ package consensus
 
 import (
 	"context"
+	"time"
+
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
-	"github.com/TopiaNetwork/topia/state"
-	"time"
-
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/state"
 )
 
 type epochService struct {
@@ -63,7 +63,17 @@ func (es *epochService) start(ctx context.Context) {
 
 			deltaH := int(newBh.Head.Height) - int(epochInfo.StartHeight)
 			if deltaH == int(es.epochInterval)-int(es.dkgStartBeforeEpoch) {
-				es.dkgExchange.start(epochInfo.Epoch + 1)
+				dkgExState := es.dkgExchange.getDKGState()
+				if dkgExState != DKGExchangeState_IDLE {
+					es.log.Warnf("Unfinished dkg exchange is going on an new dkg can't start, current state: %s", dkgExState.String)
+				} else {
+					err = es.dkgExchange.updateDKGPartPubKeys(csStateEpoch)
+					if err != nil {
+						es.log.Errorf("Update DKG exchange part pub keys err: %v", err)
+						continue
+					}
+					es.dkgExchange.start(epochInfo.Epoch + 1)
+				}
 			} else if deltaH == int(es.epochInterval) {
 				csStateEpoch.SetLatestEpoch(&chain.EpochInfo{
 					Epoch:          epochInfo.Epoch + 1,
@@ -75,6 +85,7 @@ func (es *epochService) start(ctx context.Context) {
 					es.log.Warnf("Current epoch %d DKG unfinished and still use the old, height %d", epochInfo.Epoch, newBh.Head.Height)
 				} else {
 					es.dkgExchange.notifyUpdater()
+					es.dkgExchange.updateDKGState(DKGExchangeState_IDLE)
 				}
 			}
 		case <-ctx.Done():

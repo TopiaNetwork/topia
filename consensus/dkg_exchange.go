@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	dkg "github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
 	vss "github.com/TopiaNetwork/kyber/v3/share/vss/pedersen"
@@ -18,45 +19,101 @@ const (
 	DealRespMsgChannel_Size = 150
 )
 
+type DKGExchangeState byte
+
+const (
+	DKGExchangeState_Unknown DKGExchangeState = iota
+	DKGExchangeState_IDLE
+	DKGExchangeState_Exchanging_PartPubKey //Haven't used it at present
+	DKGExchangeState_Exchanging_Deal
+	DKGExchangeState_Finished
+)
+
+type dkgExchangeData struct {
+	initDKGPrivKey     atomic.Value //string
+	initDKGPartPubKeys atomic.Value //[]string
+	State              atomic.Value //DKGExchangeState
+}
+
 type dkgExchange struct {
-	index              int
-	log                tplog.Logger
-	startCh            chan uint64
-	stopCh             chan struct{}
-	finishedCh         chan bool
-	partPubKey         chan *DKGPartPubKeyMessage
-	dealMsgCh          chan *DKGDealMessage
-	dealRespMsgCh      chan *DKGDealRespMessage
-	deliver            messageDeliverI
-	ledger             ledger.Ledger
-	initDKGPrivKey     string
-	initDKGPartPubKeys []string
-	dkgCrypt           *dkgCrypt
-	updatersSync       sync.RWMutex
-	dkgBLSUpdaters     []DKGBLSUpdater
+	index          int
+	log            tplog.Logger
+	nodeID         string
+	startCh        chan uint64
+	stopCh         chan struct{}
+	finishedCh     chan bool
+	partPubKey     chan *DKGPartPubKeyMessage
+	dealMsgCh      chan *DKGDealMessage
+	dealRespMsgCh  chan *DKGDealRespMessage
+	deliver        messageDeliverI
+	ledger         ledger.Ledger
+	dkgExData      *dkgExchangeData
+	dkgCrypt       *dkgCrypt
+	updatersSync   sync.RWMutex
+	dkgBLSUpdaters []DKGBLSUpdater
 }
 
 func newDKGExchange(log tplog.Logger,
+	nodeID string,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
 	initDKGPrivKey string,
-	initDKGPartPubKeys []string,
 	deliver messageDeliverI,
 	ledger ledger.Ledger) *dkgExchange {
+	dkgExData := &dkgExchangeData{}
+	dkgExData.initDKGPrivKey.Store(initDKGPrivKey)
+	dkgExData.State.Store(DKGExchangeState_IDLE)
+
 	return &dkgExchange{
-		log:                log,
-		startCh:            make(chan uint64),
-		stopCh:             make(chan struct{}),
-		finishedCh:         make(chan bool),
-		partPubKey:         partPubKey,
-		dealMsgCh:          dealMsgCh,
-		dealRespMsgCh:      dealRespMsgCh,
-		deliver:            deliver,
-		ledger:             ledger,
-		initDKGPrivKey:     initDKGPrivKey,
-		initDKGPartPubKeys: initDKGPartPubKeys,
+		log:           log,
+		nodeID:        nodeID,
+		startCh:       make(chan uint64),
+		stopCh:        make(chan struct{}),
+		finishedCh:    make(chan bool),
+		partPubKey:    partPubKey,
+		dealMsgCh:     dealMsgCh,
+		dealRespMsgCh: dealRespMsgCh,
+		deliver:       deliver,
+		ledger:        ledger,
+		dkgExData:     dkgExData,
 	}
+}
+
+func (ex *dkgExchange) updateDKGPrivKey(dkgPriKey string) {
+	ex.dkgExData.initDKGPrivKey.Swap(dkgPriKey)
+}
+
+func (ex *dkgExchange) updateDKGPartPubKeys(compStateRN state.CompositionStateReadonly) error {
+	dkgPartPubKeys, err := compStateRN.GetDKGPartPubKeysForVerify()
+	if err != nil {
+		return err
+	}
+
+	var newPubKeys []string
+	for _, pubKey := range dkgPartPubKeys {
+		newPubKeys = append(newPubKeys, pubKey)
+	}
+
+	ex.dkgExData.initDKGPartPubKeys.Swap(newPubKeys)
+
+	return nil
+}
+
+func (ex *dkgExchange) updateDKGState(exchangeState DKGExchangeState) {
+	ex.dkgExData.State.Swap(exchangeState)
+}
+
+func (ex *dkgExchange) getDKGPrivKey() string {
+	return ex.dkgExData.initDKGPrivKey.Load().(string)
+}
+
+func (ex *dkgExchange) getDKGPartPubKeys() []string {
+	return ex.dkgExData.initDKGPartPubKeys.Load().([]string)
+}
+
+func (ex *dkgExchange) getDKGState() DKGExchangeState {
+	return ex.dkgExData.State.Load().(DKGExchangeState)
 }
 
 func (ex *dkgExchange) setDKGCrypt(dkgCrypt *dkgCrypt) {
@@ -79,8 +136,10 @@ func (ex *dkgExchange) notifyUpdater() {
 }
 
 func (ex *dkgExchange) start(epoch uint64) {
-	nParticipant := len(ex.initDKGPartPubKeys)
-	dkgCrypt := newDKGCrypt(ex.log, epoch, ex.initDKGPrivKey, ex.initDKGPartPubKeys, 2*nParticipant/3+1, nParticipant)
+	dkgPrivKey := ex.dkgExData.initDKGPrivKey.Load().(string)
+	dkgPartPubKeys := ex.dkgExData.initDKGPartPubKeys.Load().([]string)
+	nParticipant := len(dkgPartPubKeys)
+	dkgCrypt := newDKGCrypt(ex.log, epoch, dkgPrivKey, dkgPartPubKeys, 2*nParticipant/3+1, nParticipant)
 	ex.setDKGCrypt(dkgCrypt)
 	ex.startCh <- epoch
 }
@@ -130,6 +189,7 @@ func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 						ex.log.Panicf("Can't marshal deal epoch %d: %v", ex.dkgCrypt.epoch, err)
 					}
 				}
+				ex.dkgExData.State.Swap(DKGExchangeState_Exchanging_Deal)
 			case <-ex.stopCh:
 				ex.log.Info("DKG exchange new epoch loop stop")
 				return
@@ -225,6 +285,7 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 
 				if ex.dkgCrypt.finished() {
 					ex.log.Info("DKG exchange finished")
+					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
 					ex.finishedCh <- true
 				}
 			case <-ex.stopCh:
@@ -243,4 +304,34 @@ func (ex *dkgExchange) startLoop(ctx context.Context) {
 	ex.startSendDealLoop(ctx)
 	ex.startReceiveDealLoop(ctx)
 	ex.startReceiveDealRespLoop(ctx)
+}
+
+func (state DKGExchangeState) String() string {
+	switch state {
+	case DKGExchangeState_IDLE:
+		return "Idle"
+	case DKGExchangeState_Exchanging_PartPubKey:
+		return "ExchangingPartPubKey"
+	case DKGExchangeState_Exchanging_Deal:
+		return "ExchangingDeal"
+	case DKGExchangeState_Finished:
+		return "Finished"
+	default:
+		return "Unknown"
+	}
+}
+
+func (state DKGExchangeState) Value(stas string) DKGExchangeState {
+	switch stas {
+	case "Idle":
+		return DKGExchangeState_IDLE
+	case "ExchangingPartPubKey":
+		return DKGExchangeState_Exchanging_PartPubKey
+	case "ExchangingDeal":
+		return DKGExchangeState_Exchanging_Deal
+	case "Finished":
+		return DKGExchangeState_Finished
+	default:
+		return DKGExchangeState_Unknown
+	}
 }

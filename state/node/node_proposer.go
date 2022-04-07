@@ -63,6 +63,10 @@ func (ns *nodeProposerState) GetActiveProposerIDs() ([]string, error) {
 		return nil, err
 	}
 
+	if totolAEIdsBytes == nil {
+		return nil, nil
+	}
+
 	var nodeAEIDs []string
 	err = json.Unmarshal(totolAEIdsBytes, &nodeAEIDs)
 	if err != nil {

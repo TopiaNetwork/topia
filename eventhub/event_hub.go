@@ -26,9 +26,9 @@ type EventHub interface {
 
 var once sync.Once
 
-var eventHubG EventHub
+var eventHubG = make(map[string]EventHub)
 
-func GetEventHub(params ...interface{}) EventHub {
+func GetEventHub(nodeID string, params ...interface{}) EventHub {
 	once.Do(func() {
 		if len(params) != 2 {
 			panic("Invalid params size: " + fmt.Sprintf("expected 2, actual %d", len(params)))
@@ -44,10 +44,10 @@ func GetEventHub(params ...interface{}) EventHub {
 			panic("Invalid params 1 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[1]).Name()))
 		}
 
-		eventHubG = NewEventHub(level, log)
+		eventHubG[nodeID] = NewEventHub(level, log)
 	})
 
-	return eventHubG
+	return eventHubG[nodeID]
 }
 
 type eventHub struct {

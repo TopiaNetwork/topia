@@ -3,14 +3,15 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/AsynkronIT/protoactor-go/actor"
-	"github.com/TopiaNetwork/topia/chain"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 
+	"github.com/AsynkronIT/protoactor-go/actor"
+
+	"github.com/TopiaNetwork/topia/chain"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/consensus"
@@ -54,16 +55,15 @@ func NewNode(endPoint string, seed string) *Node {
 
 	sysActor := actor.NewActorSystem()
 
-	nodeID := "TestNode"
 	var priKey tpcrtypes.PrivateKey
 
 	config := tpconfig.GetConfiguration()
 
-	ledger := ledger.NewLedger(chainRootPath, "universal", mainLog, backend.BackendType_Badger)
-
-	evHub := eventhub.NewEventHub(tplogcmm.InfoLevel, mainLog)
+	ledger := ledger.NewLedger(chainRootPath, "topia", mainLog, backend.BackendType_Badger)
 
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
+	nodeID := network.ID()
+	evHub := eventhub.GetEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 	txPool := txpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	cons := consensus.NewConsensus(nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, config.CSConfig)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
@@ -118,7 +118,7 @@ func (n *Node) Start() {
 	var latestEpochInfo *chain.EpochInfo
 	var latestBlock *tpchaintypes.Block
 	if n.ledger.IsGenesisState() {
-		compState := state.GetStateBuilder().CompositionState(1)
+		compState := state.GetStateBuilder().CompositionState(n.network.ID(), 1)
 		err = compState.SetLatestEpoch(n.config.Genesis.Epon)
 		if err != nil {
 			n.log.Panicf("Set latest epoch of genesis error: %v", err)

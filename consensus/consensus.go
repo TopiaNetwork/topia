@@ -46,6 +46,7 @@ type Consensus interface {
 }
 
 type consensus struct {
+	nodeID       string
 	log          tplog.Logger
 	level        tplogcmm.LogLevel
 	handler      ConsensusHandler
@@ -91,20 +92,21 @@ func NewConsensus(nodeID string,
 
 	deliver := newMessageDeliver(log, nodeID, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
 
-	exeScheduler := execution.NewExecutionScheduler(log)
+	exeScheduler := execution.NewExecutionScheduler(nodeID, log)
 
 	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, config.ExecutionPrepareInterval)
 	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
 	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, voteMsgChan, cryptS, deliver, ledger, marshaler, validator)
 	dkgEx := newDKGExchange(log, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, deliver, ledger)
 
-	epService := newEpochService(log, blockAddedCh, config.EpochInterval, config.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
+	epService := newEpochService(log, nodeID, blockAddedCh, config.EpochInterval, config.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
 	csHandler := NewConsensusHandler(log, blockAddedCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
 
 	dkgEx.addDKGBLSUpdater(deliver)
 	dkgEx.addDKGBLSUpdater(proposer)
 
 	return &consensus{
+		nodeID:       nodeID,
 		log:          consLog,
 		level:        level,
 		handler:      csHandler,
@@ -178,7 +180,7 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	ctx := context.Background()
 
-	eventhub.GetEventHub().Observe(ctx, eventhub.EventName_BlockAdded, cons.ProcessSubEvent)
+	eventhub.GetEventHub(cons.nodeID).Observe(ctx, eventhub.EventName_BlockAdded, cons.ProcessSubEvent)
 
 	cons.epochService.start(ctx)
 	cons.executor.start(ctx)

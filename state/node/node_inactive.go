@@ -28,9 +28,11 @@ type NodeInactiveState interface {
 
 	AddInactiveNode(nodeInfo *chain.NodeInfo) error
 
-	UpdateInactiveNodeWeight(nodeID string, weight uint64) error
+	updateInactiveNodeWeight(nodeID string, weight uint64) error
 
-	RemoveInactiveNode(nodeID string) error
+	updateInactiveNodeDKGPartPubKey(nodeID string, pubKey string) error
+
+	removeInactiveNode(nodeID string) error
 }
 
 type nodeInactiveState struct {
@@ -56,6 +58,10 @@ func (ns *nodeInactiveState) GetInactiveNodeIDs() ([]string, error) {
 	totolAEIdsBytes, _, err := ns.GetState(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeIDs_Key))
 	if err != nil {
 		return nil, err
+	}
+
+	if totolAEIdsBytes == nil {
+		return nil, nil
 	}
 
 	var nodeAEIDs []string
@@ -88,11 +94,15 @@ func (ns *nodeInactiveState) AddInactiveNode(nodeInfo *chain.NodeInfo) error {
 	return addNode(ns.StateStore, StateStore_Name_NodeInactive, TotalInactiveNodeIDs_Key, TotalInactiveNodeWeight_Key, nodeInfo)
 }
 
-func (ns *nodeInactiveState) UpdateInactiveNodeWeight(nodeID string, weight uint64) error {
+func (ns *nodeInactiveState) updateInactiveNodeWeight(nodeID string, weight uint64) error {
 	return uppdateWeight(ns.StateStore, StateStore_Name_NodeInactive, nodeID, TotalInactiveNodeWeight_Key, weight)
 }
 
-func (ns *nodeInactiveState) RemoveInactiveNode(nodeID string) error {
+func (ns *nodeInactiveState) updateInactiveNodeDKGPartPubKey(nodeID string, pubKey string) error {
+	return uppdateDKGPartPubKey(ns.StateStore, StateStore_Name_NodeInactive, nodeID, pubKey)
+}
+
+func (ns *nodeInactiveState) removeInactiveNode(nodeID string) error {
 	nodeInfo, err := ns.GetInactiveNode(nodeID)
 	if err != nil {
 		return nil

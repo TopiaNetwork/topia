@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"testing"
@@ -22,27 +23,30 @@ import (
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
 
-var partPubKeyChMap = make(map[int]chan *DKGPartPubKeyMessage)
-var dealMsgChMap = make(map[int]chan *DKGDealMessage)
-var dealRespMsgChMap = make(map[int]chan *DKGDealRespMessage)
+var partPubKeyChMap = make(map[string]chan *DKGPartPubKeyMessage)
+var dealMsgChMap = make(map[string]chan *DKGDealMessage)
+var dealRespMsgChMap = make(map[string]chan *DKGDealRespMessage)
 
 var dkgExChangeMap = make(map[int]*dkgExchange)
 
 var initPrivKeys []string
 var initPubKeys []string
+var initPrivKeysMap = make(map[string]string)
+var initPubKeysMap = make(map[string]string)
 
-func createTestDKGExChange(log tplog.Logger, index int, ledger ledger.Ledger) *dkgExchange {
+func createTestDKGExChange(log tplog.Logger, nodeID string, ledger ledger.Ledger) *dkgExchange {
 	deliver := &messageDeliverMock{
 		log:              log,
-		index:            index,
+		nodeID:           nodeID,
 		initPubKeys:      initPubKeys,
 		partPubKeyChMap:  partPubKeyChMap,
 		dealMsgChMap:     dealMsgChMap,
 		dealRespMsgChMap: dealRespMsgChMap,
 	}
 
-	dkgEx := newDKGExchange(log, partPubKeyChMap[index], dealMsgChMap[index], dealRespMsgChMap[index], initPrivKeys[index], initPubKeys, deliver, ledger)
-	dkgEx.index = index
+	dkgEx := newDKGExchange(log, nodeID, partPubKeyChMap[nodeID], dealMsgChMap[nodeID], dealRespMsgChMap[nodeID], initPrivKeysMap[nodeID], deliver, ledger)
+	dkgEx.nodeID = nodeID
+	dkgEx.dkgExData.initDKGPartPubKeys.Store(initPubKeysMap)
 
 	return dkgEx
 }
@@ -51,9 +55,12 @@ func creatKeyPairs(suite *bn256.Suite, nParticipant int) {
 	initPrivKeys = make([]string, nParticipant)
 	initPubKeys = make([]string, nParticipant)
 	for i := 0; i < nParticipant; i++ {
+		nodei := fmt.Sprintf("node%d", i)
 		keyPair := key.NewKeyPair(suite)
 		initPrivKeys[i], _ = encoding.ScalarToStringHex(suite, keyPair.Private)
 		initPubKeys[i], _ = encoding.PointToStringHex(suite, keyPair.Public)
+		initPrivKeysMap[nodei] = initPrivKeys[i]
+		initPubKeysMap[nodei] = initPubKeys[i]
 	}
 }
 
@@ -63,15 +70,16 @@ func createTestDKGNode(log tplog.Logger, nParticipant int) {
 	suite := bn256.NewSuiteG2()
 	creatKeyPairs(suite, nParticipant)
 	for i := 0; i < nParticipant; i++ {
-		partPubKeyChMap[i] = make(chan *DKGPartPubKeyMessage, PartPubKeyChannel_Size)
-		dealMsgChMap[i] = make(chan *DKGDealMessage, DealMSGChannel_Size)
-		dealRespMsgChMap[i] = make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
+		nodei := fmt.Sprintf("node%d", i)
+		partPubKeyChMap[nodei] = make(chan *DKGPartPubKeyMessage, PartPubKeyChannel_Size)
+		dealMsgChMap[nodei] = make(chan *DKGDealMessage, DealMSGChannel_Size)
+		dealRespMsgChMap[nodei] = make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 
-		dkgEx := createTestDKGExChange(log, i, lg)
+		dkgEx := createTestDKGExChange(log, nodei, lg)
 		dkgEx.startLoop(context.Background())
 
-		dkgCrypt := newDKGCrypt(log, 10 /*suite, */, initPrivKeys[i], initPubKeys, 2*nParticipant/3+1, nParticipant)
-		dkgEx.setDKGCrypt(dkgCrypt)
+		//dkgCrypt := newDKGCrypt(log, 10 /*suite, */, initPrivKeys[i], initPubKeys, 2*nParticipant/3+1, nParticipant)
+		//dkgEx.setDKGCrypt(dkgCrypt)
 
 		dkgExChangeMap[i] = dkgEx
 	}

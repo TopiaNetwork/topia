@@ -12,13 +12,14 @@ import (
 type messageDeliverMock struct {
 	log              tplog.Logger
 	index            int
+	nodeID           string
 	initPubKeys      []string
 	partPKSync       sync.RWMutex
 	dealMsgsync      sync.RWMutex
 	dealRespMsgSync  sync.RWMutex
-	partPubKeyChMap  map[int]chan *DKGPartPubKeyMessage
-	dealMsgChMap     map[int]chan *DKGDealMessage
-	dealRespMsgChMap map[int]chan *DKGDealRespMessage
+	partPubKeyChMap  map[string]chan *DKGPartPubKeyMessage
+	dealMsgChMap     map[string]chan *DKGDealMessage
+	dealRespMsgChMap map[string]chan *DKGDealRespMessage
 	dkgBls           DKGBls
 }
 
@@ -66,25 +67,23 @@ func (md *messageDeliverMock) deliverDKGPartPubKeyMessage(ctx context.Context, m
 	md.partPKSync.Lock()
 	defer md.partPKSync.Unlock()
 
-	for index := 0; index < len(md.partPubKeyChMap); index++ {
-		if index != md.index {
-			md.log.Infof("DKG part pub key message %d deliver to %d", md.index, index)
-			md.partPubKeyChMap[index] <- msg
+	for nodeIndex, partPubKeyCh := range md.partPubKeyChMap {
+		if nodeIndex != md.nodeID {
+			md.log.Infof("DKG part pub key message %s deliver to %s", md.nodeID, nodeIndex)
+			partPubKeyCh <- msg
 		}
 	}
 
 	return nil
 }
 
-func (md *messageDeliverMock) deliverDKGDealMessage(ctx context.Context, pubKey string, msg *DKGDealMessage) error {
+func (md *messageDeliverMock) deliverDKGDealMessage(ctx context.Context, nodeID string, msg *DKGDealMessage) error {
 	md.dealMsgsync.Lock()
 	defer md.dealMsgsync.Unlock()
 
-	for index, pk := range md.initPubKeys {
-		if pk == pubKey {
-			md.log.Infof("DKG deal message from %d deliver to %d", md.index, index)
-			md.dealMsgChMap[index] <- msg
-		}
+	if dealMsgCh, ok := md.dealMsgChMap[nodeID]; ok {
+		md.log.Infof("DKG deal message from %s deliver to %s", md.nodeID, nodeID)
+		dealMsgCh <- msg
 	}
 
 	return nil
@@ -94,10 +93,10 @@ func (md *messageDeliverMock) deliverDKGDealRespMessage(ctx context.Context, msg
 	md.dealRespMsgSync.Lock()
 	md.dealRespMsgSync.Unlock()
 
-	for index := 0; index < len(md.dealRespMsgChMap); index++ {
-		if index != md.index {
-			md.log.Infof("DKG deal response message %d deliver to %d", md.index, index)
-			md.dealRespMsgChMap[index] <- msg
+	for nodeIndex, dealRespMsgCh := range md.dealRespMsgChMap {
+		if nodeIndex != md.nodeID {
+			md.log.Infof("DKG deal response message %s deliver to %s", md.nodeID, nodeIndex)
+			dealRespMsgCh <- msg
 		}
 	}
 

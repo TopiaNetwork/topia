@@ -1,7 +1,6 @@
 package transactionpool
 
 import (
-	"encoding/hex"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
@@ -15,16 +14,17 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
-	assert.Equal(t, 0, len(pool.queue.accTxs))
-	assert.Equal(t, 0, len(pool.pending.accTxs))
-	assert.Equal(t, 0, pool.allTxsForLook.LocalCount())
-	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
-	assert.Equal(t, 0, len(pool.sortedByPriced.all.locals))
-	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
-	keyLocals = make([]string, 0)
-	keyRemotes = make([]string, 0)
+	assert.Equal(t, 0, len(pool.queues[Category1].accTxs))
+	assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
+	assert.Equal(t, 0, pool.allTxsForLook[Category1].LocalCount())
+	assert.Equal(t, 0, pool.allTxsForLook[Category1].RemoteCount())
+
+	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	keyCatLocals = make(map[string]basic.TransactionCategory, 0)
+	keyCatRemotes = make(map[string]basic.TransactionCategory, 0)
 	txLocals = make([]*basic.Transaction, 0)
 	txRemotes = make([]*basic.Transaction, 0)
 	var fromlocal, fromremote tpcrtypes.Address
@@ -39,7 +39,7 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 			txlocal.Head.FromAddr = append(txlocal.Head.FromAddr, byte(i))
 		}
 		keylocal, _ = txlocal.HashHex()
-		keyLocals = append(keyLocals, keylocal)
+		keyCatLocals[keylocal] = basic.TransactionCategory_Topia_Universal
 		txLocals = append(txLocals, txlocal)
 
 		txremote = setTxRemote(nonce, gasprice, gaslimit)
@@ -48,30 +48,32 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 			txremote.Head.FromAddr = append(txremote.Head.FromAddr, byte(i))
 		}
 		keyremote, _ = txremote.HashHex()
-		keyRemotes = append(keyRemotes, keyremote)
+		keyCatRemotes[keyremote] = basic.TransactionCategory_Topia_Universal
 		txRemotes = append(txRemotes, txremote)
-		fromlocal = tpcrtypes.Address(hex.EncodeToString(txlocal.Head.FromAddr))
+		fromlocal = tpcrtypes.Address(txlocal.Head.FromAddr)
 		_ = pool.AddTx(txlocal, true)
-		assert.Equal(t, 1, pool.queue.accTxs[fromlocal].txs.Len())
+		assert.Equal(t, 1, pool.queues[Category1].accTxs[fromlocal].txs.Len())
 		_ = pool.AddTx(txremote, false)
-		fromremote = tpcrtypes.Address(hex.EncodeToString(txremote.Head.FromAddr))
-		assert.Equal(t, 1, pool.queue.accTxs[fromremote].txs.Len())
+		fromremote = tpcrtypes.Address(txremote.Head.FromAddr)
+		assert.Equal(t, 1, pool.queues[Category1].accTxs[fromremote].txs.Len())
 		//fmt.Printf("i:%d,", i)
-		//fmt.Println("len(pool.queue.accTxs)", len(pool.queue.accTxs))
+		//fmt.Println("len(pool.queues[Category1].accTxs)", len(pool.queues[Category1].accTxs))
 	}
-	assert.Equal(t, 384, len(pool.queue.accTxs))
-	assert.Equal(t, 0, len(pool.pending.accTxs))
-	assert.Equal(t, 200, pool.allTxsForLook.LocalCount())
-	assert.Equal(t, 184, pool.allTxsForLook.RemoteCount())
-	assert.Equal(t, 200, len(pool.sortedByPriced.all.locals))
-	assert.Equal(t, 184, len(pool.sortedByPriced.all.remotes))
-	pool.truncateQueue()
-	assert.Equal(t, 256, len(pool.queue.accTxs))
-	assert.Equal(t, 0, len(pool.pending.accTxs))
-	assert.Equal(t, 200, pool.allTxsForLook.LocalCount())
-	assert.Equal(t, 56, pool.allTxsForLook.RemoteCount())
-	assert.Equal(t, 200, len(pool.sortedByPriced.all.locals))
-	assert.Equal(t, 56, len(pool.sortedByPriced.all.remotes))
+	assert.Equal(t, 384, len(pool.queues[Category1].accTxs))
+	assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
+	assert.Equal(t, 200, pool.allTxsForLook[Category1].LocalCount())
+	assert.Equal(t, 184, pool.allTxsForLook[Category1].RemoteCount())
+
+	assert.Equal(t, 200, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	assert.Equal(t, 184, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	pool.truncateQueue(Category1)
+	assert.Equal(t, 256, len(pool.queues[Category1].accTxs))
+	assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
+	assert.Equal(t, 200, pool.allTxsForLook[Category1].LocalCount())
+	assert.Equal(t, 56, pool.allTxsForLook[Category1].RemoteCount())
+
+	assert.Equal(t, 200, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	assert.Equal(t, 56, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
 }
 
@@ -80,16 +82,17 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
-	assert.Equal(t, 0, len(pool.queue.accTxs))
-	assert.Equal(t, 0, len(pool.pending.accTxs))
-	assert.Equal(t, 0, pool.allTxsForLook.LocalCount())
-	assert.Equal(t, 0, pool.allTxsForLook.RemoteCount())
-	assert.Equal(t, 0, len(pool.sortedByPriced.all.locals))
-	assert.Equal(t, 0, len(pool.sortedByPriced.all.remotes))
-	keyLocals = make([]string, 0)
-	keyRemotes = make([]string, 0)
+	assert.Equal(t, 0, len(pool.queues[Category1].accTxs))
+	assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
+	assert.Equal(t, 0, pool.allTxsForLook[Category1].LocalCount())
+	assert.Equal(t, 0, pool.allTxsForLook[Category1].RemoteCount())
+
+	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	keyCatLocals = make(map[string]basic.TransactionCategory, 0)
+	keyCatRemotes = make(map[string]basic.TransactionCategory, 0)
 	txLocals = make([]*basic.Transaction, 0)
 	txRemotes = make([]*basic.Transaction, 0)
 	var fromlocal, fromremote tpcrtypes.Address
@@ -104,7 +107,7 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 			txlocal.Head.FromAddr = append(txlocal.Head.FromAddr, byte(i))
 		}
 		keylocal, _ = txlocal.HashHex()
-		keyLocals = append(keyLocals, keylocal)
+		keyCatLocals[keylocal] = basic.TransactionCategory_Topia_Universal
 		txLocals = append(txLocals, txlocal)
 
 		txremote = setTxRemote(nonce, gasprice, gaslimit)
@@ -113,33 +116,35 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 			txremote.Head.FromAddr = append(txremote.Head.FromAddr, byte(i))
 		}
 		keyremote, _ = txremote.HashHex()
-		keyRemotes = append(keyRemotes, keyremote)
+		keyCatRemotes[keyremote] = basic.TransactionCategory_Topia_Universal
 		txRemotes = append(txRemotes, txremote)
-		fromlocal = tpcrtypes.Address(hex.EncodeToString(txlocal.Head.FromAddr))
+		fromlocal = tpcrtypes.Address(txlocal.Head.FromAddr)
 		_ = pool.AddTx(txlocal, true)
-		assert.Equal(t, 1, pool.queue.accTxs[fromlocal].txs.Len())
+		assert.Equal(t, 1, pool.queues[Category1].accTxs[fromlocal].txs.Len())
 		_ = pool.AddTx(txremote, false)
-		fromremote = tpcrtypes.Address(hex.EncodeToString(txremote.Head.FromAddr))
-		assert.Equal(t, 1, pool.queue.accTxs[fromremote].txs.Len())
+		fromremote = tpcrtypes.Address(txremote.Head.FromAddr)
+		assert.Equal(t, 1, pool.queues[Category1].accTxs[fromremote].txs.Len())
 		//fmt.Printf("i:%d,", i)
-		//fmt.Println("len(pool.queue.accTxs)", len(pool.queue.accTxs))
+		//fmt.Println("len(pool.queues[Category1].accTxs)", len(pool.queues[Category1].accTxs))
 		_ = pool.turnTx(fromlocal, keylocal, txlocal)
 		_ = pool.turnTx(fromremote, keyremote, txremote)
-		assert.Equal(t, 0, pool.queue.accTxs[fromlocal].txs.Len())
-		assert.Equal(t, 0, pool.queue.accTxs[fromremote].txs.Len())
+		assert.Equal(t, 0, pool.queues[Category1].accTxs[fromlocal].txs.Len())
+		assert.Equal(t, 0, pool.queues[Category1].accTxs[fromremote].txs.Len())
 	}
-	assert.Equal(t, 384, len(pool.queue.accTxs))
-	assert.Equal(t, 384, len(pool.pending.accTxs))
-	assert.Equal(t, 200, pool.allTxsForLook.LocalCount())
-	assert.Equal(t, 184, pool.allTxsForLook.RemoteCount())
-	assert.Equal(t, 200, len(pool.sortedByPriced.all.locals))
-	assert.Equal(t, 184, len(pool.sortedByPriced.all.remotes))
-	pool.truncatePending()
-	assert.Equal(t, 384, len(pool.queue.accTxs))
-	assert.Equal(t, 384, len(pool.pending.accTxs))
-	assert.Equal(t, 200, pool.allTxsForLook.LocalCount())
-	assert.Equal(t, 184, pool.allTxsForLook.RemoteCount())
-	assert.Equal(t, 200, len(pool.sortedByPriced.all.locals))
-	assert.Equal(t, 184, len(pool.sortedByPriced.all.remotes))
+	assert.Equal(t, 384, len(pool.queues[Category1].accTxs))
+	assert.Equal(t, 384, len(pool.pendings[Category1].accTxs))
+	assert.Equal(t, 200, pool.allTxsForLook[Category1].LocalCount())
+	assert.Equal(t, 184, pool.allTxsForLook[Category1].RemoteCount())
+
+	assert.Equal(t, 200, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	assert.Equal(t, 184, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	pool.truncatePending(Category1)
+	assert.Equal(t, 384, len(pool.queues[Category1].accTxs))
+	assert.Equal(t, 384, len(pool.pendings[Category1].accTxs))
+	assert.Equal(t, 200, pool.allTxsForLook[Category1].LocalCount())
+	assert.Equal(t, 184, pool.allTxsForLook[Category1].RemoteCount())
+
+	assert.Equal(t, 200, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	assert.Equal(t, 184, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
 }

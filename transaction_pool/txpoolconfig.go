@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"encoding/json"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 	"io/ioutil"
 	"time"
 )
@@ -12,8 +13,8 @@ type TransactionPoolConfig struct {
 	NoLocalFile  bool
 	NoRemoteFile bool
 	NoConfigFile bool
-	PathLocal    string
-	PathRemote   string
+	PathLocal    map[basic.TransactionCategory]string
+	PathRemote   map[basic.TransactionCategory]string
 	PathConfig   string
 	ReStoredDur  time.Duration
 
@@ -29,8 +30,12 @@ type TransactionPoolConfig struct {
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
-	PathLocal:   "localTransactions.json",
-	PathRemote:  "remoteTransactions.json",
+	PathLocal: map[basic.TransactionCategory]string{
+		basic.TransactionCategory_Topia_Universal: "Topia_Universal_localTransactions.json",
+		basic.TransactionCategory_Eth:             "Eth_localTransactions.json"},
+	PathRemote: map[basic.TransactionCategory]string{
+		basic.TransactionCategory_Topia_Universal: "Topia_Universal_remoteTransactions.json",
+		basic.TransactionCategory_Eth:             "Eth_remoteTransactions.json"},
 	PathConfig:  "txPoolConfigs.json",
 	ReStoredDur: 30 * time.Minute,
 
@@ -75,10 +80,10 @@ func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 	if conf.PathConfig == "" {
 		conf.PathConfig = DefaultTransactionPoolConfig.PathConfig
 	}
-	if conf.PathRemote == "" {
+	if conf.PathRemote == nil {
 		conf.PathRemote = DefaultTransactionPoolConfig.PathRemote
 	}
-	if conf.PathLocal == "" {
+	if conf.PathLocal == nil {
 		conf.PathLocal = DefaultTransactionPoolConfig.PathLocal
 	}
 

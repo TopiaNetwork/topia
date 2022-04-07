@@ -35,10 +35,11 @@ const (
 )
 
 type NodeInfo struct {
-	NodeID string
-	Weight uint64
-	Role   NodeRole
-	State  NodeState
+	NodeID        string
+	Weight        uint64
+	DKGPartPubKey string
+	Role          NodeRole
+	State         NodeState
 }
 
 type EpochInfo struct {

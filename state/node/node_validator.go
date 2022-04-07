@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 
 	"github.com/TopiaNetwork/topia/chain"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
@@ -26,11 +27,15 @@ type NodeValidatorState interface {
 
 	GetActiveValidatorsTotalWeight() (uint64, error)
 
+	GetAllActiveValidators() ([]*chain.NodeInfo, error)
+
 	AddActiveValidator(nodeInfo *chain.NodeInfo) error
 
-	UpdateActiveValidatorWeight(nodeID string, weight uint64) error
+	updateActiveValidatorWeight(nodeID string, weight uint64) error
 
-	RemoveActiveValidator(nodeID string) error
+	updateActiveValidatorDKGPartPubKey(nodeID string, pubKey string) error
+
+	removeActiveValidator(nodeID string) error
 }
 
 type nodeValidatorState struct {
@@ -84,15 +89,46 @@ func (ns *nodeValidatorState) GetActiveValidatorsTotalWeight() (uint64, error) {
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
 }
 
+func (ns *nodeValidatorState) GetAllActiveValidators() ([]*chain.NodeInfo, error) {
+	keys, vals, _, err := ns.GetAllState(StateStore_Name_Val)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) != len(vals) {
+		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
+	}
+
+	var nodes []*chain.NodeInfo
+	for i, val := range vals {
+		if string(keys[i]) == TotalActiveValidatorNodeIDs_Key || string(keys[i]) == TotalActiveValidatorWeight_Key {
+			continue
+		}
+
+		var nodeInfo chain.NodeInfo
+		err = json.Unmarshal(val, &nodeInfo)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, &nodeInfo)
+	}
+
+	return nodes, nil
+}
+
 func (ns *nodeValidatorState) AddActiveValidator(nodeInfo *chain.NodeInfo) error {
 	return addNode(ns.StateStore, StateStore_Name_Val, TotalActiveValidatorNodeIDs_Key, TotalActiveValidatorWeight_Key, nodeInfo)
 }
 
-func (ns *nodeValidatorState) UpdateActiveValidatorWeight(nodeID string, weight uint64) error {
+func (ns *nodeValidatorState) updateActiveValidatorWeight(nodeID string, weight uint64) error {
 	return uppdateWeight(ns.StateStore, StateStore_Name_Val, nodeID, TotalActiveValidatorWeight_Key, weight)
 }
 
-func (ns *nodeValidatorState) RemoveActiveValidator(nodeID string) error {
+func (ns *nodeValidatorState) updateActiveValidatorDKGPartPubKey(nodeID string, pubKey string) error {
+	return uppdateDKGPartPubKey(ns.StateStore, StateStore_Name_Val, nodeID, pubKey)
+}
+
+func (ns *nodeValidatorState) removeActiveValidator(nodeID string) error {
 	nodeInfo, err := ns.GetActiveValidator(nodeID)
 	if err != nil {
 		return nil

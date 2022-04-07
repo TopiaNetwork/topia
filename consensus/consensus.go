@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/TopiaNetwork/topia/eventhub"
+	"github.com/TopiaNetwork/topia/state"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -39,7 +40,7 @@ type Consensus interface {
 
 	UpdateHandler(handler ConsensusHandler)
 
-	Start(*actor.ActorSystem, uint64, uint64) error
+	Start(*actor.ActorSystem, uint64, uint64, uint64) error
 
 	Stop()
 }
@@ -50,11 +51,13 @@ type consensus struct {
 	handler      ConsensusHandler
 	marshaler    codec.Marshaler
 	network      tpnet.Network
+	ledger       ledger.Ledger
 	executor     *consensusExecutor
 	proposer     *consensusProposer
 	validator    *consensusValidator
 	dkgEx        *dkgExchange
 	epochService *epochService
+	config       *tpconfig.ConsensusConfiguration
 }
 
 func NewConsensus(nodeID string,
@@ -93,7 +96,7 @@ func NewConsensus(nodeID string,
 	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, config.ExecutionPrepareInterval)
 	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
 	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, voteMsgChan, cryptS, deliver, ledger, marshaler, validator)
-	dkgEx := newDKGExchange(log, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, config.InitDKGPartPubKeys, deliver, ledger)
+	dkgEx := newDKGExchange(log, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, deliver, ledger)
 
 	epService := newEpochService(log, blockAddedCh, config.EpochInterval, config.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
 	csHandler := NewConsensusHandler(log, blockAddedCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
@@ -112,6 +115,7 @@ func NewConsensus(nodeID string,
 		validator:    validator,
 		dkgEx:        dkgEx,
 		epochService: epService,
+		config:       config,
 	}
 }
 
@@ -163,7 +167,7 @@ func (cons *consensus) ProcessDKGDealResp(msg *DKGDealRespMessage) error {
 	return cons.handler.ProcessDKGDealResp(msg)
 }
 
-func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, height uint64) error {
+func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochStartHeight uint64, height uint64) error {
 	actorPID, err := CreateConsensusActor(cons.level, cons.log, sysActor, cons)
 	if err != nil {
 		cons.log.Panicf("CreateConsensusActor error: %v", err)
@@ -181,6 +185,19 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, height u
 	cons.proposer.start(ctx)
 	cons.validator.start(ctx)
 	cons.dkgEx.startLoop(ctx)
+
+	deltaH := int(height) - int(epochStartHeight)
+	if deltaH == int(cons.config.EpochInterval)-int(cons.config.DKGStartBeforeEpoch) {
+		csStateRN := state.CreateCompositionStateReadonly(cons.log, cons.ledger)
+		defer csStateRN.Stop()
+		err = cons.dkgEx.updateDKGPartPubKeys(csStateRN)
+		if err != nil {
+			cons.log.Panicf("Update DKG exchange part pub keys err: %v", err)
+			return err
+		}
+
+		cons.dkgEx.start(epoch + 1)
+	}
 
 	return nil
 }

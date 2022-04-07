@@ -162,7 +162,7 @@ func (n *Node) Start() {
 
 	n.evHub.Start(n.sysActor)
 	n.network.Start()
-	n.consensus.Start(n.sysActor, latestEpochInfo.Epoch, latestBlock.Head.Height)
+	n.consensus.Start(n.sysActor, latestEpochInfo.Epoch, latestEpochInfo.StartTimeStamp, latestBlock.Head.Height)
 	n.txPool.Start(n.sysActor, n.network)
 	n.syncer.Start(n.sysActor, n.network)
 

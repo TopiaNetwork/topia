@@ -30,6 +30,8 @@ type NodeExecutorState interface {
 
 	updateActiveExecutorWeight(nodeID string, weight uint64) error
 
+	updateActiveExecutorDKGPartPubKey(nodeID string, pubKey string) error
+
 	removeActiveExecutor(nodeID string) error
 }
 
@@ -90,6 +92,10 @@ func (ns *nodeExecutorState) addActiveExecutor(nodeInfo *chain.NodeInfo) error {
 
 func (ns *nodeExecutorState) updateActiveExecutorWeight(nodeID string, weight uint64) error {
 	return uppdateWeight(ns.StateStore, StateStore_Name_Exe, nodeID, TotalActiveExecutorWeight_Key, weight)
+}
+
+func (ns *nodeExecutorState) updateActiveExecutorDKGPartPubKey(nodeID string, pubKey string) error {
+	return uppdateDKGPartPubKey(ns.StateStore, StateStore_Name_Exe, nodeID, pubKey)
 }
 
 func (ns *nodeExecutorState) removeActiveExecutor(nodeID string) error {

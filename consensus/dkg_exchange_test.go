@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"testing"
@@ -41,8 +42,9 @@ func createTestDKGExChange(log tplog.Logger, index int, ledger ledger.Ledger) *d
 		dealRespMsgChMap: dealRespMsgChMap,
 	}
 
-	dkgEx := newDKGExchange(log, partPubKeyChMap[index], dealMsgChMap[index], dealRespMsgChMap[index], initPrivKeys[index], initPubKeys, deliver, ledger)
+	dkgEx := newDKGExchange(log, fmt.Sprintf("dkgNode%d", index), partPubKeyChMap[index], dealMsgChMap[index], dealRespMsgChMap[index], initPrivKeys[index], deliver, ledger)
 	dkgEx.index = index
+	dkgEx.dkgExData.initDKGPartPubKeys.Store(initPubKeys)
 
 	return dkgEx
 }

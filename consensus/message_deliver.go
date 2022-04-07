@@ -433,36 +433,79 @@ func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
+	sigData, err := md.cryptService.Sign(md.priKey, msg.PartPubKey)
+	if err != nil {
+		md.log.Errorf("Sign err for commit msg: %v", err)
+		return err
+	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("DKGPartPubKeyMessage marshal err: %v", err)
 		return err
 	}
 
+	propCtx := ctx
+	ValCtx := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodeIDs()
+		peerProposerIDs, err := csStateRN.GetActiveProposerIDs()
 		if err != nil {
-			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
 			return err
 		}
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+		peerProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerProposerIDs)
+		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, peerProposerIDs)
+
+		peerValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
+			return err
+		}
+		peerValidatorIDs = tpcmm.RemoveIfExistString(md.nodeID, peerValidatorIDs)
+		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
 	}
 
-	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(propCtx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send DKG deal message to network failed: err=%v", err)
+		md.log.Errorf("Send DKG part pub key message to propose network failed: err=%v", err)
+	}
+
+	ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(propCtx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send DKG part pub key message to validate network failed: err=%v", err)
 	}
 
 	return err
 }
 
-func (md *messageDeliver) getPeerByDKGPubKey(dkgPubKey string) (string, error) {
-	return "", nil
-}
+func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, nodeID string, msg *DKGDealMessage) error {
+	sigData, err := md.cryptService.Sign(md.priKey, msg.DealData)
+	if err != nil {
+		md.log.Errorf("Sign err for commit msg: %v", err)
+		return err
+	}
 
-func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, pubKey string, msg *DKGDealMessage) error {
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("DKGDealMessage marshal err: %v", err)
@@ -471,12 +514,7 @@ func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, pubKey stri
 
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerID, err := md.getPeerByDKGPubKey(pubKey)
-		if err != nil {
-			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
-			return err
-		}
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerID)
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, nodeID)
 	}
 
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
@@ -492,26 +530,58 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
+	sigData, err := md.cryptService.Sign(md.priKey, msg.RespData)
+	if err != nil {
+		md.log.Errorf("Sign err for commit msg: %v", err)
+		return err
+	}
+
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
 		md.log.Errorf("DKGDealRespMessage marshal err: %v", err)
 		return err
 	}
 
+	propCtx := ctx
+	ValCtx := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetAllConsensusNodeIDs()
+		peerProposerIDs, err := csStateRN.GetActiveProposerIDs()
 		if err != nil {
-			md.log.Errorf("Can't get all consensus nodes: err=%v", err)
+			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
 			return err
 		}
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+		peerProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerProposerIDs)
+		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, peerProposerIDs)
+
+		peerValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
+			return err
+		}
+		peerValidatorIDs = tpcmm.RemoveIfExistString(md.nodeID, peerValidatorIDs)
+		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
 	}
 
-	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, msgBytes)
+	propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(propCtx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send DKG deal response message to network failed: err=%v", err)
+		md.log.Errorf("Send deal resp message to propose network failed: err=%v", err)
+	}
+
+	ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.network.Send(propCtx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send deal resp message to validate network failed: err=%v", err)
 	}
 
 	return err

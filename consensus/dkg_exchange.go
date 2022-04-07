@@ -31,7 +31,7 @@ const (
 
 type dkgExchangeData struct {
 	initDKGPrivKey     atomic.Value //string
-	initDKGPartPubKeys atomic.Value //[]string
+	initDKGPartPubKeys atomic.Value //map[string]string. nodeID->dkgPartPubKey
 	State              atomic.Value //DKGExchangeState
 }
 
@@ -90,12 +90,7 @@ func (ex *dkgExchange) updateDKGPartPubKeys(compStateRN state.CompositionStateRe
 		return err
 	}
 
-	var newPubKeys []string
-	for _, pubKey := range dkgPartPubKeys {
-		newPubKeys = append(newPubKeys, pubKey)
-	}
-
-	ex.dkgExData.initDKGPartPubKeys.Swap(newPubKeys)
+	ex.dkgExData.initDKGPartPubKeys.Swap(dkgPartPubKeys)
 
 	return nil
 }
@@ -109,7 +104,13 @@ func (ex *dkgExchange) getDKGPrivKey() string {
 }
 
 func (ex *dkgExchange) getDKGPartPubKeys() []string {
-	return ex.dkgExData.initDKGPartPubKeys.Load().([]string)
+	dkgPartPubKeys := ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string)
+	var rtnPubKeys []string
+	for _, pubKey := range dkgPartPubKeys {
+		rtnPubKeys = append(rtnPubKeys, pubKey)
+	}
+
+	return rtnPubKeys
 }
 
 func (ex *dkgExchange) getDKGState() DKGExchangeState {
@@ -137,7 +138,7 @@ func (ex *dkgExchange) notifyUpdater() {
 
 func (ex *dkgExchange) start(epoch uint64) {
 	dkgPrivKey := ex.dkgExData.initDKGPrivKey.Load().(string)
-	dkgPartPubKeys := ex.dkgExData.initDKGPartPubKeys.Load().([]string)
+	dkgPartPubKeys := ex.getDKGPartPubKeys()
 	nParticipant := len(dkgPartPubKeys)
 	dkgCrypt := newDKGCrypt(ex.log, epoch, dkgPrivKey, dkgPartPubKeys, 2*nParticipant/3+1, nParticipant)
 	ex.setDKGCrypt(dkgCrypt)
@@ -148,6 +149,17 @@ func (ex *dkgExchange) stop() {
 	ex.stopCh <- struct{}{}
 }
 
+func (ex *dkgExchange) getNodeIDByDKGPartPubKey(dkgPartPubKey string) string {
+	dkgPartPubKeys := ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string)
+	for nodeID, pubKey := range dkgPartPubKeys {
+		if pubKey == dkgPartPubKey {
+			return nodeID
+		}
+	}
+
+	return ""
+}
+
 func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 	go func() {
 		for {
@@ -156,7 +168,7 @@ func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 				csStateRN := state.CreateCompositionStateReadonly(ex.log, ex.ledger)
 				defer csStateRN.Stop()
 
-				ex.log.Infof("DKG exchange start %d", ex.index)
+				ex.log.Infof("DKG exchange start %s", ex.nodeID)
 				if ex.dkgCrypt == nil {
 					ex.log.Panicf("dkgCrypt nil at present: epoch=%d")
 				}
@@ -182,9 +194,13 @@ func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 						DealData: dealBytes,
 					}
 					pubKey := ex.dkgCrypt.pubKey(i)
-					ex.log.Infof("Send deal %d to other participant %s", i, pubKey)
+					destNodeID := ex.getNodeIDByDKGPartPubKey(pubKey)
+					if destNodeID == "" {
+						ex.log.Panicf("can't find the responding node ID by dkg part pub key: epoch=%d", ex.dkgCrypt.epoch)
+					}
+					ex.log.Infof("Send deal %d to other participant %s", i, destNodeID)
 
-					err = ex.deliver.deliverDKGDealMessage(ctx, pubKey, dealMsg)
+					err = ex.deliver.deliverDKGDealMessage(ctx, destNodeID, dealMsg)
 					if err != nil {
 						ex.log.Panicf("Can't marshal deal epoch %d: %v", ex.dkgCrypt.epoch, err)
 					}

@@ -145,10 +145,10 @@ func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 			err := fmt.Errorf("Receive the same deal, index=%d: %v", deal.Index, deal)
 			d.log.Warnf(err.Error())
 			return nil, err
-		} else {
-			d.remoteDeals = append(d.remoteDeals, deal)
 		}
 	}
+
+	d.remoteDeals = append(d.remoteDeals, deal)
 
 	resp, err := d.dkGenerator.ProcessDeal(deal)
 
@@ -170,14 +170,10 @@ func (d *dkgCrypt) addAdvanceResp(resp *dkg.Response) error {
 			err := fmt.Errorf("Receive the same resp, index=%d: %v", resp.Index, resp)
 			d.log.Warnf(err.Error())
 			return nil
-		} else {
-			d.remoteAdvanResp = append(d.remoteAdvanResp, resp)
 		}
 	}
 
-	if d.remoteAdvanResp == nil {
-		d.remoteAdvanResp = append(d.remoteAdvanResp, resp)
-	}
+	d.remoteAdvanResp = append(d.remoteAdvanResp, resp)
 
 	return nil
 }

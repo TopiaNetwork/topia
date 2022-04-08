@@ -86,7 +86,7 @@ func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
 		tx := txs[len(txs)-1]
 		txs = txs[:len(txs)-1]
 		txId := tx.tx
-		pool.RemoveTxByKey(category, txId)
+		pool.RemoveTxByKey(txId)
 		drop -= 1
 		continue
 	}

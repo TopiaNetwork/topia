@@ -17,7 +17,7 @@ func Test_transactionPool_SaveConfig(t *testing.T) {
 	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
-	pool.config.PathRemote[Category1] = "newremote.json"
+	//pool.config.PathRemote[Category1] = "newremote.json"
 
 	if err := pool.SaveConfig(); err != nil {
 		t.Error("want", nil, "got", err)

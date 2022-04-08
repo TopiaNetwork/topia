@@ -38,21 +38,22 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	hashcatmap := make(map[string]basic.TransactionCategory)
-	hashcatmap[Key1] = basic.TransactionCategory_Topia_Universal
-	hashcatmap[Key2] = basic.TransactionCategory_Topia_Universal
-	hashcatmap[KeyR1] = basic.TransactionCategory_Topia_Universal
-	hashcatmap[KeyR2] = basic.TransactionCategory_Topia_Universal
-	var hashcatmap1, hashcatmap2 map[string]basic.TransactionCategory
+	hashs := make([]string, 0)
+	hashs = append(hashs, Key1)
+	hashs = append(hashs, Key2)
+	hashs = append(hashs, KeyR1)
+	hashs = append(hashs, KeyR2)
+	pool.RemoveTxHashs(hashs)
+	var hashs1, hashs2 []string
 	var hash string
 	for _, tx := range txLocals[1:10] {
 		hash, _ = tx.HashHex()
-		hashcatmap1[hash] = basic.TransactionCategory_Topia_Universal
+		hashs1 = append(hashs1, hash)
 		pool.AddTx(tx, false)
 	}
 	for _, tx := range txLocals[20:40] {
 		hash, _ = tx.HashHex()
-		hashcatmap2[hash] = basic.TransactionCategory_Topia_Universal
+		hashs2 = append(hashs2, hash)
 		pool.AddTx(tx, false)
 	}
 	pool.wg.Add(1)
@@ -72,17 +73,17 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	//go pool.regularRepublic()
 
 	go func() {
-		pool.chanRmTxs <- hashcatmap
+		pool.chanRmTxs <- hashs
 	}()
 	go func() {
-		pool.chanRmTxs <- hashcatmap1
+		pool.chanRmTxs <- hashs1
 	}()
 	go func() {
-		pool.chanRmTxs <- hashcatmap2
+		pool.chanRmTxs <- hashs2
 	}()
 
 	go func() {
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 		assert.Equal(t, 0, len(pool.queues[Category1].accTxs))
 		assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
 		assert.Equal(t, 0, pool.allTxsForLook[Category1].LocalCount())
@@ -449,8 +450,8 @@ func Test_transactionPool_loop(t *testing.T) {
 	pool.network = newnetwork
 	defer pool.wg.Wait()
 
-	keyCatLocals = make(map[string]basic.TransactionCategory, 0)
-	keyCatRemotes = make(map[string]basic.TransactionCategory, 0)
+	keyLocals = make([]string, 0)
+	keyRemotes = make([]string, 0)
 	txLocals = make([]*basic.Transaction, 0)
 	txRemotes = make([]*basic.Transaction, 0)
 	var fromlocal, fromremote tpcrtypes.Address
@@ -465,7 +466,7 @@ func Test_transactionPool_loop(t *testing.T) {
 			txlocal.Head.FromAddr = append(txlocal.Head.FromAddr, byte(i))
 		}
 		keylocal, _ = txlocal.HashHex()
-		keyCatLocals[keylocal] = basic.TransactionCategory_Topia_Universal
+		keyLocals = append(keyLocals, keylocal)
 		txLocals = append(txLocals, txlocal)
 		fromlocal = tpcrtypes.Address(txlocal.Head.FromAddr)
 
@@ -475,7 +476,7 @@ func Test_transactionPool_loop(t *testing.T) {
 			txremote.Head.FromAddr = append(txremote.Head.FromAddr, byte(i))
 		}
 		keyremote, _ = txremote.HashHex()
-		keyCatLocals[keyremote] = basic.TransactionCategory_Topia_Universal
+		keyRemotes = append(keyRemotes, keyremote)
 		txRemotes = append(txRemotes, txremote)
 		fromremote = tpcrtypes.Address(txremote.Head.FromAddr)
 
@@ -498,10 +499,10 @@ func Test_transactionPool_loop(t *testing.T) {
 	pool.loop()
 
 	go func() {
-		pool.chanRmTxs <- keyCatLocals
+		pool.chanRmTxs <- keyLocals
 	}()
 	go func() {
-		pool.chanRmTxs <- keyCatRemotes
+		pool.chanRmTxs <- keyRemotes
 	}()
 
 	waitChannel := make(chan struct{})

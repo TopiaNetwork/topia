@@ -29,7 +29,7 @@ var (
 	keylocal, keyremote, Key1, Key2, Key3, Key4, KeyR1, KeyR2                        string
 	from, to, From1, From2                                                           tpcrtypes.Address
 	txLocals, txRemotes                                                              []*basic.Transaction
-	keyCatLocals, keyCatRemotes                                                      map[string]basic.TransactionCategory
+	keyLocals, keyRemotes                                                            []string
 	fromLocals, fromRemotes, toLocals, toRemotes                                     []tpcrtypes.Address
 
 	OldBlock, NewBlock                                             *types.Block
@@ -46,13 +46,12 @@ var (
 
 func init() {
 	Ctx = context.Background()
-
 	Category1 = basic.TransactionCategory_Topia_Universal
 	TpiaLog, _ = tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
 	TestTxPoolConfig = DefaultTransactionPoolConfig
 	starttime = uint64(time.Now().Unix() - 105)
-	keyCatLocals = make(map[string]basic.TransactionCategory)
-	keyCatRemotes = make(map[string]basic.TransactionCategory)
+	keyLocals = make([]string, 0)
+	keyRemotes = make([]string, 0)
 	for i := 1; i <= 100; i++ {
 		nonce := uint64(i)
 		gasprice := uint64(i * 1000)
@@ -63,7 +62,7 @@ func init() {
 			txlocal.Head.FromAddr = append(txlocal.Head.FromAddr, byte(i))
 		}
 		keylocal, _ = txlocal.HashHex()
-		keyCatLocals[keylocal] = basic.TransactionCategory_Topia_Universal
+		keyLocals = append(keyLocals, keylocal)
 		txLocals = append(txLocals, txlocal)
 
 		txremote = setTxRemote(nonce, gasprice, gaslimit)
@@ -72,7 +71,7 @@ func init() {
 			txremote.Head.FromAddr = append(txremote.Head.FromAddr, byte(i))
 		}
 		keyremote, _ = txremote.HashHex()
-		keyCatRemotes[keyremote] = basic.TransactionCategory_Topia_Universal
+		keyRemotes = append(keyRemotes, keyremote)
 		txRemotes = append(txRemotes, txremote)
 	}
 	Tx1 = setTxLocal(1, 11000, 123456)
@@ -335,18 +334,19 @@ func SetNewTransactionPool(ctx context.Context, conf TransactionPoolConfig, leve
 		ctx:                 ctx,
 		allTxsForLook:       make(map[basic.TransactionCategory]*txLookup, 0),
 		ActivationIntervals: newActivationInterval(),
+		TxHashCategory:      newTxHashCategory(),
 		chanChainHead:       make(chan ChainHeadEvent, chainHeadChanSize),
 		chanReqReset:        make(chan *txPoolResetRequest),
 		chanReqPromote:      make(chan *accountSet),
 		chanReorgDone:       make(chan chan struct{}),
 		chanReorgShutdown:   make(chan struct{}),           // requests shutdown of scheduleReorgLoop
 		chanQueueTxEvent:    make(chan *basic.Transaction), //check new tx insert to txpool
-		chanRmTxs:           make(chan map[string]basic.TransactionCategory),
+		chanRmTxs:           make(chan []string),
 
 		marshaler: codec.CreateMarshaler(codecType),
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
-
+	//pool.network.Subscribe(ctx, protocol.SyncProtocolID_Msg)
 	pool.allTxsForLook[basic.TransactionCategory_Topia_Universal] = newTxLookup()
 	pool.pendings = newPendingsTxs()
 	pool.queues = newQueuesTxs()
@@ -503,7 +503,7 @@ func Test_transactionPool_RemoveTxByKey(t *testing.T) {
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
 	pool.AddTx(Tx1, true)
-	pool.RemoveTxByKey(Category1, Key1)
+	pool.RemoveTxByKey(Key1)
 	assert.Equal(t, 0, len(pool.queues[Category1].accTxs))
 	assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
 	assert.Equal(t, 0, pool.allTxsForLook[Category1].LocalCount())
@@ -512,7 +512,7 @@ func Test_transactionPool_RemoveTxByKey(t *testing.T) {
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
 	pool.AddTx(TxR1, false)
-	pool.RemoveTxByKey(Category1, KeyR1)
+	pool.RemoveTxByKey(KeyR1)
 	assert.Equal(t, 0, len(pool.queues[Category1].accTxs))
 	assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
 	assert.Equal(t, 0, pool.allTxsForLook[Category1].LocalCount())
@@ -546,12 +546,12 @@ func Test_transactionPool_RemoveTxHashs(t *testing.T) {
 	assert.Equal(t, 2, pool.allTxsForLook[Category1].RemoteCount())
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	hashcatmap := make(map[string]basic.TransactionCategory)
-	hashcatmap[Key1] = basic.TransactionCategory_Topia_Universal
-	hashcatmap[Key2] = basic.TransactionCategory_Topia_Universal
-	hashcatmap[KeyR1] = basic.TransactionCategory_Topia_Universal
-	hashcatmap[KeyR2] = basic.TransactionCategory_Topia_Universal
-	pool.RemoveTxHashs(hashcatmap)
+	hashs := make([]string, 0)
+	hashs = append(hashs, Key1)
+	hashs = append(hashs, Key2)
+	hashs = append(hashs, KeyR1)
+	hashs = append(hashs, KeyR2)
+	pool.RemoveTxHashs(hashs)
 	assert.Equal(t, 0, len(pool.queues[Category1].accTxs))
 	assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
 	assert.Equal(t, 0, pool.allTxsForLook[Category1].LocalCount())
@@ -648,7 +648,7 @@ func Test_transactionPool_Pending(t *testing.T) {
 	pool.AddTx(TxR1, false)
 	pool.AddTx(TxR2, false)
 	pool.turnTx(From1, Key1, Tx1)
-	pending := pool.Pending(Category1)
+	pending := pool.PendingOfCategory(Category1)
 	for _, txs := range pending {
 		for _, tx := range txs {
 			if !reflect.DeepEqual(tx, Tx1) {
@@ -681,7 +681,7 @@ func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 	_ = pool.turnTx(From1, Key2, Tx2)
 	_ = pool.turnTx(From2, KeyR1, TxR1)
 	_ = pool.turnTx(From2, KeyR2, TxR2)
-	pending := pool.Pending(Category1)
+	pending := pool.PendingOfCategory(Category1)
 	txs := make([]*basic.Transaction, 0)
 	txSet := NewTxsByPriceAndNonce(pending)
 	var cnt int
@@ -751,15 +751,17 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	_ = pool.turnTx(From1, Key2, Tx2)
 	_ = pool.turnTx(From2, KeyR1, TxR1)
 	_ = pool.turnTx(From2, KeyR2, TxR2)
-	pending := pool.Pending(Category1)
+	pending := pool.PendingOfCategory(Category1)
 	txs := make([]*basic.Transaction, 0)
 	for _, v := range pending {
 		for _, tx := range v {
 			txs = append(txs, tx)
 		}
 	}
-	if got := pool.PickTxs(Category1, 0); !reflect.DeepEqual(got, txs) {
-		t.Errorf("PickTxs(0) = %v\n,                                 want %v", got, txs)
+	want := len(txs)
+
+	if got := len(pool.PickTxsOfCategory(Category1, PickTransactionsFromPending)); got != want {
+		t.Error("PickTxsOfCategory want", want, "got", got)
 	}
 
 	txs2 := make([]*basic.Transaction, 0)
@@ -773,9 +775,12 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 		txs2 = append(txs2, tx)
 		txSet.Pop()
 	}
-
-	if got := pool.PickTxs(Category1, 1); !reflect.DeepEqual(got, txs2) {
-		t.Errorf("CommitTxsByPriceAndNonce() = %v\n,                            want %v", got, txs)
+	want = len(txs2)
+	//if got := pool.PickTxsOfCategory(Category1, PickTransactionsSortedByGasPriceAndNonce); !reflect.DeepEqual(got, txs2) {
+	//	t.Errorf("CommitTxsByPriceAndNonce() = %v\n,                            want %v", got, txs)
+	//}
+	if got := len(pool.PickTxsOfCategory(Category1, PickTransactionsSortedByGasPriceAndNonce)); got != want {
+		t.Error("want", want, "got", got)
 	}
 }
 

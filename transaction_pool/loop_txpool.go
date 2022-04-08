@@ -1,7 +1,6 @@
 package transactionpool
 
 import (
-	"fmt"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 	"sync/atomic"
 	"time"
@@ -25,10 +24,15 @@ func (pool *transactionPool) loop() {
 func (pool *transactionPool) chanRemoveTxHashs() {
 	//fmt.Println("chanRemoveTxHashs")
 	defer pool.wg.Done()
+	defer func() {
+		if err := recover(); err != nil {
+			pool.log.Errorf("chanRemoveTxHashs err:", err)
+		}
+	}()
 	for {
 		select {
-		case HashCatMap := <-pool.chanRmTxs:
-			pool.RemoveTxHashs(HashCatMap)
+		case Hashs := <-pool.chanRmTxs:
+			pool.RemoveTxHashs(Hashs)
 		case <-pool.chanSysShutDown:
 			close(pool.chanReorgShutdown)
 			//local txs save
@@ -52,6 +56,11 @@ func (pool *transactionPool) chanRemoveTxHashs() {
 
 func (pool *transactionPool) saveAllIfShutDown() (a, b, c int) {
 	defer pool.wg.Done()
+	defer func() {
+		if err := recover(); err != nil {
+			pool.log.Errorf("saveAllIfShutDown err:", err)
+		}
+	}()
 	for {
 		select {
 		// System shutdown.  When the system is shut down, save to the files locals/remotes/configs
@@ -77,8 +86,12 @@ func (pool *transactionPool) saveAllIfShutDown() (a, b, c int) {
 	}
 }
 func (pool *transactionPool) resetIfNewHead() {
-	fmt.Println("resetIfNewHead")
 	defer pool.wg.Done()
+	defer func() {
+		if err := recover(); err != nil {
+			pool.log.Errorf("resetIfNewHead err:", err)
+		}
+	}()
 	// Track the previous head headers for transaction reorgs
 	var head = pool.query.CurrentBlock()
 	for {
@@ -111,9 +124,14 @@ func (pool *transactionPool) resetIfNewHead() {
 }
 func (pool *transactionPool) reportTicks() {
 	defer pool.wg.Done()
+	defer func() {
+		if err := recover(); err != nil {
+			pool.log.Errorf("reportTicks err:", err)
+		}
+	}()
 	var (
 		prevPending, prevQueued, prevStales int
-		report                              = time.NewTicker(statsReportInterval) //500ms report queue stats
+		report                              = time.NewTicker(pool.config.StatsReportInterval) //500ms report queue stats
 	)
 	defer report.Stop()
 	for {
@@ -144,6 +162,7 @@ func (pool *transactionPool) reportTicks() {
 	}
 }
 func (pool *transactionPool) reportUniversal(category basic.TransactionCategory, prevPending, prevQueued, prevStales int) {
+
 	pending, queued := pool.stats(category)
 	stales := int(atomic.LoadInt64(&pool.sortedLists.Pricedlist[category].stales))
 	if pending != prevPending || queued != prevQueued || stales != prevStales {
@@ -154,17 +173,18 @@ func (pool *transactionPool) reportUniversal(category basic.TransactionCategory,
 
 func (pool *transactionPool) removeTxForUptoLifeTime() {
 	defer pool.wg.Done()
-	var evict = time.NewTicker(evictionInterval) //200ms report eviction
+	defer func() {
+		if err := recover(); err != nil {
+			pool.log.Errorf("removeTxForUptoLifeTime err:", err)
+		}
+	}()
+	var evict = time.NewTicker(pool.config.EvictionInterval) //30s report eviction
 	defer evict.Stop()
 
 	select {
 	// Handle inactive account transaction eviction
 	case <-evict.C:
 		for category, _ := range pool.pendings {
-			pool.queues[category].Mu.Lock()
-			defer pool.queues[category].Mu.Unlock()
-			pool.ActivationIntervals.Mu.Lock()
-			defer pool.ActivationIntervals.Mu.Unlock()
 			for addr := range pool.queues[category].accTxs {
 				// Skip local transactions from the eviction mechanism
 				if pool.locals.contains(addr) {
@@ -176,7 +196,7 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 				for _, tx := range list {
 					txId, _ := tx.HashHex()
 					if time.Since(pool.ActivationIntervals.activ[txId]) > pool.config.LifetimeForTx {
-						pool.RemoveTxByKey(category, txId)
+						pool.RemoveTxByKey(txId)
 					}
 				}
 			}
@@ -201,8 +221,12 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 	}
 }
 func (pool *transactionPool) regularSaveLocalTxs() {
-	fmt.Println("regularSaveLocalTxs")
 	defer pool.wg.Done()
+	defer func() {
+		if err := recover(); err != nil {
+			pool.log.Errorf("regularSaveLocalTxs err:", err)
+		}
+	}()
 	var stored = time.NewTicker(pool.config.ReStoredDur)
 	defer stored.Stop()
 	select {
@@ -236,7 +260,12 @@ func (pool *transactionPool) regularSaveLocalTxs() {
 func (pool *transactionPool) regularRepublic() {
 	//fmt.Println("regularRepublic")
 	defer pool.wg.Done()
-	var republic = time.NewTicker(republicInterval) //30s check tx lifetime )
+	defer func() {
+		if err := recover(); err != nil {
+			pool.log.Errorf("regularRepublic err:", err)
+		}
+	}()
+	var republic = time.NewTicker(pool.config.RepublicInterval) //30s check tx lifetime
 	defer republic.Stop()
 	for {
 		select {

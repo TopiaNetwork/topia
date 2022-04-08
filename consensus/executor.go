@@ -70,9 +70,9 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					continue
 				}
 
-				var receivedTxList []basic.Transaction
+				var receivedTxList []*basic.Transaction
 				for i := 0; i < len(perparePMExe.Txs); i++ {
-					var tx basic.Transaction
+					var tx *basic.Transaction
 					err = e.marshaler.Unmarshal(perparePMExe.Txs[i], &tx)
 					if err != nil {
 						e.log.Errorf("Invalid tx from pepare packed msg exe: marshal err %v", err)
@@ -194,7 +194,7 @@ func (e *consensusExecutor) start(ctx context.Context) {
 	e.prepareTimerStart(ctx)
 }
 
-func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []basic.Transaction, txResultList []basic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
+func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []*basic.Transaction, txResultList []basic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
 	if len(txList) != len(txResultList) {
 		err := fmt.Errorf("Mismatch tx list count %d and tx result count %d", len(txList), len(txResultList))
 		e.log.Errorf("%v", err)

@@ -7,7 +7,7 @@ import (
 type PackedTxs struct {
 	StateVersion uint64
 	TxRoot       []byte
-	TxList       []tx.Transaction
+	TxList       []*tx.Transaction
 }
 
 type PackedTxsResult struct {

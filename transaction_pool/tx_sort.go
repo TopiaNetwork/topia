@@ -484,6 +484,18 @@ func newActivationInterval() *activationInterval {
 	return activ
 }
 
+type txHashCategory struct {
+	Mu              sync.RWMutex
+	hashCategoryMap map[string]basic.TransactionCategory
+}
+
+func newTxHashCategory() *txHashCategory {
+	hashCat := &txHashCategory{
+		hashCategoryMap: make(map[string]basic.TransactionCategory),
+	}
+	return hashCat
+}
+
 type accountSet struct {
 	accounts map[tpcrtypes.Address]struct{}
 	cache    *[]tpcrtypes.Address
@@ -855,10 +867,7 @@ type TxByNonce []*basic.Transaction
 
 func (s TxByNonce) Len() int { return len(s) }
 func (s TxByNonce) Less(i, j int) bool {
-	var Noncei, Noncej uint64
-	Noncei = s[i].Head.Nonce
-	Noncej = s[j].Head.Nonce
-	return Noncei < Noncej
+	return s[i].Head.Nonce < s[j].Head.Nonce
 }
 func (s TxByNonce) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 

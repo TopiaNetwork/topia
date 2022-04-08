@@ -33,7 +33,7 @@ const (
 	Transaction_Eth_V1                                = 1
 )
 
-func TxRoot(txs []Transaction) []byte {
+func TxRoot(txs []*Transaction) []byte {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
 	for _, tx := range txs {
 		txBytes, _ := tx.HashBytes()

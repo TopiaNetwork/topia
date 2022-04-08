@@ -27,16 +27,19 @@ type TransactionPoolConfig struct {
 
 	LifetimeForTx         time.Duration
 	DurationForTxRePublic time.Duration
+	EvictionInterval      time.Duration //= 30 * time.Second // Time interval to check for evictable transactions
+	StatsReportInterval   time.Duration //= 500 * time.Millisecond // Time interval to report transaction pool stats
+	RepublicInterval      time.Duration //= 30 * time.Second       //time interval to check transaction lifetime for report
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	PathLocal: map[basic.TransactionCategory]string{
-		basic.TransactionCategory_Topia_Universal: "Topia_Universal_localTransactions.json",
-		basic.TransactionCategory_Eth:             "Eth_localTransactions.json"},
+		basic.TransactionCategory_Topia_Universal: "configuration/Topia_Universal_localTransactions.json",
+		basic.TransactionCategory_Eth:             "configuration/Eth_localTransactions.json"},
 	PathRemote: map[basic.TransactionCategory]string{
-		basic.TransactionCategory_Topia_Universal: "Topia_Universal_remoteTransactions.json",
-		basic.TransactionCategory_Eth:             "Eth_remoteTransactions.json"},
-	PathConfig:  "txPoolConfigs.json",
+		basic.TransactionCategory_Topia_Universal: "configuration/Topia_Universal_remoteTransactions.json",
+		basic.TransactionCategory_Eth:             "configuration/Eth_remoteTransactions.json"},
+	PathConfig:  "configuration/txPoolConfigs.json",
 	ReStoredDur: 30 * time.Minute,
 
 	GasPriceLimit:       1000,     // 1000
@@ -47,6 +50,10 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 
 	LifetimeForTx:         30 * time.Minute,
 	DurationForTxRePublic: 30 * time.Second,
+	EvictionInterval:      30 * time.Second,       // Time interval to check for evictable transactions
+	StatsReportInterval:   500 * time.Millisecond, // Time interval to report transaction pool stats
+	RepublicInterval:      30 * time.Second,       //time interval to check transaction lifetime for report
+
 }
 
 func (config *TransactionPoolConfig) check() TransactionPoolConfig {

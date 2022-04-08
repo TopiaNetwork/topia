@@ -23,8 +23,8 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	keyCatLocals = make(map[string]basic.TransactionCategory, 0)
-	keyCatRemotes = make(map[string]basic.TransactionCategory, 0)
+	keyLocals = make([]string, 0)
+	keyRemotes = make([]string, 0)
 	txLocals = make([]*basic.Transaction, 0)
 	txRemotes = make([]*basic.Transaction, 0)
 	var fromlocal, fromremote tpcrtypes.Address
@@ -39,7 +39,7 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 			txlocal.Head.FromAddr = append(txlocal.Head.FromAddr, byte(i))
 		}
 		keylocal, _ = txlocal.HashHex()
-		keyCatLocals[keylocal] = basic.TransactionCategory_Topia_Universal
+		keyLocals = append(keyLocals, keylocal)
 		txLocals = append(txLocals, txlocal)
 
 		txremote = setTxRemote(nonce, gasprice, gaslimit)
@@ -48,7 +48,7 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 			txremote.Head.FromAddr = append(txremote.Head.FromAddr, byte(i))
 		}
 		keyremote, _ = txremote.HashHex()
-		keyCatRemotes[keyremote] = basic.TransactionCategory_Topia_Universal
+		keyRemotes = append(keyRemotes, keyremote)
 		txRemotes = append(txRemotes, txremote)
 		fromlocal = tpcrtypes.Address(txlocal.Head.FromAddr)
 		_ = pool.AddTx(txlocal, true)
@@ -91,8 +91,8 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	keyCatLocals = make(map[string]basic.TransactionCategory, 0)
-	keyCatRemotes = make(map[string]basic.TransactionCategory, 0)
+	keyLocals = make([]string, 0)
+	keyRemotes = make([]string, 0)
 	txLocals = make([]*basic.Transaction, 0)
 	txRemotes = make([]*basic.Transaction, 0)
 	var fromlocal, fromremote tpcrtypes.Address
@@ -107,7 +107,7 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 			txlocal.Head.FromAddr = append(txlocal.Head.FromAddr, byte(i))
 		}
 		keylocal, _ = txlocal.HashHex()
-		keyCatLocals[keylocal] = basic.TransactionCategory_Topia_Universal
+		keyLocals = append(keyLocals, keylocal)
 		txLocals = append(txLocals, txlocal)
 
 		txremote = setTxRemote(nonce, gasprice, gaslimit)
@@ -116,7 +116,7 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 			txremote.Head.FromAddr = append(txremote.Head.FromAddr, byte(i))
 		}
 		keyremote, _ = txremote.HashHex()
-		keyCatRemotes[keyremote] = basic.TransactionCategory_Topia_Universal
+		keyRemotes = append(keyRemotes, keyremote)
 		txRemotes = append(txRemotes, txremote)
 		fromlocal = tpcrtypes.Address(txlocal.Head.FromAddr)
 		_ = pool.AddTx(txlocal, true)

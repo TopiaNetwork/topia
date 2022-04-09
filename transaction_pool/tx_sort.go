@@ -2,8 +2,6 @@ package transactionpool
 
 import (
 	"container/heap"
-	"math"
-	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -240,21 +238,18 @@ func (m *txSortedMap) LastElement() *basic.Transaction {
 // the executable/pending queue; and for storing gapped transactions for the non-
 // executable/future queue, with minor behavioral changes.
 type txList struct {
-	lock    sync.RWMutex
-	strict  bool         // Whether nonces are strictly continuous or not
-	txs     *txSortedMap // Heap indexed sorted hash map of the transactions
-	servant TransactionPoolServant
-	costcap *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
-	gascap  uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
+	lock   sync.RWMutex
+	strict bool         // Whether nonces are strictly continuous or not
+	txs    *txSortedMap // Heap indexed sorted hash map of the transactions
 }
 
 // newTxList create a new transaction list for maintaining nonce-indexable fast,
 // gapped, sortable transaction lists.
 func newTxList(strict bool) *txList {
 	return &txList{
-		strict:  strict,
-		txs:     newTxSortedMap(),
-		costcap: new(big.Int),
+		strict: strict,
+		txs:    newTxSortedMap(),
+		//	costcap: new(big.Int),
 	}
 }
 
@@ -307,55 +302,6 @@ func (l *txList) Forward(threshold uint64) []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Forward(threshold)
-}
-
-// Filter removes all transactions from the list with a cost or gas limit higher
-// than the provided thresholds. Every removed transaction is returned for any
-// post-removal maintenance. Strict-mode invalidated transactions are also
-// returned.
-//
-// This method uses the cached costcap and gascap to quickly decide if there's even
-// a point in calculating all the costs or if the balance covers all. If the threshold
-// is lower than the costgas cap, the caps will be reset to a new high after removing
-// the newly invalidated transactions.
-func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) ([]*basic.Transaction, []*basic.Transaction) {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-	// If all transactions are below the threshold, short circuit
-	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
-		return nil, nil
-	}
-	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
-	l.gascap = gasLimit
-	txQuery := l.servant
-	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *basic.Transaction) bool {
-		gas := txQuery.EstimateTxGas(tx)
-		cost := txQuery.EstimateTxCost(tx)
-		return gas > gasLimit || cost.Cmp(costLimit) > 0
-	})
-
-	if len(removed) == 0 {
-		return nil, nil
-	}
-	var invalids []*basic.Transaction
-	// If the list was strict, filter anything above the lowest nonce
-	if l.strict {
-		lowest := uint64(math.MaxUint64)
-		for _, tx := range removed {
-			Nonce := tx.Head.Nonce
-			if nonce := Nonce; lowest > nonce {
-				lowest = nonce
-			}
-		}
-
-		invalids = l.txs.filter(func(tx *basic.Transaction) bool {
-			Nonce := tx.Head.Nonce
-			return Nonce > lowest
-		})
-	}
-	l.txs.reheap()
-	return removed, invalids
 }
 
 // Cap places a hard limit on the number of items, returning all transactions

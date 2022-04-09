@@ -6,7 +6,6 @@ import (
 	"errors"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/universal"
-	"math/big"
 	"sync"
 	"time"
 
@@ -123,6 +122,7 @@ func NewTransactionPool(ctx context.Context, conf TransactionPoolConfig, level t
 		marshaler: codec.CreateMarshaler(codecType),
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
+	//pool.network.Subscribe(ctx, protocol.SyncProtocolID_Msg, message.TopicValidator())
 	pool.allTxsForLook[basic.TransactionCategory_Topia_Universal] = newTxLookup()
 	pool.curMaxGasLimit = pool.query.GetMaxGasLimit()
 	pool.pendings = newPendingsTxs()
@@ -329,7 +329,13 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network network.
 // RemoveTxByKey removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 func (pool *transactionPool) RemoveTxByKey(key string) error {
+
 	category := pool.TxHashCategory.hashCategoryMap[key]
+	pool.pendings[category].Mu.RLock()
+	defer pool.pendings[category].Mu.RUnlock()
+	pool.queues[category].Mu.RLock()
+	defer pool.queues[category].Mu.RUnlock()
+
 	tx := pool.allTxsForLook[category].Get(key)
 	if tx == nil {
 		return ErrTxNotExist
@@ -339,10 +345,8 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 	pool.allTxsForLook[category].Remove(key)
 	// Remove it from the list of sortedByPriced
 	pool.sortedLists.Pricedlist[category].Removed(1)
+
 	// Remove the transaction from the pending lists and reset the account nonce
-	pool.pendings[category].Mu.Lock()
-	defer pool.pendings[category].Mu.Unlock()
-	//switch basic.TransactionCategory(tx.Head.Category) {
 	if pending := pool.pendings[category].accTxs[addr]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {
 			if pending.Empty() {
@@ -358,8 +362,6 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 	}
 
 	// Transaction is in the future queue
-	pool.queues[category].Mu.RLock()
-	pool.queues[category].Mu.RUnlock()
 	if future := pool.queues[category].accTxs[addr]; future != nil {
 		future.Remove(tx)
 		if future.Empty() {
@@ -384,14 +386,15 @@ func (pool *transactionPool) RemoveTxHashs(hashs []string) []error {
 	}
 	return errs
 }
-func (pool *transactionPool) Cost(tx *basic.Transaction) *big.Int {
-	total := pool.query.EstimateTxCost(tx)
-	return total
-}
-func (pool *transactionPool) Gas(tx *basic.Transaction) uint64 {
-	total := pool.query.EstimateTxGas(tx)
-	return total
-}
+
+//func (pool *transactionPool) Cost(tx *basic.Transaction) *big.Int {
+//	total := pool.query.EstimateTxCost(tx)
+//	return total
+//}
+//func (pool *transactionPool) Gas(tx *basic.Transaction) uint64 {
+//	total := pool.query.EstimateTxGas(tx)
+//	return total
+//}
 
 func (pool *transactionPool) Get(category basic.TransactionCategory, key string) *basic.Transaction {
 	return pool.allTxsForLook[category].Get(key)
@@ -504,18 +507,19 @@ func (pool *transactionPool) ValidateTx(tx *basic.Transaction, local bool) error
 // stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
 func (pool *transactionPool) stats(category basic.TransactionCategory) (int, int) {
-	pending := 0
 	pool.pendings[category].Mu.RLock()
+	defer pool.pendings[category].Mu.RUnlock()
+	pool.queues[category].Mu.RLock()
+	defer pool.queues[category].Mu.RUnlock()
+
+	pending := 0
 	for _, list := range pool.pendings[category].accTxs {
 		pending += list.Len()
 	}
 	queued := 0
-	pool.pendings[category].Mu.RUnlock()
-	pool.queues[category].Mu.RLock()
 	for _, list := range pool.queues[category].accTxs {
 		queued += list.Len()
 	}
-	pool.queues[category].Mu.RUnlock()
 	return pending, queued
 }
 
@@ -626,9 +630,9 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId string, tx *bas
 	category := basic.TransactionCategory(tx.Head.Category)
 	pool.pendings[category].Mu.Lock()
 	defer pool.pendings[category].Mu.Unlock()
+
 	// Try to insert the transaction into the pending queue
-	Noncei := tx.Head.Nonce
-	if pool.queues[category].accTxs[addr] == nil || pool.queues[category].accTxs[addr].txs.Get(Noncei) != tx {
+	if pool.queues[category].accTxs[addr] == nil || pool.queues[category].accTxs[addr].txs.Get(tx.Head.Nonce) != tx {
 		return false
 	}
 	if pool.pendings[category].accTxs[addr] == nil {
@@ -707,24 +711,6 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 			}
 		}
 		pool.log.Tracef("Removed old queued transactions", "count", len(forwards))
-		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.curState.GetBalance(addr), pool.curMaxGasLimit)
-		for _, tx := range drops {
-			txId, err := tx.HashHex()
-			if err == nil {
-				pool.allTxsForLook[category].Remove(txId)
-
-				pool.ActivationIntervals.Mu.RLock()
-				defer pool.ActivationIntervals.Mu.RUnlock()
-				delete(pool.ActivationIntervals.activ, txId)
-				pool.TxHashCategory.Mu.RLock()
-				defer pool.TxHashCategory.Mu.RUnlock()
-				delete(pool.TxHashCategory.hashCategoryMap, txId)
-
-			}
-		}
-		pool.log.Tracef("Removed unpayable queued transactions", "count", len(drops))
-
 		// Gather all executable transactions and promote them
 		readies := list.Ready(pool.curState.GetNonce(addr))
 		for _, tx := range readies {
@@ -746,7 +732,7 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 			}
 		}
 		// Mark all the items dropped as removed
-		pool.sortedLists.Pricedlist[category].Removed(len(forwards) + len(drops) + len(caps))
+		pool.sortedLists.Pricedlist[category].Removed(len(forwards) + len(caps))
 
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
@@ -774,21 +760,6 @@ func (pool *transactionPool) demoteUnexecutables(category basic.TransactionCateg
 			txId, _ := tx.HashHex()
 			pool.allTxsForLook[category].Remove(txId)
 			pool.log.Tracef("Removed old pending transaction", "txId", txId)
-		}
-		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.curState.GetBalance(addr), pool.curMaxGasLimit)
-		for _, tx := range drops {
-			txId, _ := tx.HashHex()
-			pool.log.Tracef("Removed unpayable pending transaction", "txId", txId)
-			pool.allTxsForLook[category].Remove(txId)
-		}
-
-		for _, tx := range invalids {
-			hash, _ := tx.HashHex()
-			pool.log.Tracef("Demoting pending transaction", "hash", hash)
-
-			// Internal shuffle shouldn't touch the lookup set.
-			pool.queueAddTx(hash, tx, false, false)
 		}
 
 		// If there's a gap in front, alert (should never happen) and postpone all transactions

@@ -318,7 +318,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 			return errCMMBlock
 		}
 
-		eventhub.GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
+		eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 
 		scheduler.exePackedTxsList.Remove(exeTxsItem)
 

@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/TopiaNetwork/topia/chain"
 	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/state"
 
@@ -61,7 +62,8 @@ type consensus struct {
 	config       *tpconfig.ConsensusConfiguration
 }
 
-func NewConsensus(nodeID string,
+func NewConsensus(chainID chain.ChainID,
+	nodeID string,
 	priKey tpcrtypes.PrivateKey,
 	level tplogcmm.LogLevel,
 	log tplog.Logger,
@@ -97,7 +99,7 @@ func NewConsensus(nodeID string,
 	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, config.ExecutionPrepareInterval)
 	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
 	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, voteMsgChan, cryptS, deliver, ledger, marshaler, validator)
-	dkgEx := newDKGExchange(log, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, deliver, ledger)
+	dkgEx := newDKGExchange(log, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, deliver, ledger)
 
 	epService := newEpochService(log, nodeID, blockAddedCh, config.EpochInterval, config.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
 	csHandler := NewConsensusHandler(log, blockAddedCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
@@ -112,6 +114,7 @@ func NewConsensus(nodeID string,
 		handler:      csHandler,
 		marshaler:    codec.CreateMarshaler(codecType),
 		network:      network,
+		ledger:       ledger,
 		executor:     executor,
 		proposer:     proposer,
 		validator:    validator,
@@ -180,25 +183,37 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	ctx := context.Background()
 
-	eventhub.GetEventHub(cons.nodeID).Observe(ctx, eventhub.EventName_BlockAdded, cons.ProcessSubEvent)
+	eventhub.GetEventHubManager().GetEventHub(cons.nodeID).Observe(ctx, eventhub.EventName_BlockAdded, cons.ProcessSubEvent)
 
 	cons.epochService.start(ctx)
 	cons.executor.start(ctx)
 	cons.proposer.start(ctx)
 	cons.validator.start(ctx)
-	cons.dkgEx.startLoop(ctx)
 
-	deltaH := int(height) - int(epochStartHeight)
-	if deltaH == int(cons.config.EpochInterval)-int(cons.config.DKGStartBeforeEpoch) {
-		csStateRN := state.CreateCompositionStateReadonly(cons.log, cons.ledger)
-		defer csStateRN.Stop()
-		err = cons.dkgEx.updateDKGPartPubKeys(csStateRN)
-		if err != nil {
-			cons.log.Panicf("Update DKG exchange part pub keys err: %v", err)
-			return err
+	csStateRN := state.CreateCompositionStateReadonly(cons.log, cons.ledger)
+	defer csStateRN.Stop()
+	nodeInfo, err := csStateRN.GetNode(cons.nodeID)
+	if err != nil {
+		cons.log.Panicf("Get node error: %v", err)
+		return err
+	}
+
+	cons.log.Infof("Self Node id=%s, role=%d, state=%d", nodeInfo.NodeID, nodeInfo.Role, nodeInfo.State)
+
+	if nodeInfo.Role == chain.NodeRole_Proposer || nodeInfo.Role == chain.NodeRole_Validator {
+		cons.dkgEx.startLoop(ctx)
+
+		deltaH := int(height) - int(epochStartHeight)
+		if (epoch == 0 && height == 1) || deltaH == int(cons.config.EpochInterval)-int(cons.config.DKGStartBeforeEpoch) {
+			err = cons.dkgEx.updateDKGPartPubKeys(csStateRN)
+			if err != nil {
+				cons.log.Panicf("Update DKG exchange part pub keys err: %v", err)
+				return err
+			}
+
+			cons.dkgEx.initWhenStart(epoch)
+			cons.dkgEx.start(epoch)
 		}
-
-		cons.dkgEx.start(epoch + 1)
 	}
 
 	return nil

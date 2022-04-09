@@ -35,6 +35,16 @@ type dkgCrypt struct {
 }
 
 func newDKGCrypt(log tplog.Logger /*index uint32, */, epoch uint64 /*suite *bn256.Suite, */, initPrivKey string, initPartPubKeys []string, threshold int, nParticipant int) *dkgCrypt {
+	if len(initPrivKey) == 0 {
+		log.Panicf("Blank initPrivKey %s", initPrivKey)
+	}
+
+	if len(initPartPubKeys) == 0 {
+		log.Panic("Blank initPartPubKeys")
+	}
+
+	log.Infof("When newDKGCrypt: initPartPubKeys=%v", initPartPubKeys)
+
 	suite := bn256.NewSuiteG2()
 	priKey, err := encoding.StringHexToScalar(suite, initPrivKey)
 	if err != nil {
@@ -49,7 +59,7 @@ func newDKGCrypt(log tplog.Logger /*index uint32, */, epoch uint64 /*suite *bn25
 	for i := 0; i < len(initPartPubKeys); i++ {
 		partPubKey, err := encoding.StringHexToPoint(suite, initPartPubKeys[i])
 		if err != nil {
-			log.Panicf("Invalid initPubKey %s", initPartPubKeys[i])
+			log.Panicf("Invalid initPubKey %d %s", i, initPartPubKeys[i])
 		}
 		initPartPubKeyP[i] = partPubKey
 	}
@@ -115,11 +125,25 @@ func (d *dkgCrypt) getEpoch() uint64 {
 	return d.epoch
 }
 
-func (d *dkgCrypt) pubKey(index int) string {
-	if index < 0 || index >= len(d.initPartPubKeys) {
+func (d *dkgCrypt) pubKey(index uint32) string {
+	/*if index < 0 || index >= len(d.initPartPubKeys) {
 		d.log.Panicf("Out of index: %d[0, %d)", index, len(d.initPartPubKeys))
+	}*/
+	pubKeyP, err := d.dkGenerator.GetParticipantPub(index)
+	if err != nil {
+		d.log.Panic(err.Error())
 	}
-	pkHex, _ := encoding.PointToStringHex(d.suite, d.initPartPubKeys[index])
+	pkHex, _ := encoding.PointToStringHex(d.suite, pubKeyP /*d.initPartPubKeys[index]*/)
+
+	return pkHex
+}
+
+func (d *dkgCrypt) dealSignVerifyPub(dealIndex uint32) string {
+	pubKeyP, err := d.dkGenerator.GetDealVerifySignPub(dealIndex)
+	if err != nil {
+		d.log.Panic(err.Error())
+	}
+	pkHex, _ := encoding.PointToStringHex(d.suite, pubKeyP /*d.initPartPubKeys[index]*/)
 
 	return pkHex
 }
@@ -138,6 +162,8 @@ func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 	d.remoteDealsSync.Lock()
 	defer d.remoteDealsSync.Unlock()
 
+	d.log.Infof("Process deal: %d", deal.Index)
+
 	for _, dl := range d.remoteDeals {
 		dlBytes, _ := dl.MarshalMsg(nil)
 		dealBytes, _ := deal.MarshalMsg(nil)
@@ -147,6 +173,12 @@ func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 			return nil, err
 		}
 	}
+
+	d.remoteRespsSync.RLock()
+	for _, dealResp := range d.remoteAdvanResp {
+		d.log.Infof("Current deal resp: index=%d, issIndex=%d", dealResp.Index, dealResp.Response.Index)
+	}
+	d.remoteRespsSync.RUnlock()
 
 	d.remoteDeals = append(d.remoteDeals, deal)
 
@@ -179,6 +211,14 @@ func (d *dkgCrypt) addAdvanceResp(resp *dkg.Response) error {
 }
 
 func (d *dkgCrypt) processResp(resp *dkg.Response) error {
+	d.log.Infof("Process deal resp : index=%d, issIndex=%d", resp.Index, resp.Response.Index)
+
+	d.remoteDealsSync.RLock()
+	for _, deal := range d.remoteDeals {
+		d.log.Infof("Current deal: index=%d", deal.Index)
+	}
+	d.remoteDealsSync.RUnlock()
+
 	j, err := d.dkGenerator.ProcessResponse(resp)
 	if err != nil {
 		return err

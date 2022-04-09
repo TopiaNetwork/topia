@@ -25,29 +25,56 @@ type EventHub interface {
 }
 
 var once sync.Once
+var evHubMng *EventHubManager
 
-var eventHubG = make(map[string]EventHub)
+type EventHubManager struct {
+	sync        sync.RWMutex
+	eventHubMap map[string]EventHub
+}
 
-func GetEventHub(nodeID string, params ...interface{}) EventHub {
+func GetEventHubManager() *EventHubManager {
 	once.Do(func() {
-		if len(params) != 2 {
-			panic("Invalid params size: " + fmt.Sprintf("expected 2, actual %d", len(params)))
+		evHubMng = &EventHubManager{
+			eventHubMap: make(map[string]EventHub),
 		}
-
-		var level tplogcmm.LogLevel
-		var log tplog.Logger
-		ok := true
-		if level, ok = params[0].(tplogcmm.LogLevel); !ok {
-			panic("Invalid params 0 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[0]).Name()))
-		}
-		if log, ok = params[1].(tplog.Logger); !ok {
-			panic("Invalid params 1 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[1]).Name()))
-		}
-
-		eventHubG[nodeID] = NewEventHub(level, log)
 	})
 
-	return eventHubG[nodeID]
+	return evHubMng
+}
+
+func (evmng *EventHubManager) GetEventHub(nodeID string) EventHub {
+	if evHub, ok := evmng.eventHubMap[nodeID]; ok {
+		return evHub
+	}
+
+	return nil
+}
+
+func (evmng *EventHubManager) CreateEventHub(nodeID string, params ...interface{}) EventHub {
+	evmng.sync.Lock()
+	defer evmng.sync.Unlock()
+
+	if evHub, ok := evmng.eventHubMap[nodeID]; ok {
+		return evHub
+	}
+
+	if len(params) != 2 {
+		panic("Invalid params size: " + fmt.Sprintf("expected 2, actual %d", len(params)))
+	}
+
+	var level tplogcmm.LogLevel
+	var log tplog.Logger
+	ok := true
+	if level, ok = params[0].(tplogcmm.LogLevel); !ok {
+		panic("Invalid params 0 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[0]).Name()))
+	}
+	if log, ok = params[1].(tplog.Logger); !ok {
+		panic("Invalid params 1 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[1]).Name()))
+	}
+
+	evmng.eventHubMap[nodeID] = NewEventHub(level, log)
+
+	return evmng.eventHubMap[nodeID]
 }
 
 type eventHub struct {

@@ -95,8 +95,6 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 			replaceAddrs = dirtyAccounts.flatten()
 		}
 
-		pool.pendings[category].Mu.Lock()
-		pool.queues[category].Mu.Lock()
 		if reset != nil {
 			// Reset from the old head to the new, rescheduling any reorged transactions
 			pool.Reset(reset.oldHead, reset.newHead)
@@ -138,8 +136,6 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 		pool.truncateQueue(category)
 
 		pool.changesSinceReorg = 0 // Reset change counter
-		pool.pendings[category].Mu.Unlock()
-		pool.queues[category].Mu.Unlock()
 
 		// Notify subsystems for newly added transactions
 		for _, tx := range promoted {

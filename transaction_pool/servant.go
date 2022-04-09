@@ -7,7 +7,6 @@ import (
 	"github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/network/p2p"
-	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type ChainHeadEvent struct{ Block *types.Block }
@@ -16,8 +15,6 @@ type TransactionPoolServant interface {
 	GetBlock(hash types.BlockHash, num uint64) *types.Block
 	StateAt(root types.BlockHash) (*StatePoolDB, error)
 	SubChainHeadEvent(ch chan<- ChainHeadEvent) p2p.P2PPubSubService
-	EstimateTxCost(tx *basic.Transaction) *big.Int
-	EstimateTxGas(tx *basic.Transaction) uint64
 	GetMaxGasLimit() uint64
 }
 

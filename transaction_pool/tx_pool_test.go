@@ -14,7 +14,6 @@ import (
 	"github.com/TopiaNetwork/topia/transaction/universal"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"math/big"
 	"reflect"
 	"testing"
 	"time"
@@ -346,7 +345,8 @@ func SetNewTransactionPool(ctx context.Context, conf TransactionPoolConfig, leve
 		marshaler: codec.CreateMarshaler(codecType),
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
-	//pool.network.Subscribe(ctx, protocol.SyncProtocolID_Msg)
+
+	//pool.network.Subscribe(ctx, protocol.SyncProtocolID_Msg, message.TopicValidator())
 	pool.allTxsForLook[basic.TransactionCategory_Topia_Universal] = newTxLookup()
 	pool.pendings = newPendingsTxs()
 	pool.queues = newQueuesTxs()
@@ -388,6 +388,7 @@ func Test_transactionPool_ValidateTx(t *testing.T) {
 	log := TpiaLog
 	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
+
 	if err := pool.ValidateTx(TxHighGasLimit, true); err != ErrTxGasLimit {
 		t.Error("expected", ErrTxGasLimit, "got", err)
 	}
@@ -784,34 +785,6 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	}
 }
 
-func Test_transactionPool_Cost(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
-	servant.EXPECT().EstimateTxCost(gomock.Any()).Return(big.NewInt(90000000000)).AnyTimes()
-	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
-	want := big.NewInt(90000000000)
-	if got := pool.Cost(Tx1); !reflect.DeepEqual(want, got) {
-		t.Error("want", want, "got", got)
-	}
-}
-
-func Test_transactionPool_Gas(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
-	servant.EXPECT().EstimateTxGas(gomock.Any()).Return(uint64(1234567)).AnyTimes()
-	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
-	want := uint64(1234567)
-	if got := pool.Gas(Tx1); !reflect.DeepEqual(want, got) {
-		t.Error("want", want, "got", got)
-	}
-}
-
 func Test_transactionPool_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -829,7 +802,6 @@ func Test_transactionPool_Get(t *testing.T) {
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
 	pool.AddTx(TxR2, false)
-
 	want := Tx1
 	if got := pool.Get(Category1, Key1); !reflect.DeepEqual(want, got) {
 		t.Errorf("want:%v\n got:%v\n", want, got)

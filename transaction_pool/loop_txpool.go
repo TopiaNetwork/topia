@@ -271,10 +271,6 @@ func (pool *transactionPool) regularRepublic() {
 		select {
 		case <-republic.C:
 			for category, _ := range pool.pendings {
-				pool.queues[category].Mu.Lock()
-				defer pool.queues[category].Mu.Unlock()
-				pool.ActivationIntervals.Mu.Lock()
-				defer pool.ActivationIntervals.Mu.Unlock()
 				for addr := range pool.queues[category].accTxs {
 					// republic transactions from the republic mechanism
 					list := pool.queues[category].accTxs[addr].Flatten()

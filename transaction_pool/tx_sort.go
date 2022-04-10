@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	txSlotSize = 32 * 1024
-	txMaxSize  = 4 * txSlotSize
+	txSegmentSize = 32 * 1024
+	txMaxSize     = 4 * txSegmentSize
 )
 
 //nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -380,42 +380,49 @@ func (l *txList) LastElement() *basic.Transaction {
 	return l.txs.LastElement()
 }
 
-func newPendingsTxs() map[basic.TransactionCategory]*pendingTxs {
-	pendingstxs := make(map[basic.TransactionCategory]*pendingTxs, 0)
-	pendingstxs[basic.TransactionCategory_Topia_Universal] = newPendingTxs()
-	pendingstxs[basic.TransactionCategory_Eth] = newPendingTxs()
-	return pendingstxs
+type pendingsMap struct {
+	Mu      sync.RWMutex
+	pending map[basic.TransactionCategory]pendingTxs
 }
 
-type pendingTxs struct {
-	Mu     sync.RWMutex
-	accTxs map[tpcrtypes.Address]*txList
-}
-
-func newPendingTxs() *pendingTxs {
-	txs := &pendingTxs{
-		accTxs: make(map[tpcrtypes.Address]*txList),
+func newPendingsMap() *pendingsMap {
+	pendings := &pendingsMap{
+		pending: make(map[basic.TransactionCategory]pendingTxs, 0),
 	}
-	return txs
+	pendings.pending[basic.TransactionCategory_Topia_Universal] = make(map[tpcrtypes.Address]*txList, 0)
+	pendings.pending[basic.TransactionCategory_Eth] = make(map[tpcrtypes.Address]*txList, 0)
+	return pendings
 }
 
-func newQueuesTxs() map[basic.TransactionCategory]*queueTxs {
-	queuestxs := make(map[basic.TransactionCategory]*queueTxs, 0)
-	queuestxs[basic.TransactionCategory_Topia_Universal] = newQueueTxs()
-	queuestxs[basic.TransactionCategory_Eth] = newQueueTxs()
-	return queuestxs
+type pendingTxs map[tpcrtypes.Address]*txList
+
+type queuesMap struct {
+	Mu    sync.RWMutex
+	queue map[basic.TransactionCategory]queueTxs
 }
 
-type queueTxs struct {
-	Mu     sync.RWMutex
-	accTxs map[tpcrtypes.Address]*txList
-}
-
-func newQueueTxs() *queueTxs {
-	txs := &queueTxs{
-		accTxs: make(map[tpcrtypes.Address]*txList),
+func newQueuesMap() *queuesMap {
+	queues := &queuesMap{
+		queue: make(map[basic.TransactionCategory]queueTxs, 0),
 	}
-	return txs
+	queues.queue[basic.TransactionCategory_Topia_Universal] = make(map[tpcrtypes.Address]*txList)
+	queues.queue[basic.TransactionCategory_Eth] = make(map[tpcrtypes.Address]*txList)
+
+	return queues
+}
+
+type queueTxs map[tpcrtypes.Address]*txList
+
+type allTxsLookupMap struct {
+	Mu  sync.RWMutex
+	all map[basic.TransactionCategory]*txLookup
+}
+
+func newAllTxsLookupMap() *allTxsLookupMap {
+	allMap := &allTxsLookupMap{
+		all: make(map[basic.TransactionCategory]*txLookup, 0),
+	}
+	return allMap
 }
 
 type activationInterval struct {
@@ -507,16 +514,15 @@ func (accSet *accountSet) flatten() []tpcrtypes.Address {
 }
 
 type txLookup struct {
-	slots   int
-	lock    sync.RWMutex
-	locals  map[string]*basic.Transaction
-	remotes map[string]*basic.Transaction
+	segments int
+	lock     sync.RWMutex
+	locals   map[string]*basic.Transaction
+	remotes  map[string]*basic.Transaction
 }
 
 func (t *txLookup) Range(f func(key string, tx *basic.Transaction, local bool) bool, local bool, remote bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-
 	if local {
 		for k, v := range t.locals {
 			if !f(k, v, true) {
@@ -542,6 +548,7 @@ func newTxLookup() *txLookup {
 func (t *txLookup) Get(key string) *basic.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
+
 	if tx := t.locals[key]; tx != nil {
 		return tx
 	}
@@ -567,6 +574,7 @@ func (t *txLookup) GetRemoteTx(key string) *basic.Transaction {
 func (t *txLookup) Count() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
+
 	return len(t.locals) + len(t.remotes)
 }
 
@@ -586,18 +594,19 @@ func (t *txLookup) RemoteCount() int {
 	return len(t.remotes)
 }
 
-// Slots returns the current number of Quota used in the lookup.
-func (t *txLookup) Slots() int {
+// Segments returns the current number of Quota used in the lookup.
+func (t *txLookup) Segments() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	return t.slots
+	return t.segments
 }
 
 func (t *txLookup) Add(tx *basic.Transaction, local bool) {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	t.slots += numSlots(tx)
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	t.segments += numSegments(tx)
 	if txId, err := tx.HashHex(); err == nil {
 		if local {
 			t.locals[txId] = tx
@@ -608,8 +617,9 @@ func (t *txLookup) Add(tx *basic.Transaction, local bool) {
 
 }
 func (t *txLookup) Remove(key string) {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	tx, ok := t.locals[key]
 	if !ok {
 		tx, ok = t.remotes[key]
@@ -618,7 +628,7 @@ func (t *txLookup) Remove(key string) {
 		//tplog.Logger.Infof("No transaction found to be deleted", "txKey", key)
 		return
 	}
-	t.slots -= numSlots(tx)
+	t.segments -= numSegments(tx)
 	delete(t.locals, key)
 	delete(t.remotes, key)
 }
@@ -626,8 +636,8 @@ func (t *txLookup) Remove(key string) {
 // RemoteToLocals migrates the transactions belongs to the given locals to locals
 // set. The assumption is held the locals set is thread-safe to be used.
 func (t *txLookup) RemoteToLocals(locals *accountSet) int {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
+	t.lock.Lock()
+	defer t.lock.Unlock()
 
 	var migrated int
 	for key, tx := range t.remotes {
@@ -767,9 +777,9 @@ func (l *txPricedList) underpricedFor(h *priceHeap, tx *basic.Transaction) bool 
 // Discard finds a number of most underpriced transactions, removes them from the
 // priced list and returns them for further removal from the entire pool.
 // Note local transaction won't be considered for eviction.
-func (l *txPricedList) Discard(slots int, force bool) ([]*basic.Transaction, bool) {
-	drop := make([]*basic.Transaction, 0, slots) // Remote underpriced transactions to drop
-	for slots > 0 {
+func (l *txPricedList) Discard(segments int, force bool) ([]*basic.Transaction, bool) {
+	drop := make([]*basic.Transaction, 0, segments) // Remote underpriced transactions to drop
+	for segments > 0 {
 		// Discard stale transactions if found during cleanup
 		tx := heap.Pop(&l.remoteTxs).(*basic.Transaction)
 		if txId, err := tx.HashHex(); err == nil {
@@ -779,10 +789,10 @@ func (l *txPricedList) Discard(slots int, force bool) ([]*basic.Transaction, boo
 			}
 		}
 		drop = append(drop, tx)
-		slots -= numSlots(tx)
+		segments -= numSegments(tx)
 	}
 	// If we still can't make enough room for the new transaction
-	if slots > 0 && !force {
+	if segments > 0 && !force {
 		for _, tx := range drop {
 			heap.Push(&l.remoteTxs, tx)
 		}
@@ -804,9 +814,9 @@ func (l *txPricedList) Reheap() {
 	heap.Init(&l.remoteTxs)
 }
 
-// numSlots calculates the number of slots needed for a single transaction.
-func numSlots(tx *basic.Transaction) int {
-	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+// numSegments calculates the number of segments needed for a single transaction.
+func numSegments(tx *basic.Transaction) int {
+	return int((tx.Size() + txSegmentSize - 1) / txSegmentSize)
 }
 
 type TxByNonce []*basic.Transaction

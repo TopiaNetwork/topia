@@ -11,20 +11,22 @@ import (
 // pending limit. The algorithm tries to reduce transaction counts by an approximately
 // equal number for all for accounts with many pending transactions.
 func (pool *transactionPool) truncatePending(category basic.TransactionCategory) {
+	pool.pendings.Mu.RLock()
+	defer pool.pendings.Mu.RUnlock()
 	pending := uint64(0)
-	for _, list := range pool.pendings[category].accTxs {
+	for _, list := range pool.pendings.pending[category] {
 		pending += uint64(list.Len())
 	}
-	if pending <= pool.config.PendingGlobalSlots {
+	if pending <= pool.config.PendingGlobalSegments {
 		return
 	}
 
 	var greyAccounts map[tpcrtypes.Address]int
 	// Assemble a spam order to penalize large transactors first
 
-	for addr, list := range pool.pendings[category].accTxs {
+	for addr, list := range pool.pendings.pending[category] {
 		// Only evict transactions from high rollers
-		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.PendingAccountSlots {
+		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.PendingAccountSegments {
 			greyAccounts[addr] = list.Len()
 		}
 	}
@@ -42,13 +44,13 @@ func (pool *transactionPool) truncatePending(category basic.TransactionCategory)
 		heap.Init(&greyAccountsQueue)
 
 		//The accounts with the most backlogged transactions are first dumped
-		for pending > pool.config.PendingGlobalSlots && len(greyAccounts) > 0 {
+		for pending > pool.config.PendingGlobalSegments && len(greyAccounts) > 0 {
 			bePunished := heap.Pop(&greyAccountsQueue).(*CntAccountItem)
-			list := pool.pendings[category].accTxs[bePunished.accountAddr]
+			list := pool.pendings.pending[category][bePunished.accountAddr]
 			caps := list.Cap(list.Len() - 1)
 			for _, tx := range caps {
 				txId, _ := tx.HashHex()
-				pool.allTxsForLook[category].Remove(txId)
+				pool.allTxsForLook.all[category].Remove(txId)
 				pool.log.Tracef("Removed fairness-exceeding pending transaction", "txKey", txId)
 			}
 			pool.sortedLists.Pricedlist[category].Removed(len(caps))
@@ -60,8 +62,10 @@ func (pool *transactionPool) truncatePending(category basic.TransactionCategory)
 
 // truncateQueue drops the older transactions in the queue if the pool is above the global queue limit.
 func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
+	pool.queues.Mu.RLock()
+	defer pool.queues.Mu.RUnlock()
 	queued := uint64(0)
-	for _, list := range pool.queues[category].accTxs {
+	for _, list := range pool.queues.queue[category] {
 		queued += uint64(list.Len())
 	}
 	if queued <= pool.config.QueueMaxTxsGlobal {
@@ -69,10 +73,10 @@ func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
 	}
 
 	// Sort all accounts with queued transactions by heartbeat
-	txs := make(txsByHeartbeat, 0, len(pool.queues[category].accTxs))
-	for addr := range pool.queues[category].accTxs {
+	txs := make(txsByHeartbeat, 0, len(pool.queues.queue[category]))
+	for addr := range pool.queues.queue[category] {
 		if !pool.locals.contains(addr) { // don't drop locals
-			list := pool.queues[category].accTxs[addr].Flatten()
+			list := pool.queues.queue[category][addr].Flatten()
 			for _, tx := range list {
 				txId, _ := tx.HashHex()
 				txs = append(txs, txByHeartbeat{txId, pool.ActivationIntervals.activ[txId]})

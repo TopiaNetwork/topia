@@ -36,7 +36,7 @@ func (pool *transactionPool) chanRemoveTxHashs() {
 		case <-pool.chanSysShutDown:
 			close(pool.chanReorgShutdown)
 			//local txs save
-			for category, _ := range pool.allTxsForLook {
+			for category, _ := range pool.allTxsForLook.all {
 				if err := pool.SaveLocalTxs(category); err != nil {
 					pool.log.Warnf("Failed to save local transaction", "err", err)
 				}
@@ -67,7 +67,7 @@ func (pool *transactionPool) saveAllIfShutDown() (a, b, c int) {
 		case <-pool.chanSysShutDown:
 			close(pool.chanReorgShutdown)
 			//local txs save
-			for category, _ := range pool.allTxsForLook {
+			for category, _ := range pool.allTxsForLook.all {
 				if err := pool.SaveLocalTxs(category); err != nil {
 					pool.log.Warnf("Failed to save local transaction", "err", err)
 				}
@@ -105,7 +105,7 @@ func (pool *transactionPool) resetIfNewHead() {
 		case <-pool.chanSysShutDown:
 			close(pool.chanReorgShutdown)
 			//local txs save
-			for category, _ := range pool.allTxsForLook {
+			for category, _ := range pool.allTxsForLook.all {
 				if err := pool.SaveLocalTxs(category); err != nil {
 					pool.log.Warnf("Failed to save local transaction", "err", err)
 				}
@@ -138,13 +138,13 @@ func (pool *transactionPool) reportTicks() {
 		select {
 		// Handle stats reporting ticks
 		case <-report.C:
-			for category, _ := range pool.pendings {
+			for category, _ := range pool.pendings.pending {
 				pool.reportUniversal(category, prevPending, prevQueued, prevStales)
 			}
 		case <-pool.chanSysShutDown:
 			close(pool.chanReorgShutdown)
 			//local txs save
-			for category, _ := range pool.allTxsForLook {
+			for category, _ := range pool.allTxsForLook.all {
 				if err := pool.SaveLocalTxs(category); err != nil {
 					pool.log.Warnf("Failed to save local transaction", "err", err)
 				}
@@ -184,14 +184,16 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 	select {
 	// Handle inactive account transaction eviction
 	case <-evict.C:
-		for category, _ := range pool.pendings {
-			for addr := range pool.queues[category].accTxs {
+		pool.pendings.Mu.Lock()
+		pool.queues.Mu.Lock()
+		for category, _ := range pool.pendings.pending {
+			for addr := range pool.queues.queue[category] {
 				// Skip local transactions from the eviction mechanism
 				if pool.locals.contains(addr) {
 					continue
 				}
 				// Any non-locals old enough should be removed
-				list := pool.queues[category].accTxs[addr].Flatten()
+				list := pool.queues.queue[category][addr].Flatten()
 
 				for _, tx := range list {
 					txId, _ := tx.HashHex()
@@ -201,10 +203,12 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 				}
 			}
 		}
+		pool.pendings.Mu.Unlock()
+		pool.queues.Mu.Unlock()
 	case <-pool.chanSysShutDown:
 		close(pool.chanReorgShutdown)
 		//local txs save
-		for category, _ := range pool.allTxsForLook {
+		for category, _ := range pool.allTxsForLook.all {
 			if err := pool.SaveLocalTxs(category); err != nil {
 				pool.log.Warnf("Failed to save local transaction", "err", err)
 			}
@@ -232,7 +236,7 @@ func (pool *transactionPool) regularSaveLocalTxs() {
 	select {
 	// Handle local transaction  store
 	case <-stored.C:
-		for category, _ := range pool.allTxsForLook {
+		for category, _ := range pool.allTxsForLook.all {
 			if err := pool.SaveLocalTxs(category); err != nil {
 				pool.log.Warnf("Failed to save local tx ", "err", err)
 			}
@@ -240,7 +244,7 @@ func (pool *transactionPool) regularSaveLocalTxs() {
 	case <-pool.chanSysShutDown:
 		close(pool.chanReorgShutdown)
 		//local txs save
-		for category, _ := range pool.allTxsForLook {
+		for category, _ := range pool.allTxsForLook.all {
 			if err := pool.SaveLocalTxs(category); err != nil {
 				pool.log.Warnf("Failed to save local transaction", "err", err)
 			}
@@ -270,10 +274,10 @@ func (pool *transactionPool) regularRepublic() {
 	for {
 		select {
 		case <-republic.C:
-			for category, _ := range pool.pendings {
-				for addr := range pool.queues[category].accTxs {
+			for category, _ := range pool.pendings.pending {
+				for addr := range pool.queues.queue[category] {
 					// republic transactions from the republic mechanism
-					list := pool.queues[category].accTxs[addr].Flatten()
+					list := pool.queues.queue[category][addr].Flatten()
 					for _, tx := range list {
 						txId, _ := tx.HashHex()
 						if time.Since(pool.ActivationIntervals.activ[txId]) > pool.config.DurationForTxRePublic {
@@ -286,7 +290,7 @@ func (pool *transactionPool) regularRepublic() {
 		case <-pool.chanSysShutDown:
 			close(pool.chanReorgShutdown)
 			//local txs save
-			for category, _ := range pool.allTxsForLook {
+			for category, _ := range pool.allTxsForLook.all {
 				if err := pool.SaveLocalTxs(category); err != nil {
 					pool.log.Warnf("Failed to save local transaction", "err", err)
 				}

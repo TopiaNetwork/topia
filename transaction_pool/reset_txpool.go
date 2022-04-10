@@ -86,7 +86,7 @@ func (pool *transactionPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet, events map[tpcrtypes.Address]*txSortedMap) {
 	defer close(done)
-	for category, _ := range pool.pendings {
+	for category, _ := range pool.pendings.pending {
 		var replaceAddrs []tpcrtypes.Address
 		if dirtyAccounts != nil && reset == nil {
 			// Only dirty accounts need to be promoted, unless we're resetting.
@@ -94,7 +94,9 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 			// the flatten operation can be avoided.
 			replaceAddrs = dirtyAccounts.flatten()
 		}
-
+		pool.allTxsForLook.Mu.Lock()
+		pool.pendings.Mu.Lock()
+		pool.queues.Mu.Lock()
 		if reset != nil {
 			// Reset from the old head to the new, rescheduling any reorged transactions
 			pool.Reset(reset.oldHead, reset.newHead)
@@ -107,8 +109,8 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 				}
 			}
 			// Reset needs promote for all addresses
-			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues[category].accTxs))
-			for addr := range pool.queues[category].accTxs {
+			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues.queue[category]))
+			for addr := range pool.queues.queue[category] {
 				replaceAddrs = append(replaceAddrs, addr)
 			}
 		}
@@ -124,8 +126,8 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 				pool.sortedLists.Pricedlist[category].Reheap()
 			}
 			// Update all accounts to the latest known pending nonce
-			nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings[category].accTxs))
-			for addr, list := range pool.pendings[category].accTxs {
+			nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings.pending[category]))
+			for addr, list := range pool.pendings.pending[category] {
 				highestPending := list.LastElement()
 				Noncei := highestPending.Head.Nonce
 				nonces[addr] = Noncei + 1
@@ -136,7 +138,9 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 		pool.truncateQueue(category)
 
 		pool.changesSinceReorg = 0 // Reset change counter
-
+		pool.allTxsForLook.Mu.Unlock()
+		pool.pendings.Mu.Unlock()
+		pool.queues.Mu.Unlock()
 		// Notify subsystems for newly added transactions
 		for _, tx := range promoted {
 			addr := tpcrtypes.Address(tx.Head.FromAddr)
@@ -263,7 +267,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 					}
 				}
 
-				reInject = TxDifference(discarded, included)
+				reInject = basic.TxDifference(discarded, included)
 			}
 		}
 	}
@@ -284,23 +288,4 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 	pool.log.Debugf("ReInjecting stale transactions", "count", len(reInject))
 
 	return nil
-}
-
-// TxDifference returns a new set which is the difference between a and b.
-func TxDifference(a, b []*basic.Transaction) []*basic.Transaction {
-	keep := make([]*basic.Transaction, 0, len(a))
-	remove := make(map[string]struct{})
-	for _, tx := range b {
-		if txId, err := tx.HashHex(); err != nil {
-			remove[txId] = struct{}{}
-		}
-	}
-	for _, tx := range a {
-		if txId, err := tx.HashHex(); err != nil {
-			if _, ok := remove[txId]; !ok {
-				keep = append(keep, tx)
-			}
-		}
-	}
-	return keep
 }

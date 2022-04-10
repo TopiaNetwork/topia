@@ -127,3 +127,22 @@ func (m *Transaction) BasicVerify(ctx context.Context, log tplog.Logger, txServa
 		TransactionSignatureVerifier(),
 	)
 }
+
+// TxDifference returns a new set which is the difference between a and b.
+func TxDifference(a, b []*Transaction) []*Transaction {
+	keep := make([]*Transaction, 0, len(a))
+	remove := make(map[string]struct{})
+	for _, tx := range b {
+		if txId, err := tx.HashHex(); err != nil {
+			remove[txId] = struct{}{}
+		}
+	}
+	for _, tx := range a {
+		if txId, err := tx.HashHex(); err != nil {
+			if _, ok := remove[txId]; !ok {
+				keep = append(keep, tx)
+			}
+		}
+	}
+	return keep
+}

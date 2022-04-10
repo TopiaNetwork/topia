@@ -380,38 +380,131 @@ func (l *txList) LastElement() *basic.Transaction {
 	return l.txs.LastElement()
 }
 
+type pendingTxs struct {
+	Mu        sync.RWMutex
+	addTxList map[tpcrtypes.Address]*txList
+}
+
+func newPendingTxs() *pendingTxs {
+	addtxs := &pendingTxs{
+		addTxList: make(map[tpcrtypes.Address]*txList, 0),
+	}
+	return addtxs
+}
+func (pending *pendingTxs) getAll() map[tpcrtypes.Address]*txList {
+	pending.Mu.Lock()
+	defer pending.Mu.Unlock()
+	return pending.addTxList
+}
+func (pending *pendingTxs) getTxListByAddr(addr tpcrtypes.Address) *txList {
+	pending.Mu.Lock()
+	defer pending.Mu.Unlock()
+	return pending.addTxList[addr]
+}
+func (pending *pendingTxs) setTxList(addr tpcrtypes.Address, txs *txList) {
+	pending.Mu.Lock()
+	defer pending.Mu.Unlock()
+	pending.addTxList[addr] = txs
+}
+func (pending *pendingTxs) removeTxListByAddr(addr tpcrtypes.Address) {
+	pending.Mu.Lock()
+	defer pending.Mu.Unlock()
+	delete(pending.addTxList, addr)
+}
+
 type pendingsMap struct {
 	Mu      sync.RWMutex
-	pending map[basic.TransactionCategory]pendingTxs
+	pending map[basic.TransactionCategory]*pendingTxs
 }
 
 func newPendingsMap() *pendingsMap {
 	pendings := &pendingsMap{
-		pending: make(map[basic.TransactionCategory]pendingTxs, 0),
+		pending: make(map[basic.TransactionCategory]*pendingTxs, 0),
 	}
-	pendings.pending[basic.TransactionCategory_Topia_Universal] = make(map[tpcrtypes.Address]*txList, 0)
-	pendings.pending[basic.TransactionCategory_Eth] = make(map[tpcrtypes.Address]*txList, 0)
+	pendings.pending[basic.TransactionCategory_Topia_Universal] = newPendingTxs()
+	pendings.pending[basic.TransactionCategory_Eth] = newPendingTxs()
 	return pendings
 }
+func (pendingmap *pendingsMap) getAll() map[basic.TransactionCategory]*pendingTxs {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	return pendingmap.pending
+}
+func (pendingmap *pendingsMap) getTxsByCategory(category basic.TransactionCategory) *pendingTxs {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	return pendingmap.pending[category]
+}
+func (pendingmap *pendingsMap) setPendings(category basic.TransactionCategory, pendingtxs *pendingTxs) {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	pendingmap.pending[category] = pendingtxs
+	return
+}
 
-type pendingTxs map[tpcrtypes.Address]*txList
+type queueTxs struct {
+	Mu         sync.RWMutex
+	addrTxList map[tpcrtypes.Address]*txList
+}
+
+func newQueueTxs() *queueTxs {
+	addtxlist := &queueTxs{
+		addrTxList: make(map[tpcrtypes.Address]*txList, 0),
+	}
+	return addtxlist
+}
+func (queuetxs *queueTxs) getAll() map[tpcrtypes.Address]*txList {
+	queuetxs.Mu.Lock()
+	defer queuetxs.Mu.Unlock()
+	return queuetxs.addrTxList
+}
+func (queuetxs *queueTxs) getTxListByAddr(addr tpcrtypes.Address) *txList {
+	queuetxs.Mu.Lock()
+	defer queuetxs.Mu.Unlock()
+	return queuetxs.addrTxList[addr]
+}
+func (queuetxs *queueTxs) setTxList(addr tpcrtypes.Address, txlist *txList) {
+	queuetxs.Mu.Lock()
+	defer queuetxs.Mu.Unlock()
+	queuetxs.addrTxList[addr] = txlist
+	return
+}
+func (queuetxs *queueTxs) removeTxListByAddr(addr tpcrtypes.Address) {
+	queuetxs.Mu.Lock()
+	defer queuetxs.Mu.Unlock()
+	delete(queuetxs.addrTxList, addr)
+}
 
 type queuesMap struct {
 	Mu    sync.RWMutex
-	queue map[basic.TransactionCategory]queueTxs
+	queue map[basic.TransactionCategory]*queueTxs
 }
 
 func newQueuesMap() *queuesMap {
 	queues := &queuesMap{
-		queue: make(map[basic.TransactionCategory]queueTxs, 0),
+		queue: make(map[basic.TransactionCategory]*queueTxs, 0),
 	}
-	queues.queue[basic.TransactionCategory_Topia_Universal] = make(map[tpcrtypes.Address]*txList)
-	queues.queue[basic.TransactionCategory_Eth] = make(map[tpcrtypes.Address]*txList)
-
+	queues.queue[basic.TransactionCategory_Topia_Universal] = newQueueTxs()
+	queues.queue[basic.TransactionCategory_Eth] = newQueueTxs()
 	return queues
 }
 
-type queueTxs map[tpcrtypes.Address]*txList
+func (queuemap *queuesMap) getAll() map[basic.TransactionCategory]*queueTxs {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	return queuemap.queue
+}
+func (queuemap *queuesMap) getTxsByCategory(category basic.TransactionCategory) *queueTxs {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	return queuemap.queue[category]
+}
+func (queuemap *queuesMap) setQueues(category basic.TransactionCategory, queuetxs *queueTxs) {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	queuemap.queue[category] = queuetxs
+	return
+}
 
 type allTxsLookupMap struct {
 	Mu  sync.RWMutex
@@ -422,7 +515,29 @@ func newAllTxsLookupMap() *allTxsLookupMap {
 	allMap := &allTxsLookupMap{
 		all: make(map[basic.TransactionCategory]*txLookup, 0),
 	}
+	allMap.setAllTxsLookup(basic.TransactionCategory_Topia_Universal, newTxLookup())
+	allMap.setAllTxsLookup(basic.TransactionCategory_Eth, newTxLookup())
 	return allMap
+}
+func (alltxsmap *allTxsLookupMap) getAll() map[basic.TransactionCategory]*txLookup {
+	alltxsmap.Mu.Lock()
+	defer alltxsmap.Mu.Unlock()
+	return alltxsmap.all
+}
+func (alltxsmap *allTxsLookupMap) getAllTxsLookupByCategory(category basic.TransactionCategory) *txLookup {
+	alltxsmap.Mu.Lock()
+	defer alltxsmap.Mu.Unlock()
+	return alltxsmap.all[category]
+}
+func (alltxsmap *allTxsLookupMap) setAllTxsLookup(category basic.TransactionCategory, txlook *txLookup) {
+	alltxsmap.Mu.Lock()
+	defer alltxsmap.Mu.Unlock()
+	alltxsmap.all[category] = txlook
+}
+func (alltxsmap *allTxsLookupMap) removeAllTxsLookupByCategory(category basic.TransactionCategory) {
+	alltxsmap.Mu.Lock()
+	defer alltxsmap.Mu.Unlock()
+	delete(alltxsmap.all, category)
 }
 
 type activationInterval struct {
@@ -436,6 +551,28 @@ func newActivationInterval() *activationInterval {
 	}
 	return activ
 }
+func (activ *activationInterval) getAll() map[string]time.Time {
+	activ.Mu.Lock()
+	defer activ.Mu.Unlock()
+	return activ.activ
+}
+func (activ *activationInterval) getTxActivByKey(key string) time.Time {
+	activ.Mu.Lock()
+	defer activ.Mu.Unlock()
+	return activ.activ[key]
+}
+func (activ *activationInterval) setTxActiv(key string, time2 time.Time) {
+	activ.Mu.Lock()
+	defer activ.Mu.Unlock()
+	activ.activ[key] = time2
+	return
+}
+func (activ *activationInterval) removeTxActiv(key string) {
+	activ.Mu.Lock()
+	defer activ.Mu.Unlock()
+	delete(activ.activ, key)
+	return
+}
 
 type txHashCategory struct {
 	Mu              sync.RWMutex
@@ -447,6 +584,26 @@ func newTxHashCategory() *txHashCategory {
 		hashCategoryMap: make(map[string]basic.TransactionCategory),
 	}
 	return hashCat
+}
+func (hashCat *txHashCategory) getAll() map[string]basic.TransactionCategory {
+	hashCat.Mu.Lock()
+	defer hashCat.Mu.Unlock()
+	return hashCat.hashCategoryMap
+}
+func (hashCat *txHashCategory) getByHash(key string) basic.TransactionCategory {
+	hashCat.Mu.Lock()
+	defer hashCat.Mu.Unlock()
+	return hashCat.hashCategoryMap[key]
+}
+func (hashCat *txHashCategory) setHashCat(key string, category basic.TransactionCategory) {
+	hashCat.Mu.Lock()
+	defer hashCat.Mu.Unlock()
+	hashCat.hashCategoryMap[key] = category
+}
+func (hashCat *txHashCategory) removeHashCat(key string) {
+	hashCat.Mu.Lock()
+	defer hashCat.Mu.Unlock()
+	delete(hashCat.hashCategoryMap, key)
 }
 
 type accountSet struct {
@@ -553,6 +710,16 @@ func (t *txLookup) Get(key string) *basic.Transaction {
 		return tx
 	}
 	return t.remotes[key]
+}
+func (t *txLookup) GetAllLocalKeyTxs() map[string]*basic.Transaction {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	return t.locals
+}
+func (t *txLookup) GetAllRemoteKeyTxs() map[string]*basic.Transaction {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	return t.remotes
 }
 
 // GetLocalTx returns a transaction if it exists in the lookup, or nil if not found.
@@ -698,14 +865,31 @@ func (h *priceHeap) Pop() interface{} {
 }
 
 type txSortedList struct {
+	Mu         sync.RWMutex
 	Pricedlist map[basic.TransactionCategory]*txPricedList
 	//add other sorted list
 }
 
 func newTxSortedList(all *txLookup) *txSortedList {
 	txSorted := &txSortedList{Pricedlist: make(map[basic.TransactionCategory]*txPricedList, 0)}
-	txSorted.Pricedlist[basic.TransactionCategory_Topia_Universal] = newTxPricedList(all)
+	txSorted.setPricedlist(basic.TransactionCategory_Topia_Universal, newTxPricedList(all))
 	return txSorted
+}
+func (txsorts *txSortedList) getAllPricedlist() map[basic.TransactionCategory]*txPricedList {
+	txsorts.Mu.Lock()
+	defer txsorts.Mu.Unlock()
+	return txsorts.Pricedlist
+}
+func (txsorts *txSortedList) getPricedlistByCategory(category basic.TransactionCategory) *txPricedList {
+	txsorts.Mu.Lock()
+	defer txsorts.Mu.Unlock()
+	return txsorts.Pricedlist[category]
+}
+func (txsorts *txSortedList) setPricedlist(category basic.TransactionCategory, txpriced *txPricedList) {
+	txsorts.Mu.Lock()
+	defer txsorts.Mu.Unlock()
+	txsorts.Pricedlist[category] = txpriced
+	return
 }
 
 type txPricedList struct {

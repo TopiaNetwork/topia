@@ -8,9 +8,8 @@ import (
 )
 
 func (pool *transactionPool) SaveLocalTxs(category basic.TransactionCategory) error {
-	pool.allTxsForLook.Mu.Lock()
-	defer pool.allTxsForLook.Mu.Lock()
-	locals, err := json.Marshal(pool.allTxsForLook.all[category].locals)
+
+	locals, err := json.Marshal(pool.allTxsForLook.getAllTxsLookupByCategory(category).GetAllLocalKeyTxs())
 	if err != nil {
 		return err
 	}

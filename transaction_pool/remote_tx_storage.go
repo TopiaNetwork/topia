@@ -15,16 +15,11 @@ type remoteTxs struct {
 }
 
 func (pool *transactionPool) SaveRemoteTxs(category basic.TransactionCategory) error {
-	pool.allTxsForLook.Mu.Lock()
-	defer pool.allTxsForLook.Mu.Unlock()
-	pool.ActivationIntervals.Mu.Lock()
-	defer pool.ActivationIntervals.Mu.Unlock()
-	pool.TxHashCategory.Mu.Lock()
-	defer pool.TxHashCategory.Mu.Unlock()
+
 	var remotetxs = &remoteTxs{}
-	remotetxs.Txs = pool.allTxsForLook.all[category].remotes
-	remotetxs.ActivationIntervals = pool.ActivationIntervals.activ
-	remotetxs.TxHashCategorys = pool.TxHashCategory.hashCategoryMap
+	remotetxs.Txs = pool.allTxsForLook.getAllTxsLookupByCategory(category).GetAllRemoteKeyTxs()
+	remotetxs.ActivationIntervals = pool.ActivationIntervals.getAll()
+	remotetxs.TxHashCategorys = pool.TxHashCategory.getAll()
 	remotes, err := json.Marshal(remotetxs)
 	if err != nil {
 		return err
@@ -58,14 +53,10 @@ func (pool *transactionPool) LoadRemoteTxs(category basic.TransactionCategory) e
 		pool.AddRemote(tx)
 	}
 	for txId, ActivationInterval := range remotetxs.ActivationIntervals {
-		pool.ActivationIntervals.Mu.RLock()
-		defer pool.ActivationIntervals.Mu.RUnlock()
-		pool.ActivationIntervals.activ[txId] = ActivationInterval
+		pool.ActivationIntervals.setTxActiv(txId, ActivationInterval)
 	}
 	for txId, TxHashCategory := range remotetxs.TxHashCategorys {
-		pool.TxHashCategory.Mu.RLock()
-		defer pool.TxHashCategory.Mu.RUnlock()
-		pool.TxHashCategory.hashCategoryMap[txId] = TxHashCategory
+		pool.TxHashCategory.setHashCat(txId, TxHashCategory)
 	}
 	return nil
 }

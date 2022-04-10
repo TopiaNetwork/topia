@@ -205,11 +205,21 @@ func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 					if destNodeID == "" {
 						ex.log.Panicf("can't find the responding node ID by dkg part pub key: epoch=%d", ex.dkgCrypt.epoch)
 					}
-					ex.log.Infof("Send deal %d dealIndex %d from %s to other participant %s, expected signVerify pub %s, %v", i, deal.Index, ex.nodeID, destNodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
+
+					verifierPub, _ := ex.dkgCrypt.dkGenerator.GetVerifierPubOfDealer(i)
+					ex.log.Infof("Send deal %d dealIndex %d from %s to other participant %s %s, enc verifier pub %s, expected signVerify pub %s, %v",
+						i,
+						deal.Index,
+						ex.nodeID,
+						destNodeID,
+						pubKey,
+						verifierPub.String(),
+						ex.dkgCrypt.dealSignVerifyPub(deal.Index),
+						ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
 
 					err = ex.deliver.deliverDKGDealMessage(ctx, destNodeID, dealMsg)
 					if err != nil {
-						ex.log.Panicf("Can't marshal deal epoch %d: %v", ex.dkgCrypt.epoch, err)
+						ex.log.Panicf("Can't deliver deal epoch %d: %v", ex.dkgCrypt.epoch, err)
 					}
 				}
 				ex.dkgExData.State.Swap(DKGExchangeState_Exchanging_Deal)
@@ -236,14 +246,14 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 					continue
 				}
 
-				ex.log.Infof("DKG exchange receive dealIndex %d epoch=%d", deal.Index, dealMsg.Epoch)
+				ex.log.Infof("Node %s receive dealIndex %d epoch=%d", ex.nodeID, deal.Index, dealMsg.Epoch)
 
 				dealResp, err := ex.dkgCrypt.processDeal(&deal)
 				if err != nil {
-					ex.log.Panicf("Process deal failed dealIndex %d epoch %d: %v, self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.epoch, err, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
+					ex.log.Errorf("Process deal failed dealIndex %d epoch %d: %v, self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.epoch, err, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
 					continue
 				} else {
-					ex.log.Infof("Process deal succeeded dealIndex %d epoch %d, self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.epoch, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
+					ex.log.Infof("Node %s process deal successed dealIndex %d epoch %d, self nodeID %s, expected signVerify pub %s, %v", ex.nodeID, deal.Index, ex.dkgCrypt.epoch, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
 				}
 
 				if dealResp.Response.Status != vss.StatusApproval {
@@ -264,7 +274,7 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 					RespData: dealRespBytes,
 				}
 
-				ex.log.Infof("Send deal %d response to other participants", deal.Index)
+				ex.log.Infof("Node %s send deal %d response to other participants", ex.nodeID, deal.Index)
 
 				err = ex.deliver.deliverDKGDealRespMessage(ctx, dealRespMsg)
 				if err != nil {
@@ -286,25 +296,30 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 		for {
 			select {
 			case dealRespMsg := <-ex.dealRespMsgCh:
-				ex.log.Infof("DKG exchange receive deal response %d epoch=%d", ex.index, dealRespMsg.Epoch)
-
 				var resp dkg.Response
 				_, err := resp.UnmarshalMsg(dealRespMsg.RespData)
 				if err != nil {
 					ex.log.Panicf("Can't Unmarshal response epoch %d: %v", ex.dkgCrypt.epoch, err)
 				}
+
+				ex.log.Infof("Node %s receive deal response %d epoch=%d", ex.nodeID, resp.Index, dealRespMsg.Epoch)
+
 				err = ex.dkgCrypt.processResp(&resp)
 				if err != nil {
 					if err == vss.ErrNoDealBeforeResponse {
-						ex.log.Warnf("Process response failed: epoch %d: %v", ex.dkgCrypt.epoch, err)
+						ex.log.Warnf("Process response error : %v, epoch %d", err, ex.dkgCrypt.epoch)
 						ex.dkgCrypt.addAdvanceResp(&resp)
+					} else if err == vss.ErrExistResponseOfSameOrigin {
+						ex.log.Warnf("Process response error: %v, epoch %d", err, ex.dkgCrypt.epoch)
 					} else {
 						ex.log.Panicf("Process response failed: epoch %d: %v", ex.dkgCrypt.epoch, err)
 					}
 				}
 
+				ex.log.Infof("Node %s process deal response successed %d epoch=%d", ex.nodeID, resp.Index, dealRespMsg.Epoch)
+
 				if ex.dkgCrypt.finished() {
-					ex.log.Info("DKG exchange finished")
+					ex.log.Infof("DKG exchange finished: node %s", ex.nodeID)
 					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
 					ex.finishedCh <- true
 				}

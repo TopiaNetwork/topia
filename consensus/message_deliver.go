@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/TopiaNetwork/topia/chain"
 	"math/big"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
@@ -47,7 +48,7 @@ type messageDeliverI interface {
 
 	deliverDKGPartPubKeyMessage(ctx context.Context, msg *DKGPartPubKeyMessage) error
 
-	deliverDKGDealMessage(ctx context.Context, pubKey string, msg *DKGDealMessage) error
+	deliverDKGDealMessage(ctx context.Context, nodeID string, msg *DKGDealMessage) error
 
 	deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error
 
@@ -522,6 +523,26 @@ func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *
 }
 
 func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, nodeID string, msg *DKGDealMessage) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
+	nodeInfo, err := csStateRN.GetNode(nodeID)
+	if err != nil {
+		md.log.Errorf("Can't get node info: %v", err)
+		return err
+	}
+
+	forwardProtocol := ""
+	if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer {
+		forwardProtocol = tpnetprotoc.ForwardPropose_Msg
+	} else if nodeInfo.Role&chain.NodeRole_Validator == chain.NodeRole_Validator {
+		forwardProtocol = tpnetprotoc.FrowardValidate_Msg
+	} else {
+		err = fmt.Errorf("Invalid deal dest nodeID %s, role=%d", nodeID, nodeInfo.Role)
+		md.log.Error(err.Error())
+		return err
+	}
+
 	sigData, err := md.cryptService.Sign(md.priKey, msg.DealData)
 	if err != nil {
 		md.log.Errorf("Sign err for commit msg: %v", err)
@@ -549,7 +570,7 @@ func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, nodeID stri
 	}
 
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.deliverSendCommon(ctx, tpnetprotoc.AsyncSendProtocolID, MOD_NAME, ConsensusMessage_DKGDeal, msgBytes)
+	err = md.deliverSendCommon(ctx, forwardProtocol, MOD_NAME, ConsensusMessage_DKGDeal, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send DKG deal message to network failed: err=%v", err)
 	}
@@ -592,7 +613,9 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 			return err
 		}
 		peerProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerProposerIDs)
-		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, peerProposerIDs)
+		if len(peerProposerIDs) > 0 {
+			propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, peerProposerIDs)
+		}
 
 		peerValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
 		if err != nil {
@@ -600,19 +623,25 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 			return err
 		}
 		peerValidatorIDs = tpcmm.RemoveIfExistString(md.nodeID, peerValidatorIDs)
-		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
+		if len(peerValidatorIDs) > 0 {
+			ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
+		}
 	}
 
-	propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.deliverSendCommon(propCtx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_DKGDealResp, msgBytes)
-	if err != nil {
-		md.log.Errorf("Send deal resp message to propose network failed: err=%v", err)
+	if propCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
+		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+		err = md.deliverSendCommon(propCtx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_DKGDealResp, msgBytes)
+		if err != nil {
+			md.log.Errorf("Send deal resp message to propose network failed: err=%v", err)
+		}
 	}
 
-	ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.deliverSendCommon(propCtx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_DKGDealResp, msgBytes)
-	if err != nil {
-		md.log.Errorf("Send deal resp message to validate network failed: err=%v", err)
+	if ValCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
+		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+		err = md.deliverSendCommon(ValCtx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_DKGDealResp, msgBytes)
+		if err != nil {
+			md.log.Errorf("Send deal resp message to validate network failed: err=%v", err)
+		}
 	}
 
 	return err

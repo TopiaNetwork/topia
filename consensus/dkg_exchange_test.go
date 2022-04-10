@@ -87,7 +87,7 @@ func createTestDKGNode(log tplog.Logger, nParticipant int) {
 func TestDkgExchangeLoop(t *testing.T) {
 	log, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
 
-	nParticipant := 5
+	nParticipant := 3
 
 	createTestDKGNode(log, nParticipant)
 
@@ -97,6 +97,11 @@ func TestDkgExchangeLoop(t *testing.T) {
 
 	for i := 0; i < nParticipant; i++ {
 		dkgExChangeMap[i].initWhenStart(10)
+
+		for t, verfer := range dkgExChangeMap[i].dkgCrypt.dkGenerator.Verifiers() {
+			longterm, pub := verfer.Key()
+			log.Infof("After init, Verifier t %d: longterm=%s, pub=%s, index=%d", t, longterm.String(), pub.String(), verfer.Index())
+		}
 	}
 
 	for i := 0; i < nParticipant; i++ {

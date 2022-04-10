@@ -94,9 +94,6 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 			// the flatten operation can be avoided.
 			replaceAddrs = dirtyAccounts.flatten()
 		}
-		pool.allTxsForLook.Mu.Lock()
-		pool.pendings.Mu.Lock()
-		pool.queues.Mu.Lock()
 		if reset != nil {
 			// Reset from the old head to the new, rescheduling any reorged transactions
 			pool.Reset(reset.oldHead, reset.newHead)
@@ -109,8 +106,8 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 				}
 			}
 			// Reset needs promote for all addresses
-			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues.queue[category]))
-			for addr := range pool.queues.queue[category] {
+			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues.getTxsByCategory(category).getAll()))
+			for addr, _ := range pool.queues.getTxsByCategory(category).getAll() {
 				replaceAddrs = append(replaceAddrs, addr)
 			}
 		}
@@ -123,11 +120,11 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 		if reset != nil {
 			pool.demoteUnexecutables(category) //demote transactions
 			if reset.newHead != nil {
-				pool.sortedLists.Pricedlist[category].Reheap()
+				pool.sortedLists.getPricedlistByCategory(category).Reheap()
 			}
 			// Update all accounts to the latest known pending nonce
-			nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings.pending[category]))
-			for addr, list := range pool.pendings.pending[category] {
+			nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings.getTxsByCategory(category).getAll()))
+			for addr, list := range pool.pendings.getTxsByCategory(category).getAll() {
 				highestPending := list.LastElement()
 				Noncei := highestPending.Head.Nonce
 				nonces[addr] = Noncei + 1
@@ -138,9 +135,7 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 		pool.truncateQueue(category)
 
 		pool.changesSinceReorg = 0 // Reset change counter
-		pool.allTxsForLook.Mu.Unlock()
-		pool.pendings.Mu.Unlock()
-		pool.queues.Mu.Unlock()
+
 		// Notify subsystems for newly added transactions
 		for _, tx := range promoted {
 			addr := tpcrtypes.Address(tx.Head.FromAddr)

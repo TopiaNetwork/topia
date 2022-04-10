@@ -20,10 +20,10 @@ type TransactionPoolConfig struct {
 
 	GasPriceLimit uint64
 
-	PendingAccountSlots uint64 // Number of executable transaction slots guaranteed per account
-	PendingGlobalSlots  uint64 // Maximum number of executable transaction slots for all accounts
-	QueueMaxTxsAccount  uint64 // Maximum number of non-executable transaction slots permitted per account
-	QueueMaxTxsGlobal   uint64 // Maximum number of non-executable transaction slots for all accounts
+	PendingAccountSegments uint64 // Number of executable transaction slots guaranteed per account
+	PendingGlobalSegments  uint64 // Maximum number of executable transaction slots for all accounts
+	QueueMaxTxsAccount     uint64 // Maximum number of non-executable transaction slots permitted per account
+	QueueMaxTxsGlobal      uint64 // Maximum number of non-executable transaction slots for all accounts
 
 	LifetimeForTx         time.Duration
 	DurationForTxRePublic time.Duration
@@ -34,19 +34,19 @@ type TransactionPoolConfig struct {
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	PathLocal: map[basic.TransactionCategory]string{
-		basic.TransactionCategory_Topia_Universal: "configuration/Topia_Universal_localTransactions.json",
-		basic.TransactionCategory_Eth:             "configuration/Eth_localTransactions.json"},
+		basic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_localTransactions.json",
+		basic.TransactionCategory_Eth:             "savedtxs/Eth_localTransactions.json"},
 	PathRemote: map[basic.TransactionCategory]string{
-		basic.TransactionCategory_Topia_Universal: "configuration/Topia_Universal_remoteTransactions.json",
-		basic.TransactionCategory_Eth:             "configuration/Eth_remoteTransactions.json"},
+		basic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json",
+		basic.TransactionCategory_Eth:             "savedtxs/Eth_remoteTransactions.json"},
 	PathConfig:  "configuration/txPoolConfigs.json",
 	ReStoredDur: 30 * time.Minute,
 
-	GasPriceLimit:       1000,     // 1000
-	PendingAccountSlots: 16,       //16
-	PendingGlobalSlots:  8192,     //8192
-	QueueMaxTxsAccount:  64,       //64
-	QueueMaxTxsGlobal:   8192 * 2, //PendingGlobalSlots*2
+	GasPriceLimit:          1000,     // 1000
+	PendingAccountSegments: 64,       //64
+	PendingGlobalSegments:  8192,     //8192
+	QueueMaxTxsAccount:     64,       //64
+	QueueMaxTxsGlobal:      8192 * 2, //PendingGlobalSlots*2
 
 	LifetimeForTx:         30 * time.Minute,
 	DurationForTxRePublic: 30 * time.Second,
@@ -62,13 +62,13 @@ func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 		//tplog.Logger.Infof("Invalid GasPriceLimit,updated to default value:", "from", conf.GasPriceLimit, "to", DefaultTransactionPoolConfig.GasPriceLimit)
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
-	if conf.PendingAccountSlots < 1 {
+	if conf.PendingAccountSegments < 2 {
 		//tplog.Logger.Infof("Invalid PendingAccountSlots,updated to default value:", "from", conf.PendingAccountSlots, "to", DefaultTransactionPoolConfig.PendingAccountSlots)
-		conf.PendingAccountSlots = DefaultTransactionPoolConfig.PendingAccountSlots
+		conf.PendingAccountSegments = DefaultTransactionPoolConfig.PendingAccountSegments
 	}
-	if conf.PendingGlobalSlots < 1 {
+	if conf.PendingGlobalSegments < 1 {
 		//tplog.Logger.Infof("Invalid PendingGlobalSlots,updated to default value:", "from", conf.PendingGlobalSlots, "to", DefaultTransactionPoolConfig.PendingGlobalSlots)
-		conf.PendingGlobalSlots = DefaultTransactionPoolConfig.PendingGlobalSlots
+		conf.PendingGlobalSegments = DefaultTransactionPoolConfig.PendingGlobalSegments
 	}
 	if conf.QueueMaxTxsAccount < 1 {
 		//tplog.Logger.Infof("Invalid QueueMaxTxsAccount,updated to default value:", "from", conf.QueueMaxTxsAccount, "to", DefaultTransactionPoolConfig.QueueMaxTxsAccount)

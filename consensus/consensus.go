@@ -43,6 +43,8 @@ type Consensus interface {
 
 	Start(*actor.ActorSystem, uint64, uint64, uint64) error
 
+	TriggerDKG(epoch uint64)
+
 	Stop()
 }
 
@@ -92,7 +94,7 @@ func NewConsensus(chainID chain.ChainID,
 		cryptS = tpcrt.CreateCryptService(log, config.CrptyType)
 	}
 
-	deliver := newMessageDeliver(log, nodeID, priKey, DeliverStrategy_All, network, marshaler, cryptS, ledger)
+	deliver := newMessageDeliver(log, nodeID, priKey, DeliverStrategy_Specifically, network, marshaler, cryptS, ledger)
 
 	exeScheduler := execution.NewExecutionScheduler(nodeID, log)
 
@@ -200,23 +202,26 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	cons.log.Infof("Self Node id=%s, role=%d, state=%d", nodeInfo.NodeID, nodeInfo.Role, nodeInfo.State)
 
-	if nodeInfo.Role == chain.NodeRole_Proposer || nodeInfo.Role == chain.NodeRole_Validator {
+	if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer || nodeInfo.Role&chain.NodeRole_Validator == chain.NodeRole_Validator {
 		cons.dkgEx.startLoop(ctx)
 
-		deltaH := int(height) - int(epochStartHeight)
-		if (epoch == 0 && height == 1) || deltaH == int(cons.config.EpochInterval)-int(cons.config.DKGStartBeforeEpoch) {
-			err = cons.dkgEx.updateDKGPartPubKeys(csStateRN)
-			if err != nil {
-				cons.log.Panicf("Update DKG exchange part pub keys err: %v", err)
-				return err
-			}
-
-			cons.dkgEx.initWhenStart(epoch)
-			cons.dkgEx.start(epoch)
+		err = cons.dkgEx.updateDKGPartPubKeys(csStateRN)
+		if err != nil {
+			cons.log.Panicf("Update DKG exchange part pub keys err: %v", err)
+			return err
+		}
+		cons.dkgEx.initWhenStart(epoch)
+		for i, verfer := range cons.dkgEx.dkgCrypt.dkGenerator.Verifiers() {
+			longterm, pub := verfer.Key()
+			cons.log.Infof("After init, dkgInitPrivKey=%s, Verifier i %d: longterm=%s, pub=%s, index=%d", cons.dkgEx.dkgExData.initDKGPrivKey.Load().(string), i, longterm.String(), pub.String(), verfer.Index())
 		}
 	}
 
 	return nil
+}
+
+func (cons *consensus) TriggerDKG(epoch uint64) {
+	cons.dkgEx.start(epoch)
 }
 
 func (cons *consensus) dispatch(actorCtx actor.Context, data []byte) {

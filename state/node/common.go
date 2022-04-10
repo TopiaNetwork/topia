@@ -98,7 +98,7 @@ func updateTotalIDs(stateStore tplgss.StateStore, name string, totalIDsKey strin
 		return err
 	}
 
-	return stateStore.Update(StateStore_Name_Node, []byte(totalIDsKey), finalTotolIdsBytesNew)
+	return stateStore.Update(name, []byte(totalIDsKey), finalTotolIdsBytesNew)
 }
 
 func updateTotalWeight(stateStore tplgss.StateStore, name string, totalWeightKey string, deltaWeight int64) error {

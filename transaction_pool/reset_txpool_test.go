@@ -20,10 +20,10 @@ func Test_transactionPool_Reset(t *testing.T) {
 	log := TpiaLog
 	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
-	assert.Equal(t, 0, len(pool.queues[Category1].accTxs))
-	assert.Equal(t, 0, len(pool.pendings[Category1].accTxs))
-	assert.Equal(t, 0, pool.allTxsForLook[Category1].LocalCount())
-	assert.Equal(t, 0, pool.allTxsForLook[Category1].RemoteCount())
+	assert.Equal(t, 0, len(pool.queues.queue[Category1]))
+	assert.Equal(t, 0, len(pool.pendings.pending[Category1]))
+	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
+	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	if err := pool.Reset(OldBlockHead, NewBlockHead); err != nil {

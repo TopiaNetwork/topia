@@ -33,7 +33,7 @@ func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, tx
 	}
 
 	for _, txItem := range ept.packedTxs.TxList {
-		txRS := txfactory.CreatTransactionAction(&txItem).Execute(ctx, log, txServant)
+		txRS := txfactory.CreatTransactionAction(txItem).Execute(ctx, log, txServant)
 		if txRS == nil {
 			txHexHash, _ := txItem.HashHex()
 			err := fmt.Errorf("tx %s execute error", txHexHash)

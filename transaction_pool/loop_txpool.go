@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"github.com/TopiaNetwork/topia/transaction/basic"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 )
@@ -26,7 +27,7 @@ func (pool *transactionPool) chanRemoveTxHashs() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
-			pool.log.Errorf("chanRemoveTxHashs err:", err)
+			pool.log.Errorf("chanRemoveTxHashs err:", err, debug.Stack())
 		}
 	}()
 	for {
@@ -58,7 +59,7 @@ func (pool *transactionPool) saveAllIfShutDown() (a, b, c int) {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
-			pool.log.Errorf("saveAllIfShutDown err:", err)
+			pool.log.Errorf("saveAllIfShutDown err:", err, debug.Stack())
 		}
 	}()
 	for {
@@ -89,7 +90,7 @@ func (pool *transactionPool) resetIfNewHead() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
-			pool.log.Errorf("resetIfNewHead err:", err)
+			pool.log.Errorf("resetIfNewHead err:", err, debug.Stack())
 		}
 	}()
 	// Track the previous head headers for transaction reorgs
@@ -126,7 +127,7 @@ func (pool *transactionPool) reportTicks() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
-			pool.log.Errorf("reportTicks err:", err)
+			pool.log.Errorf("reportTicks err:", err, debug.Stack())
 		}
 	}()
 	var (
@@ -175,7 +176,7 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
-			pool.log.Errorf("removeTxForUptoLifeTime err:", err)
+			pool.log.Errorf("removeTxForUptoLifeTime err:", err, debug.Stack())
 		}
 	}()
 	var evict = time.NewTicker(pool.config.EvictionInterval) //30s report eviction
@@ -228,7 +229,7 @@ func (pool *transactionPool) regularSaveLocalTxs() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
-			pool.log.Errorf("regularSaveLocalTxs err:", err)
+			pool.log.Errorf("regularSaveLocalTxs err:", err, debug.Stack())
 		}
 	}()
 	var stored = time.NewTicker(pool.config.ReStoredDur)
@@ -266,7 +267,7 @@ func (pool *transactionPool) regularRepublic() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
-			pool.log.Errorf("regularRepublic err:", err)
+			pool.log.Errorf("regularRepublic err:", err, debug.Stack())
 		}
 	}()
 	var republic = time.NewTicker(pool.config.RepublicInterval) //30s check tx lifetime

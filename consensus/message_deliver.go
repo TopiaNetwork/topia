@@ -118,17 +118,23 @@ func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, 
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
-	sigData, pubKey, err := md.dkgBls.Sign(msg.TxsData())
+	sigData, err := md.cryptService.Sign(md.priKey, msg.TxsData())
 	if err != nil {
-		md.log.Errorf("DKG sign PreparePackedMessageExe err: %v", err)
+		md.log.Errorf("Can't sign when deliver PreparePackedMessageExe err: %v", err)
 		return err
 	}
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't convert to pub key when deliverPreparePackedMessageExe err: %v", err)
+		return err
+	}
+
 	msg.Signature = sigData
 	msg.PubKey = pubKey
 
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
-		md.log.Errorf("PreparePackedMessageExe marshal err: %v", err)
+		md.log.Errorf("Deliver PreparePackedMessageExe marshal err: %v", err)
 		return err
 	}
 
@@ -162,11 +168,17 @@ func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context,
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
-	sigData, pubKey, err := md.dkgBls.Sign(msg.TxHashsData())
+	sigData, err := md.cryptService.Sign(md.priKey, msg.TxHashsData())
 	if err != nil {
-		md.log.Errorf("DKG sign PreparePackedMessageProp err: %v", err)
+		md.log.Errorf("Can't sign PreparePackedMessageProp when deliverPreparePackagedMessageProp err: %v", err)
 		return err
 	}
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't convert to pub key when deliverPreparePackagedMessageProp err: %v", err)
+		return err
+	}
+
 	msg.Signature = sigData
 	msg.PubKey = pubKey
 

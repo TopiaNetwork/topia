@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	PartPubKeyChannel_Size  = 150
-	DealMSGChannel_Size     = 150
-	DealRespMsgChannel_Size = 150
+	PartPubKeyChannel_Size  = 500
+	DealMSGChannel_Size     = 500
+	DealRespMsgChannel_Size = 500
 )
 
 type DKGExchangeState byte
@@ -73,9 +73,9 @@ func newDKGExchange(log tplog.Logger,
 		log:           log,
 		chainID:       chainID,
 		nodeID:        nodeID,
-		startCh:       make(chan uint64),
-		stopCh:        make(chan struct{}),
-		finishedCh:    make(chan bool),
+		startCh:       make(chan uint64, 1),
+		stopCh:        make(chan struct{}, 1),
+		finishedCh:    make(chan bool, 1),
 		partPubKey:    partPubKey,
 		dealMsgCh:     dealMsgCh,
 		dealRespMsgCh: dealRespMsgCh,
@@ -175,7 +175,7 @@ func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 		for {
 			select {
 			case epoch := <-ex.startCh:
-				ex.log.Infof("DKG exchange start %s", ex.nodeID)
+				ex.log.Infof("DKG exchange send deal start %s", ex.nodeID)
 				if ex.dkgCrypt == nil {
 					ex.log.Panicf("dkgCrypt nil at present: epoch=%d")
 				}
@@ -250,8 +250,13 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 
 				dealResp, err := ex.dkgCrypt.processDeal(&deal)
 				if err != nil {
-					ex.log.Errorf("Process deal failed dealIndex %d epoch %d: %v, self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.epoch, err, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
-					continue
+					if err == vss.ErrDealAlreadyProcessed {
+						ex.log.Warnf("Process received deal dealIndex %d epoch %d: self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.epoch, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
+						continue
+					} else {
+						ex.log.Panicf("Process deal failed dealIndex %d epoch %d: %v, self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.epoch, err, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
+						continue
+					}
 				} else {
 					ex.log.Infof("Node %s process deal successed dealIndex %d epoch %d, self nodeID %s, expected signVerify pub %s, %v", ex.nodeID, deal.Index, ex.dkgCrypt.epoch, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
 				}
@@ -307,10 +312,10 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 				err = ex.dkgCrypt.processResp(&resp)
 				if err != nil {
 					if err == vss.ErrNoDealBeforeResponse {
-						ex.log.Warnf("Process response error : %v, epoch %d", err, ex.dkgCrypt.epoch)
+						ex.log.Warnf("Process no deal before response: epoch %d", ex.dkgCrypt.epoch)
 						ex.dkgCrypt.addAdvanceResp(&resp)
 					} else if err == vss.ErrExistResponseOfSameOrigin {
-						ex.log.Warnf("Process response error: %v, epoch %d", err, ex.dkgCrypt.epoch)
+						ex.log.Warnf("Process same origin response: epoch %d", ex.dkgCrypt.epoch)
 					} else {
 						ex.log.Panicf("Process response failed: epoch %d: %v", ex.dkgCrypt.epoch, err)
 					}

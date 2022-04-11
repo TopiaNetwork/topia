@@ -40,6 +40,8 @@ func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, tx
 			log.Errorf("%v", err)
 			return &packedTxsRS, err
 		}
+
+		packedTxsRS.TxsResult = append(packedTxsRS.TxsResult, *txRS)
 	}
 
 	packedTxsRS.TxRSRoot = basic.TxResultRoot(packedTxsRS.TxsResult, ept.packedTxs.TxList)

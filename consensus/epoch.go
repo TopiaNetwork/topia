@@ -48,53 +48,55 @@ func newEpochService(log tplog.Logger,
 }
 
 func (es *epochService) start(ctx context.Context) {
-	for {
-		select {
-		case newBh := <-es.blockAddedCh:
-			maxStateVer, err := es.exeScheduler.MaxStateVersion(es.log, es.ledger)
-			if err != nil {
-				es.log.Errorf("Can't get max state version: %v", err)
-				continue
-			}
-			csStateEpoch := state.GetStateBuilder().CreateCompositionState(es.log, es.nodeID, es.ledger, maxStateVer+1)
+	go func() {
+		for {
+			select {
+			case newBh := <-es.blockAddedCh:
+				maxStateVer, err := es.exeScheduler.MaxStateVersion(es.log, es.ledger)
+				if err != nil {
+					es.log.Errorf("Can't get max state version: %v", err)
+					continue
+				}
+				csStateEpoch := state.GetStateBuilder().CreateCompositionState(es.log, es.nodeID, es.ledger, maxStateVer+1)
 
-			epochInfo, err := csStateEpoch.GetLatestEpoch()
-			if err != nil {
-				es.log.Errorf("Can't get the latest epoch: err=%v", err)
-				continue
-			}
+				epochInfo, err := csStateEpoch.GetLatestEpoch()
+				if err != nil {
+					es.log.Errorf("Can't get the latest epoch: err=%v", err)
+					continue
+				}
 
-			deltaH := int(newBh.Head.Height) - int(epochInfo.StartHeight)
-			if deltaH == int(es.epochInterval)-int(es.dkgStartBeforeEpoch) {
-				dkgExState := es.dkgExchange.getDKGState()
-				if dkgExState != DKGExchangeState_IDLE {
-					es.log.Warnf("Unfinished dkg exchange is going on an new dkg can't start, current state: %s", dkgExState.String)
-				} else {
-					err = es.dkgExchange.updateDKGPartPubKeys(csStateEpoch)
-					if err != nil {
-						es.log.Errorf("Update DKG exchange part pub keys err: %v", err)
-						continue
+				deltaH := int(newBh.Head.Height) - int(epochInfo.StartHeight)
+				if deltaH == int(es.epochInterval)-int(es.dkgStartBeforeEpoch) {
+					dkgExState := es.dkgExchange.getDKGState()
+					if dkgExState != DKGExchangeState_IDLE {
+						es.log.Warnf("Unfinished dkg exchange is going on an new dkg can't start, current state: %s", dkgExState.String)
+					} else {
+						err = es.dkgExchange.updateDKGPartPubKeys(csStateEpoch)
+						if err != nil {
+							es.log.Errorf("Update DKG exchange part pub keys err: %v", err)
+							continue
+						}
+						es.dkgExchange.initWhenStart(epochInfo.Epoch + 1)
+						es.dkgExchange.start(epochInfo.Epoch + 1)
 					}
-					es.dkgExchange.start(epochInfo.Epoch + 1)
-				}
-			} else if deltaH == int(es.epochInterval) {
-				csStateEpoch.SetLatestEpoch(&chain.EpochInfo{
-					Epoch:          epochInfo.Epoch + 1,
-					StartTimeStamp: uint64(time.Now().UnixNano()),
-					StartHeight:    newBh.Head.Height,
-				})
+				} else if deltaH == int(es.epochInterval) {
+					csStateEpoch.SetLatestEpoch(&chain.EpochInfo{
+						Epoch:          epochInfo.Epoch + 1,
+						StartTimeStamp: uint64(time.Now().UnixNano()),
+						StartHeight:    newBh.Head.Height,
+					})
 
-				if !es.dkgExchange.dkgCrypt.finished() {
-					es.log.Warnf("Current epoch %d DKG unfinished and still use the old, height %d", epochInfo.Epoch, newBh.Head.Height)
-				} else {
-					es.dkgExchange.notifyUpdater()
-					es.dkgExchange.updateDKGState(DKGExchangeState_IDLE)
+					if !es.dkgExchange.dkgCrypt.finished() {
+						es.log.Warnf("Current epoch %d DKG unfinished and still use the old, height %d", epochInfo.Epoch, newBh.Head.Height)
+					} else {
+						es.dkgExchange.notifyUpdater()
+						es.dkgExchange.updateDKGState(DKGExchangeState_IDLE)
+					}
 				}
+			case <-ctx.Done():
+				es.log.Info("Exit epoch cycle")
+				return
 			}
-		case <-ctx.Done():
-			es.log.Info("Exit epoch cycle")
-			return
 		}
-	}
-
+	}()
 }

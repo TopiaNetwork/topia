@@ -13,7 +13,7 @@ import (
 func (pool *transactionPool) truncatePending(category basic.TransactionCategory) {
 
 	pending := uint64(0)
-	for _, list := range pool.pendings.getTxsByCategory(category).getAll() {
+	for _, list := range pool.pendings.getAddrTxListOfCategory(category) {
 		pending += uint64(list.Len())
 	}
 	if pending <= pool.config.PendingGlobalSegments {
@@ -23,7 +23,7 @@ func (pool *transactionPool) truncatePending(category basic.TransactionCategory)
 	var greyAccounts map[tpcrtypes.Address]int
 	// Assemble a spam order to penalize large transactors first
 
-	for addr, list := range pool.pendings.getTxsByCategory(category).getAll() {
+	for addr, list := range pool.pendings.getAddrTxListOfCategory(category) {
 		// Only evict transactions from high rollers
 		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.PendingAccountSegments {
 			greyAccounts[addr] = list.Len()
@@ -45,7 +45,7 @@ func (pool *transactionPool) truncatePending(category basic.TransactionCategory)
 		//The accounts with the most backlogged transactions are first dumped
 		for pending > pool.config.PendingGlobalSegments && len(greyAccounts) > 0 {
 			bePunished := heap.Pop(&greyAccountsQueue).(*CntAccountItem)
-			list := pool.pendings.getTxsByCategory(category).getTxListByAddr(bePunished.accountAddr)
+			list := pool.pendings.getTxListByAddrOfCategory(category, bePunished.accountAddr)
 			caps := list.Cap(list.Len() - 1)
 			for _, tx := range caps {
 				txId, _ := tx.HashHex()
@@ -63,7 +63,7 @@ func (pool *transactionPool) truncatePending(category basic.TransactionCategory)
 func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
 
 	queued := uint64(0)
-	for _, list := range pool.queues.getTxsByCategory(category).getAll() {
+	for _, list := range pool.queues.getAddrTxListOfCategory(category) {
 		queued += uint64(list.Len())
 	}
 	if queued <= pool.config.QueueMaxTxsGlobal {
@@ -71,10 +71,10 @@ func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
 	}
 
 	// Sort all accounts with queued transactions by heartbeat
-	txs := make(txsByHeartbeat, 0, len(pool.queues.getTxsByCategory(category).getAll()))
-	for addr := range pool.queues.getTxsByCategory(category).getAll() {
+	txs := make(txsByHeartbeat, 0, len(pool.queues.getAddrTxListOfCategory(category)))
+	for addr := range pool.queues.getAddrTxListOfCategory(category) {
 		if !pool.locals.contains(addr) { // don't drop locals
-			list := pool.queues.getTxsByCategory(category).getTxListByAddr(addr).Flatten()
+			list := pool.queues.getTxListByAddrOfCategory(category, addr).Flatten()
 			for _, tx := range list {
 				txId, _ := tx.HashHex()
 				txs = append(txs, txByHeartbeat{txId, pool.ActivationIntervals.getTxActivByKey(txId)})

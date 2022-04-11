@@ -19,16 +19,16 @@ func Test_transactionPool_AddRemote(t *testing.T) {
 	log := TpiaLog
 	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
-	assert.Equal(t, 0, len(pool.queues.getTxsByCategory(Category1).getAll()))
-	assert.Equal(t, 0, len(pool.pendings.getTxsByCategory(Category1).getAll()))
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	pool.AddRemote(TxR1)
-	assert.Equal(t, 1, len(pool.queues.getTxsByCategory(Category1).getAll()))
-	assert.Equal(t, 0, len(pool.pendings.getTxsByCategory(Category1).getAll()))
+	assert.Equal(t, 1, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
 	assert.Equal(t, 1, pool.allTxsForLook.all[Category1].RemoteCount())
 
@@ -43,8 +43,8 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 	log := TpiaLog
 	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
-	assert.Equal(t, 0, len(pool.queues.getTxsByCategory(Category1).getAll()))
-	assert.Equal(t, 0, len(pool.pendings.getTxsByCategory(Category1).getAll()))
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
@@ -56,9 +56,9 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 	txsMap := make(map[tpcrtypes.Address][]*basic.Transaction)
 	txsMap[From2] = txs
 	pool.AddRemotes(txs)
-	assert.Equal(t, 1, len(pool.queues.getTxsByCategory(Category1).getAll()))
-	assert.Equal(t, 2, pool.queues.getTxsByCategory(Category1).getTxListByAddr(From2).txs.Len())
-	assert.Equal(t, 0, len(pool.pendings.getTxsByCategory(Category1).getAll()))
+	assert.Equal(t, 1, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 2, pool.queues.getTxListByAddrOfCategory(Category1, From2).txs.Len())
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
 	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
 
@@ -73,8 +73,8 @@ func Test_transactionPool_SaveRemoteTxs(t *testing.T) {
 	log := TpiaLog
 	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
-	assert.Equal(t, 0, len(pool.queues.getTxsByCategory(Category1).getAll()))
-	assert.Equal(t, 0, len(pool.pendings.getTxsByCategory(Category1).getAll()))
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
@@ -113,8 +113,8 @@ func Test_transactionPool_LoadRemoteTxs(t *testing.T) {
 	log := TpiaLog
 	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
-	assert.Equal(t, 0, len(pool.queues.getTxsByCategory(Category1).getAll()))
-	assert.Equal(t, 0, len(pool.pendings.getTxsByCategory(Category1).getAll()))
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
@@ -152,8 +152,8 @@ func Test_transactionPool_BroadCastTx(t *testing.T) {
 	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	pool.network = network
-	assert.Equal(t, 0, len(pool.queues.getTxsByCategory(Category1).getAll()))
-	assert.Equal(t, 0, len(pool.pendings.getTxsByCategory(Category1).getAll()))
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 

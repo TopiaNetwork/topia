@@ -30,9 +30,9 @@ import (
 )
 
 const (
-	ExecutorNode_Number  = 0
+	ExecutorNode_Number  = 3
 	ProposerNode_Number  = 3
-	ValidatorNode_number = 0
+	ValidatorNode_number = 4
 )
 
 var portFrefix = map[string]string{
@@ -237,9 +237,22 @@ func createNetworkNodes(
 		}
 	}
 
-	buildNodeConnections(networkExes)
-	buildNodeConnections(networkProps)
-	buildNodeConnections(networkVals)
+	//buildNodeConnections(networkExes)
+	//buildNodeConnections(networkProps)
+	//buildNodeConnections(networkVals)
+
+	var netCons []tpnet.Network
+	for _, netExe := range networkExes {
+		netCons = append(netCons, netExe)
+	}
+	for _, netProp := range networkProps {
+		netCons = append(netCons, netProp)
+	}
+	for _, netVal := range networkVals {
+		netCons = append(netCons, netVal)
+	}
+
+	buildNodeConnections(netCons)
 
 	time.Sleep(10 * time.Second)
 
@@ -398,7 +411,7 @@ func TestMultiRoleNodes(t *testing.T) {
 		activeProposers, _ := csStateRN.GetActiveProposerIDs()
 		activeValidators, _ := csStateRN.GetActiveValidatorIDs()
 
-		t.Logf("Curent active proposers %v and validators %v", activeProposers, activeValidators)
+		nodeP.mainLog.Infof("Curent active proposers %v and validators %v", activeProposers, activeValidators)
 
 		latestEpochInfo, _ := csStateRN.GetLatestEpoch()
 

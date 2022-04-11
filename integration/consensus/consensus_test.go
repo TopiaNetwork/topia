@@ -9,6 +9,7 @@ import (
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/consensus"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -29,9 +30,9 @@ import (
 )
 
 const (
-	ExecutorNode_Number  = 3
+	ExecutorNode_Number  = 0
 	ProposerNode_Number  = 3
-	ValidatorNode_number = 6
+	ValidatorNode_number = 0
 )
 
 var portFrefix = map[string]string{
@@ -41,6 +42,7 @@ var portFrefix = map[string]string{
 }
 
 type nodeParams struct {
+	chainID         chain.ChainID
 	nodeID          string
 	nodeType        string
 	priKey          tpcrtypes.PrivateKey
@@ -52,6 +54,7 @@ type nodeParams struct {
 	network         tpnet.Network
 	txPool          txpool.TransactionPool
 	ledger          ledger.Ledger
+	cs              consensus.Consensus
 	config          *tpconfig.Configuration
 	sysActor        *actor.ActorSystem
 	compState       state.CompositionState
@@ -90,6 +93,20 @@ func createNetworkNodes(
 			Role:   chain.NodeRole_Executor,
 			State:  chain.NodeState_Active,
 		})
+		for j := 0; j < i; j++ {
+			executorNetParams[j].compState.AddNode(&chain.NodeInfo{
+				NodeID: network.ID(),
+				Weight: 10,
+				Role:   chain.NodeRole_Executor,
+				State:  chain.NodeState_Active,
+			})
+			executorNetParams[i].compState.AddNode(&chain.NodeInfo{
+				NodeID: executorNetParams[j].nodeID,
+				Weight: 10,
+				Role:   chain.NodeRole_Executor,
+				State:  chain.NodeState_Active,
+			})
+		}
 		for _, proposerNetParam := range proposerNetParams {
 			proposerNetParam.compState.AddNode(&chain.NodeInfo{
 				NodeID: network.ID(),
@@ -118,6 +135,7 @@ func createNetworkNodes(
 		keyPair := key.NewKeyPair(suite)
 		proposerNetParams[i].dkgPriKey, _ = encoding.ScalarToStringHex(suite, keyPair.Private)
 		proposerNetParams[i].dkgPartPubKey, _ = encoding.PointToStringHex(suite, keyPair.Public)
+		proposerNetParams[i].config.CSConfig.InitDKGPrivKey = proposerNetParams[i].dkgPriKey
 
 		proposerNetParams[i].compState.AddNode(&chain.NodeInfo{
 			NodeID:        network.ID(),
@@ -126,6 +144,24 @@ func createNetworkNodes(
 			Role:          chain.NodeRole_Proposer,
 			State:         chain.NodeState_Active,
 		})
+
+		for j := 0; j < i; j++ {
+			proposerNetParams[j].compState.AddNode(&chain.NodeInfo{
+				NodeID:        network.ID(),
+				Weight:        10,
+				DKGPartPubKey: proposerNetParams[i].dkgPartPubKey,
+				Role:          chain.NodeRole_Proposer,
+				State:         chain.NodeState_Active,
+			})
+
+			proposerNetParams[i].compState.AddNode(&chain.NodeInfo{
+				NodeID:        proposerNetParams[j].nodeID,
+				Weight:        10,
+				DKGPartPubKey: proposerNetParams[j].dkgPartPubKey,
+				Role:          chain.NodeRole_Proposer,
+				State:         chain.NodeState_Active,
+			})
+		}
 		for _, executorNetParam := range executorNetParams {
 			executorNetParam.compState.AddNode(&chain.NodeInfo{
 				NodeID:        network.ID(),
@@ -154,20 +190,38 @@ func createNetworkNodes(
 		networkVals = append(networkVals, network)
 
 		keyPair := key.NewKeyPair(suite)
-		proposerNetParams[i].dkgPriKey, _ = encoding.ScalarToStringHex(suite, keyPair.Private)
-		proposerNetParams[i].dkgPartPubKey, _ = encoding.PointToStringHex(suite, keyPair.Public)
+		validatorNetParams[i].dkgPriKey, _ = encoding.ScalarToStringHex(suite, keyPair.Private)
+		validatorNetParams[i].dkgPartPubKey, _ = encoding.PointToStringHex(suite, keyPair.Public)
+		validatorNetParams[i].config.CSConfig.InitDKGPrivKey = validatorNetParams[i].dkgPriKey
 
 		validatorNetParams[i].compState.AddNode(&chain.NodeInfo{
-			NodeID: network.ID(),
-			Weight: 10,
-			Role:   chain.NodeRole_Validator,
-			State:  chain.NodeState_Active,
+			NodeID:        network.ID(),
+			Weight:        10,
+			DKGPartPubKey: validatorNetParams[i].dkgPartPubKey,
+			Role:          chain.NodeRole_Validator,
+			State:         chain.NodeState_Active,
 		})
+		for j := 0; j < i; j++ {
+			validatorNetParams[j].compState.AddNode(&chain.NodeInfo{
+				NodeID:        network.ID(),
+				Weight:        10,
+				DKGPartPubKey: validatorNetParams[i].dkgPartPubKey,
+				Role:          chain.NodeRole_Validator,
+				State:         chain.NodeState_Active,
+			})
+			validatorNetParams[i].compState.AddNode(&chain.NodeInfo{
+				NodeID:        validatorNetParams[j].nodeID,
+				Weight:        10,
+				DKGPartPubKey: validatorNetParams[j].dkgPartPubKey,
+				Role:          chain.NodeRole_Validator,
+				State:         chain.NodeState_Active,
+			})
+		}
 		for _, executorNetParam := range executorNetParams {
 			executorNetParam.compState.AddNode(&chain.NodeInfo{
 				NodeID:        network.ID(),
 				Weight:        10,
-				DKGPartPubKey: proposerNetParams[i].dkgPartPubKey,
+				DKGPartPubKey: validatorNetParams[i].dkgPartPubKey,
 				Role:          chain.NodeRole_Validator,
 				State:         chain.NodeState_Active,
 			})
@@ -176,7 +230,7 @@ func createNetworkNodes(
 			proposerNetParam.compState.AddNode(&chain.NodeInfo{
 				NodeID:        network.ID(),
 				Weight:        10,
-				DKGPartPubKey: proposerNetParams[i].dkgPartPubKey,
+				DKGPartPubKey: validatorNetParams[i].dkgPartPubKey,
 				Role:          chain.NodeRole_Validator,
 				State:         chain.NodeState_Active,
 			})
@@ -220,7 +274,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		network := tpnet.NewNetwork(context.Background(), testMainLog, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, ledger))
 
-		eventhub.GetEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
+		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
 		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), ledger, 1)
 
@@ -264,7 +318,10 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			}
 		}*/
 
+		newConfig := &tpconfig.Configuration{}
+		tpcmm.DeepCopyByGob(newConfig, config)
 		nParams = append(nParams, &nodeParams{
+			chainID:         "consintetest",
 			nodeType:        nodeType,
 			priKey:          priKey,
 			mainLevel:       tplogcmm.InfoLevel,
@@ -273,7 +330,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			network:         network,
 			txPool:          txPool,
 			ledger:          ledger,
-			config:          config,
+			config:          newConfig,
 			sysActor:        sysActor,
 			compState:       compState,
 			latestEpochInfo: latestEpochInfo,
@@ -288,6 +345,7 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
 		cs := consensus.NewConsensus(
+			nParams[i].chainID,
 			nParams[i].nodeID,
 			nParams[i].priKey,
 			tplogcmm.InfoLevel,
@@ -300,7 +358,7 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 		)
 
 		cs.Start(nParams[i].sysActor, nParams[i].latestEpochInfo.Epoch, nParams[i].latestEpochInfo.StartHeight, nParams[i].latestBlock.Head.Height)
-
+		nParams[i].cs = cs
 		css = append(css, cs)
 	}
 
@@ -310,9 +368,11 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 func TestMultiRoleNodes(t *testing.T) {
 	os.RemoveAll("./TestConsensus")
 
+	waitChan := make(chan struct{})
+
 	executorParams := createNodeParams(ExecutorNode_Number, "executor")
-	proposerParams := createNodeParams(ExecutorNode_Number, "proposer")
-	validatorParams := createNodeParams(ExecutorNode_Number, "validator")
+	proposerParams := createNodeParams(ProposerNode_Number, "proposer")
+	validatorParams := createNodeParams(ValidatorNode_number, "validator")
 
 	/*executorNet, proposerNet, validatorNet := */
 	createNetworkNodes(executorParams, proposerParams, validatorParams, t)
@@ -323,9 +383,28 @@ func TestMultiRoleNodes(t *testing.T) {
 	nParams = append(nParams, validatorParams...)
 	for _, nodeP := range nParams {
 		nodeP.compState.Commit()
+		t.Logf("DKG PriKey = %s, nodeType=%s", nodeP.config.CSConfig.InitDKGPrivKey, nodeP.nodeType)
 	}
 
 	createConsensusAndStart(nParams)
 
-	time.Sleep(2000 * time.Millisecond)
+	var dkgNParams []*nodeParams
+	dkgNParams = append(dkgNParams, proposerParams...)
+	dkgNParams = append(nParams, validatorParams...)
+	for _, nodeP := range dkgNParams {
+		csStateRN := state.CreateCompositionStateReadonly(nodeP.mainLog, nodeP.ledger)
+		defer csStateRN.Stop()
+
+		activeProposers, _ := csStateRN.GetActiveProposerIDs()
+		activeValidators, _ := csStateRN.GetActiveValidatorIDs()
+
+		t.Logf("Curent active proposers %v and validators %v", activeProposers, activeValidators)
+
+		latestEpochInfo, _ := csStateRN.GetLatestEpoch()
+
+		nodeP.cs.TriggerDKG(latestEpochInfo.Epoch)
+	}
+
+	<-waitChan
+	//time.Sleep(10000 * time.Millisecond)
 }

@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"io"
 
-	network2 "github.com/TopiaNetwork/topia/network/protocol"
-
 	ggio "github.com/gogo/protobuf/io"
 	"github.com/libp2p/go-libp2p-core/network"
 
 	tplog "github.com/TopiaNetwork/topia/log"
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/network/message"
+	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 )
 
 type P2PStreamService struct {
@@ -34,7 +33,7 @@ func (ps *P2PStreamService) handleIncomingStream(stream network.Stream) {
 	ps.log.Infof("Received stream ID=%s, protocol=%s localID=%s remoteID=%s",
 		stream.ID(), stream.Protocol(), stream.Conn().LocalPeer().String(), stream.Conn().RemotePeer().String())
 
-	reader := ggio.NewDelimitedReader(stream, network2.StreamMaxMsgSize)
+	reader := ggio.NewDelimitedReader(stream, tpnetprotoc.StreamMaxMsgSize)
 
 	for {
 		select {
@@ -56,14 +55,14 @@ func (ps *P2PStreamService) handleIncomingStream(stream network.Stream) {
 			return
 		}
 
-		if streamMsg.Size() > network2.StreamMaxMsgSize {
+		if streamMsg.Size() > tpnetprotoc.StreamMaxMsgSize {
 			stream.Reset()
 			ps.log.Errorf("received message exceeded permissible message maxSize FromPeerID=%s, ProtocolID=%s, ModuleName=%s, size=%s, maxSize=%d",
 				streamMsg.FromPeerID,
 				streamMsg.ProtocolID,
 				streamMsg.ModuleName,
 				streamMsg.Size(),
-				network2.StreamMaxMsgSize)
+				tpnetprotoc.StreamMaxMsgSize)
 			return
 		}
 
@@ -78,7 +77,7 @@ func (ps *P2PStreamService) handleStreamMessage(stream network.Stream, streamMsg
 		return err
 	}
 
-	return ps.p2pService.dispatch(streamMsg.ModuleName, streamMsg)
+	return ps.p2pService.dispatch(streamMsg.ModuleName, streamMsg.Data)
 }
 
 func (ps *P2PStreamService) handleIncomingStreamWithResp(stream network.Stream) {
@@ -87,7 +86,7 @@ func (ps *P2PStreamService) handleIncomingStreamWithResp(stream network.Stream) 
 	ps.log.Infof("Received stream ID=%s, protocol=%s localID=%s remoteID=%s",
 		stream.ID(), stream.Protocol(), stream.Conn().LocalPeer().String(), stream.Conn().RemotePeer().String())
 
-	reader := ggio.NewDelimitedReader(stream, network2.StreamMaxMsgSize)
+	reader := ggio.NewDelimitedReader(stream, tpnetprotoc.StreamMaxMsgSize)
 	var streamMsg message.NetworkMessage
 	err := reader.ReadMsg(&streamMsg)
 	if err != nil {
@@ -101,14 +100,14 @@ func (ps *P2PStreamService) handleIncomingStreamWithResp(stream network.Stream) 
 		return
 	}
 
-	if streamMsg.Size() > network2.StreamMaxMsgSize {
+	if streamMsg.Size() > tpnetprotoc.StreamMaxMsgSize {
 		stream.Reset()
 		ps.log.Errorf("received message exceeded permissible message maxSize FromPeerID=%s, ProtocolID=%s, ModuleName=%s, size=%d, maxSize=%d",
 			streamMsg.FromPeerID,
 			streamMsg.ProtocolID,
 			streamMsg.ModuleName,
 			streamMsg.Size(),
-			network2.StreamMaxMsgSize)
+			tpnetprotoc.StreamMaxMsgSize)
 		return
 	}
 
@@ -161,8 +160,8 @@ func (ps *P2PStreamService) writeMessage(stream network.Stream, streamMsg *messa
 }
 
 func (ps *P2PStreamService) readMessage(stream network.Stream) (*message.NetworkMessage, error) {
-	r := bufio.NewReader(NewStreamReader(stream, network2.ReadResMinSpeed, network2.ReadResDeadline))
-	ggr := ggio.NewDelimitedReader(r, network2.StreamMaxMsgSize)
+	r := bufio.NewReader(NewStreamReader(stream, tpnetprotoc.ReadResMinSpeed, tpnetprotoc.ReadResDeadline))
+	ggr := ggio.NewDelimitedReader(r, tpnetprotoc.StreamMaxMsgSize)
 
 	var streamMsg message.NetworkMessage
 	err := ggr.ReadMsg(&streamMsg)
@@ -178,14 +177,14 @@ func (ps *P2PStreamService) readMessage(stream network.Stream) (*message.Network
 		return nil, err
 	}
 
-	if streamMsg.Size() > network2.StreamMaxMsgSize {
+	if streamMsg.Size() > tpnetprotoc.StreamMaxMsgSize {
 		stream.Reset()
 		err := fmt.Errorf("received message exceeded permissible message maxSize FromPeerID=%s, ProtocolID=%s, ModuleName=%s, size=%d, maxSize=%d",
 			streamMsg.FromPeerID,
 			streamMsg.ProtocolID,
 			streamMsg.ModuleName,
 			streamMsg.Size(),
-			network2.StreamMaxMsgSize)
+			tpnetprotoc.StreamMaxMsgSize)
 		ps.log.Error(err.Error())
 		return nil, err
 	}

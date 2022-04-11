@@ -31,7 +31,7 @@ func TestSend(t *testing.T) {
 	ctx := context.Background()
 	err := p2p1.Connect(p2p2.ListenAddr())
 	assert.Equal(t, nil, err)
-	err = p2p1.Send(context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, []string{p2p2.ID().String()}), protocol.AsyncSendProtocolID, "", nil)
+	err = p2p1.Send(context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, []string{p2p2.ID().String()}), protocol.AsyncSendProtocolID, "", []byte("testingstr"))
 	assert.Equal(t, nil, err)
 
 	time.Sleep(30 * time.Second)

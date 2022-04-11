@@ -33,6 +33,14 @@ func BytesCopy(src []byte) []byte {
 	return dst
 }
 
+func DeepCopyByGob(dst, src interface{}) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(src); err != nil {
+		return err
+	}
+	return gob.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(dst)
+}
+
 func CloneSlice(a [][]byte) [][]byte {
 	other := make([][]byte, len(a))
 	for i := range a {

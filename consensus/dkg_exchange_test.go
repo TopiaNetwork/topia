@@ -18,7 +18,6 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
 	"github.com/TopiaNetwork/topia/ledger"
-	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
@@ -44,7 +43,7 @@ func createTestDKGExChange(log tplog.Logger, nodeID string, ledger ledger.Ledger
 		dealRespMsgChMap: dealRespMsgChMap,
 	}
 
-	dkgEx := newDKGExchange(log, nodeID, partPubKeyChMap[nodeID], dealMsgChMap[nodeID], dealRespMsgChMap[nodeID], initPrivKeysMap[nodeID], deliver, ledger)
+	dkgEx := newDKGExchange(log, "testdkg", nodeID, partPubKeyChMap[nodeID], dealMsgChMap[nodeID], dealRespMsgChMap[nodeID], initPrivKeysMap[nodeID], deliver, ledger)
 	dkgEx.nodeID = nodeID
 	dkgEx.dkgExData.initDKGPartPubKeys.Store(initPubKeysMap)
 
@@ -65,7 +64,7 @@ func creatKeyPairs(suite *bn256.Suite, nParticipant int) {
 }
 
 func createTestDKGNode(log tplog.Logger, nParticipant int) {
-	lg := ledger.NewLedger(".", "dkgtest", log, backend.BackendType_Badger)
+	//lg := ledger.NewLedger(".", "dkgtest", log, backend.BackendType_Badger)
 
 	suite := bn256.NewSuiteG2()
 	creatKeyPairs(suite, nParticipant)
@@ -75,7 +74,7 @@ func createTestDKGNode(log tplog.Logger, nParticipant int) {
 		dealMsgChMap[nodei] = make(chan *DKGDealMessage, DealMSGChannel_Size)
 		dealRespMsgChMap[nodei] = make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 
-		dkgEx := createTestDKGExChange(log, nodei, lg)
+		dkgEx := createTestDKGExChange(log, nodei, nil)
 		dkgEx.startLoop(context.Background())
 
 		//dkgCrypt := newDKGCrypt(log, 10 /*suite, */, initPrivKeys[i], initPubKeys, 2*nParticipant/3+1, nParticipant)
@@ -95,6 +94,16 @@ func TestDkgExchangeLoop(t *testing.T) {
 	var wg sync.WaitGroup
 	msg := []byte("test dkg")
 	signData := make([][]byte, 0)
+
+	for i := 0; i < nParticipant; i++ {
+		dkgExChangeMap[i].initWhenStart(10)
+
+		for t, verfer := range dkgExChangeMap[i].dkgCrypt.dkGenerator.Verifiers() {
+			longterm, pub := verfer.Key()
+			log.Infof("After init, Verifier t %d: longterm=%s, pub=%s, index=%d", t, longterm.String(), pub.String(), verfer.Index())
+		}
+	}
+
 	for i := 0; i < nParticipant; i++ {
 		wg.Add(1)
 		dkgExChangeMap[i].start(10)

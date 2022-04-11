@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/AsynkronIT/protoactor-go v0.0.0-20211217071430-1b4f403946c3
 	github.com/TopiaNetwork/go-bls v0.0.1
-	github.com/TopiaNetwork/kyber/v3 v3.7.1
+	github.com/TopiaNetwork/kyber/v3 v3.7.6
 	github.com/btcsuite/btcd v0.22.0-beta
 	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea
 	github.com/dgraph-io/badger/v3 v3.2103.2

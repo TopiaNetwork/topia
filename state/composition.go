@@ -41,6 +41,8 @@ type CompositionStateReadonly interface {
 
 	GetAllConsensusNodeIDs() ([]string, error)
 
+	GetNode(nodeID string) (*chain.NodeInfo, error)
+
 	GetTotalWeight() (uint64, error)
 
 	GetActiveExecutorIDs() ([]string, error)

@@ -11,10 +11,10 @@ type TransactionPoolHandler interface {
 
 type transactionPoolHandler struct {
 	log    tplog.Logger
-	txPool TransactionPool
+	txPool *transactionPool
 }
 
-func NewTransactionPoolHandler(log tplog.Logger, txPool TransactionPool) *transactionPoolHandler {
+func NewTransactionPoolHandler(log tplog.Logger, txPool *transactionPool) *transactionPoolHandler {
 	return &transactionPoolHandler{
 		log:    log,
 		txPool: txPool,
@@ -28,6 +28,11 @@ func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
 		handler.log.Error("txmessage data error")
 		return err
 	}
-	handler.txPool.AddTx(tx, false)
+	if err := handler.txPool.ValidateTx(tx, false); err != nil {
+		return err
+	}
+	if err := handler.txPool.AddTx(tx, false); err != nil {
+		return err
+	}
 	return nil
 }

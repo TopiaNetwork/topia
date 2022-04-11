@@ -106,8 +106,8 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 				}
 			}
 			// Reset needs promote for all addresses
-			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues.getTxsByCategory(category).getAll()))
-			for addr, _ := range pool.queues.getTxsByCategory(category).getAll() {
+			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues.getQueueTxsByCategory(category).addrTxList))
+			for addr, _ := range pool.queues.getQueueTxsByCategory(category).addrTxList {
 				replaceAddrs = append(replaceAddrs, addr)
 			}
 		}
@@ -123,8 +123,8 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 				pool.sortedLists.getPricedlistByCategory(category).Reheap()
 			}
 			// Update all accounts to the latest known pending nonce
-			nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings.getTxsByCategory(category).getAll()))
-			for addr, list := range pool.pendings.getTxsByCategory(category).getAll() {
+			nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings.getPendingTxsByCategory(category).addrTxList))
+			for addr, list := range pool.pendings.getAddrTxListOfCategory(category) {
 				highestPending := list.LastElement()
 				Noncei := highestPending.Head.Nonce
 				nonces[addr] = Noncei + 1

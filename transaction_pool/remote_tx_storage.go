@@ -16,10 +16,11 @@ type remoteTxs struct {
 
 func (pool *transactionPool) SaveRemoteTxs(category basic.TransactionCategory) error {
 
-	var remotetxs = &remoteTxs{}
-	remotetxs.Txs = pool.allTxsForLook.getAllTxsLookupByCategory(category).GetAllRemoteKeyTxs()
-	remotetxs.ActivationIntervals = pool.ActivationIntervals.getAll()
-	remotetxs.TxHashCategorys = pool.TxHashCategory.getAll()
+	var remotetxs = &remoteTxs{
+		Txs:                 pool.allTxsForLook.getAllTxsLookupByCategory(category).GetAllRemoteKeyTxs(),
+		ActivationIntervals: pool.ActivationIntervals.getAll(),
+		TxHashCategorys:     pool.TxHashCategory.getAll(),
+	}
 	remotes, err := json.Marshal(remotetxs)
 	if err != nil {
 		return err

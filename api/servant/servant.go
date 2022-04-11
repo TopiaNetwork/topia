@@ -2,13 +2,13 @@ package servant
 
 import (
 	"context"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tpnet "github.com/TopiaNetwork/topia/network"
-	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	"math/big"
 
 	"github.com/TopiaNetwork/topia/chain"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	tpnet "github.com/TopiaNetwork/topia/network"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type APIServant interface {
@@ -29,6 +29,8 @@ type APIServant interface {
 	GetTransactionCount(addr tpcrtypes.Address, height uint64) (uint64, error)
 
 	GetTransactionResultByHash(txHashHex string) (*txbasic.TransactionResult, error)
+
+	GetLatestBlock() (*tpchaintypes.Block, error)
 
 	GetBlockByHeight(height uint64) (*tpchaintypes.Block, error)
 
@@ -88,6 +90,11 @@ func (s *apiServant) GetTransactionCount(addr tpcrtypes.Address, height uint64) 
 }
 
 func (s *apiServant) GetTransactionResultByHash(txHashHex string) (*txbasic.TransactionResult, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *apiServant) GetLatestBlock() (*tpchaintypes.Block, error) {
 	//TODO implement me
 	panic("implement me")
 }

@@ -92,14 +92,14 @@ func (selector *roleSelectorVRF) hashToSeed(hash []byte) uint64 {
 	for len(hash) < 8 {
 		hash = append(hash, byte(0))
 	}
-	return binary.LittleEndian.Uint64(hash[:8])
+	return binary.BigEndian.Uint64(hash[:8])
 }
 
 func (selector *roleSelectorVRF) makeVRFHash(role RoleSelector, epoch uint64, round uint64, vrfProof []byte) []byte {
 	b := make([]byte, 24)
-	binary.LittleEndian.PutUint64(b, uint64(role))
-	binary.LittleEndian.PutUint64(b[8:16], epoch)
-	binary.LittleEndian.PutUint64(b[16:24], round)
+	binary.BigEndian.PutUint64(b, uint64(role))
+	binary.BigEndian.PutUint64(b[8:16], epoch)
+	binary.BigEndian.PutUint64(b[16:24], round)
 
 	hasher := tpcmm.NewBlake2bHasher(0)
 
@@ -204,6 +204,8 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		return nil, nil, fmt.Errorf("Invalid role %s", role.String())
 	}
 
+	sort.Strings(avtiveNodeID)
+
 	canInfos, err := selector.getCandidateInfos(avtiveNodeID, csServant)
 	if err != nil {
 		return nil, nil, err
@@ -236,7 +238,7 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		return nil, nil, err
 	}
 
-	vrfHash := selector.makeVRFHash(role, eponInfo.Epoch, latestBlock.Head.Height, vrfProof)
+	vrfHash := selector.makeVRFHash(role, eponInfo.Epoch, latestBlock.Head.Height, vrfInputData)
 	seed := selector.hashToSeed(vrfHash)
 
 	for i := 0; i < count; i++ {

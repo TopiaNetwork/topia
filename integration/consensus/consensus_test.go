@@ -277,7 +277,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			panic("Can't generate node private key")
 		}
 
-		txPool := &mock.TransactionPoolMock{}
+		txPool := mock.NewTransactionPoolMock(testMainLog, cryptService)
 
 		config := tpconfig.GetConfiguration()
 

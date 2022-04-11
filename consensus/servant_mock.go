@@ -3,60 +3,87 @@ package consensus
 import (
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"time"
 )
 
-type consensusServantMock struct{}
+type consensusServanMock struct{}
 
-func (cs *consensusServantMock) ChainID() chain.ChainID {
-	return "TestNet"
+func (cs *consensusServanMock) ChainID() chain.ChainID {
+	return "testtopia"
 }
 
-func (cs *consensusServantMock) GetLatestBlock() (*tpchaintypes.Block, error) {
+func (cs *consensusServanMock) GetLatestEpoch() (*chain.EpochInfo, error) {
+	return &chain.EpochInfo{
+		Epoch:          0,
+		StartTimeStamp: uint64(time.Now().UnixNano()),
+		StartHeight:    1,
+	}, nil
+}
+
+func (cs *consensusServanMock) GetLatestBlock() (*tpchaintypes.Block, error) {
+	timeStamp := uint64(time.Now().UnixNano())
+
+	return &tpchaintypes.Block{
+		Head: &tpchaintypes.BlockHead{
+			ChainID:   []byte(cs.ChainID()),
+			Version:   1,
+			Height:    1,
+			Epoch:     0,
+			Round:     1,
+			TimeStamp: timeStamp,
+		},
+	}, nil
+}
+
+func (cs *consensusServanMock) GetAllConsensusNodeIDs() ([]string, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetAllConsensusNodes() ([]string, error) {
+func (cs *consensusServanMock) GetActiveExecutorIDs() ([]string, error) {
+	return []string{
+		"16Uiu2HAmUnckEUPdYJ35h6DkUbNKDchbBDUd6heZi5DgBHkBJRCT",
+		"16Uiu2HAmKcwN8p9PZg4mnTSyruJpUNP4Crr9gfcrqPovLQjwYNhi",
+		"16Uiu2HAmA4RpFMvce7JAMUgbfRGcLW4EqaYzHYefRNrSQauBwNUm",
+	}, nil
+}
+
+func (cs *consensusServanMock) GetActiveProposerIDs() ([]string, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetActiveExecutorIDs() ([]string, error) {
+func (cs *consensusServanMock) GetActiveValidatorIDs() ([]string, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetActiveProposerIDs() ([]string, error) {
+func (cs *consensusServanMock) GetTotalWeight() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetActiveValidatorIDs() ([]string, error) {
+func (cs *consensusServanMock) GetActiveExecutorsTotalWeight() (uint64, error) {
+	return 30, nil
+}
+
+func (cs *consensusServanMock) GetActiveProposersTotalWeight() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetChainTotalWeight() (uint64, error) {
+func (cs *consensusServanMock) GetActiveValidatorsTotalWeight() (uint64, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (cs *consensusServantMock) GetActiveExecutorsTotalWeight() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
-}
+func (cs *consensusServanMock) GetNodeWeight(nodeID string) (uint64, error) {
+	nwMap :=
+		map[string]uint64{
+			"16Uiu2HAmUnckEUPdYJ35h6DkUbNKDchbBDUd6heZi5DgBHkBJRCT": 10,
+			"16Uiu2HAmKcwN8p9PZg4mnTSyruJpUNP4Crr9gfcrqPovLQjwYNhi": 20,
+			"16Uiu2HAmA4RpFMvce7JAMUgbfRGcLW4EqaYzHYefRNrSQauBwNUm": 10,
+		}
 
-func (cs *consensusServantMock) GetActiveProposersTotalWeight() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (cs *consensusServantMock) GetActiveValidatorsTotalWeight() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (cs *consensusServantMock) GetNodeWeight(nodeID string) (uint64, error) {
-	//TODO implement me
-	panic("implement me")
+	return nwMap[nodeID], nil
 }

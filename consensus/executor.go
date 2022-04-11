@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tpcrt "github.com/TopiaNetwork/topia/crypt"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
 	"time"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
 
@@ -33,7 +33,18 @@ type consensusExecutor struct {
 	prepareInterval         time.Duration
 }
 
-func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, txPool txpool.TransactionPool, marshaler codec.Marshaler, ledger ledger.Ledger, exeScheduler execution.ExecutionScheduler, deliver *messageDeliver, preprePackedMsgExeChan chan *PreparePackedMessageExe, commitMsgChan chan *CommitMessage, prepareInterval time.Duration) *consensusExecutor {
+func newConsensusExecutor(log tplog.Logger,
+	nodeID string,
+	priKey tpcrtypes.PrivateKey,
+	txPool txpool.TransactionPool,
+	marshaler codec.Marshaler,
+	ledger ledger.Ledger,
+	exeScheduler execution.ExecutionScheduler,
+	deliver *messageDeliver,
+	preprePackedMsgExeChan chan *PreparePackedMessageExe,
+	commitMsgChan chan *CommitMessage,
+	cryptService tpcrt.CryptService,
+	prepareInterval time.Duration) *consensusExecutor {
 	return &consensusExecutor{
 		log:                     log,
 		nodeID:                  nodeID,
@@ -45,6 +56,7 @@ func newConsensusExecutor(log tplog.Logger, nodeID string, priKey tpcrtypes.Priv
 		deliver:                 deliver,
 		preparePackedMsgExeChan: preprePackedMsgExeChan,
 		commitMsgChan:           commitMsgChan,
+		cryptService:            cryptService,
 		prepareInterval:         prepareInterval,
 	}
 }
@@ -69,9 +81,9 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					continue
 				}
 
-				var receivedTxList []basic.Transaction
+				var receivedTxList []txbasic.Transaction
 				for i := 0; i < len(perparePMExe.Txs); i++ {
-					var tx basic.Transaction
+					var tx txbasic.Transaction
 					err = e.marshaler.Unmarshal(perparePMExe.Txs[i], &tx)
 					if err != nil {
 						e.log.Errorf("Invalid tx from pepare packed msg exe: marshal err %v", err)
@@ -82,7 +94,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 				if err != nil {
 					continue
 				}
-				receivedTxRoot := basic.TxRoot(receivedTxList)
+				receivedTxRoot := txbasic.TxRoot(receivedTxList)
 				if bytes.Compare(receivedTxRoot, perparePMExe.TxRoot) != 0 {
 					e.log.Errorf("Invalid pepare packed msg exe: tx root expected %v, actual %v", perparePMExe.TxRoot, receivedTxRoot)
 					break
@@ -157,6 +169,8 @@ func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 		return false, nil, err
 	}
 
+	e.log.Infof("Selected execution launcher %s, self node %s", candInfo[0].nodeID, e.nodeID)
+
 	if candInfo[0].nodeID == e.nodeID {
 		return true, vrfProof, nil
 	}
@@ -165,10 +179,11 @@ func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 }
 
 func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
-	timer := time.NewTimer(e.prepareInterval)
-	defer timer.Stop()
+	e.log.Infof("Executor %s prepareTimerStart, timer=%fs", e.nodeID, e.prepareInterval.Seconds())
 
 	go func() {
+		timer := time.NewTimer(e.prepareInterval)
+		defer timer.Stop()
 		for {
 			select {
 			case <-timer.C:
@@ -176,6 +191,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 				if isCan {
 					e.Prepare(ctx, vrfProof)
 				}
+				timer.Reset(e.prepareInterval)
 			case <-ctx.Done():
 				e.log.Info("Consensus executor exit prepare timre")
 				return
@@ -189,7 +205,7 @@ func (e *consensusExecutor) start(ctx context.Context) {
 	e.prepareTimerStart(ctx)
 }
 
-func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []basic.Transaction, txResultList []basic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
+func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []txbasic.Transaction, txResultList []txbasic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
 	if len(txList) != len(txResultList) {
 		err := fmt.Errorf("Mismatch tx list count %d and tx result count %d", len(txList), len(txResultList))
 		e.log.Errorf("%v", err)
@@ -263,7 +279,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return nil
 	}
 
-	txRoot := basic.TxRoot(pendTxs)
+	txRoot := txbasic.TxRoot(pendTxs)
 	maxStateVer, err := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
 	if err != nil {
 		e.log.Errorf("Can't get max state version: %v", err)
@@ -283,7 +299,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		e.log.Errorf("Execute state version %d packed txs err from local: %v", packedTxs.StateVersion, err)
 		return err
 	}
-	txRSRoot := basic.TxResultRoot(txsRS.TxsResult, packedTxs.TxList)
+	txRSRoot := txbasic.TxResultRoot(txsRS.TxsResult, packedTxs.TxList)
 
 	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {

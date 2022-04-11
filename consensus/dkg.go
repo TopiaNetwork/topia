@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	vss "github.com/TopiaNetwork/kyber/v3/share/vss/pedersen"
 	"sync"
 
 	"github.com/TopiaNetwork/kyber/v3"
@@ -234,9 +235,15 @@ func (d *dkgCrypt) processResp(resp *dkg.Response) error {
 func (d *dkgCrypt) processAdvanceResp() error {
 	for _, resp := range d.remoteAdvanResp {
 		j, err := d.dkGenerator.ProcessResponse(resp)
+
 		if err != nil {
-			d.log.Errorf("Process advance response failed: %v", err)
-			return err
+			if err == vss.ErrExistResponseOfSameOrigin {
+				d.log.Warn("Process advance response existed same origin")
+				continue
+			} else {
+				d.log.Warnf("Process advance response failed and will exit: %v", err)
+				return err
+			}
 		}
 
 		if j != nil {

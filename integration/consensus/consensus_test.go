@@ -139,7 +139,7 @@ func createNetworkNodes(
 
 		proposerNetParams[i].compState.AddNode(&chain.NodeInfo{
 			NodeID:        network.ID(),
-			Weight:        10,
+			Weight:        uint64(10 * (i + 1)),
 			DKGPartPubKey: proposerNetParams[i].dkgPartPubKey,
 			Role:          chain.NodeRole_Proposer,
 			State:         chain.NodeState_Active,
@@ -148,7 +148,7 @@ func createNetworkNodes(
 		for j := 0; j < i; j++ {
 			proposerNetParams[j].compState.AddNode(&chain.NodeInfo{
 				NodeID:        network.ID(),
-				Weight:        10,
+				Weight:        uint64(10 * (i + 1)),
 				DKGPartPubKey: proposerNetParams[i].dkgPartPubKey,
 				Role:          chain.NodeRole_Proposer,
 				State:         chain.NodeState_Active,
@@ -156,7 +156,7 @@ func createNetworkNodes(
 
 			proposerNetParams[i].compState.AddNode(&chain.NodeInfo{
 				NodeID:        proposerNetParams[j].nodeID,
-				Weight:        10,
+				Weight:        uint64(10 * (i + 1)),
 				DKGPartPubKey: proposerNetParams[j].dkgPartPubKey,
 				Role:          chain.NodeRole_Proposer,
 				State:         chain.NodeState_Active,
@@ -165,7 +165,7 @@ func createNetworkNodes(
 		for _, executorNetParam := range executorNetParams {
 			executorNetParam.compState.AddNode(&chain.NodeInfo{
 				NodeID:        network.ID(),
-				Weight:        10,
+				Weight:        uint64(10 * (i + 1)),
 				DKGPartPubKey: proposerNetParams[i].dkgPartPubKey,
 				Role:          chain.NodeRole_Proposer,
 				State:         chain.NodeState_Active,
@@ -174,7 +174,7 @@ func createNetworkNodes(
 		for _, validatorNetParam := range validatorNetParams {
 			validatorNetParam.compState.AddNode(&chain.NodeInfo{
 				NodeID:        network.ID(),
-				Weight:        10,
+				Weight:        uint64(10 * (i + 1)),
 				DKGPartPubKey: proposerNetParams[i].dkgPartPubKey,
 				Role:          chain.NodeRole_Proposer,
 				State:         chain.NodeState_Active,
@@ -405,17 +405,19 @@ func TestMultiRoleNodes(t *testing.T) {
 	dkgNParams = append(dkgNParams, proposerParams...)
 	dkgNParams = append(nParams, validatorParams...)
 	for _, nodeP := range dkgNParams {
-		csStateRN := state.CreateCompositionStateReadonly(nodeP.mainLog, nodeP.ledger)
-		defer csStateRN.Stop()
+		func() {
+			csStateRN := state.CreateCompositionStateReadonly(nodeP.mainLog, nodeP.ledger)
+			defer csStateRN.Stop()
 
-		activeProposers, _ := csStateRN.GetActiveProposerIDs()
-		activeValidators, _ := csStateRN.GetActiveValidatorIDs()
+			activeProposers, _ := csStateRN.GetActiveProposerIDs()
+			activeValidators, _ := csStateRN.GetActiveValidatorIDs()
 
-		nodeP.mainLog.Infof("Curent active proposers %v and validators %v", activeProposers, activeValidators)
+			nodeP.mainLog.Infof("Curent active proposers %v and validators %v", activeProposers, activeValidators)
 
-		latestEpochInfo, _ := csStateRN.GetLatestEpoch()
+			latestEpochInfo, _ := csStateRN.GetLatestEpoch()
 
-		nodeP.cs.TriggerDKG(latestEpochInfo.Epoch)
+			nodeP.cs.TriggerDKG(latestEpochInfo.Epoch)
+		}()
 	}
 
 	<-waitChan

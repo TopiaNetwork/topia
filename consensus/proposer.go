@@ -105,10 +105,7 @@ func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block) ([]byte, 
 	return hasher.Bytes(), nil
 }
 
-func (p *consensusProposer) canProposeBlock(block *tpchaintypes.Block) (bool, []byte, []byte, error) {
-	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
-	defer csStateRN.Stop()
-
+func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, block *tpchaintypes.Block) (bool, []byte, []byte, error) {
 	proposerSel := NewProposerSelector(ProposerSelectionType_Poiss, p.cryptService)
 
 	vrfData, err := p.getVrfInputData(block)
@@ -154,32 +151,41 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 		for {
 			select {
 			case ppmProp := <-p.preprePackedMsgPropChan:
-				csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
-				defer csStateRN.Stop()
+				err := func() error {
+					csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
+					defer csStateRN.Stop()
 
-				p.syncPPMPropList.Lock()
-				defer p.syncPPMPropList.Unlock()
+					p.syncPPMPropList.Lock()
+					defer p.syncPPMPropList.Unlock()
 
-				latestBlock, err := csStateRN.GetLatestBlock()
-				if err != nil {
-					p.log.Errorf("Can't get the latest bock when receiving prepare packed msg prop: %v", err)
-					continue
-				}
-				if ppmProp.StateVersion <= latestBlock.Head.Height {
-					p.log.Errorf("Received outdated prepare packed msg prop: %v", err)
-					continue
-				}
-
-				if p.ppmPropList.Len() > 0 {
-					latestPPMProp := p.ppmPropList.Back().Value.(*PreparePackedMessageProp)
-					if ppmProp.StateVersion != latestPPMProp.StateVersion+1 {
-						p.log.Errorf("Received invalid prepare packed msg prop: expected state version %d, actual %d", latestPPMProp.StateVersion+1, ppmProp.StateVersion)
-						continue
+					latestBlock, err := csStateRN.GetLatestBlock()
+					if err != nil {
+						p.log.Errorf("Can't get the latest bock when receiving prepare packed msg prop: %v", err)
+						return err
 					}
+					if ppmProp.StateVersion <= latestBlock.Head.Height {
+						err = fmt.Errorf("Received outdated prepare packed msg prop: StateVersion=%d, latest block height=%d", ppmProp.StateVersion, latestBlock.Head.Height)
+						p.log.Errorf("%v", err)
+						return err
+					}
+
+					if p.ppmPropList.Len() > 0 {
+						latestPPMProp := p.ppmPropList.Back().Value.(*PreparePackedMessageProp)
+						if ppmProp.StateVersion != latestPPMProp.StateVersion+1 {
+							err = fmt.Errorf("Received invalid prepare packed msg prop: expected state version %d, actual %d", latestPPMProp.StateVersion+1, ppmProp.StateVersion)
+							p.log.Errorf("%v", err)
+							return err
+						}
+					}
+
+					p.ppmPropList.PushBack(ppmProp)
+
+					return nil
+				}()
+
+				if err != nil {
+					continue
 				}
-
-				p.ppmPropList.PushBack(ppmProp)
-
 			case <-ctx.Done():
 				p.log.Info("Consensus proposer receiveing prepare packed msg prop exit")
 				return
@@ -256,11 +262,14 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		p.isProposing = 0
 	}()
 
+	p.syncPPMPropList.RLock()
 	if p.ppmPropList.Len() == 0 {
 		err := fmt.Errorf("Current ppm prop list size 0")
 		p.log.Infof("%s", err.Error())
+		p.syncPPMPropList.RUnlock()
 		return err
 	}
+	p.syncPPMPropList.RUnlock()
 
 	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 	defer csStateRN.Stop()
@@ -281,7 +290,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
-	canPropose, vrfProof, maxPri, err := p.canProposeBlock(latestBlock)
+	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock)
 	if !canPropose {
 		err = fmt.Errorf("Can't propose block at the epoch : epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
 		p.log.Infof("%s", err.Error())
@@ -315,9 +324,9 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 
 func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 	go func() {
+		timer := time.NewTimer(p.proposeMaxInterval)
+		defer timer.Stop()
 		for {
-			timer := time.NewTimer(p.proposeMaxInterval)
-			defer timer.Stop()
 			select {
 			case addedBlock := <-p.blockAddedCh:
 				if err := p.proposeBlockSpecification(ctx, addedBlock); err != nil {
@@ -389,14 +398,14 @@ func (p *consensusProposer) produceProposeBlock(chainID chain.ChainID,
 	vrfProof []byte,
 	maxPri []byte,
 	stateRoot []byte) (*ProposeMessage, error) {
-	p.syncPPMPropList.Lock()
+	p.syncPPMPropList.RLock()
 	frontPPMProp := p.ppmPropList.Front().Value.(*PreparePackedMessageProp)
 	if frontPPMProp.StateVersion != latestBlock.Head.Height+1 {
 		err := fmt.Errorf("Invalid prepare packed message prop: expected front state version %d, actual %d", latestBlock.Head.Height+1, frontPPMProp.StateVersion)
-		defer p.syncPPMPropList.Unlock()
+		p.syncPPMPropList.RUnlock()
 		return nil, err
 	}
-	p.syncPPMPropList.Unlock()
+	p.syncPPMPropList.RUnlock()
 
 	newBlockHead, stateVersion, err := p.createBlockHead(chainID, latestEpoch.Epoch, vrfProof, maxPri, frontPPMProp, latestBlock, stateRoot)
 	if err != nil {

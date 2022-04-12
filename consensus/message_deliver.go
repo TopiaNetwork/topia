@@ -330,7 +330,7 @@ func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, m
 		md.log.Errorf("ExeResultValidateReqMessage marshal err: %v", err)
 		return nil, err
 	}
-	resp, err := md.deliverSendWithRespCommon(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_ExeRSValidateReq, msgBytes)
+	resp, err := md.deliverSendWithRespCommon(ctx, tpnetprotoc.ForwardExecute_SyncMsg, MOD_NAME, ConsensusMessage_ExeRSValidateReq, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send execution result validate request message to executor network failed: err=%v", err)
 		return nil, err

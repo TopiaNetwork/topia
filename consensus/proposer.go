@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/chain"
 	tpcmm "github.com/TopiaNetwork/topia/common"
-	"go.uber.org/atomic"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -35,7 +35,7 @@ type consensusProposer struct {
 	ledger                  ledger.Ledger
 	cryptService            tpcrt.CryptService
 	proposeMaxInterval      time.Duration
-	isProposing             atomic.Bool
+	isProposing             uint32
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -66,12 +66,11 @@ func newConsensusProposer(log tplog.Logger,
 		ledger:                  ledger,
 		cryptService:            crypt,
 		proposeMaxInterval:      proposeMaxInterval,
+		isProposing:             0,
 		ppmPropList:             list.New(),
 		validator:               validator,
 		voteCollector:           newConsensusVoteCollector(log),
 	}
-
-	csProposer.isProposing.Store(false)
 
 	return csProposer
 }
@@ -248,8 +247,14 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 }
 
 func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, addedBlock *tpchaintypes.Block) error {
-	p.isProposing.Swap(true)
-	defer p.isProposing.Swap(false)
+	if atomic.CompareAndSwapUint32(&p.isProposing, 0, 1) {
+		err := fmt.Errorf("Self node %s is proposing", p.nodeID)
+		p.log.Infof("%s", err.Error())
+		return err
+	}
+	defer func() {
+		p.isProposing = 0
+	}()
 
 	if p.ppmPropList.Len() == 0 {
 		err := fmt.Errorf("Current ppm prop list size 0")

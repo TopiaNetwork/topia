@@ -52,6 +52,7 @@ func (es *epochService) start(ctx context.Context) {
 		for {
 			select {
 			case newBh := <-es.blockAddedCh:
+				es.log.Infof("Epoch service receive new block added event: new block height %d", newBh.Head.Height)
 				maxStateVer, err := es.exeScheduler.MaxStateVersion(es.log, es.ledger)
 				if err != nil {
 					es.log.Errorf("Can't get max state version: %v", err)

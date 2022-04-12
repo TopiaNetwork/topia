@@ -76,7 +76,6 @@ func NewConsensus(chainID chain.ChainID,
 	config *tpconfig.ConsensusConfiguration) Consensus {
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
-	roundCh := make(chan *RoundInfo)
 	preprePackedMsgExeChan := make(chan *PreparePackedMessageExe)
 	preprePackedMsgPropChan := make(chan *PreparePackedMessageProp)
 	proposeMsgChan := make(chan *ProposeMessage)
@@ -100,7 +99,7 @@ func NewConsensus(chainID chain.ChainID,
 
 	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, cryptS, config.ExecutionPrepareInterval)
 	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
-	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, voteMsgChan, cryptS, deliver, ledger, marshaler, validator)
+	proposer := newConsensusProposer(log, nodeID, priKey, blockAddedCh, preprePackedMsgPropChan, voteMsgChan, cryptS, config.ProposerBlockMaxInterval, deliver, ledger, marshaler, validator)
 	dkgEx := newDKGExchange(log, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, deliver, ledger)
 
 	epService := newEpochService(log, nodeID, blockAddedCh, config.EpochInterval, config.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)

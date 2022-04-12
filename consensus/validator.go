@@ -33,7 +33,7 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 
 func (v *consensusValidator) judgeLocalMaxPriBestForProposer(maxPri []byte) (bool, error) {
 	v.syncPropMsgCached.RLock()
-	defer v.syncPropMsgCached.Unlock()
+	defer v.syncPropMsgCached.RUnlock()
 
 	if v.propMsgCached != nil {
 		bhCached, err := v.propMsgCached.BlockHeadInfo()

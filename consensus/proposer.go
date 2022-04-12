@@ -125,10 +125,12 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 					continue
 				}
 
-				latestPPMProp := p.ppmPropList.Back().Value.(*PreparePackedMessageProp)
-				if ppmProp.StateVersion != latestPPMProp.StateVersion+1 {
-					p.log.Errorf("Received invalid prepare packed msg prop: expected state version %d, actual %d", latestPPMProp.StateVersion+1, ppmProp.StateVersion)
-					continue
+				if p.ppmPropList.Len() > 0 {
+					latestPPMProp := p.ppmPropList.Back().Value.(*PreparePackedMessageProp)
+					if ppmProp.StateVersion != latestPPMProp.StateVersion+1 {
+						p.log.Errorf("Received invalid prepare packed msg prop: expected state version %d, actual %d", latestPPMProp.StateVersion+1, ppmProp.StateVersion)
+						continue
+					}
 				}
 
 				p.ppmPropList.PushBack(ppmProp)

@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -67,6 +68,11 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
 				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
+				if compState == nil {
+					err := errors.New("Can't  CreateCompositionState when received new PreparePackedMessageExe")
+					e.log.Errorf("%v", err)
+					continue
+				}
 
 				latestBlock, err := compState.GetLatestBlock()
 				if err != nil {
@@ -287,6 +293,11 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 	}
 
 	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, maxStateVer+1)
+	if compState == nil {
+		err = errors.New("Can't CreateCompositionState for Prepare")
+		e.log.Errorf("%v", err)
+		return err
+	}
 
 	var packedTxs execution.PackedTxs
 

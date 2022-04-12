@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -67,6 +68,11 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
 				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
+				if compState == nil {
+					err := errors.New("Can't  CreateCompositionState when received new PreparePackedMessageExe")
+					e.log.Errorf("%v", err)
+					continue
+				}
 
 				latestBlock, err := compState.GetLatestBlock()
 				if err != nil {
@@ -94,7 +100,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 				if err != nil {
 					continue
 				}
-				receivedTxRoot := txbasic.TxRoot(receivedTxList)
+				receivedTxRoot := txbasic.TxRootByBytes(perparePMExe.Txs)
 				if bytes.Compare(receivedTxRoot, perparePMExe.TxRoot) != 0 {
 					e.log.Errorf("Invalid pepare packed msg exe: tx root expected %v, actual %v", perparePMExe.TxRoot, receivedTxRoot)
 					break
@@ -123,19 +129,28 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 		for {
 			select {
 			case commitMsg := <-e.commitMsgChan:
-				csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
-				defer csStateRN.Stop()
+				err := func() error {
+					csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
+					defer csStateRN.Stop()
 
-				var bh tpchaintypes.BlockHead
-				err := e.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
-				if err != nil {
-					e.log.Errorf("Can't unmarshal received block head of commit message: %v", err)
-					continue
+					var bh tpchaintypes.BlockHead
+					err := e.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
+					if err != nil {
+						e.log.Errorf("Can't unmarshal received block head of commit message: %v", err)
+						return err
+					}
+
+					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, e.marshaler, e.ledger.GetBlockStore(), e.deliver.network)
+					if err != nil {
+						e.log.Errorf("Commit packed tx err: %v", err)
+						return err
+					}
+
+					return nil
 				}
 
-				err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, e.marshaler, e.ledger.GetBlockStore(), e.deliver.network)
 				if err != nil {
-					e.log.Errorf("Commit packed tx err: %v", err)
+					continue
 				}
 			case <-ctx.Done():
 				e.log.Info("Consensus executor receiveing prepare packed msg exe exit")
@@ -255,7 +270,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 	}
 
 	for i := 0; i < len(txList); i++ {
-		txBytes, _ := e.marshaler.Marshal(txList[i])
+		txBytes, _ := e.marshaler.Marshal(&txList[i])
 		exePPM.Txs = append(exePPM.Txs, txBytes)
 
 		txHashBytes, _ := txList[i].HashBytes()
@@ -287,6 +302,11 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 	}
 
 	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, maxStateVer+1)
+	if compState == nil {
+		err = errors.New("Can't CreateCompositionState for Prepare")
+		e.log.Errorf("%v", err)
+		return err
+	}
 
 	var packedTxs execution.PackedTxs
 

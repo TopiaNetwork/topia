@@ -112,6 +112,7 @@ func NewP2PService(ctx context.Context, log tplog.Logger, sysActor *actor.ActorS
 	p2p.host.SetStreamHandler(tpnetprotoc.SyncProtocolID_Msg, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.HeatBeatPtotocolID, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_Msg, p2p.streamService.handleIncomingStream)
+	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_SyncMsg, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.ForwardPropose_Msg, p2p.streamService.handleIncomingStream)
 	p2p.host.SetStreamHandler(tpnetprotoc.FrowardValidate_Msg, p2p.streamService.handleIncomingStream)
 
@@ -596,7 +597,7 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 				peerID,
 				protocol.ID(protocolID))
 			if err != nil {
-				p2p.log.Errorf("failed to open stream to peer: %w", err)
+				p2p.log.Errorf("failed to open stream to peer: %v", err)
 				return
 			}
 

@@ -105,7 +105,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 			return exeTxsItem.Value.(*executionPackedTxs).PackedTxsResult(), nil
 		}
 
-		if txPacked.StateVersion-exeTxsL.StateVersion() != 1 {
+		if txPacked.StateVersion != exeTxsL.StateVersion()+1 {
 			err := fmt.Errorf("Invalid packedTxs state version, expected %d, actual %d", exeTxsL.StateVersion()+1, txPacked.StateVersion)
 			scheduler.log.Errorf("%v", err)
 			return nil, err
@@ -120,14 +120,19 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 	}
 
 	exePackedTxs := newExecutionPackedTxs(txPacked, compState)
-	scheduler.exePackedTxsList.PushBack(exePackedTxs)
 
 	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txbasic.NewTansactionServant(compState, compState))
-	if err != nil {
+	if err == nil {
 		scheduler.lastStateVersion.Store(txPacked.StateVersion)
+		exePackedTxs.packedTxsRS = packedTxsRS
+		scheduler.exePackedTxsList.PushBack(exePackedTxs)
+
+		return packedTxsRS, nil
 	}
 
-	return packedTxsRS, err
+	scheduler.log.Errorf("State version %d packed tx eventually execute failed: %v", txPacked.StateVersion, err)
+
+	return nil, err
 }
 
 func (scheduler *executionScheduler) MaxStateVersion(log tplog.Logger, ledger ledger.Ledger) (uint64, error) {
@@ -167,6 +172,12 @@ func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Contex
 		if exeTxsF.StateVersion() != stateVersion {
 			err := fmt.Errorf("Invalid state version: expected %d, actual %d", exeTxsF.StateVersion(), stateVersion)
 			scheduler.log.Errorf("%v")
+			return nil, nil, err
+		}
+
+		if exeTxsF.packedTxsRS == nil {
+			err := fmt.Errorf("No exist responding packed txs result: stateVersion=%d", stateVersion)
+			scheduler.log.Errorf("%v", err)
 			return nil, nil, err
 		}
 

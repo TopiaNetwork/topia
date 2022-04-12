@@ -129,19 +129,28 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 		for {
 			select {
 			case commitMsg := <-e.commitMsgChan:
-				csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
-				defer csStateRN.Stop()
+				err := func() error {
+					csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
+					defer csStateRN.Stop()
 
-				var bh tpchaintypes.BlockHead
-				err := e.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
-				if err != nil {
-					e.log.Errorf("Can't unmarshal received block head of commit message: %v", err)
-					continue
+					var bh tpchaintypes.BlockHead
+					err := e.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
+					if err != nil {
+						e.log.Errorf("Can't unmarshal received block head of commit message: %v", err)
+						return err
+					}
+
+					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, e.marshaler, e.ledger.GetBlockStore(), e.deliver.network)
+					if err != nil {
+						e.log.Errorf("Commit packed tx err: %v", err)
+						return err
+					}
+
+					return nil
 				}
 
-				err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, e.marshaler, e.ledger.GetBlockStore(), e.deliver.network)
 				if err != nil {
-					e.log.Errorf("Commit packed tx err: %v", err)
+					continue
 				}
 			case <-ctx.Done():
 				e.log.Info("Consensus executor receiveing prepare packed msg exe exit")

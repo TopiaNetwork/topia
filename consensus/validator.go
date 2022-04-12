@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/state"
@@ -95,27 +96,37 @@ func (v *consensusValidator) start(ctx context.Context) {
 		for {
 			select {
 			case propMsg := <-v.proposeMsgChan:
-				csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
-				defer csStateRN.Stop()
+				err := func() error {
+					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
+					defer csStateRN.Stop()
 
-				bh, err := propMsg.BlockHeadInfo()
+					bh, err := propMsg.BlockHeadInfo()
+					if err != nil {
+						v.log.Errorf("Can't get propose block head info: %v", err)
+						return err
+					}
+
+					if can := v.canProcessForwardProposeMsg(ctx, bh.MaxPri, propMsg); !can {
+						err = errors.New("Can't vote received propose msg")
+						v.log.Infof("%s", err.Error())
+						return err
+					}
+
+					voteMsg, err := v.produceVoteMsg(propMsg)
+					if err != nil {
+						v.log.Errorf("Can't produce vote msg: err=%v", err)
+						return err
+					}
+					if err = v.deliver.deliverVoteMessage(ctx, voteMsg, string(bh.Proposer)); err != nil {
+						v.log.Errorf("Consensus deliver vote message err: %v", err)
+						return err
+					}
+
+					return nil
+				}
+
 				if err != nil {
-					v.log.Errorf("Can't get propose block head info: %v", err)
 					continue
-				}
-
-				if can := v.canProcessForwardProposeMsg(ctx, bh.MaxPri, propMsg); !can {
-					v.log.Error("Can't vote received propose msg")
-					continue
-				}
-
-				voteMsg, err := v.produceVoteMsg(propMsg)
-				if err != nil {
-					v.log.Errorf("Can't produce vote msg: err=%v", err)
-					continue
-				}
-				if err = v.deliver.deliverVoteMessage(ctx, voteMsg, string(bh.Proposer)); err != nil {
-					v.log.Errorf("Consensus deliver vote message err: %v", err)
 				}
 			case <-ctx.Done():
 				v.log.Info("Consensus validator exit")

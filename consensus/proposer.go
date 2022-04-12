@@ -247,7 +247,7 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 }
 
 func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, addedBlock *tpchaintypes.Block) error {
-	if atomic.CompareAndSwapUint32(&p.isProposing, 0, 1) {
+	if !atomic.CompareAndSwapUint32(&p.isProposing, 0, 1) {
 		err := fmt.Errorf("Self node %s is proposing", p.nodeID)
 		p.log.Infof("%s", err.Error())
 		return err

@@ -128,7 +128,7 @@ func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, epoch); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(hasher.Writer(), binary.BigEndian, stateVersion); err != nil {
+	if err := binary.Write(hasher.Writer(), binary.BigEndian, height); err != nil {
 		return nil, err
 	}
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, stateVersion); err != nil {

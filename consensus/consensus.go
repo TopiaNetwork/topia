@@ -76,7 +76,6 @@ func NewConsensus(chainID chain.ChainID,
 	config *tpconfig.ConsensusConfiguration) Consensus {
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
-	roundCh := make(chan *RoundInfo)
 	preprePackedMsgExeChan := make(chan *PreparePackedMessageExe)
 	preprePackedMsgPropChan := make(chan *PreparePackedMessageProp)
 	proposeMsgChan := make(chan *ProposeMessage)
@@ -100,7 +99,7 @@ func NewConsensus(chainID chain.ChainID,
 
 	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, cryptS, config.ExecutionPrepareInterval)
 	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
-	proposer := newConsensusProposer(log, nodeID, priKey, roundCh, preprePackedMsgPropChan, voteMsgChan, cryptS, deliver, ledger, marshaler, validator)
+	proposer := newConsensusProposer(log, nodeID, priKey, blockAddedCh, preprePackedMsgPropChan, voteMsgChan, cryptS, config.ProposerBlockMaxInterval, deliver, ledger, marshaler, validator)
 	dkgEx := newDKGExchange(log, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, deliver, ledger)
 
 	epService := newEpochService(log, nodeID, blockAddedCh, config.EpochInterval, config.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
@@ -187,11 +186,6 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	eventhub.GetEventHubManager().GetEventHub(cons.nodeID).Observe(ctx, eventhub.EventName_BlockAdded, cons.ProcessSubEvent)
 
-	cons.epochService.start(ctx)
-	cons.executor.start(ctx)
-	cons.proposer.start(ctx)
-	cons.validator.start(ctx)
-
 	csStateRN := state.CreateCompositionStateReadonly(cons.log, cons.ledger)
 	defer csStateRN.Stop()
 	nodeInfo, err := csStateRN.GetNode(cons.nodeID)
@@ -202,7 +196,18 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	cons.log.Infof("Self Node id=%s, role=%d, state=%d", nodeInfo.NodeID, nodeInfo.Role, nodeInfo.State)
 
+	cons.epochService.start(ctx)
+
+	if nodeInfo.Role&chain.NodeRole_Executor == chain.NodeRole_Executor {
+		cons.executor.start(ctx)
+	}
+
 	if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer || nodeInfo.Role&chain.NodeRole_Validator == chain.NodeRole_Validator {
+		if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer {
+			cons.proposer.start(ctx)
+		}
+
+		cons.validator.start(ctx)
 		cons.dkgEx.startLoop(ctx)
 
 		err = cons.dkgEx.updateDKGPartPubKeys(csStateRN)

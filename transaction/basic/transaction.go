@@ -43,6 +43,28 @@ func TxRoot(txs []Transaction) []byte {
 	return tree.Root()
 }
 
+func TxRootByBytes(txsBytes [][]byte) []byte {
+	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+	for _, txBytes := range txsBytes {
+		txHashBytes := tpcmm.NewBlake2bHasher(0).Compute(string(txBytes))
+		tree.Update(txHashBytes, txHashBytes)
+	}
+
+	return tree.Root()
+}
+
+func TxRootWithRtn(txs []Transaction) ([]byte, [][]byte) {
+	var txsBytes [][]byte
+	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+	for _, tx := range txs {
+		txBytes, _ := tx.HashBytes()
+		tree.Update(txBytes, txBytes)
+		txsBytes = append(txsBytes, txBytes)
+	}
+
+	return tree.Root(), txsBytes
+}
+
 func NewTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey tpcrtypes.PrivateKey, nonce uint64, txCategory TransactionCategory, txVersion TransactionVersion, data []byte) *Transaction {
 	if privKey == nil {
 		panic("Tx private key nil")

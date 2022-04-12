@@ -94,7 +94,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 				if err != nil {
 					continue
 				}
-				receivedTxRoot := txbasic.TxRoot(receivedTxList)
+				receivedTxRoot := txbasic.TxRootByBytes(perparePMExe.Txs)
 				if bytes.Compare(receivedTxRoot, perparePMExe.TxRoot) != 0 {
 					e.log.Errorf("Invalid pepare packed msg exe: tx root expected %v, actual %v", perparePMExe.TxRoot, receivedTxRoot)
 					break
@@ -255,7 +255,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 	}
 
 	for i := 0; i < len(txList); i++ {
-		txBytes, _ := e.marshaler.Marshal(txList[i])
+		txBytes, _ := e.marshaler.Marshal(&txList[i])
 		exePPM.Txs = append(exePPM.Txs, txBytes)
 
 		txHashBytes, _ := txList[i].HashBytes()

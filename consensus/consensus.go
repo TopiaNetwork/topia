@@ -187,11 +187,6 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	eventhub.GetEventHubManager().GetEventHub(cons.nodeID).Observe(ctx, eventhub.EventName_BlockAdded, cons.ProcessSubEvent)
 
-	cons.epochService.start(ctx)
-	cons.executor.start(ctx)
-	cons.proposer.start(ctx)
-	cons.validator.start(ctx)
-
 	csStateRN := state.CreateCompositionStateReadonly(cons.log, cons.ledger)
 	defer csStateRN.Stop()
 	nodeInfo, err := csStateRN.GetNode(cons.nodeID)
@@ -202,7 +197,18 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	cons.log.Infof("Self Node id=%s, role=%d, state=%d", nodeInfo.NodeID, nodeInfo.Role, nodeInfo.State)
 
+	cons.epochService.start(ctx)
+
+	if nodeInfo.Role&chain.NodeRole_Executor == chain.NodeRole_Executor {
+		cons.executor.start(ctx)
+	}
+
 	if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer || nodeInfo.Role&chain.NodeRole_Validator == chain.NodeRole_Validator {
+		if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer {
+			cons.proposer.start(ctx)
+		}
+
+		cons.validator.start(ctx)
 		cons.dkgEx.startLoop(ctx)
 
 		err = cons.dkgEx.updateDKGPartPubKeys(csStateRN)

@@ -293,7 +293,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		var latestEpochInfo *chain.EpochInfo
 		var latestBlock *tpchaintypes.Block
-		if l.State() == ledger.LedgerState_Uninitialized {
+		if l.State() == tpcmm.LedgerState_Uninitialized {
 			err = compState.SetLatestEpoch(config.Genesis.Epon)
 			if err != nil {
 				panic("Set latest epoch of genesis error: " + err.Error())
@@ -317,7 +317,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			latestEpochInfo = config.Genesis.Epon
 			latestBlock = config.Genesis.Block
 
-			l.UpdateState(ledger.LedgerState_Genesis)
+			l.UpdateState(tpcmm.LedgerState_Genesis)
 		} /*else {
 			csStateRN := state.CreateCompositionStateReadonly(testMainLog, ledger)
 			defer csStateRN.Stop()

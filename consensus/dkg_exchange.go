@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"github.com/TopiaNetwork/topia/chain"
+	"github.com/TopiaNetwork/topia/common"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -328,7 +329,7 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
 					ex.finishedCh <- true
 
-					if ex.ledger.State() == ledger.LedgerState_Genesis {
+					if ex.ledger.State() == common.LedgerState_Genesis {
 						ex.notifyUpdater()
 						ex.updateDKGState(DKGExchangeState_IDLE)
 					}

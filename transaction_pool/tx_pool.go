@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/universal"
 	"sync"
@@ -44,6 +45,7 @@ var (
 	ErrOversizedData      = errors.New("transaction overSized data")
 	ErrTxUpdate           = errors.New("can not update tx")
 	ErrPendingIsNil       = errors.New("Pending is nil")
+	ErrUnRooted           = errors.New("UnRooted new chain")
 )
 
 type TransactionPool interface {
@@ -67,6 +69,7 @@ type TransactionPool interface {
 }
 
 type transactionPool struct {
+	nodeId string
 	config TransactionPoolConfig
 
 	chanSysShutDown   chan error
@@ -100,10 +103,11 @@ type transactionPool struct {
 	wg                  sync.WaitGroup
 }
 
-func NewTransactionPool(ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
+func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 	conf = (&conf).check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
+		nodeId:              nodeID,
 		config:              conf,
 		log:                 poolLog,
 		level:               level,
@@ -151,32 +155,19 @@ func NewTransactionPool(ctx context.Context, conf TransactionPoolConfig, level t
 	}
 
 	pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
-
-	pool.loop()
+	pool.loopChanSelect()
 
 	return pool
 }
 
 func (pool *transactionPool) AddTx(tx *basic.Transaction, local bool) error {
-	category := basic.TransactionCategory(tx.Head.Category)
-	txId, err := tx.HashHex()
-	if err != nil {
-		return err
-	}
-
-	if pool.allTxsForLook.getAllTxsLookupByCategory(category).Get(txId) != nil {
-		return nil
-	}
-	if err := pool.ValidateTx(tx, local); err != nil {
-		return err
-	}
 	if local {
-		err = pool.AddLocal(tx)
+		err := pool.AddLocal(tx)
 		if err != nil {
 			return err
 		}
 	} else {
-		err = pool.AddRemote(tx)
+		err := pool.AddRemote(tx)
 		if err != nil {
 			return err
 		}
@@ -317,15 +308,12 @@ func (pool *transactionPool) addTxs(txs []*basic.Transaction, local, sync bool) 
 	//newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
 	var nilSlot = 0
 	for _, err := range newErrs {
-		//fmt.Println("addTxs 003")
 
 		for errs[nilSlot] != nil {
 			nilSlot++
 		}
-		//fmt.Println("addTxs 004")
 
 		errs[nilSlot] = err
-		//fmt.Println("addTxs 005")
 		nilSlot++
 	}
 	//fmt.Println("addTxs 006")
@@ -358,6 +346,7 @@ func (pool *transactionPool) UpdateTx(tx *basic.Transaction, txKey string) error
 	category := basic.TransactionCategory(tx.Head.Category)
 	// Two transactions with the same sender and receiver,
 	//the later tx with higher gasPrice, can replace specified previously unPackaged tx.
+	//newTxId, _ := tx.HashHex()
 	err := pool.ValidateTx(tx, false)
 	if err != nil {
 		return err
@@ -371,6 +360,9 @@ func (pool *transactionPool) UpdateTx(tx *basic.Transaction, txKey string) error
 			GasPrice(tx2) <= GasPrice(tx) {
 			pool.RemoveTxByKey(txKey)
 			pool.add(tx, false)
+			//data := "txPool update a new " + string(category) + "tx,txHash is " + newTxId + ",the replaced txHash is " + txKey
+			//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxReceived, data)
+
 		}
 		return nil
 	default:
@@ -397,7 +389,7 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network network.
 		return err
 	}
 	network.RegisterModule(MOD_NAME, actorPID, pool.marshaler)
-	pool.loop()
+	pool.loopChanSelect()
 	return nil
 }
 
@@ -416,33 +408,21 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 	pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(key)
 	// Remove it from the list of sortedByPriced
 	pool.sortedLists.getPricedlistByCategory(category).Removed(1)
+	//data := "txPool remove a " + string(category) + "tx,txHash is " + key
+	//fmt.Println("eventhub,", data)
+	//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxReceived, data)
 
 	// Remove the transaction from the pending lists and reset the account nonce
-	if pendinglist := pool.pendings.getTxListByAddrOfCategory(category, addr); pendinglist != nil {
-		if removed, invalids := pendinglist.Remove(tx); removed {
-			if pendinglist.Empty() {
-				pool.pendings.removeTxListByAddrOfCategory(category, addr)
-			}
-			// Postpone any invalidated transactions
-			for _, tx := range invalids {
-				txId, _ := tx.HashHex()
-				// Internal shuffle shouldn't touch the lookup set.
-				pool.queueAddTx(txId, tx, false, false)
-			}
-		}
+	f1 := func(txId string, tx *basic.Transaction) {
+		pool.queueAddTx(txId, tx, false, false)
 	}
-
+	pool.pendings.getTxListRemoveByAddrOfCategory(f1, tx, category, addr)
 	// Transaction is in the future queue
-	if future := pool.queues.getTxListByAddrOfCategory(category, addr); future != nil {
-		future.Remove(tx)
-		if future.Empty() {
-			if txs := pool.queues.getQueueTxsByCategory(category); txs != nil {
-				txs.removeTxListByAddr(addr)
-			}
-			pool.ActivationIntervals.removeTxActiv(key)
-			pool.TxHashCategory.removeHashCat(key)
-		}
+	f2 := func(string2 string) {
+		pool.ActivationIntervals.removeTxActiv(string2)
+		pool.TxHashCategory.removeHashCat(string2)
 	}
+	pool.queues.getTxListRemoveFutureByAddrOfCategory(tx, f2, key, category, addr)
 
 	return nil
 }
@@ -470,42 +450,32 @@ func (pool *transactionPool) Get(category basic.TransactionCategory, key string)
 	return pool.allTxsForLook.getAllTxsLookupByCategory(category).Get(key)
 }
 
-//
-//(queuemap *queuesMap) addTxByKeyOfCategory(
-//f1 func(category basic.TransactionCategory, string2 string),
-//f2 func(category basic.TransactionCategory),
-//f3 func(category basic.TransactionCategory, string2 string) *basic.Transaction,
-//f4 func(string2 string),
-//f5 func(string2 string),
-//f6 func(string2 string, category basic.TransactionCategory),
-//key string, tx *basic.Transaction, local bool, addAll bool) (bool, error)
 // queueAddTx inserts a new transaction into the non-executable transaction queue.
 // Note, this method assumes the pool lock is held!
 func (pool *transactionPool) queueAddTx(key string, tx *basic.Transaction, local bool, addAll bool) (bool, error) {
 	// Try to insert the transaction into the future queue
 	f1 := func(category basic.TransactionCategory, key string) {
 		pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(key)
-	}
-	f2 := func(category basic.TransactionCategory) {
 		pool.sortedLists.getPricedlistByCategory(category).Removed(1)
+
 	}
-	f3 := func(category basic.TransactionCategory, string2 string) *basic.Transaction {
+	f2 := func(category basic.TransactionCategory, string2 string) *basic.Transaction {
 		return pool.allTxsForLook.getAllTxsLookupByCategory(category).Get(key)
 	}
-	f4 := func(string2 string) {
+	f3 := func(string2 string) {
 		pool.log.Errorf("Missing transaction in lookup set, please report the issue", "TxID", key)
 	}
-	f5 := func(category basic.TransactionCategory, tx *basic.Transaction, local bool) {
+	f4 := func(category basic.TransactionCategory, tx *basic.Transaction, local bool) {
 		pool.allTxsForLook.getAllTxsLookupByCategory(category).Add(tx, local)
+		pool.ActivationIntervals.setTxActiv(key, time.Now())
 	}
-	f6 := func(string2 string) { pool.ActivationIntervals.setTxActiv(key, time.Now()) }
-	f7 := func(string2 string, category basic.TransactionCategory) {
+	f5 := func(key string, category basic.TransactionCategory) {
+		pool.ActivationIntervals.setTxActiv(key, time.Now())
 		pool.TxHashCategory.setHashCat(key, category)
+		//data := "txPool add a new " + string(category) + "tx,txHash is " + key
+		//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxReceived, data)
 	}
-
-	ok, err := pool.queues.addTxByKeyOfCategory(f1, f2, f3, f4, f5, f6, f7,
-		key, tx, local, addAll)
-
+	ok, err := pool.queues.addTxByKeyOfCategory(f1, f2, f3, f4, f5, key, tx, local, addAll)
 	return ok, err
 }
 
@@ -590,13 +560,14 @@ func (pool *transactionPool) stats(category basic.TransactionCategory) (int, int
 func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bool, err error) {
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
-	isLocal := local || pool.locals.containsTx(tx)
 	txId, _ := tx.HashHex()
-	//If the transaction fails basic validation, discard it
+	isLocal := local || pool.locals.containsTx(tx)
+
 	if err = pool.ValidateTx(tx, isLocal); err != nil {
 		pool.log.Tracef("Discarding invalid transaction", "txId", txId, "err", err)
 		return false, err
 	}
+
 	category := basic.TransactionCategory(tx.Head.Category)
 	// If the transaction is already known, discard it
 	if pool.allTxsForLook.getAllTxsLookupByCategory(category).Get(txId) != nil {
@@ -607,16 +578,23 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.allTxsForLook.getAllTxsLookupByCategory(category).Segments()+numSegments(tx)) > pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal {
 		// If the new transaction is underpriced, don't accept it
+		fmt.Println("pool.add:If the transaction pool is full 001")
 		if !isLocal && pool.sortedLists.getPricedlistByCategory(category).Underpriced(tx) {
 			gasprice := GasPrice(tx)
 			pool.log.Tracef("Discarding underpriced transaction", "hash", txId, "GasPrice", gasprice)
 			return false, ErrUnderpriced
 		}
+		fmt.Println("pool.add:If the transaction pool is full 002")
+
 		if pool.changesSinceReorg > int(pool.config.PendingGlobalSegments/4) {
 			//	fmt.Println("add pool full 02 and changesSinceReorg:", pool.changesSinceReorg)
 			return false, ErrTxPoolOverflow
 		}
-		drop, success := pool.sortedLists.getPricedlistByCategory(category).Discard(pool.allTxsForLook.getAllTxsLookupByCategory(category).Segments()-int(pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal)+numSegments(tx), isLocal)
+
+		drop, success := pool.sortedLists.getPricedlistByCategory(category).Discard(
+			pool.allTxsForLook.getAllTxsLookupByCategory(category).Segments()-
+				int(pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal)+numSegments(tx), isLocal)
+
 		// Special case, we still can't make the room for the new remote one.
 		if !isLocal && !success {
 			pool.log.Tracef("Discarding overflown transaction", "txId", txId)
@@ -633,7 +611,6 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 			pool.RemoveTxByKey(txIdi)
 		}
 	}
-
 	// Try to replace an existing transaction in the pending pool
 	from := tpcrtypes.Address(tx.Head.FromAddr)
 	f1 := func(category basic.TransactionCategory, txId string) {
@@ -652,7 +629,6 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f2, f3, f4, f5); !ok {
 		return ok, err
 	}
-
 	// New transaction isn't replacing a pending one, push into queue
 	replaced, err = pool.queueAddTx(txId, tx, isLocal, true)
 	if err != nil {
@@ -661,11 +637,8 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 
 	// Mark local addresses and store local transactions
 	if local && !pool.locals.contains(from) {
-
 		pool.log.Infof("Setting new local account", "address", from)
-
 		pool.locals.add(from)
-
 		pool.sortedLists.getPricedlistByCategory(category).Removed(pool.allTxsForLook.getAllTxsLookupByCategory(category).RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 
 	}
@@ -687,8 +660,7 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId string, tx *bas
 	if pool.pendings.getTxListByAddrOfCategory(category, addr) == nil {
 		pool.pendings.setTxListOfCategory(category, addr, newTxList(false))
 	}
-	list := pool.pendings.getTxListByAddrOfCategory(category, addr)
-	inserted, old := list.Add(tx)
+	inserted, old := pool.pendings.getTxListByAddrOfCategory(category, addr).Add(tx)
 	if !inserted {
 		// An older transaction was existed, discard this
 		pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)

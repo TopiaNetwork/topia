@@ -14,7 +14,7 @@ func Test_transactionPool_SaveConfig(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
 	//pool.config.PathRemote[Category1] = "newremote.json"

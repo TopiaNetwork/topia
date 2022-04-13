@@ -69,8 +69,9 @@ func NewNode(endPoint string, seed string) *Node {
 	nodeID := network.ID()
 	evHub := eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 	conf := txpool.DefaultTransactionPoolConfig
-	txPool := txpool.NewTransactionPool(ctx,conf,tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
+	txPool := txpool.NewTransactionPool(nodeID, ctx, conf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	cons := consensus.NewConsensus(compStateRN.ChainID(), nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, config.CSConfig)
+
 
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 

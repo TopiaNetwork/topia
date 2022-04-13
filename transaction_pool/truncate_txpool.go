@@ -45,8 +45,7 @@ func (pool *transactionPool) truncatePending(category basic.TransactionCategory)
 		//The accounts with the most backlogged transactions are first dumped
 		for pending > pool.config.PendingGlobalSegments && len(greyAccounts) > 0 {
 			bePunished := heap.Pop(&greyAccountsQueue).(*CntAccountItem)
-			list := pool.pendings.getTxListByAddrOfCategory(category, bePunished.accountAddr)
-			caps := list.Cap(list.Len() - 1)
+			caps := pool.pendings.getTxListCapsByAddrOfCategory(category, bePunished.accountAddr)
 			for _, tx := range caps {
 				txId, _ := tx.HashHex()
 				pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)

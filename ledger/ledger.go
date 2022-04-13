@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"go.uber.org/atomic"
 	"path/filepath"
 
 	"github.com/TopiaNetwork/topia/ledger/backend"
@@ -13,21 +14,32 @@ import (
 
 type LedgerID string
 
+type LedgerState byte
+
+const (
+	LedgerState_Uninitialized LedgerState = iota
+	LedgerState_Genesis
+	LedgerState_AutoInc
+)
+
 type Ledger interface {
 	CreateStateStore() (tplgss.StateStore, error)
 
 	CreateStateStoreReadonly() (tplgss.StateStore, error)
 
+	UpdateState(state LedgerState)
+
 	PendingStateStore() int32
 
 	GetBlockStore() block.BlockStore
 
-	IsGenesisState() bool
+	State() LedgerState
 }
 
 type ledger struct {
 	id             LedgerID
 	log            tplog.Logger
+	state          atomic.Value
 	backendStateDB backend.Backend
 	blockStore     block.BlockStore
 	historyStore   *history.HistoryStore
@@ -39,13 +51,17 @@ func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backe
 	bsLog := tplog.CreateModuleLogger(tplogcmm.InfoLevel, "StateStore", log)
 	backendStateDB := backend.NewBackend(backendType, bsLog, filepath.Join(rootPath, "statestore"), "statestore")
 
-	return &ledger{
+	l := &ledger{
 		id:             id,
 		log:            log,
 		backendStateDB: backendStateDB,
 		blockStore:     block.NewBlockStore(log, rootPath, backendType),
 		historyStore:   history.NewHistoryStore(log, rootPath, backendType),
 	}
+
+	l.state.Store(LedgerState_Uninitialized)
+
+	return l
 }
 
 func (l *ledger) CreateStateStore() (tplgss.StateStore, error) {
@@ -66,18 +82,10 @@ func (l *ledger) GetBlockStore() block.BlockStore {
 	return l.blockStore
 }
 
-func (l *ledger) IsGenesisState() bool {
-	reader := l.backendStateDB.Reader()
-	defer reader.Discard()
+func (l *ledger) State() LedgerState {
+	return l.state.Load().(LedgerState)
+}
 
-	it, err := reader.Iterator(nil, nil)
-	defer it.Close()
-	if err != nil {
-		l.log.Panicf("Backend state db reads iterator err: %v", err.Error())
-	}
-	if it.Next() {
-		return false
-	}
-
-	return true
+func (l *ledger) UpdateState(state LedgerState) {
+	l.state.Swap(state)
 }

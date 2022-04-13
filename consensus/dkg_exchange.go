@@ -327,6 +327,11 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 					ex.log.Infof("DKG exchange finished: node %s", ex.nodeID)
 					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
 					ex.finishedCh <- true
+
+					if ex.ledger.State() == ledger.LedgerState_Genesis {
+						ex.notifyUpdater()
+						ex.updateDKGState(DKGExchangeState_IDLE)
+					}
 				}
 			case <-ex.stopCh:
 				ex.log.Info("DKG exchange receive deal response loop stop")

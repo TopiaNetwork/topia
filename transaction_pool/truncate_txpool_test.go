@@ -30,7 +30,7 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 	txRemotes = make([]*basic.Transaction, 0)
 
 	for i := 1; i <= 400; i++ {
-		//fmt.Printf("i:%d,", i)
+
 		nonce := uint64(i)
 		gasprice := uint64(i * 1000)
 		gaslimit := uint64(i * 1000000)

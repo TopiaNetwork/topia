@@ -9,10 +9,8 @@ import (
 )
 
 type Account struct {
-
 	Addr    tpcrtypes.Address
 	Name    string
 	Nonce   uint64
 	Balance map[chain.TokenSymbol]*big.Int
-
 }

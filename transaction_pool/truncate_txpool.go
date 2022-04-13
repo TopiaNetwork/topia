@@ -4,7 +4,7 @@ import (
 	"container/heap"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
-	"sort"
+	"time"
 )
 
 // truncatePending removes transactions from the pending queue if the pool is above the
@@ -71,24 +71,22 @@ func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
 
 	// Sort all accounts with queued transactions by heartbeat
 	txs := make(txsByHeartbeat, 0, len(pool.queues.getAddrTxListOfCategory(category)))
-	for addr := range pool.queues.getAddrTxListOfCategory(category) {
-		if !pool.locals.contains(addr) { // don't drop locals
-			list := pool.queues.getTxListByAddrOfCategory(category, addr).Flatten()
-			for _, tx := range list {
-				txId, _ := tx.HashHex()
-				txs = append(txs, txByHeartbeat{txId, pool.ActivationIntervals.getTxActivByKey(txId)})
-			}
+	f1 := func(address tpcrtypes.Address) bool {
+		return !pool.locals.contains(address)
+	}
+	f2 := func(string2 string) time.Time {
+		return pool.ActivationIntervals.getTxActivByKey(string2)
+	}
+	if txs = pool.queues.addTxsForTruncateQueue(category, f1, f2); txs != nil {
+		// Drop transactions until the total is below the limit or only locals remain
+		for cnt := queued; cnt > pool.config.QueueMaxTxsGlobal && len(txs) > 0; {
+			tx := txs[len(txs)-1]
+			txs = txs[:len(txs)-1]
+			txId := tx.txId
+			pool.RemoveTxByKey(txId)
+			cnt -= 1
+			continue
 		}
 	}
-	sort.Sort(txs)
 
-	// Drop transactions until the total is below the limit or only locals remain
-	for drop := queued - pool.config.QueueMaxTxsGlobal; drop > 0 && len(txs) > 0; {
-		tx := txs[len(txs)-1]
-		txs = txs[:len(txs)-1]
-		txId := tx.tx
-		pool.RemoveTxByKey(txId)
-		drop -= 1
-		continue
-	}
 }

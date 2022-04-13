@@ -30,7 +30,6 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 	txRemotes = make([]*basic.Transaction, 0)
 
 	for i := 1; i <= 400; i++ {
-
 		nonce := uint64(i)
 		gasprice := uint64(i * 1000)
 		gaslimit := uint64(i * 1000000)
@@ -51,9 +50,7 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 		keyremote, _ = txremote.HashHex()
 		keyRemotes = append(keyRemotes, keyremote)
 		txRemotes = append(txRemotes, txremote)
-		fmt.Println("Addtx txlocal:")
 		_ = pool.AddTx(txlocal, true)
-		fmt.Println("Addtx txremote:")
 		_ = pool.AddTx(txremote, false)
 	}
 	assert.Equal(t, 449, len(pool.queues.getAddrTxListOfCategory(Category1)))

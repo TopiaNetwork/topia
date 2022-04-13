@@ -6,6 +6,7 @@ import (
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/ledger"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 	tpnet "github.com/TopiaNetwork/topia/network"
 )
@@ -37,10 +38,11 @@ type ChainState interface {
 
 type chainState struct {
 	tplgss.StateStore
+	ledger ledger.Ledger
 }
 
-func NewChainStore(stateStore tplgss.StateStore) ChainState {
-	stateStore.AddNamedStateStore("chain")
+func NewChainStore(stateStore tplgss.StateStore, ledger ledger.Ledger) ChainState {
+	stateStore.AddNamedStateStore(StateStore_Name)
 	return &chainState{
 		StateStore: stateStore,
 	}
@@ -113,10 +115,17 @@ func (cs *chainState) SetLatestBlock(block *tpchaintypes.Block) error {
 
 	isExist, _ := cs.Exists(StateStore_Name, []byte(LatestBlock_Key))
 	if isExist {
-		return cs.Update(StateStore_Name, []byte(LatestBlock_Key), blkBytes)
+		err = cs.Update(StateStore_Name, []byte(LatestBlock_Key), blkBytes)
+
 	} else {
-		return cs.Put(StateStore_Name, []byte(LatestBlock_Key), blkBytes)
+		err = cs.Put(StateStore_Name, []byte(LatestBlock_Key), blkBytes)
 	}
+
+	if err == nil && block.Head.Height >= 2 {
+		cs.ledger.UpdateState(ledger.LedgerState_AutoInc)
+	}
+
+	return err
 }
 
 func (cs *chainState) SetLatestBlockResult(blockResult *tpchaintypes.BlockResult) error {

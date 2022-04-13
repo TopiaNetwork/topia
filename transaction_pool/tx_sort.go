@@ -3,7 +3,6 @@ package transactionpool
 import (
 	"container/heap"
 	"errors"
-
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -667,10 +666,34 @@ func (queuemap *queuesMap) getTxListRemoveFutureByAddrOfCategory(tx *basic.Trans
 func (queuemap *queuesMap) getAddrTxListOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address]*txList {
 	queuemap.Mu.Lock()
 	defer queuemap.Mu.Unlock()
-	queuemap.queue[category].Mu.Lock()
-	defer queuemap.queue[category].Mu.Unlock()
-	if maptxlist := queuemap.queue[category].addrTxList; maptxlist != nil {
-		return maptxlist
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuemap.queue[category].Mu.Lock()
+		defer queuemap.queue[category].Mu.Unlock()
+		if maptxlist := queuemap.queue[category].addrTxList; maptxlist != nil {
+			return maptxlist
+		}
+	}
+	return nil
+}
+func (queuemap *queuesMap) addTxsForTruncateQueue(category basic.TransactionCategory,
+	f1 func(tpcrtypes.Address) bool, f2 func(string2 string) time.Time) txsByHeartbeat {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuemap.queue[category].Mu.Lock()
+		defer queuemap.queue[category].Mu.Unlock()
+		txs := make(txsByHeartbeat, 0, len(queuemap.queue[category].addrTxList))
+		for addr := range queuemap.queue[category].addrTxList {
+			if f1(addr) {
+				list := queuemap.queue[category].addrTxList[addr].Flatten()
+				for _, tx := range list {
+					txId, _ := tx.HashHex()
+					txs = append(txs, txByHeartbeat{txId, f2(txId)})
+				}
+			}
+		}
+		sort.Sort(txs)
+		return txs
 	}
 	return nil
 }
@@ -1368,7 +1391,7 @@ func (pq *CntAccountHeap) Pop() interface{} {
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
 type txByHeartbeat struct {
-	tx                 string
+	txId               string
 	ActivationInterval time.Time
 }
 

@@ -65,13 +65,11 @@ func NewNode(endPoint string, seed string) *Node {
 	defer compStateRN.Stop()
 
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
-
 	nodeID := network.ID()
 	evHub := eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 	conf := txpool.DefaultTransactionPoolConfig
 	txPool := txpool.NewTransactionPool(nodeID, ctx, conf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	cons := consensus.NewConsensus(compStateRN.ChainID(), nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, config.CSConfig)
-
 
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 

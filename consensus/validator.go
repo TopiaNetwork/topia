@@ -5,12 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/topia/ledger"
-	"github.com/TopiaNetwork/topia/state"
 	"math/big"
 	"sync"
 
+	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/state"
 )
 
 type consensusValidator struct {
@@ -28,6 +28,7 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 		log:            log,
 		nodeID:         nodeID,
 		proposeMsgChan: proposeMsgChan,
+		ledger:         ledger,
 		deliver:        deliver,
 	}
 }
@@ -106,6 +107,8 @@ func (v *consensusValidator) start(ctx context.Context) {
 						return err
 					}
 
+					v.log.Infof("Validator received new propose message: self nodeID %s, epoch %d, stateVersion %d", v.nodeID, propMsg.Epoch, propMsg.StateVersion)
+
 					if can := v.canProcessForwardProposeMsg(ctx, bh.MaxPri, propMsg); !can {
 						err = errors.New("Can't vote received propose msg")
 						v.log.Infof("%s", err.Error())
@@ -123,7 +126,7 @@ func (v *consensusValidator) start(ctx context.Context) {
 					}
 
 					return nil
-				}
+				}()
 
 				if err != nil {
 					continue

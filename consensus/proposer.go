@@ -203,7 +203,7 @@ func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (
 	}
 	blockHead.VoteAggSignature = aggSign
 
-	newBlockHeadBytes, err := p.marshaler.Marshal(blockHead)
+	newBlockHeadBytes, err := p.marshaler.Marshal(&blockHead)
 	if err != nil {
 		p.log.Errorf("Marshal block head failed: %v", err)
 		return nil, err
@@ -235,7 +235,12 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 					continue
 				}
 
-				commitMsg, _ := p.produceCommitMsg(voteMsg, aggSign)
+				commitMsg, err := p.produceCommitMsg(voteMsg, aggSign)
+				if err != nil {
+					p.log.Errorf("Can't produce commit message: %v", err)
+					continue
+				}
+
 				err = p.deliver.deliverCommitMessage(context.Background(), commitMsg)
 				if err != nil {
 					p.log.Errorf("Can't deliver commit message: %v", err)
@@ -304,18 +309,18 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	}
 	proposeBlock, err := p.produceProposeBlock(csStateRN.ChainID(), latestEpoch, latestBlock, vrfProof, maxPri, stateRoot)
 	if err != nil {
-		p.log.Errorf("Produce propose block error: epoch=%d, height=%d, err=%v", addedBlock.Head.Epoch, addedBlock.Head.Height, err)
+		p.log.Errorf("Produce propose block error: epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
 		return err
 	}
 
 	if can := p.validator.canProcessForwardProposeMsg(ctx, maxPri, proposeBlock); !can {
-		err = fmt.Errorf("Can't delive propose message: epoch=%d, height=%d", addedBlock.Head.Epoch, addedBlock.Head.Height)
+		err = fmt.Errorf("Can't delive propose message: epoch=%d, height=%d", latestBlock.Head.Epoch, latestBlock.Head.Height)
 		p.log.Infof("%s", err.Error())
 		return err
 	}
 
 	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
-		p.log.Errorf("Consensus deliver propose message err: epoch =%d, height=%d, err=%v", addedBlock.Head.Epoch, addedBlock.Head.Height, err)
+		p.log.Errorf("Consensus deliver propose message err: epoch =%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
 		return err
 	}
 

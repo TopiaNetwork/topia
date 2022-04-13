@@ -17,7 +17,7 @@ func Test_transactionPool_AddRemote(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -41,7 +41,7 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -71,7 +71,7 @@ func Test_transactionPool_SaveRemoteTxs(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -111,7 +111,7 @@ func Test_transactionPool_LoadRemoteTxs(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -127,7 +127,7 @@ func Test_transactionPool_LoadRemoteTxs(t *testing.T) {
 	if err := pool.SaveRemoteTxs(Category1); err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	pool = SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool = SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	if err := pool.LoadRemoteTxs(Category1); err != nil {
 		t.Error("want", nil, "got", err)
@@ -149,7 +149,7 @@ func Test_transactionPool_BroadCastTx(t *testing.T) {
 	log := TpiaLog
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	pool.network = network
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))

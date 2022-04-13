@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -40,10 +41,12 @@ var (
 	State                                                          *StatePoolDB
 	TpiaLog                                                        tplog.Logger
 	starttime                                                      uint64
+	NodeID                                                         string
 	Ctx                                                            context.Context
 )
 
 func init() {
+	NodeID = "TestNode"
 	Ctx = context.Background()
 	Category1 = basic.TransactionCategory_Topia_Universal
 	TpiaLog, _ = tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
@@ -318,7 +321,7 @@ func SetBlockData(txs map[string]*basic.Transaction) *types.BlockData {
 	return blockdata
 }
 
-func SetNewTransactionPool(ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
+func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 
 	conf = (&conf).check()
 	conf.PendingAccountSegments = 16
@@ -327,6 +330,7 @@ func SetNewTransactionPool(ctx context.Context, conf TransactionPoolConfig, leve
 	conf.QueueMaxTxsGlobal = 256
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
+		nodeId:              nodeId,
 		config:              conf,
 		log:                 poolLog,
 		level:               level,
@@ -385,7 +389,7 @@ func Test_transactionPool_ValidateTx(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
 	if err := pool.ValidateTx(TxHighGasLimit, true); err != ErrTxGasLimit {
@@ -401,7 +405,7 @@ func Test_transactionPool_GetLocalTxs(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -434,7 +438,7 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -495,7 +499,7 @@ func Test_transactionPool_RemoveTxByKey(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -505,7 +509,10 @@ func Test_transactionPool_RemoveTxByKey(t *testing.T) {
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
 	pool.AddTx(Tx1, true)
+	fmt.Println("test 001")
 	pool.RemoveTxByKey(Key1)
+	fmt.Println("test 002")
+
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
@@ -529,7 +536,7 @@ func Test_transactionPool_RemoveTxHashs(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -568,7 +575,7 @@ func Test_transactionPool_turnTx(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -600,7 +607,7 @@ func Test_transactionPool_UpdateTx(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -636,7 +643,7 @@ func Test_transactionPool_Pending(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -665,7 +672,7 @@ func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -707,7 +714,7 @@ func Test_transactionPool_CommitTxsForPending(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -735,7 +742,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -791,7 +798,7 @@ func Test_transactionPool_Get(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -818,7 +825,7 @@ func Test_transactionPool_Size(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -841,7 +848,7 @@ func Test_transactionPool_Start(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().RegisterModule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -861,7 +868,7 @@ func Test_transactionPool_Stop(t *testing.T) {
 	defer ctrl.Finish()
 	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))

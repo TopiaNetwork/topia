@@ -18,7 +18,7 @@ func Test_transactionPool_Reset(t *testing.T) {
 		Return(NewBlock).AnyTimes()
 	servant.EXPECT().StateAt(gomock.Any()).Return(State, nil).AnyTimes()
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))

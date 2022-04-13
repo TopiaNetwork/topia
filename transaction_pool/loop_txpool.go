@@ -1,28 +1,29 @@
 package transactionpool
 
 import (
+	"fmt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 	"runtime/debug"
 	"time"
 )
 
-func (pool *transactionPool) loop() {
+func (pool *transactionPool) loopChanSelect() {
 	pool.wg.Add(1)
-	go pool.chanRemoveTxHashs()
+	go pool.loopChanRemoveTxHashs()
 	pool.wg.Add(1)
-	go pool.resetIfNewHead()
-	//pool.wg.Add(1)
-	//go pool.reportTicks()
+	go pool.loopResetIfNewHead()
 	pool.wg.Add(1)
-	go pool.removeTxForUptoLifeTime()
+	go pool.loopRemoveTxForUptoLifeTime()
 	pool.wg.Add(1)
-	go pool.regularSaveLocalTxs()
+	go pool.loopRegularSaveLocalTxs()
 	pool.wg.Add(1)
-	go pool.regularRepublic()
+	go pool.loopRegularRepublic()
+	pool.wg.Add(1)
+	go pool.loopSaveAllIfShutDown()
 }
 
-func (pool *transactionPool) chanRemoveTxHashs() {
+func (pool *transactionPool) loopChanRemoveTxHashs() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
@@ -33,15 +34,11 @@ func (pool *transactionPool) chanRemoveTxHashs() {
 		select {
 		case Hashs := <-pool.chanRmTxs:
 			pool.RemoveTxHashs(Hashs)
-		case <-pool.chanSysShutDown:
-			close(pool.chanReorgShutdown)
-			pool.saveAllWhenSysShutDown()
-			return
 		}
 	}
 }
 
-func (pool *transactionPool) saveAllIfShutDown() (a, b, c int) {
+func (pool *transactionPool) loopSaveAllIfShutDown() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
@@ -52,14 +49,18 @@ func (pool *transactionPool) saveAllIfShutDown() (a, b, c int) {
 		select {
 		// System shutdown.  When the system is shut down, save to the files locals/remotes/configs
 		case <-pool.chanSysShutDown:
+			fmt.Println("call shutdown")
 			close(pool.chanReorgShutdown)
 			pool.saveAllWhenSysShutDown()
+			close(pool.chanRmTxs)
+			close(pool.chanChainHead)
+			close(pool.chanQueueTxEvent)
 			return
 		}
 
 	}
 }
-func (pool *transactionPool) resetIfNewHead() {
+func (pool *transactionPool) loopResetIfNewHead() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
@@ -76,66 +77,11 @@ func (pool *transactionPool) resetIfNewHead() {
 				pool.requestReset(head.Head, ev.Block.Head)
 				head = ev.Block
 			}
-		case <-pool.chanSysShutDown:
-			close(pool.chanReorgShutdown)
-			pool.saveAllWhenSysShutDown()
-			return
 		}
 	}
 }
 
-//func (pool *transactionPool) reportTicks() {
-//	defer pool.wg.Done()
-//	defer func() {
-//		if err := recover(); err != nil {
-//			pool.log.Errorf("reportTicks err:", err, debug.Stack())
-//		}
-//	}()
-//	var (
-//		prevPending, prevQueued, prevStales int
-//		report                              = time.NewTicker(pool.config.StatsReportInterval) //500ms report queue stats
-//	)
-//	defer report.Stop()
-//	for {
-//		select {
-//		// Handle stats reporting ticks
-//		case <-report.C:
-//			for category, _ := range pool.pendings.getAll() {
-//				pool.reportUniversal(category, prevPending, prevQueued, prevStales)
-//				prevPending, prevQueued, prevStales = pool.reportUniversal(category, prevPending, prevQueued, prevStales)
-//			}
-//		case <-pool.chanSysShutDown:
-//			close(pool.chanReorgShutdown)
-//			//local txs save
-//			for category, _ := range pool.allTxsForLook.getAll() {
-//				if err := pool.SaveLocalTxs(category); err != nil {
-//					pool.log.Warnf("Failed to save local transaction", "err", err)
-//				}
-//				//remote txs save
-//				if err := pool.SaveRemoteTxs(category); err != nil {
-//					pool.log.Warnf("Failed to save remote transaction", "err", err)
-//				}
-//			}
-//			//txPool configs save
-//			if err := pool.SaveConfig(); err != nil {
-//				pool.log.Warnf("Failed to save transaction pool configs", "err", err)
-//			}
-//			return
-//		}
-//	}
-//}
-//func (pool *transactionPool) reportUniversal(category basic.TransactionCategory, prevPending, prevQueued, prevStales int)(int,int,int) {
-//
-//	pending, queued := pool.stats(category)
-//	stales := int(atomic.LoadInt64(&pool.sortedLists.getPricedlistByCategory(category).stales))
-//	if pending != prevPending || queued != prevQueued || stales != prevStales {
-//		pool.log.Debugf("Transaction pool status report", "category", category, "executable", pending, "queued", queued, "stales", stales)
-//		prevPending, prevQueued, prevStales = pending, queued, stales
-//	}
-//	return prevPending, prevQueued, prevStales
-//}
-
-func (pool *transactionPool) removeTxForUptoLifeTime() {
+func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
@@ -161,14 +107,10 @@ func (pool *transactionPool) removeTxForUptoLifeTime() {
 
 		}
 
-	case <-pool.chanSysShutDown:
-		close(pool.chanReorgShutdown)
-		pool.saveAllWhenSysShutDown()
-		return
 	}
 }
 
-func (pool *transactionPool) regularSaveLocalTxs() {
+func (pool *transactionPool) loopRegularSaveLocalTxs() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
@@ -185,14 +127,10 @@ func (pool *transactionPool) regularSaveLocalTxs() {
 				pool.log.Warnf("Failed to save local tx ", "err", err)
 			}
 		}
-	case <-pool.chanSysShutDown:
-		close(pool.chanReorgShutdown)
-		pool.saveAllWhenSysShutDown()
-		return
 	}
 }
 
-func (pool *transactionPool) regularRepublic() {
+func (pool *transactionPool) loopRegularRepublic() {
 	//fmt.Println("regularRepublic")
 	defer pool.wg.Done()
 	defer func() {
@@ -215,10 +153,6 @@ func (pool *transactionPool) regularRepublic() {
 			for category, _ := range pool.queues.getAll() {
 				pool.queues.republicTx(category, f1, time2, f2)
 			}
-		case <-pool.chanSysShutDown:
-			close(pool.chanReorgShutdown)
-			pool.saveAllWhenSysShutDown()
-			return
 		}
 	}
 }

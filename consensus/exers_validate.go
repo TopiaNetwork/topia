@@ -104,7 +104,7 @@ func (ev *executionResultValidate) validateExeResultResp(origTxRoot []byte, orig
 		return "", false, err
 	}
 
-	if bytes.Compare(origTxRoot, deepSMSTTxRS.Root()) != 0 {
+	if bytes.Compare(origTxRSRoot, deepSMSTTxRS.Root()) != 0 {
 		err := fmt.Errorf("Invalid tx result proof from executor %s", string(validateResp.Executor))
 		ev.log.Errorf("%v", err)
 

@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
@@ -20,6 +22,59 @@ type EventHub interface {
 	Trig(ctx context.Context, name string, data interface{}) error
 	Observe(ctx context.Context, evName string, evHandler EventHandler) (string, error) //return observation id
 	UnObserve(ctx context.Context, obsID string, evName string) error
+}
+
+var once sync.Once
+var evHubMng *EventHubManager
+
+type EventHubManager struct {
+	sync        sync.RWMutex
+	eventHubMap map[string]EventHub
+}
+
+func GetEventHubManager() *EventHubManager {
+	once.Do(func() {
+		evHubMng = &EventHubManager{
+			eventHubMap: make(map[string]EventHub),
+		}
+	})
+
+	return evHubMng
+}
+
+func (evmng *EventHubManager) GetEventHub(nodeID string) EventHub {
+	if evHub, ok := evmng.eventHubMap[nodeID]; ok {
+		return evHub
+	}
+
+	return nil
+}
+
+func (evmng *EventHubManager) CreateEventHub(nodeID string, params ...interface{}) EventHub {
+	evmng.sync.Lock()
+	defer evmng.sync.Unlock()
+
+	if evHub, ok := evmng.eventHubMap[nodeID]; ok {
+		return evHub
+	}
+
+	if len(params) != 2 {
+		panic("Invalid params size: " + fmt.Sprintf("expected 2, actual %d", len(params)))
+	}
+
+	var level tplogcmm.LogLevel
+	var log tplog.Logger
+	ok := true
+	if level, ok = params[0].(tplogcmm.LogLevel); !ok {
+		panic("Invalid params 0 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[0]).Name()))
+	}
+	if log, ok = params[1].(tplog.Logger); !ok {
+		panic("Invalid params 1 type: " + fmt.Sprintf("expected LogLevel, actual %s", reflect.TypeOf(params[1]).Name()))
+	}
+
+	evmng.eventHubMap[nodeID] = NewEventHub(level, log)
+
+	return evmng.eventHubMap[nodeID]
 }
 
 type eventHub struct {
@@ -42,6 +97,7 @@ func NewEventHub(level tplogcmm.LogLevel, log tplog.Logger) EventHub {
 	evManager.registerEvent(EventName_BlockCommited, reflect.TypeOf(&tpchaintypes.Block{}).String())
 	evManager.registerEvent(EventName_BlockVerified, reflect.TypeOf(&tpchaintypes.Block{}).String())
 	evManager.registerEvent(EventName_BlockConfirmed, reflect.TypeOf(&tpchaintypes.Block{}).String())
+	evManager.registerEvent(EventName_BlockAdded, reflect.TypeOf(&tpchaintypes.Block{}).String())
 
 	return &eventHub{
 		log:       logEVActor,

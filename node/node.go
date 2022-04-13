@@ -68,7 +68,7 @@ func NewNode(endPoint string, seed string) *Node {
 
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
 	conf := txpool.DefaultTransactionPoolConfig
-	txPool := txpool.NewTransactionPool(ctx,conf,tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
+	txPool := txpool.NewTransactionPool(nodeID, ctx, conf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	cons := consensus.NewConsensus(nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, csConfig)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 

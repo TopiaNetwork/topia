@@ -38,6 +38,7 @@ func (pool *transactionPool) scheduleReorgLoop() {
 			reset, dirtyAccounts = nil, nil
 			queuedEvents = make(map[tpcrtypes.Address]*txSortedMap)
 		}
+		//Fetch Txs
 
 		select {
 		case req := <-pool.chanReqReset:
@@ -231,7 +232,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 					if add = pool.query.GetBlock(types.BlockHash(add.Head.ParentBlockHash), add.Head.Height-1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newHead.Height,
 							"hash", types.BlockHash(newHead.Hash))
-						return nil
+						return ErrUnRooted
 					}
 				}
 
@@ -246,7 +247,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 					if rem = pool.query.GetBlock(types.BlockHash(rem.Head.ParentBlockHash), rem.Head.Height-1); rem == nil {
 						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldHead.Height,
 							"hash", types.BlockHash(oldHead.Hash))
-						return nil
+						return ErrUnRooted
 					}
 					for _, tx := range add.Data.Txs {
 						var txType *basic.Transaction
@@ -258,7 +259,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 					if add = pool.query.GetBlock(types.BlockHash(add.Head.ParentBlockHash), add.Head.Height-1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newHead.Height,
 							"hash", types.BlockHash(newHead.Hash))
-						return nil
+						return ErrUnRooted
 					}
 				}
 
@@ -266,21 +267,16 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 			}
 		}
 	}
-
 	// Initialize the internal state to the current head
 	if newHead == nil {
 		newHead = pool.query.CurrentBlock().GetHead()
 	}
-
 	stateDb, err := pool.query.StateAt(types.BlockHash(newHead.Hash))
 	if err != nil {
 		pool.log.Errorf("Failed to reset txPool state", "err", err)
-		return nil
+		return err
 	}
-
 	pool.curState = *stateDb
-
 	pool.log.Debugf("ReInjecting stale transactions", "count", len(reInject))
-
 	return nil
 }

@@ -27,9 +27,9 @@ type TransactionPoolConfig struct {
 
 	LifetimeForTx         time.Duration
 	DurationForTxRePublic time.Duration
-	EvictionInterval      time.Duration //= 30 * time.Second // Time interval to check for evictable transactions
-	StatsReportInterval   time.Duration //= 500 * time.Millisecond // Time interval to report transaction pool stats
-	RepublicInterval      time.Duration //= 30 * time.Second       //time interval to check transaction lifetime for report
+	EvictionInterval      time.Duration //= 29989 * time // Time interval to check for evictable transactions
+	StatsReportInterval   time.Duration //= 499 * time.Millisecond // Time interval to report transaction pool stats
+	RepublicInterval      time.Duration //= 30011 * time.Millisecond       //time interval to check transaction lifetime for report
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
@@ -49,10 +49,10 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	QueueMaxTxsGlobal:      8192 * 2, //PendingGlobalSlots*2
 
 	LifetimeForTx:         30 * time.Minute,
-	DurationForTxRePublic: 30 * time.Second,
-	EvictionInterval:      30 * time.Second,       // Time interval to check for evictable transactions
-	StatsReportInterval:   500 * time.Millisecond, // Time interval to report transaction pool stats
-	RepublicInterval:      30 * time.Second,       //time interval to check transaction lifetime for report
+	DurationForTxRePublic: 30011 * time.Millisecond, //Prime Numbers 30second
+	EvictionInterval:      30013 * time.Millisecond, // Time interval to check for evictable transactions
+	StatsReportInterval:   499 * time.Millisecond,   // Time interval to report transaction pool stats
+	RepublicInterval:      30029 * time.Millisecond, //time interval to check transaction lifetime for report
 
 }
 

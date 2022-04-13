@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"errors"
+	"fmt"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
@@ -17,7 +18,7 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	servant := NewMockTransactionPoolServant(ctrl)
 	servant.EXPECT().CurrentBlock().Return(NewBlock).AnyTimes()
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -46,6 +47,13 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	pool.RemoveTxHashs(hashs)
 	var hashs1, hashs2 []string
 	var hash string
+	fmt.Println("hashs", hashs)
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
+	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	for _, tx := range txLocals[1:10] {
 		hash, _ = tx.HashHex()
 		hashs1 = append(hashs1, hash)
@@ -56,43 +64,29 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 		hashs2 = append(hashs2, hash)
 		pool.AddTx(tx, false)
 	}
+	fmt.Println(hash)
 	pool.wg.Add(1)
-	go pool.chanRemoveTxHashs()
+	go pool.loopChanRemoveTxHashs()
 
-	//pool.wg.Add(1)
-	//go pool.saveAllIfShutDown()
-	//pool.wg.Add(1)
-	//go pool.resetIfNewHead()
-	//pool.wg.Add(1)
-	//go pool.reportTicks()
-	//pool.wg.Add(1)
-	//go pool.removeTxForUptoLifeTime()
-	//pool.wg.Add(1)
-	//go pool.regularSaveLocalTxs()
-	//pool.wg.Add(1)
-	//go pool.regularRepublic()
-
+	pool.wg.Add(1)
 	go func() {
-		pool.chanRmTxs <- hashs
-	}()
-	go func() {
+		defer pool.wg.Done()
 		pool.chanRmTxs <- hashs1
 	}()
+	pool.wg.Add(1)
 	go func() {
+		defer pool.wg.Done()
 		pool.chanRmTxs <- hashs2
 	}()
-
-	go func() {
-		time.Sleep(10 * time.Second)
-		assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
-		assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-		assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
-		assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-
-		assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-		assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	}()
 	pool.wg.Wait()
+
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
+	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	fmt.Println("test001")
 
 }
 
@@ -103,14 +97,13 @@ func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
 	servant.EXPECT().CurrentBlock().Return(NewBlock).AnyTimes()
 
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
 	newnetwork := NewMockNetwork(ctrl)
 	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	pool.network = newnetwork
-	defer pool.wg.Wait()
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
@@ -135,18 +128,14 @@ func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
 
 	//check new local files:localTransactions.json,remoteTransactions.json,txPoolConfigs.json
 	pool.wg.Add(1)
-	go pool.saveAllIfShutDown()
-	//pool.wg.Add(1)
-	//go pool.resetIfNewHead()
-	//pool.wg.Add(1)
-	//go pool.reportTicks()
-	//pool.wg.Add(1)
-	//go pool.removeTxForUptoLifeTime()
-	//pool.wg.Add(1)
-	//go pool.regularSaveLocalTxs()
-	//pool.wg.Add(1)
-	//go pool.regularRepublic()
-	pool.chanSysShutDown <- errors.New("shut down")
+	go pool.loopSaveAllIfShutDown()
+
+	pool.wg.Add(1)
+	go func() {
+		pool.wg.Done()
+		pool.chanSysShutDown <- errors.New("shut down")
+	}()
+	pool.wg.Wait()
 
 }
 
@@ -157,7 +146,7 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	servant.EXPECT().CurrentBlock().Return(NewBlock).AnyTimes()
 
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
 	newnetwork := NewMockNetwork(ctrl)
@@ -189,80 +178,11 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	hashs = append(hashs, KeyR1)
 	hashs = append(hashs, KeyR2)
 
-	//pool.wg.Add(1)
-	//go pool.chanRemoveTxHashs()
-	//pool.wg.Add(1)
-	//go pool.saveAllIfShutDown()
 	pool.wg.Add(1)
-	go pool.resetIfNewHead()
-	//pool.wg.Add(1)
-	//go pool.reportTicks()
-	//pool.wg.Add(1)
-	//go pool.removeTxForUptoLifeTime()
-	//pool.wg.Add(1)
-	//go pool.regularSaveLocalTxs()
-	//pool.wg.Add(1)
-	//go pool.regularRepublic()
+	go pool.loopResetIfNewHead()
 	newheadevent := &ChainHeadEvent{NewBlock}
 	pool.chanChainHead <- *newheadevent
 }
-
-//
-//func Test_transactionPool_loop_reportTicks(t *testing.T) {
-//	ctrl := gomock.NewController(t)
-//	defer ctrl.Finish()
-//	servant := NewMockTransactionPoolServant(ctrl)
-//	servant.EXPECT().CurrentBlock().Return(NewBlock).AnyTimes()
-//
-//	log := TpiaLog
-//	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-//	pool.query = servant
-//
-//	newnetwork := NewMockNetwork(ctrl)
-//	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-//
-//	pool.network = newnetwork
-//	defer pool.wg.Wait()
-//	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
-//	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-//	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
-//	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-//
-//	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-//	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-//	pool.AddTx(Tx1, true)
-//	pool.AddTx(Tx2, true)
-//	pool.AddTx(TxR1, false)
-//	pool.AddTx(TxR2, false)
-//	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
-//	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-//	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].LocalCount())
-//	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
-//
-//	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-//	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-//	var hashs []string
-//	hashs = append(hashs, Key1)
-//	hashs = append(hashs, Key2)
-//	hashs = append(hashs, KeyR1)
-//	hashs = append(hashs, KeyR2)
-//
-//	//pool.wg.Add(1)
-//	//go pool.chanRemoveTxHashs()
-//	//pool.wg.Add(1)
-//	//go pool.saveAllIfShutDown()
-//	//pool.wg.Add(1)
-//	//go pool.resetIfNewHead()
-//	pool.wg.Add(1)
-//	go pool.reportTicks()
-//	//pool.wg.Add(1)
-//	//go pool.removeTxForUptoLifeTime()
-//	//pool.wg.Add(1)
-//	//go pool.regularSaveLocalTxs()
-//	//pool.wg.Add(1)
-//	//go pool.regularRepublic()
-//
-//}
 
 func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -271,7 +191,7 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	servant.EXPECT().CurrentBlock().Return(NewBlock).AnyTimes()
 
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
 	newnetwork := NewMockNetwork(ctrl)
@@ -298,24 +218,12 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
-	//pool.wg.Add(1)
-	//go pool.chanRemoveTxHashs()
-	//pool.wg.Add(1)
-	//go pool.saveAllIfShutDown()
-	//pool.wg.Add(1)
-	//go pool.resetIfNewHead()
-	//pool.wg.Add(1)
-	//go pool.reportTicks()
-
 	waitChannel := make(chan struct{})
 
 	//***********change lifTime to trigger**************
 	pool.wg.Add(1)
-	go pool.removeTxForUptoLifeTime()
-	//pool.wg.Add(1)
-	//go pool.regularSaveLocalTxs()
-	//pool.wg.Add(1)
-	//go pool.regularRepublic()
+	go pool.loopRemoveTxForUptoLifeTime()
+
 	<-waitChannel
 	time.Sleep(10 * time.Second)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -334,7 +242,7 @@ func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
 	servant.EXPECT().CurrentBlock().Return(NewBlock).AnyTimes()
 
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
 	newnetwork := NewMockNetwork(ctrl)
@@ -361,24 +269,9 @@ func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
-	//pool.wg.Add(1)
-	//go pool.chanRemoveTxHashs()
-	//pool.wg.Add(1)
-	//go pool.saveAllIfShutDown()
-	//pool.wg.Add(1)
-	//go pool.resetIfNewHead()
-	//pool.wg.Add(1)
-	//go pool.reportTicks()
-
-	//change lifTime to trigger
-	//pool.wg.Add(1)
-	//go pool.removeTxForUptoLifeTime()
-
 	//check new local file:localTransactions.json,
 	pool.wg.Add(1)
-	go pool.regularSaveLocalTxs()
-	//pool.wg.Add(1)
-	//go pool.regularRepublic()
+	go pool.loopRegularSaveLocalTxs()
 
 }
 
@@ -389,7 +282,7 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 	servant.EXPECT().CurrentBlock().Return(NewBlock).AnyTimes()
 
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
 	newnetwork := NewMockNetwork(ctrl)
@@ -416,24 +309,8 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
-	//pool.wg.Add(1)
-	//go pool.chanRemoveTxHashs()
-	//pool.wg.Add(1)
-	//go pool.saveAllIfShutDown()
-	//pool.wg.Add(1)
-	//go pool.resetIfNewHead()
-	//pool.wg.Add(1)
-	//go pool.reportTicks()
-
-	//change lifTime to trigger
-	//pool.wg.Add(1)
-	//go pool.removeTxForUptoLifeTime()
-
-	//check new local file:localTransactions.json,
-	//pool.wg.Add(1)
-	//go pool.regularSaveLocalTxs()
 	pool.wg.Add(1)
-	go pool.regularRepublic()
+	go pool.loopRegularRepublic()
 
 }
 
@@ -443,7 +320,7 @@ func Test_transactionPool_loop(t *testing.T) {
 	servant := NewMockTransactionPoolServant(ctrl)
 	servant.EXPECT().CurrentBlock().Return(NewBlock).AnyTimes()
 	log := TpiaLog
-	pool := SetNewTransactionPool(Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 	newnetwork := NewMockNetwork(ctrl)
 	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -497,7 +374,7 @@ func Test_transactionPool_loop(t *testing.T) {
 	assert.Equal(t, 100, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 100, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 
-	pool.loop()
+	pool.loopChanSelect()
 
 	go func() {
 		pool.chanRmTxs <- keyLocals

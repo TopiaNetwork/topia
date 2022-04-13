@@ -119,7 +119,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 			f2 := func(string2 string) {
 				pool.RemoveTxByKey(string2)
 			}
-			for category, _ := range pool.pendings.getAll() {
+			for category, _ := range pool.queues.getAll() {
 				pool.queues.removeTxForLifeTime(category, f0, f1, time2, f2)
 
 			}

@@ -427,6 +427,49 @@ func (pendingmap *pendingsMap) getPendingTxsByCategory(category basic.Transactio
 	}
 	return nil
 }
+func (pendingmap *pendingsMap) demoteUnexecutablesByCategory(category basic.TransactionCategory,
+	f1 func(tpcrtypes.Address) uint64,
+	f2 func(transactionCategory basic.TransactionCategory, txId string),
+	f3 func(hash string, tx *basic.Transaction)) {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	if pending := pendingmap.pending[category]; pending != nil {
+		pendingmap.pending[category].Mu.Lock()
+		defer pendingmap.pending[category].Mu.Unlock()
+		if len(pendingmap.pending[category].addrTxList) > 0 {
+			for addr, list := range pendingmap.pending[category].addrTxList {
+				nonce := f1(addr)
+				olds := list.Forward(nonce)
+				for _, tx := range olds {
+					txId, _ := tx.HashHex()
+					f2(category, txId)
+					//pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
+					//pool.log.Tracef("Removed old pending transaction", "txId", txId)
+				}
+				// If there's a gap in front, alert (should never happen) and postpone all transactions
+				if list.Len() > 0 && list.txs.Get(nonce) == nil {
+					gaped := list.Cap(0)
+					for _, tx := range gaped {
+						hash, _ := tx.HashHex()
+						f3(hash, tx)
+						//{
+						//pool.log.Errorf("Demoting invalidated transaction", "hash", hash)
+						// Internal shuffle shouldn't touch the lookup set.
+						//pool.queueAddTx(hash, tx, false, false)
+						//}
+					}
+
+				}
+				// Delete the entire pending entry if it became empty.
+				if list.Empty() {
+					delete(pendingmap.pending[category].addrTxList, addr)
+				}
+
+			}
+		}
+	}
+}
+
 func (pendingmap *pendingsMap) getAddrTxsByCategory(category basic.TransactionCategory) map[tpcrtypes.Address][]*basic.Transaction {
 	pendingmap.Mu.Lock()
 	defer pendingmap.Mu.Unlock()
@@ -439,13 +482,81 @@ func (pendingmap *pendingsMap) getAddrTxsByCategory(category basic.TransactionCa
 	}
 	return pending
 }
-func (pendingsMap *pendingsMap) getAddrTxListOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address]*txList {
-	pendingsMap.Mu.Lock()
-	defer pendingsMap.Mu.Unlock()
-	pendingsMap.pending[category].Mu.Lock()
-	defer pendingsMap.pending[category].Mu.Unlock()
-	if maptxlist := pendingsMap.pending[category].addrTxList; maptxlist != nil {
-		return maptxlist
+func (pendingmap *pendingsMap) getAddrTxListOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address]*txList {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
+		pendingmap.pending[category].Mu.Lock()
+		defer pendingmap.pending[category].Mu.Unlock()
+		if maptxlist := pendingmap.pending[category].addrTxList; maptxlist != nil {
+			return maptxlist
+		}
+	}
+	return nil
+}
+func (pendingmap *pendingsMap) getCommitTxsCategory(category basic.TransactionCategory) []*basic.Transaction {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
+		pendingmap.pending[category].Mu.Lock()
+		defer pendingmap.pending[category].Mu.Unlock()
+		var txs = make([]*basic.Transaction, 0)
+		if maptxlist := pendingmap.pending[category].addrTxList; maptxlist != nil {
+			for _, txlist := range maptxlist {
+				for _, tx := range txlist.txs.cache {
+					txs = append(txs, tx)
+				}
+			}
+		}
+		return txs
+	}
+	return nil
+}
+
+func (pendingmap *pendingsMap) getStatsOfCategory(category basic.TransactionCategory) int {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
+		pendingmap.pending[category].Mu.Lock()
+		defer pendingmap.pending[category].Mu.Unlock()
+		pending := 0
+		if maptxlist := pendingmap.pending[category].addrTxList; maptxlist != nil {
+			for _, list := range maptxlist {
+				pending += list.Len()
+			}
+			return pending
+		}
+	}
+	return 0
+}
+func (pendingmap *pendingsMap) truncatePendingByCategoryFun1(category basic.TransactionCategory) uint64 {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
+		pendingmap.pending[category].Mu.Lock()
+		defer pendingmap.pending[category].Mu.Unlock()
+		pending := uint64(0)
+		for _, list := range pendingmap.pending[category].addrTxList {
+			pending += uint64(list.Len())
+		}
+		return pending
+	}
+	return 0
+}
+func (pendingmap *pendingsMap) truncatePendingByCategoryFun2(category basic.TransactionCategory,
+	f1 func(tpcrtypes.Address) bool, PendingAccountSegments uint64) map[tpcrtypes.Address]int {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
+
+		var greyAccounts map[tpcrtypes.Address]int
+		for addr, list := range pendingmap.pending[category].addrTxList {
+			// Only evict transactions from high rollers
+			if f1(addr) && uint64(list.Len()) > PendingAccountSegments {
+				greyAccounts[addr] = list.Len()
+			}
+		}
+		return greyAccounts
 	}
 	return nil
 }
@@ -637,14 +748,85 @@ func (queuemap *queuesMap) getQueueTxsByCategory(category basic.TransactionCateg
 func (queuemap *queuesMap) getTxListByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address) *txList {
 	queuemap.Mu.Lock()
 	defer queuemap.Mu.Unlock()
-	queuemap.queue[category].Mu.Lock()
-	defer queuemap.queue[category].Mu.Unlock()
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuemap.queue[category].Mu.Lock()
+		defer queuemap.queue[category].Mu.Unlock()
 
-	if txlist := queuemap.queue[category].addrTxList[addr]; txlist != nil {
-		return txlist
+		if txlist := queuemap.queue[category].addrTxList[addr]; txlist != nil {
+			return txlist
+		}
 	}
 	return nil
 }
+func (queuemap *queuesMap) replaceExecutablesDropOverLimit(
+	f1 func(address tpcrtypes.Address) bool,
+	f2 func(category basic.TransactionCategory, txId string),
+	QueueMaxTxsAccount uint64,
+	category basic.TransactionCategory, addr tpcrtypes.Address) int {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuemap.queue[category].Mu.Lock()
+		defer queuemap.queue[category].Mu.Unlock()
+		if txlist := queuemap.queue[category].addrTxList[addr]; txlist != nil {
+			var caps []*basic.Transaction
+			if f1(addr) {
+				caps = txlist.Cap(int(QueueMaxTxsAccount))
+				for _, tx := range caps {
+					txId, _ := tx.HashHex()
+					f2(category, txId)
+				}
+			}
+			return len(caps)
+		}
+	}
+	return 0
+}
+
+func (queuemap *queuesMap) replaceExecutablesDeleteEmpty(category basic.TransactionCategory, addr tpcrtypes.Address) {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuemap.queue[category].Mu.Lock()
+		defer queuemap.queue[category].Mu.Unlock()
+
+		if txlist := queuemap.queue[category].addrTxList[addr]; txlist != nil {
+			if txlist.Empty() {
+				delete(queuemap.queue[category].addrTxList, addr)
+			}
+		}
+	}
+}
+
+func (queuemap *queuesMap) replaceExecutablesDropTooOld(category basic.TransactionCategory, addr tpcrtypes.Address,
+	f1 func(address tpcrtypes.Address) uint64,
+	f2 func(transactionCategory basic.TransactionCategory, txId string)) int {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuemap.queue[category].Mu.Lock()
+		defer queuemap.queue[category].Mu.Unlock()
+
+		if list := queuemap.queue[category].addrTxList[addr]; list != nil {
+			// Drop all transactions that are deemed too old (low nonce)
+			forwards := list.Forward(f1(addr))
+
+			for _, tx := range forwards {
+				if txId, err := tx.HashHex(); err != nil {
+				} else {
+					f2(category, txId)
+					//pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
+				}
+			}
+			return len(forwards)
+			//pool.log.Tracef("Removed old queued transactions", "count", len(forwards))
+
+		}
+
+	}
+	return 0
+}
+
 func (queuemap *queuesMap) getTxListRemoveFutureByAddrOfCategory(tx *basic.Transaction, f1 func(string2 string), key string, category basic.TransactionCategory, addr tpcrtypes.Address) {
 	queuemap.Mu.Lock()
 	defer queuemap.Mu.Unlock()
@@ -675,6 +857,23 @@ func (queuemap *queuesMap) getAddrTxListOfCategory(category basic.TransactionCat
 	}
 	return nil
 }
+func (queuemap *queuesMap) getStatsOfCategory(category basic.TransactionCategory) int {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuemap.queue[category].Mu.Lock()
+		defer queuemap.queue[category].Mu.Unlock()
+		queue := 0
+		if maptxlist := queuemap.queue[category].addrTxList; maptxlist != nil {
+			for _, list := range maptxlist {
+				queue += list.Len()
+			}
+			return queue
+		}
+	}
+	return 0
+}
+
 func (queuemap *queuesMap) addTxsForTruncateQueue(category basic.TransactionCategory,
 	f1 func(tpcrtypes.Address) bool, f2 func(string2 string) time.Time) txsByHeartbeat {
 	queuemap.Mu.Lock()
@@ -857,6 +1056,15 @@ func (alltxsmap *allTxsLookupMap) getAllTxsLookupByCategory(category basic.Trans
 	}
 	return nil
 }
+func (alltxsmap *allTxsLookupMap) getRemoteMapTxsLookupByCategory(category basic.TransactionCategory) map[string]*basic.Transaction {
+	alltxsmap.Mu.Lock()
+	defer alltxsmap.Mu.Unlock()
+	if txlookup := alltxsmap.all[category]; txlookup != nil {
+		return txlookup.remotes
+	}
+	return nil
+}
+
 func (alltxsmap *allTxsLookupMap) setAllTxsLookup(category basic.TransactionCategory, txlook *txLookup) {
 	alltxsmap.Mu.Lock()
 	defer alltxsmap.Mu.Unlock()

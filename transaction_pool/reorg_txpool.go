@@ -38,7 +38,6 @@ func (pool *transactionPool) scheduleReorgLoop() {
 			reset, dirtyAccounts = nil, nil
 			queuedEvents = make(map[tpcrtypes.Address]*txSortedMap)
 		}
-		//Fetch Txs
 
 		select {
 		case req := <-pool.chanReqReset:

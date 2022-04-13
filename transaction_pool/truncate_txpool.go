@@ -12,23 +12,16 @@ import (
 // equal number for all for accounts with many pending transactions.
 func (pool *transactionPool) truncatePending(category basic.TransactionCategory) {
 
-	pending := uint64(0)
-	for _, list := range pool.pendings.getAddrTxListOfCategory(category) {
-		pending += uint64(list.Len())
-	}
+	pending := pool.pendings.truncatePendingByCategoryFun1(category)
+
 	if pending <= pool.config.PendingGlobalSegments {
 		return
 	}
 
-	var greyAccounts map[tpcrtypes.Address]int
 	// Assemble a spam order to penalize large transactors first
+	f1 := func(address tpcrtypes.Address) bool { return !pool.locals.contains(address) }
+	greyAccounts := pool.pendings.truncatePendingByCategoryFun2(category, f1, pool.config.PendingAccountSegments)
 
-	for addr, list := range pool.pendings.getAddrTxListOfCategory(category) {
-		// Only evict transactions from high rollers
-		if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.PendingAccountSegments {
-			greyAccounts[addr] = list.Len()
-		}
-	}
 	if len(greyAccounts) > 0 {
 		greyAccountsQueue := make(CntAccountHeap, len(greyAccounts))
 		i := 0

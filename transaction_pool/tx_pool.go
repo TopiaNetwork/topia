@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/universal"
 	"sync"
@@ -539,15 +538,9 @@ func (pool *transactionPool) ValidateTx(tx *basic.Transaction, local bool) error
 // number of queued (non-executable) transactions.
 func (pool *transactionPool) stats(category basic.TransactionCategory) (int, int) {
 
-	pending := 0
+	pending := pool.pendings.getStatsOfCategory(category)
+	queued := pool.queues.getStatsOfCategory(category)
 
-	for _, list := range pool.pendings.getPendingTxsByCategory(category).addrTxList {
-		pending += list.Len()
-	}
-	queued := 0
-	for _, list := range pool.queues.getQueueTxsByCategory(category).addrTxList {
-		queued += list.Len()
-	}
 	return pending, queued
 }
 
@@ -564,11 +557,6 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 	txId, _ := tx.HashHex()
 	isLocal := local || pool.locals.containsTx(tx)
 
-	if err = pool.ValidateTx(tx, isLocal); err != nil {
-		pool.log.Tracef("Discarding invalid transaction", "txId", txId, "err", err)
-		return false, err
-	}
-
 	category := basic.TransactionCategory(tx.Head.Category)
 	// If the transaction is already known, discard it
 	if pool.allTxsForLook.getAllTxsLookupByCategory(category).Get(txId) != nil {
@@ -579,13 +567,11 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.allTxsForLook.getAllTxsLookupByCategory(category).Segments()+numSegments(tx)) > pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal {
 		// If the new transaction is underpriced, don't accept it
-		fmt.Println("pool.add:If the transaction pool is full 001")
 		if !isLocal && pool.sortedLists.getPricedlistByCategory(category).Underpriced(tx) {
 			gasprice := GasPrice(tx)
 			pool.log.Tracef("Discarding underpriced transaction", "hash", txId, "GasPrice", gasprice)
 			return false, ErrUnderpriced
 		}
-		fmt.Println("pool.add:If the transaction pool is full 002")
 
 		if pool.changesSinceReorg > int(pool.config.PendingGlobalSegments/4) {
 			//	fmt.Println("add pool full 02 and changesSinceReorg:", pool.changesSinceReorg)
@@ -716,22 +702,16 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 
 	// Iterate over all accounts and promote any executable transactions
 	for _, addr := range accounts {
-		list := pool.queues.getTxListByAddrOfCategory(category, addr)
-		if list == nil {
-			continue // Just in case someone calls with a non existing account
+		f1 := func(address tpcrtypes.Address) uint64 { return pool.curState.GetNonce(address) }
+		f2 := func(transactionCategory basic.TransactionCategory, string2 string) {
+			pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(string2)
 		}
-		// Drop all transactions that are deemed too old (low nonce)
-		forwards := list.Forward(pool.curState.GetNonce(addr))
+		forwardsCnt := pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2)
 
-		for _, tx := range forwards {
-			if txId, err := tx.HashHex(); err != nil {
-			} else {
-				pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
-			}
-		}
-		pool.log.Tracef("Removed old queued transactions", "count", len(forwards))
+		pool.log.Tracef("Removed old queued transactions", "count", forwardsCnt)
 		// Gather all executable transactions and promote them
-		readies := list.Ready(pool.curState.GetNonce(addr))
+
+		readies := pool.queues.getTxListByAddrOfCategory(category, addr).Ready(pool.curState.GetNonce(addr))
 		for _, tx := range readies {
 			txId, _ := tx.HashHex()
 			if pool.turnTx(addr, txId, tx) {
@@ -741,22 +721,18 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 		pool.log.Tracef("Promoted queued transactions", "count", len(replaced))
 
 		// Drop all transactions over the allowed limit
-		var caps []*basic.Transaction
-		if !pool.locals.contains(addr) {
-			caps = list.Cap(int(pool.config.QueueMaxTxsAccount))
-			for _, tx := range caps {
-				txId, _ := tx.HashHex()
-				pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
-				pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
-			}
+		f3 := func(addr tpcrtypes.Address) bool { return !pool.locals.contains(addr) }
+		f4 := func(category basic.TransactionCategory, txId string) {
+			pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
+			pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
 		}
+		capscnt := pool.queues.replaceExecutablesDropOverLimit(f3, f4, pool.config.QueueMaxTxsAccount, category, addr)
+
 		// Mark all the items dropped as removed
-		pool.sortedLists.getPricedlistByCategory(category).Removed(len(forwards) + len(caps))
+		pool.sortedLists.getPricedlistByCategory(category).Removed(forwardsCnt + capscnt)
 
 		// Delete the entire queue entry if it became empty.
-		if list.Empty() {
-			pool.queues.removeTxListByAddrOfCategory(category, addr)
-		}
+		pool.queues.replaceExecutablesDeleteEmpty(category, addr)
 	}
 	return replaced
 }
@@ -770,34 +746,18 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 // to trigger a re-heap is this function
 func (pool *transactionPool) demoteUnexecutables(category basic.TransactionCategory) {
 	// Iterate over all accounts and demote any non-executable transactions
-	for addr, list := range pool.pendings.getPendingTxsByCategory(category).addrTxList {
-		nonce := pool.curState.GetNonce(addr)
-
-		// Drop all transactions that are deemed too old (low nonce)
-		olds := list.Forward(nonce)
-		for _, tx := range olds {
-			txId, _ := tx.HashHex()
-			pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
-			pool.log.Tracef("Removed old pending transaction", "txId", txId)
-		}
-
-		// If there's a gap in front, alert (should never happen) and postpone all transactions
-		if list.Len() > 0 && list.txs.Get(nonce) == nil {
-			gaped := list.Cap(0)
-			for _, tx := range gaped {
-				hash, _ := tx.HashHex()
-				pool.log.Errorf("Demoting invalidated transaction", "hash", hash)
-
-				// Internal shuffle shouldn't touch the lookup set.
-				pool.queueAddTx(hash, tx, false, false)
-			}
-
-		}
-		// Delete the entire pending entry if it became empty.
-		if list.Empty() {
-			pool.pendings.removeTxListByAddrOfCategory(category, addr)
-		}
+	f1 := func(address tpcrtypes.Address) uint64 { return pool.curState.GetNonce(address) }
+	f2 := func(category basic.TransactionCategory, txId string) {
+		pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
+		pool.log.Tracef("Removed old pending transaction", "txId", txId)
 	}
+	f3 := func(hash string, tx *basic.Transaction) {
+		pool.log.Errorf("Demoting invalidated transaction", "hash", hash)
+		// Internal shuffle shouldn't touch the lookup set.
+		pool.queueAddTx(hash, tx, false, false)
+	}
+	pool.pendings.demoteUnexecutablesByCategory(category, f1, f2, f3)
+
 }
 
 // PickTxs if txsType is 0,pick current pending txs,if 1 pick txs sorted by price and nonce
@@ -831,13 +791,7 @@ func (pool *transactionPool) PickTxsOfCategory(category basic.TransactionCategor
 
 // CommitTxsForPending  : Block packaged transactions for pending
 func (pool *transactionPool) CommitTxsForPending(category basic.TransactionCategory) []*basic.Transaction {
-	txls := pool.pendings.getPendingTxsByCategory(category).addrTxList
-	var txs = make([]*basic.Transaction, 0)
-	for _, txlist := range txls {
-		for _, tx := range txlist.txs.cache {
-			txs = append(txs, tx)
-		}
-	}
+	txs := pool.pendings.getCommitTxsCategory(category)
 	return txs
 }
 

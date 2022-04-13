@@ -17,7 +17,7 @@ type remoteTxs struct {
 func (pool *transactionPool) SaveRemoteTxs(category basic.TransactionCategory) error {
 
 	var remotetxs = &remoteTxs{
-		Txs:                 pool.allTxsForLook.getAllTxsLookupByCategory(category).GetAllRemoteKeyTxs(),
+		Txs:                 pool.allTxsForLook.getRemoteMapTxsLookupByCategory(category),
 		ActivationIntervals: pool.ActivationIntervals.getAll(),
 		TxHashCategorys:     pool.TxHashCategory.getAll(),
 	}

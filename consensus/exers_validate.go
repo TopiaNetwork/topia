@@ -13,6 +13,10 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
+const (
+	ValidateTxMaxCount = 3
+)
+
 type executionResultValidate struct {
 	log     tplog.Logger
 	nodeID  string
@@ -27,12 +31,12 @@ func newExecutionResultValidate(log tplog.Logger, nodeID string, deliver message
 	}
 }
 
-func (ev *executionResultValidate) resultValidateDataRequest(ctx context.Context, propMsg *ProposeMessage) (*ExeResultValidateRespMessage, [][]byte, [][]byte, error) {
+func (ev *executionResultValidate) resultValidateDataRequest(ctx context.Context, propMsg *ProposeMessage, validateTxCount int) (*ExeResultValidateRespMessage, [][]byte, [][]byte, error) {
 	var randTxHashs [][]byte
 	var randTxRSHashs [][]byte
 
 	maxTxIndex := big.NewInt(int64(len(propMsg.TxHashs)))
-	for i := 0; i < 3; i++ {
+	for i := 0; i < validateTxCount; i++ {
 		randTxHashBig, err := rand.Int(rand.Reader, maxTxIndex)
 		if err != nil {
 			ev.log.Errorf("Generate validate tx hash index err: %d, %v", i, err)
@@ -100,7 +104,7 @@ func (ev *executionResultValidate) validateExeResultResp(origTxRoot []byte, orig
 		return "", false, err
 	}
 
-	if bytes.Compare(origTxRoot, deepSMSTTxRS.Root()) != 0 {
+	if bytes.Compare(origTxRSRoot, deepSMSTTxRS.Root()) != 0 {
 		err := fmt.Errorf("Invalid tx result proof from executor %s", string(validateResp.Executor))
 		ev.log.Errorf("%v", err)
 
@@ -121,13 +125,13 @@ func (ev *executionResultValidate) Validate(ctx context.Context, propMsg *Propos
 		return "", false, err
 	}
 
-	validateResp, txHashs, txResultHashs, err := ev.resultValidateDataRequest(ctx, propMsg)
+	validateResp, txHashs, txResultHashs, err := ev.resultValidateDataRequest(ctx, propMsg, ValidateTxMaxCount)
 	if err != nil {
 		ev.log.Errorf("Deliver execution result validate req err: %v", err)
 		return "", false, err
 	}
 
-	if len(validateResp.TxProofs) != len(propMsg.TxHashs) || len(validateResp.TxResultProofs) != len(propMsg.TxResultHashs) {
+	if len(validateResp.TxProofs) != ValidateTxMaxCount || len(validateResp.TxResultProofs) != ValidateTxMaxCount {
 		err := fmt.Errorf("Invalid tx proof or tx result proof count: expected %d, %d; actual %d, %d", len(propMsg.TxHashs), len(propMsg.TxResultHashs), validateResp.TxProofs, validateResp.TxResultProofs)
 		ev.log.Errorf("%v", err)
 		return "", false, err

@@ -283,17 +283,17 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		sysActor := actor.NewActorSystem()
 
-		ledger := createLedger(testMainLog, "./TestConsensus", backend.BackendType_Badger, i, nodeType)
+		l := createLedger(testMainLog, "./TestConsensus", backend.BackendType_Badger, i, nodeType)
 
-		network := tpnet.NewNetwork(context.Background(), testMainLog, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, ledger))
+		network := tpnet.NewNetwork(context.Background(), testMainLog, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
-		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), ledger, 1)
+		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1)
 
 		var latestEpochInfo *chain.EpochInfo
 		var latestBlock *tpchaintypes.Block
-		if ledger.IsGenesisState() {
+		if l.State() == tpcmm.LedgerState_Uninitialized {
 			err = compState.SetLatestEpoch(config.Genesis.Epon)
 			if err != nil {
 				panic("Set latest epoch of genesis error: " + err.Error())
@@ -316,6 +316,8 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 			latestEpochInfo = config.Genesis.Epon
 			latestBlock = config.Genesis.Block
+
+			l.UpdateState(tpcmm.LedgerState_Genesis)
 		} /*else {
 			csStateRN := state.CreateCompositionStateReadonly(testMainLog, ledger)
 			defer csStateRN.Stop()
@@ -342,7 +344,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			codecType:       codec.CodecType_PROTO,
 			network:         network,
 			txPool:          txPool,
-			ledger:          ledger,
+			ledger:          l,
 			config:          newConfig,
 			sysActor:        sysActor,
 			compState:       compState,

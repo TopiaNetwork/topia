@@ -3,7 +3,6 @@ package transactionpool
 import (
 	"container/heap"
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -752,7 +751,6 @@ func (queuemap *queuesMap) addTxByKeyOfCategory(
 	f4 func(category basic.TransactionCategory, transaction *basic.Transaction, local bool),
 	f5 func(string2 string, category basic.TransactionCategory),
 	key string, tx *basic.Transaction, local bool, addAll bool) (bool, error) {
-	fmt.Println("addTxByKeyOfCategory")
 	queuemap.Mu.Lock()
 	defer queuemap.Mu.Unlock()
 	category := basic.TransactionCategory(tx.Head.Category)

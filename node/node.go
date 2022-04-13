@@ -120,7 +120,7 @@ func (n *Node) Start() {
 
 	var latestEpochInfo *chain.EpochInfo
 	var latestBlock *tpchaintypes.Block
-	if n.ledger.IsGenesisState() {
+	if n.ledger.State() {
 		compState := state.GetStateBuilder().CompositionState(n.network.ID(), 1)
 		err = compState.SetLatestEpoch(n.config.Genesis.Epon)
 		if err != nil {

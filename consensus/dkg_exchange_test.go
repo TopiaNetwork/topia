@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/ledger/backend"
 	"log"
 	"sync"
 	"testing"
@@ -64,7 +65,7 @@ func creatKeyPairs(suite *bn256.Suite, nParticipant int) {
 }
 
 func createTestDKGNode(log tplog.Logger, nParticipant int) {
-	//lg := ledger.NewLedger(".", "dkgtest", log, backend.BackendType_Badger)
+	lg := ledger.NewLedger(".", "dkgtest", log, backend.BackendType_Badger)
 
 	suite := bn256.NewSuiteG2()
 	creatKeyPairs(suite, nParticipant)
@@ -74,7 +75,7 @@ func createTestDKGNode(log tplog.Logger, nParticipant int) {
 		dealMsgChMap[nodei] = make(chan *DKGDealMessage, DealMSGChannel_Size)
 		dealRespMsgChMap[nodei] = make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 
-		dkgEx := createTestDKGExChange(log, nodei, nil)
+		dkgEx := createTestDKGExChange(log, nodei, lg)
 		dkgEx.startLoop(context.Background())
 
 		//dkgCrypt := newDKGCrypt(log, 10 /*suite, */, initPrivKeys[i], initPubKeys, 2*nParticipant/3+1, nParticipant)

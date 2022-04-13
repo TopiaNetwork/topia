@@ -2,21 +2,22 @@ package consensus
 
 import (
 	"context"
-	"github.com/AsynkronIT/protoactor-go/actor"
-	"github.com/TopiaNetwork/topia/chain"
-	"github.com/TopiaNetwork/topia/eventhub"
-	"github.com/TopiaNetwork/topia/state"
 
+	"github.com/AsynkronIT/protoactor-go/actor"
+
+	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/state"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
 

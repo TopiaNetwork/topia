@@ -147,7 +147,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 					}
 
 					return nil
-				}
+				}()
 
 				if err != nil {
 					continue

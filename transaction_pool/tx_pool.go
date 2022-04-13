@@ -255,8 +255,8 @@ func (pool *transactionPool) BroadCastTx(tx *basic.Transaction) error {
 	if err != nil {
 		return err
 	}
-	var toModuleName string
-	toModuleName = MOD_NAME
+	var toModuleName []string
+	toModuleName = append(toModuleName, MOD_NAME)
 	pool.network.Publish(pool.ctx, toModuleName, protocol.SyncProtocolID_Msg, data)
 	return nil
 }

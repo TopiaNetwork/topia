@@ -1,9 +1,11 @@
 package ledger
 
 import (
-	"go.uber.org/atomic"
 	"path/filepath"
 
+	"go.uber.org/atomic"
+
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	"github.com/TopiaNetwork/topia/ledger/block"
 	"github.com/TopiaNetwork/topia/ledger/history"
@@ -14,26 +16,18 @@ import (
 
 type LedgerID string
 
-type LedgerState byte
-
-const (
-	LedgerState_Uninitialized LedgerState = iota
-	LedgerState_Genesis
-	LedgerState_AutoInc
-)
-
 type Ledger interface {
 	CreateStateStore() (tplgss.StateStore, error)
 
 	CreateStateStoreReadonly() (tplgss.StateStore, error)
 
-	UpdateState(state LedgerState)
+	UpdateState(state tpcmm.LedgerState)
 
 	PendingStateStore() int32
 
 	GetBlockStore() block.BlockStore
 
-	State() LedgerState
+	State() tpcmm.LedgerState
 }
 
 type ledger struct {
@@ -59,7 +53,7 @@ func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backe
 		historyStore:   history.NewHistoryStore(log, rootPath, backendType),
 	}
 
-	l.state.Store(LedgerState_Uninitialized)
+	l.state.Store(tpcmm.LedgerState_Uninitialized)
 
 	return l
 }
@@ -82,10 +76,10 @@ func (l *ledger) GetBlockStore() block.BlockStore {
 	return l.blockStore
 }
 
-func (l *ledger) State() LedgerState {
-	return l.state.Load().(LedgerState)
+func (l *ledger) State() tpcmm.LedgerState {
+	return l.state.Load().(tpcmm.LedgerState)
 }
 
-func (l *ledger) UpdateState(state LedgerState) {
+func (l *ledger) UpdateState(state tpcmm.LedgerState) {
 	l.state.Swap(state)
 }

@@ -52,7 +52,7 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 		compState, ok := compStateVerMap[stateVersion-1]
 		if ok {
 			i := 1
-			for ; compState.PendingStateStore() > 0 && i <= 3; i++ {
+			for ; compState.PendingStateStore() >= 3 && i <= 3; i++ {
 				log.Warnf("Last CompositionState hasn't been commited, need waiting for %d ms, no. %d ", Wait_StateStore_Time, i)
 				time.Sleep(Wait_StateStore_Time * time.Millisecond)
 			}

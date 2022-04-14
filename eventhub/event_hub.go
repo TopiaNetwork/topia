@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"reflect"
 	"sync"
 
@@ -98,6 +99,7 @@ func NewEventHub(level tplogcmm.LogLevel, log tplog.Logger) EventHub {
 	evManager.registerEvent(EventName_BlockVerified, reflect.TypeOf(&tpchaintypes.Block{}).String())
 	evManager.registerEvent(EventName_BlockConfirmed, reflect.TypeOf(&tpchaintypes.Block{}).String())
 	evManager.registerEvent(EventName_BlockAdded, reflect.TypeOf(&tpchaintypes.Block{}).String())
+	evManager.registerEvent(EventName_EpochNew, reflect.TypeOf(&tpcmm.EpochInfo{}).String())
 
 	return &eventHub{
 		log:       logEVActor,

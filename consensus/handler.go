@@ -32,6 +32,8 @@ type ConsensusHandler interface {
 
 	ProcessBlockAdded(block *tpchaintypes.Block) error
 
+	ProcessEpochNew(epoch *tpcmm.EpochInfo) error
+
 	ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error
 
 	ProcessDKGDeal(msg *DKGDealMessage) error
@@ -41,12 +43,13 @@ type ConsensusHandler interface {
 
 type consensusHandler struct {
 	log                     tplog.Logger
-	blockAddedCh            chan *tpchaintypes.Block
+	epochNew                chan *tpcmm.EpochInfo
 	preprePackedMsgExeChan  chan *PreparePackedMessageExe
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
 	proposeMsgChan          chan *ProposeMessage
 	voteMsgChan             chan *VoteMessage
 	commitMsgChan           chan *CommitMessage
+	blockAddedCh            chan *tpchaintypes.Block
 	partPubKey              chan *DKGPartPubKeyMessage
 	dealMsgCh               chan *DKGDealMessage
 	dealRespMsgCh           chan *DKGDealRespMessage
@@ -57,11 +60,12 @@ type consensusHandler struct {
 }
 
 func NewConsensusHandler(log tplog.Logger,
-	blockAddedCh chan *tpchaintypes.Block,
+	epochNew chan *tpcmm.EpochInfo,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
 	voteMsgChan chan *VoteMessage,
+	blockAddedCh chan *tpchaintypes.Block,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
@@ -71,11 +75,12 @@ func NewConsensusHandler(log tplog.Logger,
 	exeScheduler execution.ExecutionScheduler) *consensusHandler {
 	return &consensusHandler{
 		log:                     log,
-		blockAddedCh:            blockAddedCh,
+		epochNew:                epochNew,
 		preprePackedMsgExeChan:  preprePackedMsgExeChan,
 		preprePackedMsgPropChan: preprePackedMsgPropChan,
 		proposeMsgChan:          proposeMsgChan,
 		voteMsgChan:             voteMsgChan,
+		blockAddedCh:            blockAddedCh,
 		partPubKey:              partPubKey,
 		dealMsgCh:               dealMsgCh,
 		dealRespMsgCh:           dealRespMsgCh,
@@ -187,6 +192,12 @@ func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
 
 func (handler *consensusHandler) ProcessBlockAdded(block *tpchaintypes.Block) error {
 	handler.blockAddedCh <- block
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessEpochNew(epoch *tpcmm.EpochInfo) error {
+	handler.epochNew <- epoch
 
 	return nil
 }

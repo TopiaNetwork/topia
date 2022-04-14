@@ -2,12 +2,12 @@ package consensus
 
 import (
 	"context"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/common"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -74,9 +74,10 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	network tpnet.Network,
 	txPool txpool.TransactionPool,
 	ledger ledger.Ledger,
-	config *tpconfig.ConsensusConfiguration) Consensus {
+	config *tpconfig.Configuration) Consensus {
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
+	epochNewCh := make(chan *tpcmm.EpochInfo)
 	preprePackedMsgExeChan := make(chan *PreparePackedMessageExe)
 	preprePackedMsgPropChan := make(chan *PreparePackedMessageProp)
 	proposeMsgChan := make(chan *ProposeMessage)
@@ -87,24 +88,26 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 
+	csConfig := config.CSConfig
+
 	var cryptS tpcrt.CryptService
-	if config.CrptyType == tpcrtypes.CryptType_Ed25519 {
+	if csConfig.CrptyType == tpcrtypes.CryptType_Ed25519 {
 		cryptS = &CryptServiceMock{}
 	} else {
-		cryptS = tpcrt.CreateCryptService(log, config.CrptyType)
+		cryptS = tpcrt.CreateCryptService(log, csConfig.CrptyType)
 	}
 
 	deliver := newMessageDeliver(log, nodeID, priKey, DeliverStrategy_Specifically, network, marshaler, cryptS, ledger)
 
-	exeScheduler := execution.NewExecutionScheduler(nodeID, log)
+	exeScheduler := execution.NewExecutionScheduler(nodeID, log, config)
 
-	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, cryptS, config.ExecutionPrepareInterval)
+	executor := newConsensusExecutor(log, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
 	validator := newConsensusValidator(log, nodeID, proposeMsgChan, ledger, deliver)
-	proposer := newConsensusProposer(log, nodeID, priKey, blockAddedCh, preprePackedMsgPropChan, voteMsgChan, cryptS, config.ProposerBlockMaxInterval, deliver, ledger, marshaler, validator)
-	dkgEx := newDKGExchange(log, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, config.InitDKGPrivKey, deliver, ledger)
+	proposer := newConsensusProposer(log, nodeID, priKey, blockAddedCh, preprePackedMsgPropChan, voteMsgChan, cryptS, csConfig.ProposerBlockMaxInterval, deliver, ledger, marshaler, validator)
+	dkgEx := newDKGExchange(log, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, csConfig.InitDKGPrivKey, deliver, ledger)
 
-	epService := newEpochService(log, nodeID, blockAddedCh, config.EpochInterval, config.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
-	csHandler := NewConsensusHandler(log, blockAddedCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
+	epService := newEpochService(log, nodeID, blockAddedCh, epochNewCh, csConfig.EpochInterval, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
+	csHandler := NewConsensusHandler(log, epochNewCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, blockAddedCh, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
 
 	dkgEx.addDKGBLSUpdater(deliver)
 	dkgEx.addDKGBLSUpdater(proposer)
@@ -122,7 +125,7 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 		validator:    validator,
 		dkgEx:        dkgEx,
 		epochService: epService,
-		config:       config,
+		config:       csConfig,
 	}
 }
 
@@ -157,6 +160,10 @@ func (cons *consensus) ProcessVote(msg *VoteMessage) error {
 func (cons *consensus) ProcessSubEvent(ctx context.Context, data interface{}) error {
 	if block, ok := data.(*tpchaintypes.Block); ok {
 		return cons.handler.ProcessBlockAdded(block)
+	}
+
+	if epoch, ok := data.(*tpcmm.EpochInfo); ok {
+		return cons.handler.ProcessEpochNew(epoch)
 	}
 
 	panic("Unknown sub event data")
@@ -199,12 +206,12 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	cons.epochService.start(ctx)
 
-	if nodeInfo.Role&common.NodeRole_Executor == common.NodeRole_Executor {
+	if nodeInfo.Role&tpcmm.NodeRole_Executor == tpcmm.NodeRole_Executor {
 		cons.executor.start(ctx)
 	}
 
-	if nodeInfo.Role&common.NodeRole_Proposer == common.NodeRole_Proposer || nodeInfo.Role&common.NodeRole_Validator == common.NodeRole_Validator {
-		if nodeInfo.Role&common.NodeRole_Proposer == common.NodeRole_Proposer {
+	if nodeInfo.Role&tpcmm.NodeRole_Proposer == tpcmm.NodeRole_Proposer || nodeInfo.Role&tpcmm.NodeRole_Validator == tpcmm.NodeRole_Validator {
+		if nodeInfo.Role&tpcmm.NodeRole_Proposer == tpcmm.NodeRole_Proposer {
 			cons.proposer.start(ctx)
 		}
 

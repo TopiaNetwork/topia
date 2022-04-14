@@ -368,7 +368,7 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 			nParams[i].network,
 			nParams[i].txPool,
 			nParams[i].ledger,
-			nParams[i].config.CSConfig,
+			nParams[i].config,
 		)
 
 		cs.Start(nParams[i].sysActor, nParams[i].latestEpochInfo.Epoch, nParams[i].latestEpochInfo.StartHeight, nParams[i].latestBlock.Head.Height)

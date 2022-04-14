@@ -3,6 +3,8 @@ package chain
 import (
 	"context"
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/TopiaNetwork/topia/configuration"
+	"github.com/TopiaNetwork/topia/ledger"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -25,16 +27,23 @@ type Chain interface {
 
 type chain struct {
 	log           tplog.Logger
+	nodeID        string
 	level         tplogcmm.LogLevel
 	marshaler     codec.Marshaler
 	blkSubProcess BlockInfoSubProcessor
+	config        *configuration.Configuration
 }
 
-func NewChain(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) Chain {
+func NewChain(level tplogcmm.LogLevel,
+	log tplog.Logger,
+	nodeID string,
+	codecType codec.CodecType,
+	ledger ledger.Ledger,
+	config *configuration.Configuration) Chain {
 	chainLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
 
-	blkSubPro := NewBlockInfoSubProcessor(chainLog, marshaler)
+	blkSubPro := NewBlockInfoSubProcessor(chainLog, nodeID, marshaler, ledger, config)
 
 	return &chain{
 		log:           chainLog,
@@ -44,11 +53,11 @@ func NewChain(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecTy
 	}
 }
 
-func (c *chain) dispatch(context actor.Context, data []byte) {
+func (c *chain) dispatch(actorCtx actor.Context, data []byte) {
 	var pubsubMsgBlk tpchaintypes.PubSubMessageBlockInfo
 	err := c.marshaler.Unmarshal(data, &pubsubMsgBlk)
 	if err == nil {
-		err = c.blkSubProcess.Process(&pubsubMsgBlk)
+		err = c.blkSubProcess.Process(context.Background(), &pubsubMsgBlk)
 		if err != nil {
 			c.log.Errorf("Processs block info pubsub message err: %v", err)
 		}

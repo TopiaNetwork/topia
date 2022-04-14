@@ -19,6 +19,7 @@ const (
 	EventName_BlockVerified  = "BlockVerified"
 	EventName_BlockConfirmed = "BlockConfirmed"
 	EventName_BlockAdded     = "BlockAdded"
+	EventName_EpochNew       = "EpochNew"
 )
 
 type EventTrigger interface {

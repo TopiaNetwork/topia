@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/TopiaNetwork/topia/chain"
 	"math/big"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
@@ -241,15 +240,9 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 		ctxValidator = context.WithValue(ctxValidator, tpnetcmn.NetContextKey_PeerList, peerActiveValidatorIDs)
 	}
 
-	sigData, err := md.cryptService.Sign(md.priKey, msg.BlockHead)
+	sigData, pubKey, err := md.dkgBls.Sign(msg.BlockHead)
 	if err != nil {
-		md.log.Errorf("Sign err for propose msg: %v", err)
-		return err
-	}
-
-	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
-	if err != nil {
-		md.log.Errorf("Can't get public key from private key: %v", err)
+		md.log.Errorf("DKG sign propose msg err: %v", err)
 		return err
 	}
 	msg.Signature = sigData
@@ -265,18 +258,6 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 		return nil
 	}
 
-	sigData, pubKey, err = md.dkgBls.Sign(msg.BlockHead)
-	if err != nil {
-		md.log.Errorf("DKG sign propose msg err: %v", err)
-		return err
-	}
-	msg.Signature = sigData
-	msg.PubKey = pubKey
-	msgBytes, err = md.marshaler.Marshal(msg)
-	if err != nil {
-		md.log.Errorf("ProposeMessage marshal err: %v", err)
-		return err
-	}
 	err = md.deliverSendCommon(ctxValidator, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_Propose, msgBytes)
 	if err != nil {
 		md.log.Errorf("Send propose message to validator network failed: err=%v", err)
@@ -545,9 +526,9 @@ func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, nodeID stri
 	}
 
 	forwardProtocol := ""
-	if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer {
+	if nodeInfo.Role&tpcmm.NodeRole_Proposer == tpcmm.NodeRole_Proposer {
 		forwardProtocol = tpnetprotoc.ForwardPropose_Msg
-	} else if nodeInfo.Role&chain.NodeRole_Validator == chain.NodeRole_Validator {
+	} else if nodeInfo.Role&tpcmm.NodeRole_Validator == tpcmm.NodeRole_Validator {
 		forwardProtocol = tpnetprotoc.FrowardValidate_Msg
 	} else {
 		err = fmt.Errorf("Invalid deal dest nodeID %s, role=%d", nodeID, nodeInfo.Role)

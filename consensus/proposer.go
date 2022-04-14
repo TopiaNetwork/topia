@@ -5,14 +5,13 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/TopiaNetwork/topia/chain"
+	"github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -27,7 +26,7 @@ type consensusProposer struct {
 	log                     tplog.Logger
 	nodeID                  string
 	priKey                  tpcrtypes.PrivateKey
-	blockAddedCh            chan *tpchaintypes.Block
+	blockAddedCh            chan *types.Block
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
 	voteMsgChan             chan *VoteMessage
 	deliver                 messageDeliverI
@@ -45,7 +44,7 @@ type consensusProposer struct {
 func newConsensusProposer(log tplog.Logger,
 	nodeID string,
 	priKey tpcrtypes.PrivateKey,
-	blockAddedCh chan *tpchaintypes.Block,
+	blockAddedCh chan *types.Block,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	voteMsgChan chan *VoteMessage,
 	crypt tpcrt.CryptService,
@@ -79,7 +78,7 @@ func (p *consensusProposer) updateDKGBls(dkgBls DKGBls) {
 	p.voteCollector.updateDKGBls(dkgBls)
 }
 
-func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block) ([]byte, error) {
+func (p *consensusProposer) getVrfInputData(block *types.Block) ([]byte, error) {
 	hasher := tpcmm.NewBlake2bHasher(0)
 
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, block.Head.Epoch); err != nil {
@@ -105,7 +104,7 @@ func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block) ([]byte, 
 	return hasher.Bytes(), nil
 }
 
-func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, block *tpchaintypes.Block) (bool, []byte, []byte, error) {
+func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, block *types.Block) (bool, []byte, []byte, error) {
 	proposerSel := NewProposerSelector(ProposerSelectionType_Poiss, p.cryptService)
 
 	vrfData, err := p.getVrfInputData(block)
@@ -195,7 +194,7 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 }
 
 func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
-	var blockHead tpchaintypes.BlockHead
+	var blockHead types.BlockHead
 	err := p.marshaler.Unmarshal(msg.BlockHead, &blockHead)
 	if err != nil {
 		p.log.Errorf("Unmarshal block failed: %v", err)
@@ -203,7 +202,7 @@ func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (
 	}
 	blockHead.VoteAggSignature = aggSign
 
-	newBlockHeadBytes, err := p.marshaler.Marshal(blockHead)
+	newBlockHeadBytes, err := p.marshaler.Marshal(&blockHead)
 	if err != nil {
 		p.log.Errorf("Marshal block head failed: %v", err)
 		return nil, err
@@ -235,7 +234,12 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 					continue
 				}
 
-				commitMsg, _ := p.produceCommitMsg(voteMsg, aggSign)
+				commitMsg, err := p.produceCommitMsg(voteMsg, aggSign)
+				if err != nil {
+					p.log.Errorf("Can't produce commit message: %v", err)
+					continue
+				}
+
 				err = p.deliver.deliverCommitMessage(context.Background(), commitMsg)
 				if err != nil {
 					p.log.Errorf("Can't deliver commit message: %v", err)
@@ -252,7 +256,7 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 	}()
 }
 
-func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, addedBlock *tpchaintypes.Block) error {
+func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, addedBlock *types.Block) error {
 	if !atomic.CompareAndSwapUint32(&p.isProposing, 0, 1) {
 		err := fmt.Errorf("Self node %s is proposing", p.nodeID)
 		p.log.Infof("%s", err.Error())
@@ -304,18 +308,18 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	}
 	proposeBlock, err := p.produceProposeBlock(csStateRN.ChainID(), latestEpoch, latestBlock, vrfProof, maxPri, stateRoot)
 	if err != nil {
-		p.log.Errorf("Produce propose block error: epoch=%d, height=%d, err=%v", addedBlock.Head.Epoch, addedBlock.Head.Height, err)
+		p.log.Errorf("Produce propose block error: epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
 		return err
 	}
 
 	if can := p.validator.canProcessForwardProposeMsg(ctx, maxPri, proposeBlock); !can {
-		err = fmt.Errorf("Can't delive propose message: epoch=%d, height=%d", addedBlock.Head.Epoch, addedBlock.Head.Height)
+		err = fmt.Errorf("Can't delive propose message: epoch=%d, height=%d", latestBlock.Head.Epoch, latestBlock.Head.Height)
 		p.log.Infof("%s", err.Error())
 		return err
 	}
 
 	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
-		p.log.Errorf("Consensus deliver propose message err: epoch =%d, height=%d, err=%v", addedBlock.Head.Epoch, addedBlock.Head.Height, err)
+		p.log.Errorf("Consensus deliver propose message err: epoch =%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
 		return err
 	}
 
@@ -353,7 +357,7 @@ func (p *consensusProposer) start(ctx context.Context) {
 	p.receiveVoteMessagStart(ctx)
 }
 
-func (p *consensusProposer) createBlockHead(chainID chain.ChainID, epoch uint64, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, stateRoot []byte) (*tpchaintypes.BlockHead, uint64, error) {
+func (p *consensusProposer) createBlockHead(chainID types.ChainID, epoch uint64, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *types.Block, stateRoot []byte) (*types.BlockHead, uint64, error) {
 	blockHashBytes, err := latestBlock.HashBytes()
 	if err != nil {
 		p.log.Errorf("Can't get the hash bytes of block height %d: %v", latestBlock.Head.Height, err)
@@ -372,9 +376,9 @@ func (p *consensusProposer) createBlockHead(chainID chain.ChainID, epoch uint64,
 		return nil, 0, err
 	}
 
-	return &tpchaintypes.BlockHead{
+	return &types.BlockHead{
 		ChainID:         []byte(chainID),
-		Version:         tpchaintypes.BLOCK_VER,
+		Version:         types.BLOCK_VER,
 		Height:          latestBlock.Head.Height + 1,
 		Epoch:           epoch,
 		Round:           latestBlock.Head.Height,
@@ -392,9 +396,9 @@ func (p *consensusProposer) createBlockHead(chainID chain.ChainID, epoch uint64,
 	}, frontPPMProp.StateVersion, nil
 }
 
-func (p *consensusProposer) produceProposeBlock(chainID chain.ChainID,
-	latestEpoch *chain.EpochInfo,
-	latestBlock *tpchaintypes.Block,
+func (p *consensusProposer) produceProposeBlock(chainID types.ChainID,
+	latestEpoch *tpcmm.EpochInfo,
+	latestBlock *types.Block,
 	vrfProof []byte,
 	maxPri []byte,
 	stateRoot []byte) (*ProposeMessage, error) {

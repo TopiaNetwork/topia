@@ -3,6 +3,9 @@ package ledger
 import (
 	"path/filepath"
 
+	"go.uber.org/atomic"
+
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	"github.com/TopiaNetwork/topia/ledger/block"
 	"github.com/TopiaNetwork/topia/ledger/history"
@@ -18,16 +21,19 @@ type Ledger interface {
 
 	CreateStateStoreReadonly() (tplgss.StateStore, error)
 
+	UpdateState(state tpcmm.LedgerState)
+
 	PendingStateStore() int32
 
 	GetBlockStore() block.BlockStore
 
-	IsGenesisState() bool
+	State() tpcmm.LedgerState
 }
 
 type ledger struct {
 	id             LedgerID
 	log            tplog.Logger
+	state          atomic.Value
 	backendStateDB backend.Backend
 	blockStore     block.BlockStore
 	historyStore   *history.HistoryStore
@@ -39,13 +45,17 @@ func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backe
 	bsLog := tplog.CreateModuleLogger(tplogcmm.InfoLevel, "StateStore", log)
 	backendStateDB := backend.NewBackend(backendType, bsLog, filepath.Join(rootPath, "statestore"), "statestore")
 
-	return &ledger{
+	l := &ledger{
 		id:             id,
 		log:            log,
 		backendStateDB: backendStateDB,
 		blockStore:     block.NewBlockStore(log, rootPath, backendType),
 		historyStore:   history.NewHistoryStore(log, rootPath, backendType),
 	}
+
+	l.state.Store(tpcmm.LedgerState_Uninitialized)
+
+	return l
 }
 
 func (l *ledger) CreateStateStore() (tplgss.StateStore, error) {
@@ -66,18 +76,10 @@ func (l *ledger) GetBlockStore() block.BlockStore {
 	return l.blockStore
 }
 
-func (l *ledger) IsGenesisState() bool {
-	reader := l.backendStateDB.Reader()
-	defer reader.Discard()
+func (l *ledger) State() tpcmm.LedgerState {
+	return l.state.Load().(tpcmm.LedgerState)
+}
 
-	it, err := reader.Iterator(nil, nil)
-	defer it.Close()
-	if err != nil {
-		l.log.Panicf("Backend state db reads iterator err: %v", err.Error())
-	}
-	if it.Next() {
-		return false
-	}
-
-	return true
+func (l *ledger) UpdateState(state tpcmm.LedgerState) {
+	l.state.Swap(state)
 }

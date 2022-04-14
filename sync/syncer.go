@@ -1,11 +1,7 @@
 package sync
 
 import (
-	"context"
 	"github.com/AsynkronIT/protoactor-go/actor"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
-
 	"github.com/TopiaNetwork/topia/codec"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
@@ -28,25 +24,20 @@ type Syncer interface {
 }
 
 type syncer struct {
-	log           tplog.Logger
-	level         tplogcmm.LogLevel
-	handler       SyncHandler
-	marshaler     codec.Marshaler
-	blkSubProcess BlockInfoSubProcessor
+	log       tplog.Logger
+	level     tplogcmm.LogLevel
+	handler   SyncHandler
+	marshaler codec.Marshaler
 }
 
 func NewSyncer(level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) Syncer {
 	syncLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
-	marshaler := codec.CreateMarshaler(codecType)
-
-	blkSubPro := NewBlockInfoSubProcessor(syncLog, marshaler)
 
 	return &syncer{
-		log:           syncLog,
-		level:         level,
-		handler:       NewSyncHandler(syncLog),
-		marshaler:     codec.CreateMarshaler(codecType),
-		blkSubProcess: blkSubPro,
+		log:       syncLog,
+		level:     level,
+		handler:   NewSyncHandler(syncLog),
+		marshaler: codec.CreateMarshaler(codecType),
 	}
 }
 
@@ -83,28 +74,12 @@ func (sync *syncer) Start(sysActor *actor.ActorSystem, network network.Network) 
 
 	network.RegisterModule(MOD_NAME, actorPID, sync.marshaler)
 
-	err = network.Subscribe(context.Background(), tpnetprotoc.PubSubProtocolID_BlockInfo, sync.blkSubProcess.Validate)
-	if err != nil {
-		sync.log.Panicf("Sync Subscribe block info pubsub err: %v", err)
-		return err
-	}
-
 	return nil
 }
 
 func (sync *syncer) dispatch(context actor.Context, data []byte) {
-	var pubsubMsgBlk tpchaintypes.PubSubMessageBlockInfo
-	err := sync.marshaler.Unmarshal(data, &pubsubMsgBlk)
-	if err == nil {
-		err = sync.blkSubProcess.Process(&pubsubMsgBlk)
-		if err != nil {
-			sync.log.Errorf("Processs block info pubsub message err: %v", err)
-		}
-		return
-	}
-
 	var syncMsg SyncMessage
-	err = sync.marshaler.Unmarshal(data, &syncMsg)
+	err := sync.marshaler.Unmarshal(data, &syncMsg)
 	if err != nil {
 		sync.log.Errorf("Syncer receive invalid data %v", data)
 		return

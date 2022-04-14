@@ -3,8 +3,8 @@ package node
 import (
 	"encoding/binary"
 	"encoding/json"
+	"github.com/TopiaNetwork/topia/common"
 
-	"github.com/TopiaNetwork/topia/chain"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
@@ -22,11 +22,11 @@ type NodeExecutorState interface {
 
 	GetActiveExecutorIDs() ([]string, error)
 
-	GetActiveExecutor(nodeID string) (*chain.NodeInfo, error)
+	GetActiveExecutor(nodeID string) (*common.NodeInfo, error)
 
 	GetActiveExecutorsTotalWeight() (uint64, error)
 
-	addActiveExecutor(nodeInfo *chain.NodeInfo) error
+	addActiveExecutor(nodeInfo *common.NodeInfo) error
 
 	updateActiveExecutorWeight(nodeID string, weight uint64) error
 
@@ -73,7 +73,7 @@ func (ns *nodeExecutorState) GetActiveExecutorIDs() ([]string, error) {
 	return nodeAEIDs, nil
 }
 
-func (ns *nodeExecutorState) GetActiveExecutor(nodeID string) (*chain.NodeInfo, error) {
+func (ns *nodeExecutorState) GetActiveExecutor(nodeID string) (*common.NodeInfo, error) {
 	return getNode(ns.StateStore, StateStore_Name_Exe, nodeID)
 }
 
@@ -90,7 +90,7 @@ func (ns *nodeExecutorState) GetActiveExecutorsTotalWeight() (uint64, error) {
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
 }
 
-func (ns *nodeExecutorState) addActiveExecutor(nodeInfo *chain.NodeInfo) error {
+func (ns *nodeExecutorState) addActiveExecutor(nodeInfo *common.NodeInfo) error {
 	return addNode(ns.StateStore, StateStore_Name_Exe, TotalActiveExecutorNodeIDs_Key, TotalActiveExecutorWeight_Key, nodeInfo)
 }
 

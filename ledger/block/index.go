@@ -2,8 +2,8 @@ package block
 
 import (
 	"fmt"
-
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 )

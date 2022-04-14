@@ -2,23 +2,23 @@ package servant
 
 import (
 	"context"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/currency"
 	"math/big"
 
-	"github.com/TopiaNetwork/topia/chain"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type APIServant interface {
-	ChainID() chain.ChainID
+	ChainID() tpchaintypes.ChainID
 
 	NetworkType() tpnet.NetworkType
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
-	GetBalance(symbol chain.TokenSymbol, addr tpcrtypes.Address) (*big.Int, error)
+	GetBalance(symbol currency.TokenSymbol, addr tpcrtypes.Address) (*big.Int, error)
 
 	EstimateGas(tx *txbasic.Transaction) (*big.Int, error)
 
@@ -49,7 +49,7 @@ func NewAPIServant() APIServant {
 	return &apiServant{}
 }
 
-func (s *apiServant) ChainID() chain.ChainID {
+func (s *apiServant) ChainID() tpchaintypes.ChainID {
 	//TODO implement me
 	panic("implement me")
 }
@@ -64,7 +64,7 @@ func (s *apiServant) GetNonce(addr tpcrtypes.Address) (uint64, error) {
 	panic("implement me")
 }
 
-func (s *apiServant) GetBalance(symbol chain.TokenSymbol, addr tpcrtypes.Address) (*big.Int, error) {
+func (s *apiServant) GetBalance(symbol currency.TokenSymbol, addr tpcrtypes.Address) (*big.Int, error) {
 	//TODO implement me
 	panic("implement me")
 }

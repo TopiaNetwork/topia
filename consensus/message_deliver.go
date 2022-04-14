@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/TopiaNetwork/topia/chain"
 	"math/big"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
@@ -527,9 +526,9 @@ func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, nodeID stri
 	}
 
 	forwardProtocol := ""
-	if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer {
+	if nodeInfo.Role&tpcmm.NodeRole_Proposer == tpcmm.NodeRole_Proposer {
 		forwardProtocol = tpnetprotoc.ForwardPropose_Msg
-	} else if nodeInfo.Role&chain.NodeRole_Validator == chain.NodeRole_Validator {
+	} else if nodeInfo.Role&tpcmm.NodeRole_Validator == tpcmm.NodeRole_Validator {
 		forwardProtocol = tpnetprotoc.FrowardValidate_Msg
 	} else {
 		err = fmt.Errorf("Invalid deal dest nodeID %s, role=%d", nodeID, nodeInfo.Role)

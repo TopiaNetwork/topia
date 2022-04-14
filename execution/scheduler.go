@@ -7,16 +7,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/eventhub"
 	"time"
 
 	"github.com/lazyledger/smt"
 	"github.com/subchen/go-trylock/v2"
 	"go.uber.org/atomic"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/configuration"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/block"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -61,9 +62,10 @@ type executionScheduler struct {
 	schedulerState   *atomic.Uint32
 	lastStateVersion *atomic.Uint64
 	exePackedTxsList *list.List
+	config           *configuration.Configuration
 }
 
-func NewExecutionScheduler(nodeID string, log tplog.Logger) *executionScheduler {
+func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration) *executionScheduler {
 	exeLog := tplog.CreateModuleLogger(logcomm.InfoLevel, MOD_NAME, log)
 	return &executionScheduler{
 		nodeID:           nodeID,
@@ -73,6 +75,7 @@ func NewExecutionScheduler(nodeID string, log tplog.Logger) *executionScheduler 
 		lastStateVersion: atomic.NewUint64(0),
 		schedulerState:   atomic.NewUint32(uint32(SchedulerState_Idle)),
 		exePackedTxsList: list.New(),
+		config:           config,
 	}
 }
 
@@ -315,6 +318,27 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 		if err != nil {
 			scheduler.log.Errorf("Set latest block result err when CommitPackedTx: %v", err)
 			return err
+		}
+
+		latestEpoch, err := exeTxsF.compState.GetLatestEpoch()
+		if err != nil {
+			scheduler.log.Errorf("Can't get latest epoch error: %v", err)
+			return err
+		}
+
+		var newEpoch *tpcmm.EpochInfo
+		deltaH := int(block.Head.Height) - int(latestEpoch.StartHeight)
+		if deltaH == int(scheduler.config.CSConfig.EpochInterval) {
+			newEpoch = &tpcmm.EpochInfo{
+				Epoch:          latestEpoch.Epoch + 1,
+				StartTimeStamp: uint64(time.Now().UnixNano()),
+				StartHeight:    block.Head.Height,
+			}
+			err = exeTxsF.compState.SetLatestEpoch(newEpoch)
+			if err != nil {
+				scheduler.log.Errorf("Save the latest epoch error: %v", err)
+				return err
+			}
 		}
 
 		errCMMState := exeTxsF.compState.Commit()

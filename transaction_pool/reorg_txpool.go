@@ -86,72 +86,71 @@ func (pool *transactionPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet, events map[tpcrtypes.Address]*txSortedMap) {
 	defer close(done)
-	for category, _ := range pool.pendings.pending {
-		var replaceAddrs []tpcrtypes.Address
-		if dirtyAccounts != nil && reset == nil {
-			// Only dirty accounts need to be promoted, unless we're resetting.
-			// For resets, all addresses in the tx queue will be promoted and
-			// the flatten operation can be avoided.
-			replaceAddrs = dirtyAccounts.flatten()
-		}
-		if reset != nil {
-			// Reset from the old head to the new, rescheduling any reorged transactions
-			pool.Reset(reset.oldHead, reset.newHead)
 
-			// Nonces were reset, discard any events that became stale
-			for addr := range events {
-				events[addr].Forward(pool.curState.GetNonce(addr))
-				if events[addr].Len() == 0 {
-					delete(events, addr)
-				}
-			}
-			// Reset needs promote for all addresses
-			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues.getAddrTxListOfCategory(category)))
-			for addr, _ := range pool.queues.getQueueTxsByCategory(category).addrTxList {
-				replaceAddrs = append(replaceAddrs, addr)
+	var replaceAddrs []tpcrtypes.Address
+	if dirtyAccounts != nil && reset == nil {
+		// Only dirty accounts need to be promoted, unless we're resetting.
+		// For resets, all addresses in the tx queue will be promoted and
+		// the flatten operation can be avoided.
+		replaceAddrs = dirtyAccounts.flatten()
+	}
+	if reset != nil {
+		// Reset from the old head to the new, rescheduling any reorged transactions
+		pool.Reset(reset.oldHead, reset.newHead)
+
+		// Nonces were reset, discard any events that became stale
+		for addr := range events {
+			events[addr].Forward(pool.curState.GetNonce(addr))
+			if events[addr].Len() == 0 {
+				delete(events, addr)
 			}
 		}
-		// Check for pending transactions for every account that sent new ones
-		promoted := pool.replaceExecutables(category, replaceAddrs)
+		// Reset needs promote for all addresses
+		for category, _ := range pool.allTxsForLook.getAll() {
+			replaceAddrs = append(replaceAddrs, pool.queues.replaceAddrTxListOfCategory(category)...)
+		}
+	}
+	// Check for pending transactions for every account that sent new ones
+	var promoted []*basic.Transaction
+	for category, _ := range pool.allTxsForLook.getAll() {
+		promoted = append(promoted, pool.replaceExecutables(category, replaceAddrs)...)
+	}
+	// If a new block appeared, validate the pool of pending transactions. This will
+	// remove any transaction that has been included in the block or was invalidated
+	// because of another transaction (e.g. higher gas price).
+	if reset != nil {
+		for category, _ := range pool.allTxsForLook.getAll() {
 
-		// If a new block appeared, validate the pool of pending transactions. This will
-		// remove any transaction that has been included in the block or was invalidated
-		// because of another transaction (e.g. higher gas price).
-		if reset != nil {
 			pool.demoteUnexecutables(category) //demote transactions
 			if reset.newHead != nil {
-				pool.sortedLists.getPricedlistByCategory(category).Reheap()
+				pool.sortedLists.ReheapForPricedlistByCategory(category)
 			}
 			// Update all accounts to the latest known pending nonce
-			nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings.getPendingTxsByCategory(category).addrTxList))
-			for addr, list := range pool.pendings.getAddrTxListOfCategory(category) {
-				highestPending := list.LastElement()
-				Noncei := highestPending.Head.Nonce
-				nonces[addr] = Noncei + 1
-			}
+			pool.pendings.noncesForAddrTxListOfCategory(category)
 		}
-		// Ensure pool.queue and pool.pending sizes stay within the configured limits.
+	}
+	// Ensure pool.queue and pool.pending sizes stay within the configured limits.
+	for category, _ := range pool.allTxsForLook.getAll() {
 		pool.truncatePending(category)
 		pool.truncateQueue(category)
+	}
+	pool.changesSinceReorg = 0 // Reset change counter
 
-		pool.changesSinceReorg = 0 // Reset change counter
-
-		// Notify subsystems for newly added transactions
-		for _, tx := range promoted {
-			addr := tpcrtypes.Address(tx.Head.FromAddr)
-			if _, ok := events[addr]; !ok {
-				events[addr] = newTxSortedMap()
-			}
-			events[addr].Put(tx)
+	// Notify subsystems for newly added transactions
+	for _, tx := range promoted {
+		addr := tpcrtypes.Address(tx.Head.FromAddr)
+		if _, ok := events[addr]; !ok {
+			events[addr] = newTxSortedMap()
 		}
-		if len(events) > 0 {
-			var txs []*basic.Transaction
-			for _, set := range events {
-				txs = append(txs, set.Flatten()...)
-			}
-			for _, tx := range txs {
-				pool.BroadCastTx(tx)
-			}
+		events[addr].Put(tx)
+	}
+	if len(events) > 0 {
+		var txs []*basic.Transaction
+		for _, set := range events {
+			txs = append(txs, set.Flatten()...)
+		}
+		for _, tx := range txs {
+			pool.BroadCastTx(tx)
 		}
 	}
 }

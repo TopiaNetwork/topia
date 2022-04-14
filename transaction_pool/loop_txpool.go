@@ -1,7 +1,6 @@
 package transactionpool
 
 import (
-	"fmt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 	"runtime/debug"
@@ -55,7 +54,6 @@ func (pool *transactionPool) loopSaveAllIfShutDown() {
 		select {
 		// System shutdown.  When the system is shut down, save to the files locals/remotes/configs
 		case <-pool.chanSysShutDown:
-			fmt.Println("call shutdown")
 			close(pool.chanReorgShutdown)
 			pool.saveAllWhenSysShutDown()
 			close(pool.chanRmTxs)
@@ -161,7 +159,6 @@ func (pool *transactionPool) loopRegularSaveLocalTxs() {
 }
 
 func (pool *transactionPool) loopRegularRepublic() {
-	//fmt.Println("regularRepublic")
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {

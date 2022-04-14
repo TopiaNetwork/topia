@@ -2,8 +2,8 @@ package mock
 
 import (
 	"github.com/AsynkronIT/protoactor-go/actor"
-	"github.com/TopiaNetwork/topia/chain"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	"github.com/TopiaNetwork/topia/currency"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"math/big"
 	"sync"
@@ -34,7 +34,7 @@ func NewTransactionPoolMock(log tplog.Logger, cryptService tpcrt.CryptService) *
 		toAddr, _ := cryptService.CreateAddress(toPubKey)
 
 		tx := txuni.ConstructTransactionWithUniversalTransfer(log, cryptService, fromPriKey, fromPriKey, 1, 200, 500, toAddr,
-			[]txuni.TargetItem{{chain.TokenSymbol_Native, big.NewInt(10)}})
+			[]txuni.TargetItem{{currency.TokenSymbol_Native, big.NewInt(10)}})
 
 		txPool.pendingTxs = append(txPool.pendingTxs, *tx)
 	}

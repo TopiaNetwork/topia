@@ -2,11 +2,12 @@ package state
 
 import (
 	"crypto/sha256"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/currency"
 	"github.com/lazyledger/smt"
 	"math/big"
 
-	"github.com/TopiaNetwork/topia/chain"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
@@ -29,9 +30,9 @@ type NodeNetWorkStateWapper interface {
 type CompositionStateReadonly interface {
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
-	GetBalance(addr tpcrtypes.Address, symbol chain.TokenSymbol) (*big.Int, error)
+	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
-	ChainID() chain.ChainID
+	ChainID() tpchaintypes.ChainID
 
 	NetworkType() tpnet.NetworkType
 
@@ -41,7 +42,7 @@ type CompositionStateReadonly interface {
 
 	GetAllConsensusNodeIDs() ([]string, error)
 
-	GetNode(nodeID string) (*chain.NodeInfo, error)
+	GetNode(nodeID string) (*common.NodeInfo, error)
 
 	GetTotalWeight() (uint64, error)
 
@@ -61,7 +62,7 @@ type CompositionStateReadonly interface {
 
 	GetActiveValidatorsTotalWeight() (uint64, error)
 
-	GetLatestEpoch() (*chain.EpochInfo, error)
+	GetLatestEpoch() (*common.EpochInfo, error)
 
 	StateRoot() ([]byte, error)
 

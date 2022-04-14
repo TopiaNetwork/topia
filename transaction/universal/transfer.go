@@ -3,9 +3,9 @@ package universal
 import (
 	"context"
 	"encoding/json"
+	"github.com/TopiaNetwork/topia/currency"
 	"math/big"
 
-	"github.com/TopiaNetwork/topia/chain"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -17,7 +17,7 @@ const (
 )
 
 type TargetItem struct {
-	Symbol chain.TokenSymbol
+	Symbol currency.TokenSymbol
 	Value  *big.Int
 }
 

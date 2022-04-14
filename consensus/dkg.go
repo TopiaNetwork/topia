@@ -323,3 +323,7 @@ func (d *dkgCrypt) RecoverSig(msg []byte, sigs [][]byte) ([]byte, error) {
 
 	return tbls.Recover(d.suite, pubPoly, msg, sigs, d.threshold, d.nParticipant)
 }
+
+func (d *dkgCrypt) Threshold() int {
+	return d.threshold
+}

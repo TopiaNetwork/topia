@@ -2,7 +2,7 @@ package consensus
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/chain"
+	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/common"
 	"sort"
 	"sync"
@@ -41,7 +41,7 @@ type dkgExchangeData struct {
 type dkgExchange struct {
 	index          int
 	log            tplog.Logger
-	chainID        chain.ChainID
+	chainID        types.ChainID
 	nodeID         string
 	startCh        chan uint64
 	stopCh         chan struct{}
@@ -58,7 +58,7 @@ type dkgExchange struct {
 }
 
 func newDKGExchange(log tplog.Logger,
-	chainID chain.ChainID,
+	chainID types.ChainID,
 	nodeID string,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,

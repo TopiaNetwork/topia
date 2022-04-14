@@ -6,6 +6,8 @@ type DKGBls interface {
 	Verify(msg, sig []byte) error
 
 	RecoverSig(msg []byte, sigs [][]byte) ([]byte, error)
+
+	Threshold() int
 }
 
 type DKGBLSUpdater interface {

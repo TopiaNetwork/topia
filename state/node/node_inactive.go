@@ -3,8 +3,8 @@ package node
 import (
 	"encoding/binary"
 	"encoding/json"
+	"github.com/TopiaNetwork/topia/common"
 
-	"github.com/TopiaNetwork/topia/chain"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
@@ -22,11 +22,11 @@ type NodeInactiveState interface {
 
 	GetInactiveNodeIDs() ([]string, error)
 
-	GetInactiveNode(nodeID string) (*chain.NodeInfo, error)
+	GetInactiveNode(nodeID string) (*common.NodeInfo, error)
 
 	GetInactiveNodesTotalWeight() (uint64, error)
 
-	AddInactiveNode(nodeInfo *chain.NodeInfo) error
+	AddInactiveNode(nodeInfo *common.NodeInfo) error
 
 	updateInactiveNodeWeight(nodeID string, weight uint64) error
 
@@ -73,7 +73,7 @@ func (ns *nodeInactiveState) GetInactiveNodeIDs() ([]string, error) {
 	return nodeAEIDs, nil
 }
 
-func (ns *nodeInactiveState) GetInactiveNode(nodeID string) (*chain.NodeInfo, error) {
+func (ns *nodeInactiveState) GetInactiveNode(nodeID string) (*common.NodeInfo, error) {
 	return getNode(ns.StateStore, StateStore_Name_NodeInactive, nodeID)
 }
 
@@ -90,7 +90,7 @@ func (ns *nodeInactiveState) GetInactiveNodesTotalWeight() (uint64, error) {
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
 }
 
-func (ns *nodeInactiveState) AddInactiveNode(nodeInfo *chain.NodeInfo) error {
+func (ns *nodeInactiveState) AddInactiveNode(nodeInfo *common.NodeInfo) error {
 	return addNode(ns.StateStore, StateStore_Name_NodeInactive, TotalInactiveNodeIDs_Key, TotalInactiveNodeWeight_Key, nodeInfo)
 }
 

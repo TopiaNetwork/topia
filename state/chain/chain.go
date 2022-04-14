@@ -3,7 +3,6 @@ package chain
 import (
 	"errors"
 
-	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -25,7 +24,7 @@ type LedgerStateUpdater interface {
 }
 
 type ChainState interface {
-	ChainID() chain.ChainID
+	ChainID() tpchaintypes.ChainID
 
 	NetworkType() tpnet.NetworkType
 
@@ -53,13 +52,13 @@ func NewChainStore(stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater) C
 	}
 }
 
-func (cs *chainState) ChainID() chain.ChainID {
+func (cs *chainState) ChainID() tpchaintypes.ChainID {
 	chainIDBytes, _, err := cs.GetState(StateStore_Name, []byte(ChainID_Key))
 	if err != nil {
-		return chain.ChainID_Empty
+		return tpchaintypes.ChainID_Empty
 	}
 
-	return chain.ChainID(chainIDBytes)
+	return tpchaintypes.ChainID(chainIDBytes)
 }
 
 func (cs *chainState) NetworkType() tpnet.NetworkType {

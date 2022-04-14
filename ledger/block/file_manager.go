@@ -1,7 +1,7 @@
 package block
 
 import (
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -33,23 +33,23 @@ func (fm *fileManager) moveToNextFile() {
 	panic("implement me")
 }
 
-func (fm *fileManager) addBlock(block *tpchaintypes.Block) error {
+func (fm *fileManager) addBlock(block *types.Block) error {
 	panic("implement me")
 }
 
-func (fm *fileManager) retrieveBlockByHash(blockHash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
+func (fm *fileManager) retrieveBlockByHash(blockHash types.BlockHash) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (fm *fileManager) retrieveBlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error) {
+func (fm *fileManager) retrieveBlockByNumber(blockNum types.BlockNum) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (fm *fileManager) retrieveBlockByTxID(txID string) (*tpchaintypes.Block, error) {
+func (fm *fileManager) retrieveBlockByTxID(txID string) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (mgr *fileManager) fetchBlock(lp *fileLocPointer) (*tpchaintypes.Block, error) {
+func (mgr *fileManager) fetchBlock(lp *fileLocPointer) (*types.Block, error) {
 	panic("implement me")
 }
 

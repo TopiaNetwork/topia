@@ -3,10 +3,10 @@ package account
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/TopiaNetwork/topia/currency"
 	"math/big"
 
 	"github.com/TopiaNetwork/topia/account"
-	"github.com/TopiaNetwork/topia/chain"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
@@ -24,13 +24,13 @@ type AccountState interface {
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
-	GetBalance(addr tpcrtypes.Address, symbol chain.TokenSymbol) (*big.Int, error)
+	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
 	AddAccount(acc *account.Account) error
 
 	UpdateNonce(addr tpcrtypes.Address, nonce uint64) error
 
-	UpdateBalance(addr tpcrtypes.Address, symbol chain.TokenSymbol, value *big.Int) error
+	UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error
 }
 
 type accountState struct {
@@ -84,7 +84,7 @@ func (as *accountState) GetNonce(addr tpcrtypes.Address) (uint64, error) {
 	return acc.Nonce, nil
 }
 
-func (as *accountState) GetBalance(addr tpcrtypes.Address, symbol chain.TokenSymbol) (*big.Int, error) {
+func (as *accountState) GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error) {
 	acc, err := as.GetAccount(addr)
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func (as *accountState) UpdateNonce(addr tpcrtypes.Address, nonce uint64) error 
 	return as.Update(StateStore_Name, acc.Addr.Bytes(), accBytes)
 }
 
-func (as *accountState) UpdateBalance(addr tpcrtypes.Address, symbol chain.TokenSymbol, value *big.Int) error {
+func (as *accountState) UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error {
 	acc, err := as.GetAccount(addr)
 	if err != nil {
 		return err

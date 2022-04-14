@@ -2,11 +2,11 @@ package consensus
 
 import (
 	"context"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/common"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
-	"github.com/TopiaNetwork/topia/chain"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
@@ -65,7 +65,7 @@ type consensus struct {
 	config       *tpconfig.ConsensusConfiguration
 }
 
-func NewConsensus(chainID chain.ChainID,
+func NewConsensus(chainID tpchaintypes.ChainID,
 	nodeID string,
 	priKey tpcrtypes.PrivateKey,
 	level tplogcmm.LogLevel,
@@ -199,12 +199,12 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	cons.epochService.start(ctx)
 
-	if nodeInfo.Role&chain.NodeRole_Executor == chain.NodeRole_Executor {
+	if nodeInfo.Role&common.NodeRole_Executor == common.NodeRole_Executor {
 		cons.executor.start(ctx)
 	}
 
-	if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer || nodeInfo.Role&chain.NodeRole_Validator == chain.NodeRole_Validator {
-		if nodeInfo.Role&chain.NodeRole_Proposer == chain.NodeRole_Proposer {
+	if nodeInfo.Role&common.NodeRole_Proposer == common.NodeRole_Proposer || nodeInfo.Role&common.NodeRole_Validator == common.NodeRole_Validator {
+		if nodeInfo.Role&common.NodeRole_Proposer == common.NodeRole_Proposer {
 			cons.proposer.start(ctx)
 		}
 

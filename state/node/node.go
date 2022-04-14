@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/topia/chain"
+	"github.com/TopiaNetwork/topia/common"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
@@ -17,7 +17,7 @@ type NodeState interface {
 
 	GetAllConsensusNodeIDs() ([]string, error)
 
-	GetNode(nodeID string) (*chain.NodeInfo, error)
+	GetNode(nodeID string) (*common.NodeInfo, error)
 
 	GetTotalWeight() (uint64, error)
 
@@ -25,7 +25,7 @@ type NodeState interface {
 
 	GetDKGPartPubKeysForVerify() (map[string]string, error) //nodeID->DKGPartPubKey
 
-	AddNode(nodeInfo *chain.NodeInfo) error
+	AddNode(nodeInfo *common.NodeInfo) error
 
 	UpdateWeight(nodeID string, weight uint64) error
 
@@ -33,8 +33,8 @@ type NodeState interface {
 }
 
 type nodeStateMetaInfo struct {
-	Role  chain.NodeRole
-	State chain.NodeState
+	Role  common.NodeRole
+	State common.NodeState
 }
 
 type nodeState struct {
@@ -94,7 +94,7 @@ func (ns *nodeState) GetAllConsensusNodeIDs() ([]string, error) {
 	return allNodeIDs, nil
 }
 
-func (ns *nodeState) GetNode(nodeID string) (*chain.NodeInfo, error) {
+func (ns *nodeState) GetNode(nodeID string) (*common.NodeInfo, error) {
 	nodeMetaInfoBytes, _, err := ns.GetState(StateStore_Name_Node, []byte(nodeID))
 	if err != nil {
 		return nil, err
@@ -111,20 +111,20 @@ func (ns *nodeState) GetNode(nodeID string) (*chain.NodeInfo, error) {
 	}
 
 	switch nodeMetaInfo.State {
-	case chain.NodeState_Active:
+	case common.NodeState_Active:
 		{
 			switch nodeMetaInfo.Role {
-			case chain.NodeRole_Executor:
+			case common.NodeRole_Executor:
 				return ns.GetActiveExecutor(nodeID)
-			case chain.NodeRole_Proposer:
+			case common.NodeRole_Proposer:
 				return ns.GetActiveProposer(nodeID)
-			case chain.NodeRole_Validator:
+			case common.NodeRole_Validator:
 				return ns.GetActiveValidator(nodeID)
 			default:
 				return nil, fmt.Errorf("Invalid node role from %s", nodeID)
 			}
 		}
-	case chain.NodeState_Inactive:
+	case common.NodeState_Inactive:
 		return ns.GetInactiveNode(nodeID)
 	default:
 		return nil, fmt.Errorf("Invalid node state from %s", nodeID)
@@ -162,21 +162,21 @@ func (ns *nodeState) GetNodeWeight(nodeID string) (uint64, error) {
 	return nodeInfo.Weight, nil
 }
 
-func (ns *nodeState) AddNode(nodeInfo *chain.NodeInfo) error {
+func (ns *nodeState) AddNode(nodeInfo *common.NodeInfo) error {
 	if nodeInfo == nil {
 		return errors.New("Nil node info input")
 	}
 
 	var err error
 	switch nodeInfo.State {
-	case chain.NodeState_Active:
+	case common.NodeState_Active:
 		{
 			switch nodeInfo.Role {
-			case chain.NodeRole_Executor:
+			case common.NodeRole_Executor:
 				err = ns.addActiveExecutor(nodeInfo)
-			case chain.NodeRole_Proposer:
+			case common.NodeRole_Proposer:
 				err = ns.AddActiveProposer(nodeInfo)
-			case chain.NodeRole_Validator:
+			case common.NodeRole_Validator:
 				err = ns.AddActiveValidator(nodeInfo)
 			default:
 				return fmt.Errorf("Invalid node role from %s", nodeInfo.NodeID)
@@ -184,7 +184,7 @@ func (ns *nodeState) AddNode(nodeInfo *chain.NodeInfo) error {
 
 			break
 		}
-	case chain.NodeState_Inactive:
+	case common.NodeState_Inactive:
 		err = ns.AddInactiveNode(nodeInfo)
 		break
 	default:
@@ -247,20 +247,20 @@ func (ns *nodeState) UpdateWeight(nodeID string, weight uint64) error {
 	}
 
 	switch nodeMetaInfo.State {
-	case chain.NodeState_Active:
+	case common.NodeState_Active:
 		{
 			switch nodeMetaInfo.Role {
-			case chain.NodeRole_Executor:
+			case common.NodeRole_Executor:
 				return ns.updateActiveExecutorWeight(nodeID, weight)
-			case chain.NodeRole_Proposer:
+			case common.NodeRole_Proposer:
 				return ns.updateActiveProposerWeight(nodeID, weight)
-			case chain.NodeRole_Validator:
+			case common.NodeRole_Validator:
 				return ns.updateActiveValidatorWeight(nodeID, weight)
 			default:
 				return fmt.Errorf("Invalid node role from %s", nodeID)
 			}
 		}
-	case chain.NodeState_Inactive:
+	case common.NodeState_Inactive:
 		return ns.updateInactiveNodeWeight(nodeID, weight)
 	default:
 		return fmt.Errorf("Invalid node state from %s", nodeID)
@@ -284,20 +284,20 @@ func (ns *nodeState) UpdateDKGPartPubKey(nodeID string, pubKey string) error {
 	}
 
 	switch nodeMetaInfo.State {
-	case chain.NodeState_Active:
+	case common.NodeState_Active:
 		{
 			switch nodeMetaInfo.Role {
-			case chain.NodeRole_Executor:
+			case common.NodeRole_Executor:
 				return ns.updateActiveExecutorDKGPartPubKey(nodeID, pubKey)
-			case chain.NodeRole_Proposer:
+			case common.NodeRole_Proposer:
 				return ns.updateActiveProposerDKGPartPubKey(nodeID, pubKey)
-			case chain.NodeRole_Validator:
+			case common.NodeRole_Validator:
 				return ns.updateActiveValidatorDKGPartPubKey(nodeID, pubKey)
 			default:
 				return fmt.Errorf("Invalid node role from %s", nodeID)
 			}
 		}
-	case chain.NodeState_Inactive:
+	case common.NodeState_Inactive:
 		return ns.updateInactiveNodeDKGPartPubKey(nodeID, pubKey)
 	default:
 		return fmt.Errorf("Invalid node state from %s", nodeID)

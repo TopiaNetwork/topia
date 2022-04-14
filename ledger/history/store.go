@@ -1,9 +1,9 @@
 package history
 
 import (
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"path/filepath"
 
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
 	tplog "github.com/TopiaNetwork/topia/log"

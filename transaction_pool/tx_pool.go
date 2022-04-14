@@ -45,6 +45,7 @@ var (
 	ErrTxUpdate           = errors.New("can not update tx")
 	ErrPendingIsNil       = errors.New("Pending is nil")
 	ErrUnRooted           = errors.New("UnRooted new chain")
+	ErrQueueEmpty         = errors.New("queue is empty")
 )
 
 type TransactionPool interface {
@@ -709,27 +710,42 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 		forwardsCnt := pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2)
 
 		pool.log.Tracef("Removed old queued transactions", "count", forwardsCnt)
-		// Gather all executable transactions and promote them
 
-		readies := pool.queues.getTxListByAddrOfCategory(category, addr).Ready(pool.curState.GetNonce(addr))
-		for _, tx := range readies {
-			txId, _ := tx.HashHex()
-			if pool.turnTx(addr, txId, tx) {
-				replaced = append(replaced, tx)
+		// Gather all executable transactions and promote them
+		ft0 := func(address tpcrtypes.Address) uint64 { return pool.curState.GetNonce(address) }
+		ft1 := func(category basic.TransactionCategory, address tpcrtypes.Address, tx *basic.Transaction) (bool, *basic.Transaction) {
+			if pool.pendings.getTxListByAddrOfCategory(category, addr) == nil {
+				pool.pendings.setTxListOfCategory(category, addr, newTxList(false))
 			}
+			inserted, old := pool.pendings.getTxListByAddrOfCategory(category, addr).Add(tx)
+			return inserted, old
 		}
-		pool.log.Tracef("Promoted queued transactions", "count", len(replaced))
+		ft2 := func(category basic.TransactionCategory, txId string) {
+			pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
+			pool.sortedLists.getPricedlistByCategory(category).Removed(1)
+		}
+		ft3 := func(category basic.TransactionCategory, addr tpcrtypes.Address, tx *basic.Transaction) {
+			pool.queues.getTxListByAddrOfCategory(category, addr).Remove(tx)
+		}
+		ft4 := func(category basic.TransactionCategory, oldkey string) {
+			pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(oldkey)
+			pool.sortedLists.getPricedlistByCategory(category).Removed(1)
+		}
+		ft5 := func(txId string) { pool.ActivationIntervals.setTxActiv(txId, time.Now()) }
+		replacedCnt := pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft3, ft4, ft5, replaced, category, addr)
+
+		pool.log.Tracef("Promoted queued transactions", "count", replacedCnt)
 
 		// Drop all transactions over the allowed limit
-		f3 := func(addr tpcrtypes.Address) bool { return !pool.locals.contains(addr) }
-		f4 := func(category basic.TransactionCategory, txId string) {
+		fl1 := func(addr tpcrtypes.Address) bool { return !pool.locals.contains(addr) }
+		fl2 := func(category basic.TransactionCategory, txId string) {
 			pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
 			pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
 		}
-		capscnt := pool.queues.replaceExecutablesDropOverLimit(f3, f4, pool.config.QueueMaxTxsAccount, category, addr)
+		capsCnt := pool.queues.replaceExecutablesDropOverLimit(fl1, fl2, pool.config.QueueMaxTxsAccount, category, addr)
 
 		// Mark all the items dropped as removed
-		pool.sortedLists.getPricedlistByCategory(category).Removed(forwardsCnt + capscnt)
+		pool.sortedLists.getPricedlistByCategory(category).Removed(forwardsCnt + capsCnt)
 
 		// Delete the entire queue entry if it became empty.
 		pool.queues.replaceExecutablesDeleteEmpty(category, addr)
@@ -785,14 +801,14 @@ func (pool *transactionPool) PickTxsOfCategory(category basic.TransactionCategor
 
 	case PickTransactionsSortedByGasPriceAndNonce:
 		return pool.CommitTxsByPriceAndNonce(category)
+	default:
+		return nil
 	}
-	return nil
 }
 
 // CommitTxsForPending  : Block packaged transactions for pending
 func (pool *transactionPool) CommitTxsForPending(category basic.TransactionCategory) []*basic.Transaction {
-	txs := pool.pendings.getCommitTxsCategory(category)
-	return txs
+	return pool.pendings.getCommitTxsCategory(category)
 }
 
 // CommitTxsByPriceAndNonce  : Block packaged transactions sorted by price and nonce

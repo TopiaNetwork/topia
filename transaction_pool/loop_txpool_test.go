@@ -47,7 +47,6 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	pool.RemoveTxHashs(hashs)
 	var hashs1, hashs2 []string
 	var hash string
-	fmt.Println("hashs", hashs)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
@@ -64,7 +63,6 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 		hashs2 = append(hashs2, hash)
 		pool.AddTx(tx, false)
 	}
-	fmt.Println(hash)
 	pool.wg.Add(1)
 	go pool.loopChanRemoveTxHashs()
 

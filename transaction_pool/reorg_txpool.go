@@ -106,7 +106,7 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 				}
 			}
 			// Reset needs promote for all addresses
-			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues.getQueueTxsByCategory(category).addrTxList))
+			replaceAddrs = make([]tpcrtypes.Address, 0, len(pool.queues.getAddrTxListOfCategory(category)))
 			for addr, _ := range pool.queues.getQueueTxsByCategory(category).addrTxList {
 				replaceAddrs = append(replaceAddrs, addr)
 			}

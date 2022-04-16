@@ -18,17 +18,17 @@ const (
 
 //nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
 //retrieving sorted transactions from the possibly gapped future queue.
-type nonceHeap []uint64
+type nonceHp []uint64
 
-func (h nonceHeap) Len() int           { return len(h) }
-func (h nonceHeap) Less(i, j int) bool { return h[i] < h[j] }
-func (h nonceHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h nonceHp) Len() int           { return len(h) }
+func (h nonceHp) Less(i, j int) bool { return h[i] < h[j] }
+func (h nonceHp) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 
-func (h *nonceHeap) Push(x interface{}) {
+func (h *nonceHp) Push(x interface{}) {
 	*h = append(*h, x.(uint64))
 }
 
-func (h *nonceHeap) Pop() interface{} {
+func (h *nonceHp) Pop() interface{} {
 	old := *h
 	n := len(old)
 	x := old[n-1]
@@ -38,28 +38,28 @@ func (h *nonceHeap) Pop() interface{} {
 
 // txSortedMap is a nonce->transaction hash map with a heap based index to allow
 // iterating over the contents in a nonce-incrementing way.
-type txSortedMap struct {
+type txSortedMapByNonce struct {
 	items map[uint64]*basic.Transaction // Hash map storing the transaction data
-	index *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
+	index *nonceHp                      // Heap of nonces of all the stored transactions (non-strict mode)
 	cache []*basic.Transaction          // Cache of the transactions already sorted
 }
 
-// newTxSortedMap creates a new nonce-sorted transaction map.
-func newTxSortedMap() *txSortedMap {
-	return &txSortedMap{
+// newtxSortedMapByNonce creates a new nonce-sorted transaction map.
+func newtxSortedMapByNonce() *txSortedMapByNonce {
+	return &txSortedMapByNonce{
 		items: make(map[uint64]*basic.Transaction),
-		index: new(nonceHeap),
+		index: new(nonceHp),
 	}
 }
 
 // Get retrieves the current transactions associated with the given nonce.
-func (m *txSortedMap) Get(nonce uint64) *basic.Transaction {
+func (m *txSortedMapByNonce) Get(nonce uint64) *basic.Transaction {
 	return m.items[nonce]
 }
 
 // Put inserts a new transaction into the map, also updating the map's nonce
 // index. If a transaction already exists with the same nonce, it's overwritten.
-func (m *txSortedMap) Put(tx *basic.Transaction) {
+func (m *txSortedMapByNonce) Put(tx *basic.Transaction) {
 
 	nonce := tx.Head.Nonce
 	if m.items[nonce] == nil {
@@ -71,7 +71,7 @@ func (m *txSortedMap) Put(tx *basic.Transaction) {
 // Forward removes all transactions from the map with a nonce lower than the
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
-func (m *txSortedMap) Forward(threshold uint64) []*basic.Transaction {
+func (m *txSortedMapByNonce) Forward(threshold uint64) []*basic.Transaction {
 	var removed []*basic.Transaction
 
 	// Pop off heap items until the threshold is reached
@@ -92,7 +92,7 @@ func (m *txSortedMap) Forward(threshold uint64) []*basic.Transaction {
 // Filter, as opposed to 'filter', re-initialises the heap after the operation is done.
 // If you want to do several consecutive filterings, it's therefore better to first
 // do a .filter(func1) followed by .Filter(func2) or reheap()
-func (m *txSortedMap) Filter(filter func(*basic.Transaction) bool) []*basic.Transaction {
+func (m *txSortedMapByNonce) Filter(filter func(*basic.Transaction) bool) []*basic.Transaction {
 	removed := m.filter(filter)
 	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
@@ -101,7 +101,7 @@ func (m *txSortedMap) Filter(filter func(*basic.Transaction) bool) []*basic.Tran
 	return removed
 }
 
-func (m *txSortedMap) reheap() {
+func (m *txSortedMapByNonce) reheap() {
 	*m.index = make([]uint64, 0, len(m.items))
 	for nonce := range m.items {
 		*m.index = append(*m.index, nonce)
@@ -112,7 +112,7 @@ func (m *txSortedMap) reheap() {
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
 // should only be used if followed immediately by a call to Filter or reheap()
-func (m *txSortedMap) filter(filter func(*basic.Transaction) bool) []*basic.Transaction {
+func (m *txSortedMapByNonce) filter(filter func(*basic.Transaction) bool) []*basic.Transaction {
 	var removed []*basic.Transaction
 
 	// Collect all the transactions to filter out
@@ -130,7 +130,7 @@ func (m *txSortedMap) filter(filter func(*basic.Transaction) bool) []*basic.Tran
 
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
-func (m *txSortedMap) Cap(threshold int) []*basic.Transaction {
+func (m *txSortedMapByNonce) Cap(threshold int) []*basic.Transaction {
 	// Short circuit if the number of items is under the limit
 	if len(m.items) <= threshold {
 		return nil
@@ -155,7 +155,7 @@ func (m *txSortedMap) Cap(threshold int) []*basic.Transaction {
 
 // Remove deletes a transaction from the maintained map, returning whether the
 // transaction was found.
-func (m *txSortedMap) Remove(nonce uint64) bool {
+func (m *txSortedMapByNonce) Remove(nonce uint64) bool {
 	// Short circuit if no transaction is present
 	_, ok := m.items[nonce]
 	if !ok {
@@ -181,7 +181,7 @@ func (m *txSortedMap) Remove(nonce uint64) bool {
 // Note, all transactions with nonces lower than start will also be returned to
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
-func (m *txSortedMap) Ready(start uint64) []*basic.Transaction {
+func (m *txSortedMapByNonce) Ready(start uint64) []*basic.Transaction {
 	// Short circuit if no transactions are available
 	if m.index.Len() == 0 || (*m.index)[0] > start {
 		return nil
@@ -199,11 +199,11 @@ func (m *txSortedMap) Ready(start uint64) []*basic.Transaction {
 }
 
 // Len returns the length of the transaction map.
-func (m *txSortedMap) Len() int {
+func (m *txSortedMapByNonce) Len() int {
 	return len(m.items)
 }
 
-func (m *txSortedMap) flatten() []*basic.Transaction {
+func (m *txSortedMapByNonce) flatten() []*basic.Transaction {
 	// If the sorting was not cached yet, create and cache it
 	if m.cache == nil {
 		m.cache = make([]*basic.Transaction, 0, len(m.items))
@@ -218,7 +218,7 @@ func (m *txSortedMap) flatten() []*basic.Transaction {
 // Flatten creates a nonce-sorted slice of transactions based on the loosely
 // sorted internal representation. The result of the sorting is cached in case
 // it's requested again before any modifications are made to the contents.
-func (m *txSortedMap) Flatten() []*basic.Transaction {
+func (m *txSortedMapByNonce) Flatten() []*basic.Transaction {
 	// Copy the cache to prevent accidental modifications
 	cache := m.flatten()
 	txs := make([]*basic.Transaction, len(cache))
@@ -228,34 +228,33 @@ func (m *txSortedMap) Flatten() []*basic.Transaction {
 
 // LastElement returns the last element of a flattened list, thus, the
 // transaction with the highest nonce
-func (m *txSortedMap) LastElement() *basic.Transaction {
+func (m *txSortedMapByNonce) LastElement() *basic.Transaction {
 	cache := m.flatten()
 	return cache[len(cache)-1]
 }
 
-// txList is a "list" of transactions belonging to an account, sorted by account
+// txCoreList is a "list" of transactions belonging to an account, sorted by account
 // nonce. The same type can be used both for storing contiguous transactions for
 // the executable/pending queue; and for storing gapped transactions for the non-
 // executable/future queue, with minor behavioral changes.
-type txList struct {
+type txCoreList struct {
 	lock   sync.RWMutex
-	strict bool         // Whether nonces are strictly continuous or not
-	txs    *txSortedMap // Heap indexed sorted hash map of the transactions
+	strict bool                // Whether nonces are strictly continuous or not
+	txs    *txSortedMapByNonce // Heap indexed sorted hash map of the transactions
 }
 
 // newTxList create a new transaction list for maintaining nonce-indexable fast,
 // gapped, sortable transaction lists.
-func newTxList(strict bool) *txList {
-	return &txList{
+func newCoreList(strict bool) *txCoreList {
+	return &txCoreList{
 		strict: strict,
-		txs:    newTxSortedMap(),
-		//	costcap: new(big.Int),
+		txs:    newtxSortedMapByNonce(),
 	}
 }
 
 // Overlaps returns whether the transaction specified has the same nonce as one
 // already contained within the list.
-func (l *txList) Overlaps(tx *basic.Transaction) bool {
+func (l *txCoreList) Overlaps(tx *basic.Transaction) bool {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	Nonce := tx.Head.Nonce
@@ -267,7 +266,7 @@ func (l *txList) Overlaps(tx *basic.Transaction) bool {
 //
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
-func (l *txList) Add(tx *basic.Transaction) (bool, *basic.Transaction) {
+func (l *txCoreList) txCoreAdd(tx *basic.Transaction) (bool, *basic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	// If there's an older better transaction, abort
@@ -298,7 +297,7 @@ func (l *txList) Add(tx *basic.Transaction) (bool, *basic.Transaction) {
 // Forward removes all transactions from the list with a nonce lower than the
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
-func (l *txList) Forward(threshold uint64) []*basic.Transaction {
+func (l *txCoreList) Forward(threshold uint64) []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Forward(threshold)
@@ -306,7 +305,7 @@ func (l *txList) Forward(threshold uint64) []*basic.Transaction {
 
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
-func (l *txList) Cap(threshold int) []*basic.Transaction {
+func (l *txCoreList) Cap(threshold int) []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Cap(threshold)
@@ -315,7 +314,7 @@ func (l *txList) Cap(threshold int) []*basic.Transaction {
 // Remove deletes a transaction from the maintained list, returning whether the
 // transaction was found, and also returning any transaction invaliated due to
 // the deletion (strict mode only).
-func (l *txList) Remove(tx *basic.Transaction) (bool, []*basic.Transaction) {
+func (l *txCoreList) Remove(tx *basic.Transaction) (bool, []*basic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	// Remove the transaction from the set
@@ -343,21 +342,21 @@ func (l *txList) Remove(tx *basic.Transaction) (bool, []*basic.Transaction) {
 // Note, all transactions with nonces lower than start will also be returned to
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
-func (l *txList) Ready(start uint64) []*basic.Transaction {
+func (l *txCoreList) Ready(start uint64) []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Ready(start)
 }
 
 // Len returns the length of the transaction list.
-func (l *txList) Len() int {
+func (l *txCoreList) Len() int {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Len()
 }
 
 // Empty returns whether the list of transactions is empty or not.
-func (l *txList) Empty() bool {
+func (l *txCoreList) Empty() bool {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.Len() == 0
@@ -366,7 +365,7 @@ func (l *txList) Empty() bool {
 // Flatten creates a nonce-sorted slice of transactions based on the loosely
 // sorted internal representation. The result of the sorting is cached in case
 // it's requested again before any modifications are made to the contents.
-func (l *txList) Flatten() []*basic.Transaction {
+func (l *txCoreList) Flatten() []*basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.Flatten()
@@ -374,7 +373,7 @@ func (l *txList) Flatten() []*basic.Transaction {
 
 // LastElement returns the last element of a flattened list, thus, the
 // transaction with the highest nonce
-func (l *txList) LastElement() *basic.Transaction {
+func (l *txCoreList) LastElement() *basic.Transaction {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	return l.txs.LastElement()
@@ -382,12 +381,12 @@ func (l *txList) LastElement() *basic.Transaction {
 
 type pendingTxs struct {
 	Mu         sync.RWMutex
-	addrTxList map[tpcrtypes.Address]*txList
+	addrTxList map[tpcrtypes.Address]*txCoreList
 }
 
 func newPendingTxs() *pendingTxs {
 	addtxs := &pendingTxs{
-		addrTxList: make(map[tpcrtypes.Address]*txList, 0),
+		addrTxList: make(map[tpcrtypes.Address]*txCoreList, 0),
 	}
 	return addtxs
 }
@@ -406,12 +405,28 @@ func newPendingsMap() *pendingsMap {
 	return pendings
 }
 
+func (pendingmap *pendingsMap) getAllCommitTxs() []*basic.Transaction {
+	pendingmap.Mu.RLock()
+	defer pendingmap.Mu.RUnlock()
+	var txs = make([]*basic.Transaction, 0)
+	for _, pendingtxs := range pendingmap.pending {
+		pendingtxs.Mu.RLock()
+		pendingtxs.Mu.RUnlock()
+		for _, txList := range pendingtxs.addrTxList {
+			for _, tx := range txList.txs.cache {
+				txs = append(txs, tx)
+			}
+		}
+	}
+	return txs
+}
+
 func (pendingmap *pendingsMap) getPendingTxsByCategory(category basic.TransactionCategory) *pendingTxs {
-	pendingmap.Mu.Lock()
-	defer pendingmap.Mu.Unlock()
+	pendingmap.Mu.RLock()
+	defer pendingmap.Mu.RUnlock()
 	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
-		pendingcat.Mu.Lock()
-		defer pendingcat.Mu.Unlock()
+		pendingcat.Mu.RLock()
+		defer pendingcat.Mu.RUnlock()
 		return pendingcat
 	}
 	return nil
@@ -460,8 +475,8 @@ func (pendingmap *pendingsMap) demoteUnexecutablesByCategory(category basic.Tran
 }
 
 func (pendingmap *pendingsMap) getAddrTxsByCategory(category basic.TransactionCategory) map[tpcrtypes.Address][]*basic.Transaction {
-	pendingmap.Mu.Lock()
-	defer pendingmap.Mu.Unlock()
+	pendingmap.Mu.RLock()
+	defer pendingmap.Mu.RUnlock()
 	pending := make(map[tpcrtypes.Address][]*basic.Transaction)
 	for addr, list := range pendingmap.pending[category].addrTxList {
 		txs := list.Flatten()
@@ -471,13 +486,13 @@ func (pendingmap *pendingsMap) getAddrTxsByCategory(category basic.TransactionCa
 	}
 	return pending
 }
-func (pendingmap *pendingsMap) getAddrTxListOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address]*txList {
-	pendingmap.Mu.Lock()
-	defer pendingmap.Mu.Unlock()
+func (pendingmap *pendingsMap) getAddrTxListOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address]*txCoreList {
+	pendingmap.Mu.RLock()
+	defer pendingmap.Mu.RUnlock()
 	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
-		pendingcat.Mu.Lock()
-		defer pendingcat.Mu.Unlock()
-		if maptxlist := pendingmap.pending[category].addrTxList; maptxlist != nil {
+		pendingcat.Mu.RLock()
+		defer pendingcat.Mu.RUnlock()
+		if maptxlist := pendingcat.addrTxList; maptxlist != nil {
 			return maptxlist
 		}
 	}
@@ -501,21 +516,14 @@ func (pendingmap *pendingsMap) noncesForAddrTxListOfCategory(category basic.Tran
 	}
 }
 
-//	nonces := make(map[tpcrtypes.Address]uint64, len(pool.pendings.getPendingTxsByCategory(category).addrTxList))
-//			for addr, list := range pool.pendings.getAddrTxListOfCategory(category) {
-//				highestPending := list.LastElement()
-//				Noncei := highestPending.Head.Nonce
-//				nonces[addr] = Noncei + 1
-//			}
-
 func (pendingmap *pendingsMap) getCommitTxsCategory(category basic.TransactionCategory) []*basic.Transaction {
-	pendingmap.Mu.Lock()
-	defer pendingmap.Mu.Unlock()
+	pendingmap.Mu.RLock()
+	defer pendingmap.Mu.RUnlock()
 	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
-		pendingcat.Mu.Lock()
-		defer pendingcat.Mu.Unlock()
+		pendingcat.Mu.RLock()
+		defer pendingcat.Mu.RUnlock()
 		var txs = make([]*basic.Transaction, 0)
-		if maptxlist := pendingmap.pending[category].addrTxList; maptxlist != nil {
+		if maptxlist := pendingcat.addrTxList; maptxlist != nil {
 			for _, txlist := range maptxlist {
 				for _, tx := range txlist.txs.cache {
 					txs = append(txs, tx)
@@ -528,13 +536,13 @@ func (pendingmap *pendingsMap) getCommitTxsCategory(category basic.TransactionCa
 }
 
 func (pendingmap *pendingsMap) getStatsOfCategory(category basic.TransactionCategory) int {
-	pendingmap.Mu.Lock()
-	defer pendingmap.Mu.Unlock()
+	pendingmap.Mu.RLock()
+	defer pendingmap.Mu.RUnlock()
 	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
-		pendingcat.Mu.Lock()
-		defer pendingcat.Mu.Unlock()
+		pendingcat.Mu.RLock()
+		defer pendingcat.Mu.RUnlock()
 		pending := 0
-		if maptxlist := pendingmap.pending[category].addrTxList; maptxlist != nil {
+		if maptxlist := pendingcat.addrTxList; maptxlist != nil {
 			for _, list := range maptxlist {
 				pending += list.Len()
 			}
@@ -550,7 +558,7 @@ func (pendingmap *pendingsMap) truncatePendingByCategoryFun1(category basic.Tran
 		pendingcat.Mu.Lock()
 		defer pendingcat.Mu.Unlock()
 		pending := uint64(0)
-		for _, list := range pendingmap.pending[category].addrTxList {
+		for _, list := range pendingcat.addrTxList {
 			pending += uint64(list.Len())
 		}
 		return pending
@@ -597,30 +605,33 @@ func (pendingmap *pendingsMap) truncatePendingByCategoryFun3(f31 func(category b
 }
 
 func (pendingmap *pendingsMap) getTxsByCategory(category basic.TransactionCategory) []*basic.Transaction {
-	pendingmap.Mu.Lock()
-	defer pendingmap.Mu.Unlock()
+	pendingmap.Mu.RLock()
+	defer pendingmap.Mu.RUnlock()
 	pending := make([]*basic.Transaction, 0)
-	for _, list := range pendingmap.pending[category].addrTxList {
-		txs := list.Flatten()
-		if len(txs) > 0 {
-			pending = append(pending, txs...)
-		}
-	}
-	return pending
-}
-func (pendingmap *pendingsMap) getTxListByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address) *txList {
-	pendingmap.Mu.Lock()
-	defer pendingmap.Mu.Unlock()
 	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
-		pendingcat.Mu.Lock()
-		defer pendingcat.Mu.Unlock()
-
+		pendingcat.Mu.RLock()
+		defer pendingcat.Mu.RUnlock()
+		for _, list := range pendingcat.addrTxList {
+			txs := list.Flatten()
+			if len(txs) > 0 {
+				pending = append(pending, txs...)
+			}
+		}
+		return pending
+	}
+	return nil
+}
+func (pendingmap *pendingsMap) getTxListByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address) *txCoreList {
+	pendingmap.Mu.RLock()
+	defer pendingmap.Mu.RUnlock()
+	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
+		pendingcat.Mu.RLock()
+		defer pendingcat.Mu.RUnlock()
 		if txlist := pendingcat.addrTxList[addr]; txlist != nil {
 			return txlist
 		}
 
 	}
-
 	return nil
 }
 func (pendingmap *pendingsMap) addTxToTxListByAddrOfCategory(
@@ -632,7 +643,7 @@ func (pendingmap *pendingsMap) addTxToTxListByAddrOfCategory(
 		defer pendingcat.Mu.Unlock()
 
 		if txlist := pendingcat.addrTxList[addr]; txlist != nil {
-			return txlist.Add(tx)
+			return txlist.txCoreAdd(tx)
 		}
 
 	}
@@ -677,11 +688,10 @@ func (pendingmap *pendingsMap) replaceTxOfAddrOfCategory(category basic.Transact
 	pendingmap.Mu.Lock()
 	defer pendingmap.Mu.Unlock()
 	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
-
 		pendingcat.Mu.Lock()
 		defer pendingcat.Mu.Unlock()
 		if list := pendingcat.addrTxList[from]; list != nil && list.Overlaps(tx) {
-			inserted, old := list.Add(tx)
+			inserted, old := list.txCoreAdd(tx)
 			if !inserted {
 				return false, ErrReplaceUnderpriced
 			}
@@ -700,10 +710,9 @@ func (pendingmap *pendingsMap) replaceTxOfAddrOfCategory(category basic.Transact
 
 		}
 	}
-
 	return true, nil
 }
-func (pendingmap *pendingsMap) setTxListOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address, txs *txList) {
+func (pendingmap *pendingsMap) setTxListOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address, txs *txCoreList) {
 	pendingmap.Mu.Lock()
 	defer pendingmap.Mu.Unlock()
 	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
@@ -716,13 +725,13 @@ func (pendingmap *pendingsMap) setTxListOfCategory(category basic.TransactionCat
 }
 
 type queueTxs struct {
-	Mu         sync.RWMutex
-	addrTxList map[tpcrtypes.Address]*txList
+	Mu                sync.RWMutex
+	mapAddrTxCoreList map[tpcrtypes.Address]*txCoreList
 }
 
 func newQueueTxs() *queueTxs {
 	addtxlist := &queueTxs{
-		addrTxList: make(map[tpcrtypes.Address]*txList, 0),
+		mapAddrTxCoreList: make(map[tpcrtypes.Address]*txCoreList, 0),
 	}
 	return addtxlist
 }
@@ -742,36 +751,64 @@ func newQueuesMap() *queuesMap {
 }
 
 func (queuemap *queuesMap) getAll() map[basic.TransactionCategory]*queueTxs {
-	queuemap.Mu.Lock()
-	defer queuemap.Mu.Unlock()
+	queuemap.Mu.RLock()
+	defer queuemap.Mu.RUnlock()
 	if mapqueue := queuemap.queue; mapqueue != nil {
 		return mapqueue
 	}
 	return nil
 }
 func (queuemap *queuesMap) getQueueTxsByCategory(category basic.TransactionCategory) *queueTxs {
-	queuemap.Mu.Lock()
-	defer queuemap.Mu.Unlock()
+	queuemap.Mu.RLock()
+	defer queuemap.Mu.RUnlock()
 	if queuetxs := queuemap.queue[category]; queuetxs != nil {
 		return queuetxs
 	}
 	return nil
 }
 
-func (queuemap *queuesMap) getTxListByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address) *txList {
-	queuemap.Mu.Lock()
-	defer queuemap.Mu.Unlock()
+func (queuemap *queuesMap) getTxListByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address) *txCoreList {
+	queuemap.Mu.RLock()
+	defer queuemap.Mu.RUnlock()
 	if queuecat := queuemap.queue[category]; queuecat != nil {
-		queuemap.queue[category].Mu.Lock()
-		defer queuemap.queue[category].Mu.Unlock()
+		queuecat.Mu.RLock()
+		defer queuecat.Mu.RUnlock()
 
-		if txlist := queuemap.queue[category].addrTxList[addr]; txlist != nil {
+		if txlist := queuecat.mapAddrTxCoreList[addr]; txlist != nil {
 			return txlist
 		}
 	}
 	return nil
 }
+func (queuemap *queuesMap) getTxByNonceFromTxlistByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address, Nonce uint64) *basic.Transaction {
+	queuemap.Mu.RLock()
+	defer queuemap.Mu.RUnlock()
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuecat.Mu.RLock()
+		defer queuecat.Mu.RUnlock()
 
+		if txlist := queuecat.mapAddrTxCoreList[addr]; txlist != nil {
+			return txlist.txs.Get(Nonce)
+		}
+	}
+	return nil
+}
+
+func (queuemap *queuesMap) getLenTxsByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address) int {
+	queuemap.Mu.RLock()
+	defer queuemap.Mu.RUnlock()
+	if queuecat := queuemap.queue[category]; queuecat != nil {
+		queuecat.Mu.RLock()
+		defer queuecat.Mu.RUnlock()
+
+		if txlist := queuecat.mapAddrTxCoreList[addr]; txlist != nil {
+			txlist.lock.RLock()
+			defer txlist.lock.RUnlock()
+			return txlist.txs.Len()
+		}
+	}
+	return 0
+}
 func (queuemap *queuesMap) removeTxFromTxListByAddrOfCategory(
 	category basic.TransactionCategory, addr tpcrtypes.Address, tx *basic.Transaction) {
 	queuemap.Mu.Lock()
@@ -780,7 +817,7 @@ func (queuemap *queuesMap) removeTxFromTxListByAddrOfCategory(
 		queuemap.queue[category].Mu.Lock()
 		defer queuemap.queue[category].Mu.Unlock()
 
-		if txlist := queuemap.queue[category].addrTxList[addr]; txlist != nil {
+		if txlist := queuemap.queue[category].mapAddrTxCoreList[addr]; txlist != nil {
 			txlist.Remove(tx)
 		}
 	}
@@ -797,7 +834,7 @@ func (queuemap *queuesMap) replaceExecutablesDropOverLimit(
 	if queuecat := queuemap.queue[category]; queuecat != nil {
 		queuecat.Mu.Lock()
 		defer queuecat.Mu.Unlock()
-		if txlist := queuemap.queue[category].addrTxList[addr]; txlist != nil {
+		if txlist := queuemap.queue[category].mapAddrTxCoreList[addr]; txlist != nil {
 			var caps []*basic.Transaction
 			if f1(addr) {
 				caps = txlist.Cap(int(QueueMaxTxsAccount))
@@ -825,7 +862,7 @@ func (queuemap *queuesMap) replaceExecutablesTurnTx(f0 func(addr tpcrtypes.Addre
 	if queuecat := queuemap.queue[category]; queuecat != nil {
 		queuecat.Mu.Lock()
 		defer queuecat.Mu.Unlock()
-		if txlist := queuecat.addrTxList[addr]; txlist != nil {
+		if txlist := queuecat.mapAddrTxCoreList[addr]; txlist != nil {
 			readies := txlist.Ready(f0(addr))
 			//f1:pool.curState.GetNonce(addr)
 			for _, tx := range readies {
@@ -881,9 +918,9 @@ func (queuemap *queuesMap) replaceExecutablesDeleteEmpty(category basic.Transact
 		queuemap.queue[category].Mu.Lock()
 		defer queuemap.queue[category].Mu.Unlock()
 
-		if txlist := queuemap.queue[category].addrTxList[addr]; txlist != nil {
+		if txlist := queuemap.queue[category].mapAddrTxCoreList[addr]; txlist != nil {
 			if txlist.Empty() {
-				delete(queuemap.queue[category].addrTxList, addr)
+				delete(queuemap.queue[category].mapAddrTxCoreList, addr)
 			}
 		}
 	}
@@ -898,7 +935,7 @@ func (queuemap *queuesMap) replaceExecutablesDropTooOld(category basic.Transacti
 		queuemap.queue[category].Mu.Lock()
 		defer queuemap.queue[category].Mu.Unlock()
 
-		if list := queuemap.queue[category].addrTxList[addr]; list != nil {
+		if list := queuemap.queue[category].mapAddrTxCoreList[addr]; list != nil {
 			// Drop all transactions that are deemed too old (low nonce)
 			forwards := list.Forward(f1(addr))
 
@@ -924,11 +961,11 @@ func (queuemap *queuesMap) getTxListRemoveFutureByAddrOfCategory(tx *basic.Trans
 	if queuecat := queuemap.queue[category]; queuecat != nil {
 		queuecat.Mu.Lock()
 		defer queuecat.Mu.Unlock()
-		if future := queuemap.queue[category].addrTxList[addr]; future != nil {
+		if future := queuemap.queue[category].mapAddrTxCoreList[addr]; future != nil {
 			future.Remove(tx)
 			if future.Empty() {
 				if txs := queuemap.queue[category]; txs != nil {
-					delete(txs.addrTxList, addr)
+					delete(txs.mapAddrTxCoreList, addr)
 				}
 				f1(key)
 				//pool.ActivationIntervals.removeTxActiv(key)
@@ -938,13 +975,13 @@ func (queuemap *queuesMap) getTxListRemoveFutureByAddrOfCategory(tx *basic.Trans
 	}
 }
 
-func (queuemap *queuesMap) getAddrTxListOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address]*txList {
-	queuemap.Mu.Lock()
-	defer queuemap.Mu.Unlock()
+func (queuemap *queuesMap) getAddrTxListOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address]*txCoreList {
+	queuemap.Mu.RLock()
+	defer queuemap.Mu.RUnlock()
 	if queuecat := queuemap.queue[category]; queuecat != nil {
-		queuemap.queue[category].Mu.Lock()
-		defer queuemap.queue[category].Mu.Unlock()
-		if maptxlist := queuemap.queue[category].addrTxList; maptxlist != nil {
+		queuecat.Mu.RLock()
+		defer queuecat.Mu.RUnlock()
+		if maptxlist := queuecat.mapAddrTxCoreList; maptxlist != nil {
 			return maptxlist
 		}
 	}
@@ -955,10 +992,10 @@ func (queuemap *queuesMap) replaceAddrTxListOfCategory(category basic.Transactio
 	queuemap.Mu.Lock()
 	defer queuemap.Mu.Unlock()
 	if queuecat := queuemap.queue[category]; queuecat != nil {
-		queuemap.queue[category].Mu.Lock()
-		defer queuemap.queue[category].Mu.Unlock()
+		queuecat.Mu.Lock()
+		defer queuecat.Mu.Unlock()
 
-		if maptxlist := queuemap.queue[category].addrTxList; maptxlist != nil {
+		if maptxlist := queuemap.queue[category].mapAddrTxCoreList; maptxlist != nil {
 
 			replaceAddrs := make([]tpcrtypes.Address, 0, len(maptxlist))
 			for addr, _ := range maptxlist {
@@ -971,13 +1008,13 @@ func (queuemap *queuesMap) replaceAddrTxListOfCategory(category basic.Transactio
 }
 
 func (queuemap *queuesMap) getStatsOfCategory(category basic.TransactionCategory) int {
-	queuemap.Mu.Lock()
-	defer queuemap.Mu.Unlock()
+	queuemap.Mu.RLock()
+	defer queuemap.Mu.RUnlock()
 	if queuecat := queuemap.queue[category]; queuecat != nil {
-		queuemap.queue[category].Mu.Lock()
-		defer queuemap.queue[category].Mu.Unlock()
+		queuecat.Mu.RLock()
+		defer queuecat.Mu.RUnlock()
 		queue := 0
-		if maptxlist := queuemap.queue[category].addrTxList; maptxlist != nil {
+		if maptxlist := queuecat.mapAddrTxCoreList; maptxlist != nil {
 			for _, list := range maptxlist {
 				queue += list.Len()
 			}
@@ -1003,10 +1040,10 @@ func (queuemap *queuesMap) removeTxsForTruncateQueue(category basic.TransactionC
 	if queuecat := queuemap.queue[category]; queuecat != nil {
 		queuecat.Mu.Lock()
 		defer queuecat.Mu.Unlock()
-		txs := make(txsByHeartbeat, 0, len(queuemap.queue[category].addrTxList))
-		for addr := range queuemap.queue[category].addrTxList {
+		txs := make(txsByHeartbeat, 0, len(queuemap.queue[category].mapAddrTxCoreList))
+		for addr := range queuemap.queue[category].mapAddrTxCoreList {
 			if f1(addr) {
-				list := queuemap.queue[category].addrTxList[addr].Flatten()
+				list := queuemap.queue[category].mapAddrTxCoreList[addr].Flatten()
 				for _, tx := range list {
 					txId, _ := tx.HashHex()
 					txs = append(txs, txByHeartbeat{txId, f2(txId)})
@@ -1027,7 +1064,7 @@ func (queuemap *queuesMap) removeTxsForTruncateQueue(category basic.TransactionC
 				f51 := func(txId string, tx *basic.Transaction) {
 					//	pool.queueAddTx(txId, tx, false, false)
 					from := tpcrtypes.Address(tx.Head.FromAddr)
-					inserted, old := queuecat.addrTxList[from].Add(tx)
+					inserted, old := queuecat.mapAddrTxCoreList[from].txCoreAdd(tx)
 					if !inserted {
 						// An older transaction was existed
 						return
@@ -1049,11 +1086,11 @@ func (queuemap *queuesMap) removeTxsForTruncateQueue(category basic.TransactionC
 				}
 				f5(f51, tx, category, addr)
 				// Remove the transaction from the pending lists and reset the account nonce
-				if future := queuecat.addrTxList[addr]; future != nil {
+				if future := queuecat.mapAddrTxCoreList[addr]; future != nil {
 					future.Remove(tx)
 					if future.Empty() {
 						if droptxs := queuemap.queue[category]; droptxs != nil {
-							delete(droptxs.addrTxList, addr)
+							delete(droptxs.mapAddrTxCoreList, addr)
 						}
 						f6(txId)
 					}
@@ -1072,9 +1109,9 @@ func (queuemap *queuesMap) removeTxForLifeTime(category basic.TransactionCategor
 	queuemap.Mu.Lock()
 	defer queuemap.Mu.Unlock()
 	if queuecat := queuemap.queue[category]; queuecat != nil {
-		queuemap.queue[category].Mu.Lock()
-		defer queuemap.queue[category].Mu.Unlock()
-		for addr, txlist := range queuemap.queue[category].addrTxList {
+		queuecat.Mu.Lock()
+		defer queuecat.Mu.Unlock()
+		for addr, txlist := range queuecat.mapAddrTxCoreList {
 			if f0(addr) {
 				continue
 			}
@@ -1095,9 +1132,9 @@ func (queuemap *queuesMap) republicTx(category basic.TransactionCategory,
 	queuemap.Mu.Lock()
 	defer queuemap.Mu.Unlock()
 	if queuecat := queuemap.queue[category]; queuecat != nil {
-		queuemap.queue[category].Mu.Lock()
-		defer queuemap.queue[category].Mu.Unlock()
-		for _, txlist := range queuemap.queue[category].addrTxList {
+		queuecat.Mu.Lock()
+		defer queuecat.Mu.Unlock()
+		for _, txlist := range queuecat.mapAddrTxCoreList {
 			list := txlist.txs.Flatten()
 			for _, tx := range list {
 				txId, _ := tx.HashHex()
@@ -1109,7 +1146,7 @@ func (queuemap *queuesMap) republicTx(category basic.TransactionCategory,
 	}
 }
 
-func (l *txList) FlattenRepublic(f1 func(string2 string) time.Duration, time2 time.Duration, f2 func(tx *basic.Transaction)) {
+func (l *txCoreList) FlattenRepublic(f1 func(string2 string) time.Duration, time2 time.Duration, f2 func(tx *basic.Transaction)) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 	list := l.txs.Flatten()
@@ -1121,27 +1158,12 @@ func (l *txList) FlattenRepublic(f1 func(string2 string) time.Duration, time2 ti
 	}
 }
 
-func (queuemap *queuesMap) setTxListOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address, txs *txList) {
-	queuemap.Mu.Lock()
-	defer queuemap.Mu.Unlock()
-	queuemap.queue[category].Mu.Lock()
-	defer queuemap.queue[category].Mu.Unlock()
-	queuemap.queue[category].addrTxList[addr] = txs
-}
-func (queuemap *queuesMap) removeTxListByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address) {
-	queuemap.Mu.Lock()
-	defer queuemap.Mu.Unlock()
-	queuemap.queue[category].Mu.Lock()
-	defer queuemap.queue[category].Mu.Unlock()
-	delete(queuemap.queue[category].addrTxList, addr)
-}
-
 func (queuemap *queuesMap) addTxByKeyOfCategory(
 	f1 func(category basic.TransactionCategory, key string),
 	f2 func(category basic.TransactionCategory, key string) *basic.Transaction,
 	f3 func(string2 string),
 	f4 func(category basic.TransactionCategory, transaction *basic.Transaction, local bool),
-	f5 func(string2 string, category basic.TransactionCategory),
+	f5 func(string2 string, category basic.TransactionCategory, local bool),
 	key string, tx *basic.Transaction, local bool, addAll bool) (bool, error) {
 
 	queuemap.Mu.Lock()
@@ -1151,11 +1173,11 @@ func (queuemap *queuesMap) addTxByKeyOfCategory(
 		queuecat.Mu.Lock()
 		defer queuecat.Mu.Unlock()
 		from := tpcrtypes.Address(tx.Head.FromAddr)
-		if queuecat.addrTxList[from] == nil {
-			queuecat.addrTxList[from] = newTxList(false)
+		if queuecat.mapAddrTxCoreList[from] == nil {
+			queuecat.mapAddrTxCoreList[from] = newCoreList(false)
 		}
 
-		inserted, old := queuecat.addrTxList[from].Add(tx)
+		inserted, old := queuecat.mapAddrTxCoreList[from].txCoreAdd(tx)
 		if !inserted {
 			// An older transaction was existed
 			return false, ErrReplaceUnderpriced
@@ -1175,9 +1197,10 @@ func (queuemap *queuesMap) addTxByKeyOfCategory(
 			f4(category, tx, local)
 			//pool.allTxsForLook.getAllTxsLookupByCategory(category).Add(tx, local)
 			//pool.sortedLists.getPricedlistByCategory(category).Removed(1)
+
 		}
 		// If we never record the ActivationInterval, do it right now.
-		f5(key, category)
+		f5(key, category, local)
 
 		//pool.ActivationIntervals.setTxActiv(key, time.Now())
 		//pool.TxHashCategory.setHashCat(key, basic.TransactionCategory(tx.Head.Category))
@@ -1185,13 +1208,6 @@ func (queuemap *queuesMap) addTxByKeyOfCategory(
 		return old != nil, nil
 	}
 	return false, ErrQueueEmpty
-}
-
-func (queuemap *queuesMap) setQueues(category basic.TransactionCategory, queuetxs *queueTxs) {
-	queuemap.Mu.Lock()
-	defer queuemap.Mu.Unlock()
-	queuemap.queue[category] = queuetxs
-	return
 }
 
 type allTxsLookupMap struct {
@@ -1208,25 +1224,80 @@ func newAllTxsLookupMap() *allTxsLookupMap {
 	return allMap
 }
 func (alltxsmap *allTxsLookupMap) getAll() map[basic.TransactionCategory]*txLookup {
-	alltxsmap.Mu.Lock()
-	defer alltxsmap.Mu.Unlock()
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
 	if all := alltxsmap.all; all != nil {
 		return all
 	}
 	return nil
 
 }
+
+func (alltxsmap *allTxsLookupMap) getAllCount() int {
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
+	var cnt int
+	for category, _ := range alltxsmap.all {
+		cnt += alltxsmap.all[category].Count()
+	}
+	return cnt
+}
+func (alltxsmap *allTxsLookupMap) getLocalCountByCategory(category basic.TransactionCategory) int {
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
+	if lookuptxs := alltxsmap.all[category]; lookuptxs != nil {
+		return lookuptxs.LocalCount()
+	}
+	return 0
+}
+func (alltxsmap *allTxsLookupMap) getRemoteCountByCategory(category basic.TransactionCategory) int {
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
+	if lookuptxs := alltxsmap.all[category]; lookuptxs != nil {
+		return lookuptxs.RemoteCount()
+	}
+	return 0
+}
+
 func (alltxsmap *allTxsLookupMap) getAllTxsLookupByCategory(category basic.TransactionCategory) *txLookup {
-	alltxsmap.Mu.Lock()
-	defer alltxsmap.Mu.Unlock()
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
 	if txlookup := alltxsmap.all[category]; txlookup != nil {
 		return txlookup
 	}
 	return nil
 }
+func (alltxsmap *allTxsLookupMap) getSegmentFromAllTxsLookupByCategory(category basic.TransactionCategory) int {
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
+	if txlookup := alltxsmap.all[category]; txlookup != nil {
+		return txlookup.Segments()
+	}
+	return 0
+}
+
+func (alltxsmap *allTxsLookupMap) getCountFromAllTxsLookupByCategory(category basic.TransactionCategory) int {
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
+	if txlookup := alltxsmap.all[category]; txlookup != nil {
+		return len(txlookup.locals) + len(txlookup.remotes)
+	}
+	return 0
+}
+
+func (alltxsmap *allTxsLookupMap) getLocalKeyTxFromAllTxsLookupByCategory(category basic.TransactionCategory) map[string]*basic.Transaction {
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
+	if txlookup := alltxsmap.all[category]; txlookup != nil {
+		txlookup.lock.RLock()
+		defer txlookup.lock.RUnlock()
+		return txlookup.locals
+	}
+	return nil
+}
 func (alltxsmap *allTxsLookupMap) getTxFromKeyFromAllTxsLookupByCategory(category basic.TransactionCategory, txHash string) *basic.Transaction {
-	alltxsmap.Mu.Lock()
-	defer alltxsmap.Mu.Unlock()
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
 	if txlookup := alltxsmap.all[category]; txlookup != nil {
 		return txlookup.Get(txHash)
 	}
@@ -1242,17 +1313,16 @@ func (alltxsmap *allTxsLookupMap) remoteToLocalsAllTxsLookupByCategory(category 
 	return 0
 }
 
-//		num := pool.allTxsForLook.getAllTxsLookupByCategory(category).RemoteToLocals(pool.locals)
 func (alltxsmap *allTxsLookupMap) addTxToAllTxsLookupByCategory(category basic.TransactionCategory,
 	tx *basic.Transaction, isLocal bool) {
 	alltxsmap.Mu.Lock()
 	defer alltxsmap.Mu.Unlock()
-	if txlookup := alltxsmap.all[category]; txlookup != nil {
-		txlookup.Add(tx, isLocal)
+	if catAllMap := alltxsmap.all[category]; catAllMap != nil {
+		catAllMap.Add(tx, isLocal)
 	}
+
 }
 
-//		pool.allTxsForLook.getAllTxsLookupByCategory(category).Add(tx, isLocal)
 func (alltxsmap *allTxsLookupMap) removeTxHashFromAllTxsLookupByCategory(category basic.TransactionCategory, txhash string) {
 	alltxsmap.Mu.Lock()
 	defer alltxsmap.Mu.Unlock()
@@ -1261,11 +1331,12 @@ func (alltxsmap *allTxsLookupMap) removeTxHashFromAllTxsLookupByCategory(categor
 	}
 }
 
-//			pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txId)
 func (alltxsmap *allTxsLookupMap) getRemoteMapTxsLookupByCategory(category basic.TransactionCategory) map[string]*basic.Transaction {
-	alltxsmap.Mu.Lock()
-	defer alltxsmap.Mu.Unlock()
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
 	if txlookup := alltxsmap.all[category]; txlookup != nil {
+		txlookup.lock.RLock()
+		defer txlookup.lock.RUnlock()
 		return txlookup.remotes
 	}
 	return nil
@@ -1274,7 +1345,9 @@ func (alltxsmap *allTxsLookupMap) getRemoteMapTxsLookupByCategory(category basic
 func (alltxsmap *allTxsLookupMap) setAllTxsLookup(category basic.TransactionCategory, txlook *txLookup) {
 	alltxsmap.Mu.Lock()
 	defer alltxsmap.Mu.Unlock()
-	alltxsmap.all[category] = txlook
+	if all := alltxsmap.all; all != nil {
+		all[category] = txlook
+	}
 }
 func (alltxsmap *allTxsLookupMap) removeAllTxsLookupByCategory(category basic.TransactionCategory) {
 	alltxsmap.Mu.Lock()
@@ -1623,6 +1696,7 @@ func newTxSortedList(all *txLookup) *txSortedList {
 	txSorted.setPricedlist(basic.TransactionCategory_Topia_Universal, newTxPricedList(all))
 	return txSorted
 }
+
 func (txsorts *txSortedList) getAllPricedlist() map[basic.TransactionCategory]*txPricedList {
 	txsorts.Mu.Lock()
 	defer txsorts.Mu.Unlock()
@@ -1631,8 +1705,70 @@ func (txsorts *txSortedList) getAllPricedlist() map[basic.TransactionCategory]*t
 func (txsorts *txSortedList) getPricedlistByCategory(category basic.TransactionCategory) *txPricedList {
 	txsorts.Mu.Lock()
 	defer txsorts.Mu.Unlock()
-	return txsorts.Pricedlist[category]
+	if pricelistcap := txsorts.Pricedlist[category]; pricelistcap != nil {
+		return txsorts.Pricedlist[category]
+
+	}
+	return nil
 }
+func (txsorts *txSortedList) getAllLocalTxsByCategory(category basic.TransactionCategory) map[string]*basic.Transaction {
+	txsorts.Mu.Lock()
+	defer txsorts.Mu.Unlock()
+	if pricelistcap := txsorts.Pricedlist[category]; pricelistcap != nil {
+		if allTxs := pricelistcap.all; allTxs != nil {
+			return pricelistcap.all.locals
+		}
+	}
+	return nil
+}
+func (txsorts *txSortedList) getAllRemoteTxsByCategory(category basic.TransactionCategory) map[string]*basic.Transaction {
+	txsorts.Mu.Lock()
+	defer txsorts.Mu.Unlock()
+	if pricelistcap := txsorts.Pricedlist[category]; pricelistcap != nil {
+		if alltxs := pricelistcap.all; alltxs != nil {
+			return pricelistcap.all.remotes
+		}
+	}
+	return nil
+}
+
+func (txsorts *txSortedList) DiscardFromPricedlistByCategor(category basic.TransactionCategory, segments int, force bool) ([]*basic.Transaction, bool) {
+	txsorts.Mu.Lock()
+	defer txsorts.Mu.Unlock()
+	if pricelistcap := txsorts.Pricedlist[category]; pricelistcap != nil {
+		discard := func(segments int, force bool) ([]*basic.Transaction, bool) {
+			drop := make([]*basic.Transaction, 0, segments) // Remote underpriced transactions to drop
+			for segments > 0 {
+				// Discard stale transactions if found during cleanup
+				if pricelistcap.remoteTxs.Len() == 0 {
+					//Stop if heap is empty
+					break
+				}
+				tx := heap.Pop(&pricelistcap.remoteTxs).(*basic.Transaction)
+				if txId, err := tx.HashHex(); err == nil {
+					if pricelistcap.all.GetRemoteTx(txId) == nil { // Removed or migrated
+						atomic.AddInt64(&pricelistcap.stales, -1)
+						continue
+					}
+				}
+				drop = append(drop, tx)
+				segments -= numSegments(tx)
+			}
+			// If we still can't make enough room for the new transaction
+			if segments > 0 && !force {
+				for _, tx := range drop {
+					heap.Push(&pricelistcap.remoteTxs, tx)
+				}
+				return nil, false
+			}
+			return drop, true
+		}
+		return discard(segments, force)
+
+	}
+	return nil, false
+}
+
 func (txsorts *txSortedList) ReheapForPricedlistByCategory(category basic.TransactionCategory) {
 	txsorts.Mu.Lock()
 	defer txsorts.Mu.Unlock()
@@ -1643,13 +1779,15 @@ func (txsorts *txSortedList) ReheapForPricedlistByCategory(category basic.Transa
 func (txsorts *txSortedList) putTxToPricedlistByCategory(category basic.TransactionCategory, tx *basic.Transaction, isLocal bool) {
 	txsorts.Mu.Lock()
 	defer txsorts.Mu.Unlock()
-	txsorts.Pricedlist[category].Put(tx, isLocal)
+	if catlist := txsorts.Pricedlist[category]; catlist != nil {
+		catlist.Put(tx, isLocal)
+	}
 }
 func (txsorts *txSortedList) removedPricedlistByCategory(category basic.TransactionCategory, num int) {
 	txsorts.Mu.Lock()
 	defer txsorts.Mu.Unlock()
-	if list := txsorts.Pricedlist[category]; list != nil {
-		list.Removed(num)
+	if catlist := txsorts.Pricedlist[category]; catlist != nil {
+		catlist.Removed(num)
 	}
 }
 func (txsorts *txSortedList) setPricedlist(category basic.TransactionCategory, txpriced *txPricedList) {

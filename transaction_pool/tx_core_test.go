@@ -43,12 +43,12 @@ func init() {
 func Test_nonceHeap_Len(t *testing.T) {
 	tests := []struct {
 		name string
-		h    nonceHeap
+		h    nonceHp
 		want int
 	}{
 		// TODO: Add test cases.
 		{name: "test nonceheapLen",
-			h: nonceHeap{uint64(10), uint64(13), uint64(9)}, want: 3},
+			h: nonceHp{uint64(10), uint64(13), uint64(9)}, want: 3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -67,14 +67,14 @@ func Test_nonceHeap_Less(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		h    nonceHeap
+		h    nonceHp
 		args args
 		want bool
 	}{
 		// TODO: Add test cases.
-		{name: "test nonceheap less", h: nonceHeap{uint64(11), uint64(18)},
+		{name: "test nonceheap less", h: nonceHp{uint64(11), uint64(18)},
 			args: args{0, 1}, want: true},
-		{name: "test nonceheap less", h: nonceHeap{uint64(18), uint64(10)},
+		{name: "test nonceheap less", h: nonceHp{uint64(18), uint64(10)},
 			args: args{0, 1}, want: false},
 	}
 	for _, tt := range tests {
@@ -212,7 +212,7 @@ func Test_txSortedMap_Get(t *testing.T) {
 	testitem[uint64(1)] = Tx1
 	type fields struct {
 		items map[uint64]*basic.Transaction
-		index *nonceHeap
+		index *nonceHp
 		cache []*basic.Transaction
 	}
 	type args struct {
@@ -227,13 +227,13 @@ func Test_txSortedMap_Get(t *testing.T) {
 		// TODO: Add test cases.
 		{"test get", fields{
 			items: testitem,
-			index: &nonceHeap{uint64(1)},
+			index: &nonceHp{uint64(1)},
 			cache: nil,
 		}, args{uint64(1)}, Tx1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &txSortedMap{
+			m := &txSortedMapByNonce{
 				items: tt.fields.items,
 				index: tt.fields.index,
 				cache: tt.fields.cache,

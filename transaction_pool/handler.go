@@ -1,12 +1,15 @@
 package transactionpool
 
 import (
+	"context"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TransactionPoolHandler interface {
 	ProcessTx(msg *TxMessage) error
+	processBlockAddedEvent(context.Context, interface{}) error
 }
 
 type transactionPoolHandler struct {
@@ -33,6 +36,16 @@ func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
 	}
 	if err := handler.txPool.AddTx(tx, false); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (handler *transactionPoolHandler) processBlockAddedEvent(ctx context.Context, data interface{}) error {
+	if block, ok := data.(*tpchaintypes.Block); ok {
+		newChainHead := &ChainHeadEvent{
+			block,
+		}
+		handler.txPool.chanChainHead <- *newChainHead
 	}
 	return nil
 }

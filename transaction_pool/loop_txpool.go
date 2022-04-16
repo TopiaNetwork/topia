@@ -56,12 +56,12 @@ func (pool *transactionPool) loopSaveAllIfShutDown() {
 		case <-pool.chanSysShutDown:
 			close(pool.chanReorgShutdown)
 			pool.saveAllWhenSysShutDown()
+
 			close(pool.chanRmTxs)
 			close(pool.chanChainHead)
-			close(pool.chanQueueTxEvent)
 			return
 		case <-pool.ctx.Done():
-			pool.log.Info("System shutdown stopped")
+			pool.log.Info("Systemshutdown stopped")
 			return
 		}
 	}

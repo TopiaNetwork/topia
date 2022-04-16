@@ -70,14 +70,13 @@ func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
 		//data := "txPool remove a " + string(category) + "tx,txHash is " + key
 		//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxReceived, data)
-
 	}
 	f5 := func(f51 func(txId string, tx *basic.Transaction), tx *basic.Transaction, category basic.TransactionCategory, addr tpcrtypes.Address) {
 		pool.pendings.getTxListRemoveByAddrOfCategory(f51, tx, category, addr)
 	}
 	f511 := func(category basic.TransactionCategory, txid string) {
-		pool.allTxsForLook.getAllTxsLookupByCategory(category).Remove(txid)
-		pool.sortedLists.getPricedlistByCategory(category).Removed(1)
+		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txid)
+		pool.sortedLists.removedPricedlistByCategory(category, 1)
 	}
 	f512 := func(category basic.TransactionCategory, txId string) *basic.Transaction {
 		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txId)

@@ -106,3 +106,7 @@ func (md *messageDeliverMock) deliverDKGDealRespMessage(ctx context.Context, msg
 func (md *messageDeliverMock) updateDKGBls(dkgBls DKGBls) {
 	md.dkgBls = dkgBls
 }
+
+func (md *messageDeliverMock) isReady() bool {
+	return true
+}

@@ -42,6 +42,6 @@ func (na *NodeActor) Receive(context actor.Context) {
 	case []byte:
 		na.chain.dispatch(context, msg)
 	default:
-		na.log.Error("Sync actor receive invalid msg")
+		na.log.Error("Chain actor receive invalid msg")
 	}
 }

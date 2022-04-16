@@ -6,6 +6,7 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
+	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -54,6 +55,7 @@ type nodeParams struct {
 	txPool          txpool.TransactionPool
 	ledger          ledger.Ledger
 	cs              consensus.Consensus
+	chain           chain.Chain
 	config          *tpconfig.Configuration
 	sysActor        *actor.ActorSystem
 	compState       state.CompositionState
@@ -276,8 +278,6 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			panic("Can't generate node private key")
 		}
 
-		txPool := mock.NewTransactionPoolMock(testMainLog, cryptService)
-
 		config := tpconfig.GetConfiguration()
 
 		sysActor := actor.NewActorSystem()
@@ -286,7 +286,11 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		network := tpnet.NewNetwork(context.Background(), testMainLog, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
 
+		txPool := mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)
+
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
+
+		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, config)
 
 		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1)
 
@@ -344,6 +348,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			network:         network,
 			txPool:          txPool,
 			ledger:          l,
+			chain:           chain,
 			config:          newConfig,
 			sysActor:        sysActor,
 			compState:       compState,
@@ -358,6 +363,8 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
+		eventhub.GetEventHubManager().GetEventHub(nParams[i].nodeID).Start(nParams[i].sysActor)
+		nParams[i].chain.Start(nParams[i].sysActor, nParams[i].network)
 		cs := consensus.NewConsensus(
 			nParams[i].chainID,
 			nParams[i].nodeID,
@@ -374,6 +381,8 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 		cs.Start(nParams[i].sysActor, nParams[i].latestEpochInfo.Epoch, nParams[i].latestEpochInfo.StartHeight, nParams[i].latestBlock.Head.Height)
 		nParams[i].cs = cs
 		css = append(css, cs)
+
+		nParams[i].txPool.Start(nParams[i].sysActor, nParams[i].network)
 	}
 
 	return css

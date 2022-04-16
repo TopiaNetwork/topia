@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -44,9 +45,9 @@ type consensusProposer struct {
 func newConsensusProposer(log tplog.Logger,
 	nodeID string,
 	priKey tpcrtypes.PrivateKey,
-	blockAddedCh chan *types.Block,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	voteMsgChan chan *VoteMessage,
+	blockAddedCh chan *types.Block,
 	crypt tpcrt.CryptService,
 	proposeMaxInterval time.Duration,
 	deliver messageDeliverI,
@@ -54,7 +55,7 @@ func newConsensusProposer(log tplog.Logger,
 	marshaler codec.Marshaler,
 	validator *consensusValidator) *consensusProposer {
 	csProposer := &consensusProposer{
-		log:                     log,
+		log:                     tplog.CreateSubModuleLogger("proposer", log),
 		nodeID:                  nodeID,
 		priKey:                  priKey,
 		blockAddedCh:            blockAddedCh,
@@ -150,6 +151,7 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 		for {
 			select {
 			case ppmProp := <-p.preprePackedMsgPropChan:
+				p.log.Infof("Received prepare message from remote, state version %d self node %s", ppmProp.StateVersion, p.nodeID)
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 					defer csStateRN.Stop()
@@ -223,6 +225,7 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 		for {
 			select {
 			case voteMsg := <-p.voteMsgChan:
+				p.log.Infof("Received voite message, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
 				aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
 				if err != nil {
 					p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
@@ -240,11 +243,13 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 					continue
 				}
 
-				err = p.deliver.deliverCommitMessage(context.Background(), commitMsg)
+				err = p.deliver.deliverCommitMessage(ctx, commitMsg)
 				if err != nil {
 					p.log.Errorf("Can't deliver commit message: %v", err)
 					continue
 				}
+
+				p.log.Infof("Deliver commit message successfully, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
 
 				p.voteCollector.reset()
 
@@ -318,17 +323,33 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		return err
 	}
 
-	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
-		p.log.Errorf("Consensus deliver propose message err: epoch =%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
+	waitCount := 1
+	for !p.deliver.isReady() && waitCount <= 10 {
+		p.log.Warnf("Message deliver not ready now for delivering propose message, wait 50ms, no. %d", waitCount)
+		time.Sleep(50 * time.Millisecond)
+		waitCount++
+	}
+	if waitCount > 10 {
+		err = errors.New("Finally nil dkgBls and can't deliver propose message")
+		p.log.Errorf("%v", err)
 		return err
 	}
+
+	p.log.Infof("Message deliver ready, state version %d height %d self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
+
+	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
+		p.log.Errorf("Deliver propose message err: epoch =%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
+		return err
+	}
+
+	p.log.Infof("Propose block sucessfully, state version %d height %d self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
 
 	return nil
 }
 
 func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 	go func() {
-		timer := time.NewTimer(p.proposeMaxInterval)
+		timer := time.NewTicker(p.proposeMaxInterval)
 		defer timer.Stop()
 		for {
 			select {
@@ -340,7 +361,6 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 				if err := p.proposeBlockSpecification(ctx, nil); err != nil {
 					continue
 				}
-				timer.Reset(p.proposeMaxInterval)
 			case <-ctx.Done():
 				p.log.Info("Consensus proposer epoch exit")
 				return

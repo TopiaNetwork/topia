@@ -30,10 +30,10 @@ func (vc *consensusVoteCollector) tryAggregateSignAndAddVote(vote *VoteMessage) 
 	defer vc.Unlock()
 
 	vc.votes = append(vc.votes, vote)
-	if uint64(len(vc.votes)) >= vc.threshold {
+	if len(vc.votes) >= vc.dkgBls.Threshold() {
 		return vc.produceAggSign()
 	} else {
-		vc.log.Debugf("Received vote count=%d, required=%d", len(vc.votes), vc.threshold)
+		vc.log.Infof("Received vote count=%d, required=%d", len(vc.votes), vc.dkgBls.Threshold())
 	}
 
 	return nil, nil

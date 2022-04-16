@@ -3,7 +3,6 @@ package transactionpool
 import (
 	"encoding/json"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 	"io/ioutil"
 	"time"
@@ -60,43 +59,33 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 	conf := *config
 	if conf.GasPriceLimit < 1 {
-		tplog.Logger.Warnf("Invalid GasPriceLimit,updated to default value:", "from", conf.GasPriceLimit, "to", DefaultTransactionPoolConfig.GasPriceLimit)
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
 	if conf.PendingAccountSegments < 2 {
-		tplog.Logger.Warnf("Invalid PendingAccountSlots,updated to default value:", "from", conf.PendingAccountSegments, "to", DefaultTransactionPoolConfig.PendingAccountSegments)
 		conf.PendingAccountSegments = DefaultTransactionPoolConfig.PendingAccountSegments
 	}
 	if conf.PendingGlobalSegments < 1 {
-		tplog.Logger.Warnf("Invalid PendingGlobalSlots,updated to default value:", "from", conf.PendingGlobalSegments, "to", DefaultTransactionPoolConfig.PendingGlobalSegments)
 		conf.PendingGlobalSegments = DefaultTransactionPoolConfig.PendingGlobalSegments
 	}
 	if conf.QueueMaxTxsAccount < 1 {
-		tplog.Logger.Warnf("Invalid QueueMaxTxsAccount,updated to default value:", "from", conf.QueueMaxTxsAccount, "to", DefaultTransactionPoolConfig.QueueMaxTxsAccount)
 		conf.QueueMaxTxsAccount = DefaultTransactionPoolConfig.QueueMaxTxsAccount
 	}
 	if conf.QueueMaxTxsGlobal < 1 {
-		tplog.Logger.Warnf("Invalid QueueMaxTxsGlobal,updated to default value:", "from", conf.QueueMaxTxsGlobal, "to", DefaultTransactionPoolConfig.QueueMaxTxsGlobal)
 		conf.QueueMaxTxsGlobal = DefaultTransactionPoolConfig.QueueMaxTxsGlobal
 	}
 	if conf.LifetimeForTx < 1 {
-		tplog.Logger.Warnf("Invalid LifetimeForTx,updated to default value:", "from", conf.LifetimeForTx, "to", DefaultTransactionPoolConfig.LifetimeForTx)
 		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
 	}
 	if conf.DurationForTxRePublic < 1 {
-		tplog.Logger.Warnf("Invalid DurationForTxRePublic,updated to default value:", "from", conf.DurationForTxRePublic, "to", DefaultTransactionPoolConfig.DurationForTxRePublic)
 		conf.DurationForTxRePublic = DefaultTransactionPoolConfig.DurationForTxRePublic
 	}
 	if conf.PathConfig == "" {
-		tplog.Logger.Warnf("Invalid PathConfig,updated to default value:", "from", conf.PathConfig, "to", DefaultTransactionPoolConfig.PathConfig)
 		conf.PathConfig = DefaultTransactionPoolConfig.PathConfig
 	}
 	if conf.PathRemote == nil {
-		tplog.Logger.Warnf("Invalid PathRemote,updated to default value:", "from", conf.PathRemote, "to", DefaultTransactionPoolConfig.PathRemote)
 		conf.PathRemote = DefaultTransactionPoolConfig.PathRemote
 	}
 	if conf.PathLocal == nil {
-		tplog.Logger.Warnf("Invalid PathLocal,updated to default value:", "from", conf.PathLocal, "to", DefaultTransactionPoolConfig.PathLocal)
 		conf.PathLocal = DefaultTransactionPoolConfig.PathLocal
 	}
 

@@ -3,10 +3,11 @@ package consensus
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
-	"math/big"
-
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"go.uber.org/atomic"
+	"math/big"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -52,11 +53,14 @@ type messageDeliverI interface {
 	deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error
 
 	updateDKGBls(dkgBls DKGBls)
+
+	isReady() bool
 }
 
 type messageDeliver struct {
 	log          tplog.Logger
 	nodeID       string
+	ready        atomic.Bool
 	priKey       tpcrtypes.PrivateKey
 	strategy     DeliverStrategy
 	network      network.Network
@@ -67,7 +71,7 @@ type messageDeliver struct {
 }
 
 func newMessageDeliver(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network network.Network, marshaler codec.Marshaler, cryptService tpcrt.CryptService, ledger ledger.Ledger) *messageDeliver {
-	return &messageDeliver{
+	msgDeliver := &messageDeliver{
 		log:          log,
 		nodeID:       nodeID,
 		priKey:       priKey,
@@ -77,6 +81,10 @@ func newMessageDeliver(log tplog.Logger, nodeID string, priKey tpcrtypes.Private
 		marshaler:    marshaler,
 		cryptService: cryptService,
 	}
+
+	msgDeliver.ready.Store(false)
+
+	return msgDeliver
 }
 
 func (md *messageDeliver) deliverNetwork() network.Network {
@@ -217,6 +225,10 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
+	if msg == nil {
+		return errors.New("Nil ProposeMessage for delivering")
+	}
+
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 
 	ctxProposer := ctx
@@ -238,6 +250,11 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 			return err
 		}
 		ctxValidator = context.WithValue(ctxValidator, tpnetcmn.NetContextKey_PeerList, peerActiveValidatorIDs)
+	}
+
+	if md.dkgBls == nil {
+		err := errors.New("Nil dkg for delivering propose message")
+		return err
 	}
 
 	sigData, pubKey, err := md.dkgBls.Sign(msg.BlockHead)
@@ -386,6 +403,15 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 }
 
 func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error {
+	if msg == nil {
+		return errors.New("Nil VoteMessage for delivering")
+	}
+
+	if md.dkgBls == nil {
+		err := errors.New("Nil dkg for delivering vote message")
+		return err
+	}
+
 	sigData, pubKey, err := md.dkgBls.Sign(msg.BlockHead)
 	if err != nil {
 		md.log.Errorf("DKG sign VoteMessage err: %v", err)
@@ -642,4 +668,9 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 
 func (md *messageDeliver) updateDKGBls(dkgBls DKGBls) {
 	md.dkgBls = dkgBls
+	md.ready.Swap(true)
+}
+
+func (md *messageDeliver) isReady() bool {
+	return md.ready.Load() && md.dkgBls.Finished()
 }

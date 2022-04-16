@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -25,7 +26,7 @@ type consensusValidator struct {
 
 func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, ledger ledger.Ledger, deliver *messageDeliver) *consensusValidator {
 	return &consensusValidator{
-		log:            log,
+		log:            tplog.CreateSubModuleLogger("validator", log),
 		nodeID:         nodeID,
 		proposeMsgChan: proposeMsgChan,
 		ledger:         ledger,
@@ -97,6 +98,7 @@ func (v *consensusValidator) start(ctx context.Context) {
 		for {
 			select {
 			case propMsg := <-v.proposeMsgChan:
+				v.log.Infof("Received propose message, state version %d self node %s", propMsg.StateVersion, v.nodeID)
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
 					defer csStateRN.Stop()
@@ -120,10 +122,27 @@ func (v *consensusValidator) start(ctx context.Context) {
 						v.log.Errorf("Can't produce vote msg: err=%v", err)
 						return err
 					}
+
+					waitCount := 1
+					for !v.deliver.isReady() && waitCount <= 10 {
+						v.log.Warnf("Message deliver not ready now for delivering vote message, wait 50ms, no. %d", waitCount)
+						time.Sleep(50 * time.Millisecond)
+						waitCount++
+					}
+					if waitCount > 10 {
+						err := errors.New("Finally nil dkgBls and can't deliver vote message")
+						v.log.Errorf("%v", err)
+						return err
+					}
+
+					v.log.Infof("Message deliver ready, state version %d self node %s", propMsg.StateVersion, v.nodeID)
+
 					if err = v.deliver.deliverVoteMessage(ctx, voteMsg, string(bh.Proposer)); err != nil {
 						v.log.Errorf("Consensus deliver vote message err: %v", err)
 						return err
 					}
+
+					v.log.Infof("Deliver vote message, state version %d self node %s", propMsg.StateVersion, v.nodeID)
 
 					return nil
 				}()

@@ -53,11 +53,11 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 		if ok {
 			i := 1
 			for ; compState.PendingStateStore() >= 3 && i <= 3; i++ {
-				log.Warnf("Last CompositionState hasn't been commited, need waiting for %d ms, no. %d ", Wait_StateStore_Time, i)
+				//log.Warnf("Last CompositionState hasn't been commited, need waiting for %d ms, no. %d ", Wait_StateStore_Time, i)
 				time.Sleep(Wait_StateStore_Time * time.Millisecond)
 			}
 			if i > 3 {
-				log.Errorf("Can't create new CompositionState because of last state version not been commited: stateVersion %d", stateVersion)
+				//log.Errorf("Can't create new CompositionState because of last state version not been commited: stateVersion %d", stateVersion)
 				return nil
 			}
 

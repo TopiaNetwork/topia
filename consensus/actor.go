@@ -40,7 +40,7 @@ func (ca *ConsensusActor) Receive(context actor.Context) {
 	case *actor.Restarting:
 		ca.log.Info("Restarting, actor is about to restart")
 	case []byte:
-		ca.log.Infof("Received consensus message data=%v", msg)
+		ca.log.Debugf("Received consensus message data=%v", msg)
 		ca.cons.dispatch(context, msg)
 	default:
 		ca.log.Error("Consensus actor receive invalid msg")

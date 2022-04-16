@@ -99,9 +99,8 @@ func (es *epochService) processEpochNewStart(ctx context.Context) {
 		for {
 			select {
 			case newEpoch := <-es.epochNewCh:
-
 				es.log.Infof("Epoch service receives new epoch event: new epoch %d", newEpoch.Epoch)
-				if !es.dkgExchange.dkgCrypt.finished() {
+				if !es.dkgExchange.dkgCrypt.Finished() {
 					es.log.Warnf("Current epoch %d DKG unfinished and still use the old, height %d", newEpoch.Epoch, newEpoch.StartHeight)
 				} else {
 					es.dkgExchange.notifyUpdater()

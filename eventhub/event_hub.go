@@ -146,7 +146,7 @@ func (hub *eventHub) Observe(ctx context.Context, evName string, evHandler Event
 }
 
 func (hub *eventHub) UnObserve(ctx context.Context, obsID string, evName string) error {
-	return nil
+	return hub.evManager.removeEvObserver(obsID, evName)
 }
 
 func (hub *eventHub) Stop() {

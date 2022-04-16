@@ -3,13 +3,14 @@ package transactionpool
 import (
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {

@@ -1,11 +1,13 @@
 package transactionpool
 
 import (
-	"github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/codec"
+	"testing"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"testing"
+
+	"github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/codec"
 )
 
 func Test_transactionPool_Reset(t *testing.T) {

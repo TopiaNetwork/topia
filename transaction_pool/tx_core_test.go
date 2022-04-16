@@ -1,12 +1,14 @@
 package transactionpool
 
 import (
-	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/transaction/basic"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 var (

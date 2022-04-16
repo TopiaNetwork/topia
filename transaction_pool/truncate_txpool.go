@@ -2,15 +2,14 @@ package transactionpool
 
 import (
 	"container/heap"
+	"github.com/TopiaNetwork/topia/eventhub"
+	"time"
+
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
-	"time"
 )
 
-// truncatePending removes transactions from the pending queue if the pool is above the
-// pending limit. The algorithm tries to reduce transaction counts by an approximately
-// equal number for all for accounts with many pending transactions.
-func (pool *transactionPool) truncatePending(category basic.TransactionCategory) {
+func (pool *transactionPool) truncatePendingByCategory(category basic.TransactionCategory) {
 
 	pendingCnt := pool.pendings.truncatePendingByCategoryFun1(category)
 	if pendingCnt <= pool.config.PendingGlobalSegments {
@@ -49,7 +48,7 @@ func (pool *transactionPool) truncatePending(category basic.TransactionCategory)
 }
 
 // truncateQueue drops the older transactions in the queue if the pool is above the global queue limit.
-func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
+func (pool *transactionPool) truncateQueueByCategory(category basic.TransactionCategory) {
 	queued := pool.queues.getStatsOfCategory(category)
 	if uint64(queued) <= pool.config.QueueMaxTxsGlobal {
 		return
@@ -68,8 +67,8 @@ func (pool *transactionPool) truncateQueue(category basic.TransactionCategory) {
 		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
 		// Remove it from the list of sortedByPriced
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
-		//data := "txPool remove a " + string(category) + "tx,txHash is " + key
-		//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxReceived, data)
+		data := "txPool remove a " + string(category) + "tx,txHash is " + txId
+		eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxReceived, data)
 	}
 	f5 := func(f51 func(txId string, tx *basic.Transaction), tx *basic.Transaction, category basic.TransactionCategory, addr tpcrtypes.Address) {
 		pool.pendings.getTxListRemoveByAddrOfCategory(f51, tx, category, addr)

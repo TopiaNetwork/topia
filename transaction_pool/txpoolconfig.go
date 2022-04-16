@@ -2,10 +2,11 @@ package transactionpool
 
 import (
 	"encoding/json"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
 	"io/ioutil"
 	"time"
+
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TransactionPoolConfig struct {

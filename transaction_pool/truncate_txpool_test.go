@@ -1,13 +1,14 @@
 package transactionpool
 
 import (
-	"fmt"
+	"testing"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func Test_transactionPool_truncateQueue(t *testing.T) {
@@ -60,7 +61,7 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 
 	assert.Equal(t, 400, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 192, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	pool.truncateQueue(Category1)
+	pool.truncateQueueByCategory(Category1)
 	assert.Equal(t, 257, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 400, pool.allTxsForLook.all[Category1].LocalCount())
@@ -92,7 +93,6 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 	var fromlocal, fromremote tpcrtypes.Address
 
 	for i := 1; i <= 400; i++ {
-		fmt.Println("i:", i)
 		nonce := uint64(i)
 		gasprice := uint64(i * 1000)
 		gaslimit := uint64(i * 1000000)
@@ -130,7 +130,7 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 
 	assert.Equal(t, 400, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 192, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	pool.truncatePending(Category1)
+	pool.truncatePendingByCategory(Category1)
 	assert.Equal(t, 449, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 449, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 400, pool.allTxsForLook.all[Category1].LocalCount())

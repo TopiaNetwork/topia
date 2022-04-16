@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/TopiaNetwork/topia/chain"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 	"time"
 
 	"github.com/lazyledger/smt"
@@ -25,7 +27,6 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	"github.com/TopiaNetwork/topia/sync"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
@@ -51,7 +52,7 @@ type ExecutionScheduler interface {
 
 	ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error)
 
-	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore, network tpnet.Network) error
+	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, deltaHeight int, marshaler codec.Marshaler, blockStore block.BlockStore, network tpnet.Network) error
 }
 
 type executionScheduler struct {
@@ -63,9 +64,10 @@ type executionScheduler struct {
 	lastStateVersion *atomic.Uint64
 	exePackedTxsList *list.List
 	config           *configuration.Configuration
+	txPool           txpool.TransactionPool
 }
 
-func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration) *executionScheduler {
+func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, txPool txpool.TransactionPool) *executionScheduler {
 	exeLog := tplog.CreateModuleLogger(logcomm.InfoLevel, MOD_NAME, log)
 	return &executionScheduler{
 		nodeID:           nodeID,
@@ -76,6 +78,7 @@ func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuratio
 		schedulerState:   atomic.NewUint32(uint32(SchedulerState_Idle)),
 		exePackedTxsList: list.New(),
 		config:           config,
+		txPool:           txPool,
 	}
 }
 
@@ -129,6 +132,11 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 		scheduler.lastStateVersion.Store(txPacked.StateVersion)
 		exePackedTxs.packedTxsRS = packedTxsRS
 		scheduler.exePackedTxsList.PushBack(exePackedTxs)
+
+		for _, tx := range txPacked.TxList {
+			txHash, _ := tx.HashHex()
+			scheduler.txPool.RemoveTxByKey(txpool.TxKey(txHash))
+		}
 
 		return packedTxsRS, nil
 	}
@@ -283,7 +291,7 @@ func (scheduler *executionScheduler) ConstructBlockAndBlockResult(marshaler code
 	return block, blockResult, nil
 }
 
-func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, marshaler codec.Marshaler, blockStore block.BlockStore, network tpnet.Network) error {
+func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, deltaHeight int, marshaler codec.Marshaler, blockStore block.BlockStore, network tpnet.Network) error {
 	if ok := scheduler.executeMutex.TryLockTimeout(1 * time.Second); !ok {
 		err := fmt.Errorf("A packedTxs is commiting, try later again")
 		scheduler.log.Errorf("%v", err)
@@ -347,11 +355,14 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 			return errCMMState
 		}
 
+		/*ToDo Save new block and block result to block store
 		errCMMBlock := blockStore.CommitBlock(block)
+
 		if errCMMBlock != nil {
 			scheduler.log.Errorf("Commit block err: state version %d, err: %v", stateVersion, errCMMBlock)
 			return errCMMBlock
 		}
+		*/
 
 		eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 
@@ -378,7 +389,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 		}
 
 		go func() {
-			err := network.Publish(ctx, []string{sync.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, pubsubBlockInfoBytes)
+			err := network.Publish(ctx, []string{chain.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, pubsubBlockInfoBytes)
 			if err != nil {
 				scheduler.log.Errorf("Publish block info err: stateVersion=%d, err=%v", stateVersion, err)
 			}

@@ -71,7 +71,7 @@ func newDKGExchange(log tplog.Logger,
 	dkgExData.State.Store(DKGExchangeState_IDLE)
 
 	return &dkgExchange{
-		log:           log,
+		log:           tplog.CreateSubModuleLogger("DKG", log),
 		chainID:       chainID,
 		nodeID:        nodeID,
 		startCh:       make(chan uint64, 1),
@@ -324,7 +324,7 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 
 				ex.log.Infof("Node %s process deal response successed %d epoch=%d", ex.nodeID, resp.Index, dealRespMsg.Epoch)
 
-				if ex.dkgCrypt.finished() {
+				if ex.dkgCrypt.Finished() {
 					ex.log.Infof("DKG exchange finished: node %s", ex.nodeID)
 					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
 					ex.finishedCh <- true

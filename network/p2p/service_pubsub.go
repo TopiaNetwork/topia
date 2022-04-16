@@ -87,7 +87,7 @@ func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, validat
 
 			if pubMsg, ok := psMsg.ValidatorData.(*message.NetworkPubSubMessage); ok {
 				for _, pubModName := range pubMsg.ModuleNames {
-					err := ps.p2pService.dispatch(pubModName, pubMsg)
+					err := ps.p2pService.dispatch(pubModName, pubMsg.Data)
 					if err != nil {
 						ps.log.Errorf("can't dispatch the pubsub message from peerID=%s", pubMsg.FromPeerID)
 					}

@@ -49,7 +49,8 @@ type consensusHandler struct {
 	proposeMsgChan          chan *ProposeMessage
 	voteMsgChan             chan *VoteMessage
 	commitMsgChan           chan *CommitMessage
-	blockAddedCh            chan *tpchaintypes.Block
+	blockAddedEpochCh       chan *tpchaintypes.Block
+	blockAddedProposerCh    chan *tpchaintypes.Block
 	partPubKey              chan *DKGPartPubKeyMessage
 	dealMsgCh               chan *DKGDealMessage
 	dealRespMsgCh           chan *DKGDealRespMessage
@@ -65,7 +66,9 @@ func NewConsensusHandler(log tplog.Logger,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
 	voteMsgChan chan *VoteMessage,
-	blockAddedCh chan *tpchaintypes.Block,
+	commitMsgChan chan *CommitMessage,
+	blockAddedEpochCh chan *tpchaintypes.Block,
+	blockAddedProposerCh chan *tpchaintypes.Block,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
@@ -80,7 +83,9 @@ func NewConsensusHandler(log tplog.Logger,
 		preprePackedMsgPropChan: preprePackedMsgPropChan,
 		proposeMsgChan:          proposeMsgChan,
 		voteMsgChan:             voteMsgChan,
-		blockAddedCh:            blockAddedCh,
+		commitMsgChan:           commitMsgChan,
+		blockAddedEpochCh:       blockAddedEpochCh,
+		blockAddedProposerCh:    blockAddedProposerCh,
 		partPubKey:              partPubKey,
 		dealMsgCh:               dealMsgCh,
 		dealRespMsgCh:           dealRespMsgCh,
@@ -172,26 +177,14 @@ func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
 }
 
 func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
-	var blockHead tpchaintypes.BlockHead
-	err := handler.marshaler.Unmarshal(msg.BlockHead, &blockHead)
-	if err != nil {
-		handler.log.Errorf("Unmarshal block failed: %v", err)
-		return err
-	}
-
-	/*
-		err = handler.ledger.GetBlockStore().CommitBlock(&block)
-		if err != nil {
-			handler.log.Errorf("Can't commit block height =%d, err=%v", blockHead.Height, err)
-			return err
-		}
-	*/
+	handler.commitMsgChan <- msg
 
 	return nil
 }
 
 func (handler *consensusHandler) ProcessBlockAdded(block *tpchaintypes.Block) error {
-	handler.blockAddedCh <- block
+	handler.blockAddedEpochCh <- block
+	handler.blockAddedProposerCh <- block
 
 	return nil
 }

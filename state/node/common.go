@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/TopiaNetwork/topia/chain"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
@@ -16,7 +15,7 @@ func isNodeExist(stateStore tplgss.StateStore, name string, nodeID string) bool 
 	return isExist
 }
 
-func getNode(stateStore tplgss.StateStore, name string, nodeID string) (*chain.NodeInfo, error) {
+func getNode(stateStore tplgss.StateStore, name string, nodeID string) (*tpcmm.NodeInfo, error) {
 	nodeInfoBytes, _, err := stateStore.GetState(name, []byte(nodeID))
 	if err != nil {
 		return nil, err
@@ -26,7 +25,7 @@ func getNode(stateStore tplgss.StateStore, name string, nodeID string) (*chain.N
 		return nil, nil
 	}
 
-	var nodeInfo chain.NodeInfo
+	var nodeInfo tpcmm.NodeInfo
 	err = json.Unmarshal(nodeInfoBytes, &nodeInfo)
 	if err != nil {
 		return nil, err
@@ -35,7 +34,7 @@ func getNode(stateStore tplgss.StateStore, name string, nodeID string) (*chain.N
 	return &nodeInfo, nil
 }
 
-func addNode(stateStore tplgss.StateStore, name string, totalNodeIDsKey string, toalWeightKey string, nodeInfo *chain.NodeInfo) error {
+func addNode(stateStore tplgss.StateStore, name string, totalNodeIDsKey string, toalWeightKey string, nodeInfo *tpcmm.NodeInfo) error {
 	if nodeInfo == nil {
 		return errors.New("Nil node info")
 	}

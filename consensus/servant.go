@@ -1,14 +1,14 @@
 package consensus
 
 import (
-	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/common"
 )
 
 type consensusServant interface {
-	ChainID() chain.ChainID
+	ChainID() tpchaintypes.ChainID
 
-	GetLatestEpoch() (*chain.EpochInfo, error)
+	GetLatestEpoch() (*common.EpochInfo, error)
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 

@@ -3,6 +3,9 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/chain"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -10,8 +13,6 @@ import (
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
-	"github.com/TopiaNetwork/topia/chain"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/consensus"
@@ -31,7 +32,6 @@ type Node struct {
 	log       tplog.Logger
 	level     tplogcmm.LogLevel
 	sysActor  *actor.ActorSystem
-	handler   NodeHandler
 	marshaler codec.Marshaler
 	evHub     eventhub.EventHub
 	network   tpnet.Network
@@ -39,6 +39,7 @@ type Node struct {
 	consensus consensus.Consensus
 	txPool    txpool.TransactionPool
 	syncer    sync.Syncer
+	chain     chain.Chain
 	config    *tpconfig.Configuration
 }
 
@@ -72,12 +73,12 @@ func NewNode(endPoint string, seed string) *Node {
 	cons := consensus.NewConsensus(compStateRN.ChainID(), nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, config.CSConfig)
 
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
+	chain := chain.NewChain(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 
 	return &Node{
 		log:       mainLog,
 		level:     tplogcmm.InfoLevel,
 		sysActor:  sysActor,
-		handler:   NewNodeHandler(mainLog),
 		marshaler: codec.CreateMarshaler(codec.CodecType_PROTO),
 		evHub:     evHub,
 		network:   network,
@@ -85,12 +86,9 @@ func NewNode(endPoint string, seed string) *Node {
 		consensus: cons,
 		txPool:    txPool,
 		syncer:    syncer,
+		chain:     chain,
 		config:    config,
 	}
-}
-
-func (n *Node) processDKG(msg *DKGMessage) error {
-	return n.handler.ProcessDKG(msg)
 }
 
 func (n *Node) Start() {
@@ -112,17 +110,10 @@ func (n *Node) Start() {
 		close(waitChannel)
 	}()
 
-	actorPID, err := CreateNodeActor(n.level, n.log, n.sysActor, n)
-	if err != nil {
-		n.log.Panicf("CreateNodeActor error: %v", err)
-		return
-	}
-
-	n.network.RegisterModule("node", actorPID, n.marshaler)
-
-	var latestEpochInfo *chain.EpochInfo
+	var err error
+	var latestEpochInfo *tpcmm.EpochInfo
 	var latestBlock *tpchaintypes.Block
-	if n.ledger.IsGenesisState() {
+	if n.ledger.State() == tpcmm.LedgerState_Uninitialized {
 		compState := state.GetStateBuilder().CompositionState(n.network.ID(), 1)
 		err = compState.SetLatestEpoch(n.config.Genesis.Epon)
 		if err != nil {
@@ -170,32 +161,10 @@ func (n *Node) Start() {
 	n.consensus.Start(n.sysActor, latestEpochInfo.Epoch, latestEpochInfo.StartTimeStamp, latestBlock.Head.Height)
 	n.txPool.Start(n.sysActor, n.network)
 	n.syncer.Start(n.sysActor, n.network)
+	n.chain.Start(n.sysActor, n.network)
 
 	fmt.Println("All services were started")
 	<-waitChannel
-}
-
-func (n *Node) dispatch(context actor.Context, data []byte) {
-	var nodeMsg NodeMessage
-	err := n.marshaler.Unmarshal(data, &nodeMsg)
-	if err != nil {
-		n.log.Errorf("Node receive invalid data %v", data)
-		return
-	}
-
-	switch nodeMsg.MsgType {
-	case NodeMessage_DKG:
-		var msg DKGMessage
-		err := n.marshaler.Unmarshal(nodeMsg.Data, &msg)
-		if err != nil {
-			n.log.Errorf("Node unmarshal msg %d err %v", nodeMsg.MsgType, err)
-			return
-		}
-		n.processDKG(&msg)
-	default:
-		n.log.Errorf("Node receive invalid msg %d", nodeMsg.MsgType)
-		return
-	}
 }
 
 func (n *Node) Stop() {

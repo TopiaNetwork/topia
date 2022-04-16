@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/TopiaNetwork/topia/common"
 
-	"github.com/TopiaNetwork/topia/chain"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
@@ -23,13 +23,13 @@ type NodeProposerState interface {
 
 	GetActiveProposerIDs() ([]string, error)
 
-	GetActiveProposer(nodeID string) (*chain.NodeInfo, error)
+	GetActiveProposer(nodeID string) (*common.NodeInfo, error)
 
 	GetActiveProposersTotalWeight() (uint64, error)
 
-	GetAllActiveProposers() ([]*chain.NodeInfo, error)
+	GetAllActiveProposers() ([]*common.NodeInfo, error)
 
-	AddActiveProposer(nodeInfo *chain.NodeInfo) error
+	AddActiveProposer(nodeInfo *common.NodeInfo) error
 
 	updateActiveProposerWeight(nodeID string, weight uint64) error
 
@@ -76,7 +76,7 @@ func (ns *nodeProposerState) GetActiveProposerIDs() ([]string, error) {
 	return nodeAEIDs, nil
 }
 
-func (ns *nodeProposerState) GetActiveProposer(nodeID string) (*chain.NodeInfo, error) {
+func (ns *nodeProposerState) GetActiveProposer(nodeID string) (*common.NodeInfo, error) {
 	return getNode(ns.StateStore, StateStore_Name_Prop, nodeID)
 }
 
@@ -93,7 +93,7 @@ func (ns *nodeProposerState) GetActiveProposersTotalWeight() (uint64, error) {
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
 }
 
-func (ns *nodeProposerState) GetAllActiveProposers() ([]*chain.NodeInfo, error) {
+func (ns *nodeProposerState) GetAllActiveProposers() ([]*common.NodeInfo, error) {
 	keys, vals, _, err := ns.GetAllState(StateStore_Name_Prop)
 	if err != nil {
 		return nil, err
@@ -103,13 +103,13 @@ func (ns *nodeProposerState) GetAllActiveProposers() ([]*chain.NodeInfo, error) 
 		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
 	}
 
-	var nodes []*chain.NodeInfo
+	var nodes []*common.NodeInfo
 	for i, val := range vals {
 		if string(keys[i]) == TotalActiveProposerNodeIDs_Key || string(keys[i]) == TotalActiveProposerWeight_Key {
 			continue
 		}
 
-		var nodeInfo chain.NodeInfo
+		var nodeInfo common.NodeInfo
 		err = json.Unmarshal(val, &nodeInfo)
 		if err != nil {
 			return nil, err
@@ -120,7 +120,7 @@ func (ns *nodeProposerState) GetAllActiveProposers() ([]*chain.NodeInfo, error) 
 	return nodes, nil
 }
 
-func (ns *nodeProposerState) AddActiveProposer(nodeInfo *chain.NodeInfo) error {
+func (ns *nodeProposerState) AddActiveProposer(nodeInfo *common.NodeInfo) error {
 	return addNode(ns.StateStore, StateStore_Name_Prop, TotalActiveProposerNodeIDs_Key, TotalActiveProposerWeight_Key, nodeInfo)
 }
 

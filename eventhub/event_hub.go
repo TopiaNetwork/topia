@@ -5,12 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"reflect"
 	"sync"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"

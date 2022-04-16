@@ -1,11 +1,11 @@
-package sync
+package chain
 
 import (
 	"context"
 	"errors"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/codec"
 
+	"github.com/TopiaNetwork/topia/codec"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 )

@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/TopiaNetwork/topia/common"
 
-	"github.com/TopiaNetwork/topia/chain"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
@@ -23,13 +23,13 @@ type NodeValidatorState interface {
 
 	GetActiveValidatorIDs() ([]string, error)
 
-	GetActiveValidator(nodeID string) (*chain.NodeInfo, error)
+	GetActiveValidator(nodeID string) (*common.NodeInfo, error)
 
 	GetActiveValidatorsTotalWeight() (uint64, error)
 
-	GetAllActiveValidators() ([]*chain.NodeInfo, error)
+	GetAllActiveValidators() ([]*common.NodeInfo, error)
 
-	AddActiveValidator(nodeInfo *chain.NodeInfo) error
+	AddActiveValidator(nodeInfo *common.NodeInfo) error
 
 	updateActiveValidatorWeight(nodeID string, weight uint64) error
 
@@ -76,7 +76,7 @@ func (ns *nodeValidatorState) GetActiveValidatorIDs() ([]string, error) {
 	return nodeAEIDs, nil
 }
 
-func (ns *nodeValidatorState) GetActiveValidator(nodeID string) (*chain.NodeInfo, error) {
+func (ns *nodeValidatorState) GetActiveValidator(nodeID string) (*common.NodeInfo, error) {
 	return getNode(ns.StateStore, StateStore_Name_Val, nodeID)
 }
 
@@ -93,7 +93,7 @@ func (ns *nodeValidatorState) GetActiveValidatorsTotalWeight() (uint64, error) {
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
 }
 
-func (ns *nodeValidatorState) GetAllActiveValidators() ([]*chain.NodeInfo, error) {
+func (ns *nodeValidatorState) GetAllActiveValidators() ([]*common.NodeInfo, error) {
 	keys, vals, _, err := ns.GetAllState(StateStore_Name_Val)
 	if err != nil {
 		return nil, err
@@ -103,13 +103,13 @@ func (ns *nodeValidatorState) GetAllActiveValidators() ([]*chain.NodeInfo, error
 		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
 	}
 
-	var nodes []*chain.NodeInfo
+	var nodes []*common.NodeInfo
 	for i, val := range vals {
 		if string(keys[i]) == TotalActiveValidatorNodeIDs_Key || string(keys[i]) == TotalActiveValidatorWeight_Key {
 			continue
 		}
 
-		var nodeInfo chain.NodeInfo
+		var nodeInfo common.NodeInfo
 		err = json.Unmarshal(val, &nodeInfo)
 		if err != nil {
 			return nil, err
@@ -120,7 +120,7 @@ func (ns *nodeValidatorState) GetAllActiveValidators() ([]*chain.NodeInfo, error
 	return nodes, nil
 }
 
-func (ns *nodeValidatorState) AddActiveValidator(nodeInfo *chain.NodeInfo) error {
+func (ns *nodeValidatorState) AddActiveValidator(nodeInfo *common.NodeInfo) error {
 	return addNode(ns.StateStore, StateStore_Name_Val, TotalActiveValidatorNodeIDs_Key, TotalActiveValidatorWeight_Key, nodeInfo)
 }
 

@@ -2,10 +2,9 @@ package eventhub
 
 import (
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"reflect"
 	"testing"
-
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 )
 
 func TestRef(t *testing.T) {

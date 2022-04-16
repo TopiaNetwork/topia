@@ -1,13 +1,12 @@
 package configuration
 
 import (
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/common"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/TopiaNetwork/topia/chain"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 )
 
 func TestGenerateGenesisData(t *testing.T) {
@@ -27,7 +26,7 @@ func TestGenerateGenesisData(t *testing.T) {
 	blockHashBytes, _ := block.HashBytes()
 
 	gData := &GenesisData{
-		Epon: &chain.EpochInfo{
+		Epon: &common.EpochInfo{
 			Epoch:          0,
 			StartTimeStamp: timeStamp,
 			StartHeight:    1,

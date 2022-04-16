@@ -2,10 +2,10 @@ package consensus
 
 import (
 	"context"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/common"
 	"time"
 
-	"github.com/TopiaNetwork/topia/chain"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -81,7 +81,7 @@ func (es *epochService) start(ctx context.Context) {
 						es.dkgExchange.start(epochInfo.Epoch + 1)
 					}
 				} else if deltaH == int(es.epochInterval) {
-					csStateEpoch.SetLatestEpoch(&chain.EpochInfo{
+					csStateEpoch.SetLatestEpoch(&common.EpochInfo{
 						Epoch:          epochInfo.Epoch + 1,
 						StartTimeStamp: uint64(time.Now().UnixNano()),
 						StartHeight:    newBh.Head.Height,

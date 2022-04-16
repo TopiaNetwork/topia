@@ -2,7 +2,8 @@ package consensus
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/chain"
+	"github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/common"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -40,7 +41,7 @@ type dkgExchangeData struct {
 type dkgExchange struct {
 	index          int
 	log            tplog.Logger
-	chainID        chain.ChainID
+	chainID        types.ChainID
 	nodeID         string
 	startCh        chan uint64
 	stopCh         chan struct{}
@@ -57,7 +58,7 @@ type dkgExchange struct {
 }
 
 func newDKGExchange(log tplog.Logger,
-	chainID chain.ChainID,
+	chainID types.ChainID,
 	nodeID string,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
@@ -327,6 +328,11 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 					ex.log.Infof("DKG exchange finished: node %s", ex.nodeID)
 					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
 					ex.finishedCh <- true
+
+					if ex.ledger.State() == common.LedgerState_Genesis {
+						ex.notifyUpdater()
+						ex.updateDKGState(DKGExchangeState_IDLE)
+					}
 				}
 			case <-ex.stopCh:
 				ex.log.Info("DKG exchange receive deal response loop stop")

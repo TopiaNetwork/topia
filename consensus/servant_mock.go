@@ -1,19 +1,19 @@
 package consensus
 
 import (
-	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/common"
 	"time"
 )
 
 type consensusServanMock struct{}
 
-func (cs *consensusServanMock) ChainID() chain.ChainID {
+func (cs *consensusServanMock) ChainID() tpchaintypes.ChainID {
 	return "testtopia"
 }
 
-func (cs *consensusServanMock) GetLatestEpoch() (*chain.EpochInfo, error) {
-	return &chain.EpochInfo{
+func (cs *consensusServanMock) GetLatestEpoch() (*common.EpochInfo, error) {
+	return &common.EpochInfo{
 		Epoch:          0,
 		StartTimeStamp: uint64(time.Now().UnixNano()),
 		StartHeight:    1,

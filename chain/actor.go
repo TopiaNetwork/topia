@@ -1,4 +1,4 @@
-package node
+package chain
 
 import (
 	"github.com/AsynkronIT/protoactor-go/actor"
@@ -8,21 +8,21 @@ import (
 )
 
 type NodeActor struct {
-	log  tplog.Logger
-	pid  *actor.PID
-	node *Node
+	log   tplog.Logger
+	pid   *actor.PID
+	chain *chain
 }
 
-func CreateNodeActor(level tplogcmm.LogLevel, parentLog tplog.Logger, sysActor *actor.ActorSystem, node *Node) (*actor.PID, error) {
-	log := tplog.CreateModuleLogger(level, "consensus", parentLog)
+func CreateChainActor(level tplogcmm.LogLevel, parentLog tplog.Logger, sysActor *actor.ActorSystem, chain *chain) (*actor.PID, error) {
+	log := tplog.CreateModuleLogger(level, MOD_NAME, parentLog)
 	nActor := &NodeActor{
-		log:  log,
-		node: node,
+		log:   log,
+		chain: chain,
 	}
 	props := actor.PropsFromProducer(func() actor.Actor {
 		return nActor
 	})
-	pid, err := sysActor.Root.SpawnNamed(props, "node-actor")
+	pid, err := sysActor.Root.SpawnNamed(props, MOD_ACTOR_NAME)
 
 	nActor.pid = pid
 
@@ -40,7 +40,7 @@ func (na *NodeActor) Receive(context actor.Context) {
 	case *actor.Restarting:
 		na.log.Info("Restarting, actor is about to restart")
 	case []byte:
-		na.node.dispatch(context, msg)
+		na.chain.dispatch(context, msg)
 	default:
 		na.log.Error("Sync actor receive invalid msg")
 	}

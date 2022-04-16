@@ -4,8 +4,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 )
 

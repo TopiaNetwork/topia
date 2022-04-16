@@ -1,9 +1,10 @@
 package basic
 
 import (
+	"github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/currency"
 	"math/big"
 
-	"github.com/TopiaNetwork/topia/chain"
 	"github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -14,13 +15,13 @@ import (
 )
 
 type TansactionServant interface {
-	ChainID() chain.ChainID
+	ChainID() types.ChainID
 
 	NetworkType() tpnet.NetworkType
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
-	GetBalance(addr tpcrtypes.Address, symbol chain.TokenSymbol) (*big.Int, error)
+	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
 	GetCryptService(log log.Logger, cryptType tpcrtypes.CryptType) (tpcrt.CryptService, error)
 

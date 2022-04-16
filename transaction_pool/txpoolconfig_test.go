@@ -2,11 +2,13 @@ package transactionpool
 
 import (
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/codec"
-	"github.com/golang/mock/gomock"
 	"io/ioutil"
 	"reflect"
 	"testing"
+
+	"github.com/golang/mock/gomock"
+
+	"github.com/TopiaNetwork/topia/codec"
 )
 
 func Test_transactionPool_SaveConfig(t *testing.T) {

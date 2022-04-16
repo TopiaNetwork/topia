@@ -3,8 +3,14 @@ package transactionpool
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"reflect"
+	"testing"
+	"time"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -13,11 +19,6 @@ import (
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/TopiaNetwork/topia/transaction/universal"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
-	"reflect"
-	"testing"
-	"time"
 )
 
 var (
@@ -338,7 +339,7 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 		ActivationIntervals: newActivationInterval(),
 		TxHashCategory:      newTxHashCategory(),
 		chanChainHead:       make(chan ChainHeadEvent, chainHeadChanSize),
-		chanReqReset:        make(chan *txPoolResetRequest),
+		chanReqReset:        make(chan *txPoolResetHeads),
 		chanReqPromote:      make(chan *accountSet),
 		chanReorgDone:       make(chan chan struct{}),
 		chanReorgShutdown:   make(chan struct{}), // requests shutdown of scheduleReorgLoop
@@ -419,9 +420,7 @@ func Test_transactionPool_GetLocalTxs(t *testing.T) {
 	//txs = append(txs, txLocals[80])
 	txsMap := make(map[tpcrtypes.Address][]*basic.Transaction)
 	txsMap[From1] = txs
-	fmt.Println(1)
 	pool.AddLocals(txs)
-	fmt.Println(2)
 
 	want := txsMap
 	got := pool.GetLocalTxs(Category1)

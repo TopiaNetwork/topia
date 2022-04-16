@@ -1,10 +1,11 @@
 package transactionpool
 
 import (
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
 	"runtime/debug"
 	"time"
+
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func (pool *transactionPool) loopChanSelect() {

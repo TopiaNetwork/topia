@@ -2,14 +2,16 @@ package transactionpool
 
 import (
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/codec"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"reflect"
 	"testing"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/TopiaNetwork/topia/codec"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func Test_transactionPool_AddLocal(t *testing.T) {

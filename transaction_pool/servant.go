@@ -10,6 +10,7 @@ import (
 )
 
 type ChainHeadEvent struct{ Block *types.Block }
+
 type TransactionPoolServant interface {
 	CurrentBlock() *types.Block
 	GetBlock(hash types.BlockHash, num uint64) *types.Block

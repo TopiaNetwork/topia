@@ -1,11 +1,10 @@
 package transactionpool
 
 import (
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"math"
-
 	"github.com/TopiaNetwork/topia/chain/types"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
+	"math"
 )
 
 type txPoolResetRequest struct {
@@ -23,20 +22,18 @@ func (pool *transactionPool) scheduleReorgLoop() {
 		launchNextRun bool
 		reset         *txPoolResetRequest
 		dirtyAccounts *accountSet
-		queuedEvents  = make(map[tpcrtypes.Address]*txSortedMap)
 	)
 	for {
 		// Launch next background reorg if needed
 		if curDone == nil && launchNextRun {
 			// Run the background reorg and announcements
-			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
+			go pool.runReorg(nextDone, reset, dirtyAccounts)
 
 			// Prepare everything for the next round of reorg
 			curDone, nextDone = nextDone, make(chan struct{})
 			launchNextRun = false
 
 			reset, dirtyAccounts = nil, nil
-			queuedEvents = make(map[tpcrtypes.Address]*txSortedMap)
 		}
 
 		select {
@@ -60,15 +57,6 @@ func (pool *transactionPool) scheduleReorgLoop() {
 			launchNextRun = true
 			pool.chanReorgDone <- nextDone
 
-		case tx := <-pool.chanQueueTxEvent:
-			// Queue up the event, but don't schedule a reorg. It's up to the caller to
-			// request one later if they want the events sent.
-			addr := tpcrtypes.Address(tx.Head.FromAddr)
-			if _, ok := queuedEvents[addr]; !ok {
-				queuedEvents[addr] = newTxSortedMap()
-			}
-			queuedEvents[addr].Put(tx)
-
 		case <-curDone:
 			curDone = nil
 
@@ -84,7 +72,8 @@ func (pool *transactionPool) scheduleReorgLoop() {
 }
 
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
-func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet, events map[tpcrtypes.Address]*txSortedMap) {
+func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequest, dirtyAccounts *accountSet) {
+
 	defer close(done)
 
 	var replaceAddrs []tpcrtypes.Address
@@ -98,23 +87,12 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 		// Reset from the old head to the new, rescheduling any reorged transactions
 		pool.Reset(reset.oldHead, reset.newHead)
 
-		// Nonces were reset, discard any events that became stale
-		for addr := range events {
-			events[addr].Forward(pool.curState.GetNonce(addr))
-			if events[addr].Len() == 0 {
-				delete(events, addr)
-			}
-		}
 		// Reset needs promote for all addresses
 		for category, _ := range pool.allTxsForLook.getAll() {
 			replaceAddrs = append(replaceAddrs, pool.queues.replaceAddrTxListOfCategory(category)...)
 		}
 	}
-	// Check for pending transactions for every account that sent new ones
-	var promoted []*basic.Transaction
-	for category, _ := range pool.allTxsForLook.getAll() {
-		promoted = append(promoted, pool.replaceExecutables(category, replaceAddrs)...)
-	}
+
 	// If a new block appeared, validate the pool of pending transactions. This will
 	// remove any transaction that has been included in the block or was invalidated
 	// because of another transaction (e.g. higher gas price).
@@ -136,23 +114,6 @@ func (pool *transactionPool) runReorg(done chan struct{}, reset *txPoolResetRequ
 	}
 	pool.changesSinceReorg = 0 // Reset change counter
 
-	// Notify subsystems for newly added transactions
-	for _, tx := range promoted {
-		addr := tpcrtypes.Address(tx.Head.FromAddr)
-		if _, ok := events[addr]; !ok {
-			events[addr] = newTxSortedMap()
-		}
-		events[addr].Put(tx)
-	}
-	if len(events) > 0 {
-		var txs []*basic.Transaction
-		for _, set := range events {
-			txs = append(txs, set.Flatten()...)
-		}
-		for _, tx := range txs {
-			pool.BroadCastTx(tx)
-		}
-	}
 }
 
 // requestReset requests a pool reset to the new head block.
@@ -179,7 +140,7 @@ func (pool *transactionPool) Reset(oldHead, newHead *types.BlockHead) error {
 		//then no recombination is carried out
 		if depth := uint64(math.Abs(float64(oldNum) - float64(newNum))); depth > 64 {
 
-			pool.log.Debugf("Skipping deep transaction reorg", "depth", depth)
+			pool.log.Debugf("Skipping deep transaction reorg,", "depth:", depth)
 		} else {
 
 			//The reorganization looks shallow enough to put all the transactions into memory

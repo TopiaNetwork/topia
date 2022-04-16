@@ -21,17 +21,19 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
 	pool.query = servant
 
-	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	//assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	//assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	//assert.Equal(t, 0, pool.allTxsForLook.all[Category1].LocalCount())
+	//assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	//
+	//assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
+	//assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	fmt.Println(1)
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
 	pool.AddTx(TxR2, false)
+	fmt.Println(2)
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].LocalCount())

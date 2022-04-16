@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"encoding/json"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 	"io/ioutil"
 	"time"
@@ -27,7 +28,7 @@ type TransactionPoolConfig struct {
 
 	LifetimeForTx         time.Duration
 	DurationForTxRePublic time.Duration
-	EvictionInterval      time.Duration //= 29989 * time // Time interval to check for evictable transactions
+	EvictionInterval      time.Duration //= 29989 * time.Millisecond // Time interval to check for evictable transactions
 	StatsReportInterval   time.Duration //= 499 * time.Millisecond // Time interval to report transaction pool stats
 	RepublicInterval      time.Duration //= 30011 * time.Millisecond       //time interval to check transaction lifetime for report
 }
@@ -59,38 +60,43 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 	conf := *config
 	if conf.GasPriceLimit < 1 {
-		//tplog.Logger.Infof("Invalid GasPriceLimit,updated to default value:", "from", conf.GasPriceLimit, "to", DefaultTransactionPoolConfig.GasPriceLimit)
+		tplog.Logger.Warnf("Invalid GasPriceLimit,updated to default value:", "from", conf.GasPriceLimit, "to", DefaultTransactionPoolConfig.GasPriceLimit)
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
 	if conf.PendingAccountSegments < 2 {
-		//tplog.Logger.Infof("Invalid PendingAccountSlots,updated to default value:", "from", conf.PendingAccountSlots, "to", DefaultTransactionPoolConfig.PendingAccountSlots)
+		tplog.Logger.Warnf("Invalid PendingAccountSlots,updated to default value:", "from", conf.PendingAccountSegments, "to", DefaultTransactionPoolConfig.PendingAccountSegments)
 		conf.PendingAccountSegments = DefaultTransactionPoolConfig.PendingAccountSegments
 	}
 	if conf.PendingGlobalSegments < 1 {
-		//tplog.Logger.Infof("Invalid PendingGlobalSlots,updated to default value:", "from", conf.PendingGlobalSlots, "to", DefaultTransactionPoolConfig.PendingGlobalSlots)
+		tplog.Logger.Warnf("Invalid PendingGlobalSlots,updated to default value:", "from", conf.PendingGlobalSegments, "to", DefaultTransactionPoolConfig.PendingGlobalSegments)
 		conf.PendingGlobalSegments = DefaultTransactionPoolConfig.PendingGlobalSegments
 	}
 	if conf.QueueMaxTxsAccount < 1 {
-		//tplog.Logger.Infof("Invalid QueueMaxTxsAccount,updated to default value:", "from", conf.QueueMaxTxsAccount, "to", DefaultTransactionPoolConfig.QueueMaxTxsAccount)
+		tplog.Logger.Warnf("Invalid QueueMaxTxsAccount,updated to default value:", "from", conf.QueueMaxTxsAccount, "to", DefaultTransactionPoolConfig.QueueMaxTxsAccount)
 		conf.QueueMaxTxsAccount = DefaultTransactionPoolConfig.QueueMaxTxsAccount
 	}
 	if conf.QueueMaxTxsGlobal < 1 {
-		//tplog.Logger.Infof("Invalid QueueMaxTxsGlobal,updated to default value:", "from", conf.QueueMaxTxsGlobal, "to", DefaultTransactionPoolConfig.QueueMaxTxsGlobal)
+		tplog.Logger.Warnf("Invalid QueueMaxTxsGlobal,updated to default value:", "from", conf.QueueMaxTxsGlobal, "to", DefaultTransactionPoolConfig.QueueMaxTxsGlobal)
 		conf.QueueMaxTxsGlobal = DefaultTransactionPoolConfig.QueueMaxTxsGlobal
 	}
 	if conf.LifetimeForTx < 1 {
+		tplog.Logger.Warnf("Invalid LifetimeForTx,updated to default value:", "from", conf.LifetimeForTx, "to", DefaultTransactionPoolConfig.LifetimeForTx)
 		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
 	}
 	if conf.DurationForTxRePublic < 1 {
+		tplog.Logger.Warnf("Invalid DurationForTxRePublic,updated to default value:", "from", conf.DurationForTxRePublic, "to", DefaultTransactionPoolConfig.DurationForTxRePublic)
 		conf.DurationForTxRePublic = DefaultTransactionPoolConfig.DurationForTxRePublic
 	}
 	if conf.PathConfig == "" {
+		tplog.Logger.Warnf("Invalid PathConfig,updated to default value:", "from", conf.PathConfig, "to", DefaultTransactionPoolConfig.PathConfig)
 		conf.PathConfig = DefaultTransactionPoolConfig.PathConfig
 	}
 	if conf.PathRemote == nil {
+		tplog.Logger.Warnf("Invalid PathRemote,updated to default value:", "from", conf.PathRemote, "to", DefaultTransactionPoolConfig.PathRemote)
 		conf.PathRemote = DefaultTransactionPoolConfig.PathRemote
 	}
 	if conf.PathLocal == nil {
+		tplog.Logger.Warnf("Invalid PathLocal,updated to default value:", "from", conf.PathLocal, "to", DefaultTransactionPoolConfig.PathLocal)
 		conf.PathLocal = DefaultTransactionPoolConfig.PathLocal
 	}
 
@@ -100,6 +106,7 @@ func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 func (pool *transactionPool) LoadConfig() (conf *TransactionPoolConfig, error error) {
 	data, err := ioutil.ReadFile(pool.config.PathConfig)
 	if err != nil {
+		pool.log.Warnf("Failed to load transaction config from stored file", "err", err)
 		return nil, err
 	}
 	config := &conf

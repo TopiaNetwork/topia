@@ -36,6 +36,7 @@ type consensusProposer struct {
 	cryptService            tpcrt.CryptService
 	proposeMaxInterval      time.Duration
 	isProposing             uint32
+	lastBasedOn             uint64 //the block height which self-proposer is based on
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -105,10 +106,10 @@ func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block) ([]byte, 
 	return hasher.Bytes(), nil
 }
 
-func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, block *tpchaintypes.Block) (bool, []byte, []byte, error) {
+func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, latestBlock *tpchaintypes.Block) (bool, []byte, []byte, error) {
 	proposerSel := NewProposerSelector(ProposerSelectionType_Poiss, p.cryptService)
 
-	vrfData, err := p.getVrfInputData(block)
+	vrfData, err := p.getVrfInputData(latestBlock)
 	if err != nil {
 		p.log.Errorf("Can't get proposer selector vrf data: %v", err)
 		return false, nil, nil, err
@@ -132,10 +133,11 @@ func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateRead
 	}
 
 	winCount := proposerSel.SelectProposer(vrfProof, big.NewInt(int64(localNodeWeight)), big.NewInt(int64(totalActiveProposerWeight)))
+	p.log.Errorf("Propose block at the latest height %d: winCount=%d", latestBlock.Head.Height, winCount)
 	if winCount >= 1 {
 		maxPri := proposerSel.MaxPriority(vrfProof, winCount)
 
-		bestPri, err := p.validator.judgeLocalMaxPriBestForProposer(maxPri, block)
+		bestPri, err := p.validator.judgeLocalMaxPriBestForProposer(maxPri, latestBlock)
 		if !bestPri {
 			return false, nil, nil, err
 		}
@@ -290,6 +292,14 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
+	if p.lastBasedOn > 0 && p.lastBasedOn >= latestBlock.Head.Height {
+		err = fmt.Errorf("Have launched proposing block at height %d, latest height %d", p.lastBasedOn, latestBlock.Head.Height)
+		p.log.Warnf("%v", err)
+		return err
+	}
+
+	p.lastBasedOn = latestBlock.Head.Height
+
 	pppProp, err := p.getAvailPPMProp(latestBlock.Head.Height)
 	if err != nil {
 		p.log.Errorf("%v", err)
@@ -298,7 +308,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 
 	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock)
 	if !canPropose {
-		err = fmt.Errorf("Can't propose block at the epoch : epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
+		err = fmt.Errorf("Can't propose block at the epoch : latest epoch=%d, latest height=%d, self node=%s, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)
 		p.log.Infof("%s", err.Error())
 		return err
 	}
@@ -310,12 +320,12 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	}
 	proposeBlock, err := p.produceProposeBlock(csStateRN.ChainID(), latestEpoch, latestBlock, pppProp, vrfProof, maxPri, stateRoot)
 	if err != nil {
-		p.log.Errorf("Produce propose block error: epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
+		p.log.Errorf("Produce propose block error: latest epoch=%d, latest height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
 		return err
 	}
 
 	if can := p.validator.canProcessForwardProposeMsg(ctx, maxPri, proposeBlock); !can {
-		err = fmt.Errorf("Can't delive propose message: epoch=%d, height=%d", latestBlock.Head.Epoch, latestBlock.Head.Height)
+		err = fmt.Errorf("Can't delive propose message: latest epoch=%d,latest height=%d", latestBlock.Head.Epoch, latestBlock.Head.Height)
 		p.log.Infof("%s", err.Error())
 		return err
 	}
@@ -332,14 +342,14 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		return err
 	}
 
-	p.log.Infof("Message deliver ready, state version %d height %d self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
+	p.log.Infof("Message deliver ready, state version %d latest height %d self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
 
 	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
-		p.log.Errorf("Deliver propose message err: epoch =%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
+		p.log.Errorf("Deliver propose message err: latest epoch =%d, latest height=%d, self node=%s, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)
 		return err
 	}
 
-	p.log.Infof("Propose block sucessfully, state version %d height %d self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
+	p.log.Infof("Propose block sucessfully, state version %d latest height %d self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
 
 	return nil
 }

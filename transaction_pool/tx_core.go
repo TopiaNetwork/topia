@@ -367,12 +367,7 @@ func (pendingmap *pendingsMap) getTxsByCategory(category basic.TransactionCatego
 func (pendingmap *pendingsMap) getPendingTxsByCategory(category basic.TransactionCategory) *pendingTxs {
 	pendingmap.Mu.RLock()
 	defer pendingmap.Mu.RUnlock()
-	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
-		pendingcat.Mu.RLock()
-		defer pendingcat.Mu.RUnlock()
-		return pendingcat
-	}
-	return nil
+	return pendingmap.pending[category]
 }
 func (pendingmap *pendingsMap) demoteUnexecutablesByCategory(category basic.TransactionCategory,
 	f1 func(tpcrtypes.Address) uint64,
@@ -429,11 +424,7 @@ func (pendingmap *pendingsMap) getAddrTxListOfCategory(category basic.Transactio
 	}
 	pendingcat.Mu.RLock()
 	defer pendingcat.Mu.RUnlock()
-	if maptxlist := pendingcat.mapAddrTxCoreList; maptxlist != nil {
-		return maptxlist
-	}
-
-	return nil
+	return pendingcat.mapAddrTxCoreList
 }
 
 func (pendingmap *pendingsMap) noncesForAddrTxListOfCategory(category basic.TransactionCategory) {
@@ -700,18 +691,12 @@ func (queuemap *queuesMap) getTxsByCategory(category basic.TransactionCategory) 
 func (queuemap *queuesMap) getAll() map[basic.TransactionCategory]*queueTxs {
 	queuemap.Mu.RLock()
 	defer queuemap.Mu.RUnlock()
-	if mapqueue := queuemap.queue; mapqueue != nil {
-		return mapqueue
-	}
-	return nil
+	return queuemap.queue
 }
 func (queuemap *queuesMap) getQueueTxsByCategory(category basic.TransactionCategory) *queueTxs {
 	queuemap.Mu.RLock()
 	defer queuemap.Mu.RUnlock()
-	if queuetxs := queuemap.queue[category]; queuetxs != nil {
-		return queuetxs
-	}
-	return nil
+	return queuemap.queue[category]
 }
 
 func (queuemap *queuesMap) getTxListByAddrOfCategory(category basic.TransactionCategory, addr tpcrtypes.Address) *txCoreList {
@@ -720,10 +705,7 @@ func (queuemap *queuesMap) getTxListByAddrOfCategory(category basic.TransactionC
 	if queuecat := queuemap.queue[category]; queuecat != nil {
 		queuecat.Mu.RLock()
 		defer queuecat.Mu.RUnlock()
-
-		if txlist := queuecat.mapAddrTxCoreList[addr]; txlist != nil {
-			return txlist
-		}
+		return queuecat.mapAddrTxCoreList[addr]
 	}
 	return nil
 }
@@ -1178,13 +1160,10 @@ func newAllTxsLookupMap() *allTxsLookupMap {
 	return allMap
 }
 func (alltxsmap *allTxsLookupMap) getAll() map[basic.TransactionCategory]*txLookup {
-	alltxsmap.Mu.RLock()
-	defer alltxsmap.Mu.RUnlock()
 	if all := alltxsmap.all; all != nil {
 		return all
 	}
 	return nil
-
 }
 
 func (alltxsmap *allTxsLookupMap) getAllCount() int {
@@ -1216,10 +1195,7 @@ func (alltxsmap *allTxsLookupMap) getRemoteCountByCategory(category basic.Transa
 func (alltxsmap *allTxsLookupMap) getAllTxsLookupByCategory(category basic.TransactionCategory) *txLookup {
 	alltxsmap.Mu.RLock()
 	defer alltxsmap.Mu.RUnlock()
-	if txlookup := alltxsmap.all[category]; txlookup != nil {
-		return txlookup
-	}
-	return nil
+	return alltxsmap.all[category]
 }
 func (alltxsmap *allTxsLookupMap) getSegmentFromAllTxsLookupByCategory(category basic.TransactionCategory) int {
 	alltxsmap.Mu.RLock()
@@ -1323,10 +1299,7 @@ func newActivationInterval() *activationInterval {
 func (activ *activationInterval) getAll() map[string]time.Time {
 	activ.Mu.Lock()
 	defer activ.Mu.Unlock()
-	if act := activ.activ; act != nil {
-		return act
-	}
-	return nil
+	return activ.activ
 }
 func (activ *activationInterval) getTxActivByKey(key string) time.Time {
 	activ.Mu.Lock()
@@ -1360,10 +1333,7 @@ func newTxHashCategory() *txHashCategory {
 func (hashCat *txHashCategory) getAll() map[string]basic.TransactionCategory {
 	hashCat.Mu.Lock()
 	defer hashCat.Mu.Unlock()
-	if hc := hashCat.hashCategoryMap; hc != nil {
-		return hc
-	}
-	return nil
+	return hashCat.hashCategoryMap
 }
 func (hashCat *txHashCategory) getByHash(key string) basic.TransactionCategory {
 	hashCat.Mu.Lock()
@@ -1495,7 +1465,6 @@ func (t *txLookup) GetAllRemoteKeyTxs() map[string]*basic.Transaction {
 	return t.remotes
 }
 
-// GetLocalTx returns a transaction if it exists in the lookup, or nil if not found.
 func (t *txLookup) GetLocalTx(key string) *basic.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1503,7 +1472,6 @@ func (t *txLookup) GetLocalTx(key string) *basic.Transaction {
 	return t.locals[key]
 }
 
-// GetRemoteTx returns a transaction if it exists in the lookup, or nil if not found.
 func (t *txLookup) GetRemoteTx(key string) *basic.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1518,7 +1486,6 @@ func (t *txLookup) Count() int {
 	return len(t.locals) + len(t.remotes)
 }
 
-// LocalCount returns the current number of local transactions in the lookup.
 func (t *txLookup) LocalCount() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1526,7 +1493,6 @@ func (t *txLookup) LocalCount() int {
 	return len(t.locals)
 }
 
-// RemoteCount returns the current number of remote transactions in the lookup.
 func (t *txLookup) RemoteCount() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1534,7 +1500,6 @@ func (t *txLookup) RemoteCount() int {
 	return len(t.remotes)
 }
 
-// Segments returns the current number of Quota used in the lookup.
 func (t *txLookup) Segments() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1573,8 +1538,6 @@ func (t *txLookup) Remove(key string) {
 	delete(t.remotes, key)
 }
 
-// RemoteToLocals migrates the transactions belongs to the given locals to locals
-// set. The assumption is held the locals set is thread-safe to be used.
 func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -1590,8 +1553,6 @@ func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 	return migrated
 }
 
-// priceHp is a heap.Interface implementation over transactions for retrieving
-// price-sorted transactions to discard when the pool fills up.
 type priceHp struct {
 	list []*basic.Transaction
 }
@@ -1657,11 +1618,7 @@ func (txsorts *txSortedList) getAllPricedlist() map[basic.TransactionCategory]*t
 func (txsorts *txSortedList) getPricedlistByCategory(category basic.TransactionCategory) *txPricedList {
 	txsorts.Mu.Lock()
 	defer txsorts.Mu.Unlock()
-	if pricelistcap := txsorts.Pricedlist[category]; pricelistcap != nil {
-		return txsorts.Pricedlist[category]
-
-	}
-	return nil
+	return txsorts.Pricedlist[category]
 }
 func (txsorts *txSortedList) getAllLocalTxsByCategory(category basic.TransactionCategory) map[string]*basic.Transaction {
 	txsorts.Mu.Lock()
@@ -1752,29 +1709,24 @@ func (txsorts *txSortedList) setPricedlist(category basic.TransactionCategory, t
 
 type txPricedList struct {
 	stales    int64
-	all       *txLookup  // Pointer to the map of all transactions
-	remoteTxs priceHp    // Heaps of prices of all the stored **remote** transactions
-	reheapMu  sync.Mutex // Mutex asserts that only one routine is reheaping the list
+	all       *txLookup
+	remoteTxs priceHp // Heaps of prices of all the stored **remote** transactions
+	reheapMu  sync.Mutex
 }
 
-// newTxPricedList creates a new price-sorted transaction heap.
 func newTxPricedList(all *txLookup) *txPricedList {
 	return &txPricedList{
 		all: all,
 	}
 }
 
-// Put inserts a new transaction into the heap.
 func (l *txPricedList) Put(tx *basic.Transaction, local bool) {
 	if local {
 		return
 	}
-	// Insert every new transaction to the urgent heap first; Discard will balance the heaps
 	heap.Push(&l.remoteTxs, tx)
 }
 
-//Removed Delete transactions and reset the queue when the number of deleted transactions
-//is greater than a quarter of the number in the queue.
 func (l *txPricedList) Removed(count int) {
 	stales := atomic.AddInt64(&l.stales, int64(count))
 	if int(stales) <= (len(l.remoteTxs.list))/4 {
@@ -1783,23 +1735,17 @@ func (l *txPricedList) Removed(count int) {
 	l.Reheap()
 }
 
-// Underpriced checks whether a transaction is cheaper than (or as cheap as) the
-// lowest priced (remote) transaction currently being tracked.
 func (l *txPricedList) Underpriced(tx *basic.Transaction) bool {
-	// Note: with two queues, being underpriced is defined as being worse than the worst item
-	// in all non-empty queues if there is any. If both queues are empty then nothing is underpriced.
+
 	return (l.underpricedFor(&l.remoteTxs, tx) || len(l.remoteTxs.list) == 0) &&
 		(len(l.remoteTxs.list) != 0)
 }
 
-// underpricedFor checks whether a transaction is cheaper than (or as cheap as) the
-// lowest priced (remote) transaction in the given heap.
 func (l *txPricedList) underpricedFor(h *priceHp, tx *basic.Transaction) bool {
-	// Discard stale price points if found at the heap start
 	for len(h.list) > 0 {
 		head := h.list[0]
 		txId, _ := head.HashHex()
-		if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
+		if l.all.GetRemoteTx(txId) == nil {
 			atomic.AddInt64(&l.stales, -1)
 			heap.Pop(h)
 			continue
@@ -1807,29 +1753,22 @@ func (l *txPricedList) underpricedFor(h *priceHp, tx *basic.Transaction) bool {
 		break
 
 	}
-	// Check if the transaction is underpriced or not
 	if len(h.list) == 0 {
-		return false // There is no remote transaction at all.
+		return false
 	}
-	// If the remote transaction is even cheaper than the
-	// cheapest one tracked locally, reject it.
+
 	return h.cmp(h.list[0], tx) >= 0
 }
 
-// Discard finds a number of most underpriced transactions, removes them from the
-// priced list and returns them for further removal from the entire pool.
-// Note local transaction won't be considered for eviction.
 func (l *txPricedList) Discard(segments int, force bool) ([]*basic.Transaction, bool) {
 	drop := make([]*basic.Transaction, 0, segments) // Remote underpriced transactions to drop
 	for segments > 0 {
-		// Discard stale transactions if found during cleanup
 		if l.remoteTxs.Len() == 0 {
-			//Stop if heap is empty
 			break
 		}
 		tx := heap.Pop(&l.remoteTxs).(*basic.Transaction)
 		if txId, err := tx.HashHex(); err == nil {
-			if l.all.GetRemoteTx(txId) == nil { // Removed or migrated
+			if l.all.GetRemoteTx(txId) == nil {
 				atomic.AddInt64(&l.stales, -1)
 				continue
 			}
@@ -1837,7 +1776,6 @@ func (l *txPricedList) Discard(segments int, force bool) ([]*basic.Transaction, 
 		drop = append(drop, tx)
 		segments -= numSegments(tx)
 	}
-	// If we still can't make enough room for the new transaction
 	if segments > 0 && !force {
 		for _, tx := range drop {
 			heap.Push(&l.remoteTxs, tx)
@@ -1847,7 +1785,6 @@ func (l *txPricedList) Discard(segments int, force bool) ([]*basic.Transaction, 
 	return drop, true
 }
 
-// Reheap forcibly rebuilds the heap based on the current remote transaction set.
 func (l *txPricedList) Reheap() {
 	l.reheapMu.Lock()
 	defer l.reheapMu.Unlock()
@@ -1856,11 +1793,10 @@ func (l *txPricedList) Reheap() {
 	l.all.Range(func(key string, tx *basic.Transaction, local bool) bool {
 		l.remoteTxs.list = append(l.remoteTxs.list, tx)
 		return true
-	}, false, true) // Only iterate remotes
+	}, false, true)
 	heap.Init(&l.remoteTxs)
 }
 
-// numSegments calculates the number of segments needed for a single transaction.
 func numSegments(tx *basic.Transaction) int {
 	return int((tx.Size() + txSegmentSize - 1) / txSegmentSize)
 }
@@ -1877,8 +1813,7 @@ func (s TxByNonce) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 type CntAccountItem struct {
 	accountAddr tpcrtypes.Address
 	cnt         int // The priority of CntAccountItem in the queue is counts of account in txPool.
-	// The index is needed by update and is maintained by the heap.Interface methods.
-	index int // The index of the CntAccountItem item in the heap.
+	index       int // The index of the CntAccountItem item in the heap.
 }
 
 // A CntAccountHeap implements heap.Interface and holds GreyAccCnt.
@@ -1887,7 +1822,6 @@ type CntAccountHeap []*CntAccountItem
 func (pq CntAccountHeap) Len() int { return len(pq) }
 
 func (pq CntAccountHeap) Less(i, j int) bool {
-	// We want Pop to give us the highest, not lowest, priority so we use greater than here.
 	return pq[i].cnt < pq[j].cnt
 }
 
@@ -1913,7 +1847,7 @@ func (pq *CntAccountHeap) Pop() interface{} {
 	return GreyAccCnt
 }
 
-// txByActivationInterval is an account address tagged with its last activity timestamp.
+// txByActivationInterval tagged with transaction's last activity timestamp.
 type txByActivationInterval struct {
 	txId               string
 	ActivationInterval time.Time
@@ -1935,7 +1869,6 @@ func (s TxByPriceAndTime) Less(i, j int) bool {
 		return true
 	}
 	if GasPrice(s[i]) == GasPrice(s[j]) {
-		//		return s[i].Time.Before(s[j].Time)
 		return time.Unix(int64(s[i].Head.TimeStamp), 0).Before(time.Unix(int64(s[j].Head.TimeStamp), 0))
 	}
 	return false
@@ -1971,7 +1904,6 @@ func NewTxsByPriceAndNonce(txs map[tpcrtypes.Address][]*basic.Transaction) *TxsB
 	}
 }
 
-// Peek returns the next transaction by price.
 func (t *TxsByPriceAndNonce) Peek() *basic.Transaction {
 	if len(t.heads) == 0 {
 		return nil
@@ -1979,7 +1911,6 @@ func (t *TxsByPriceAndNonce) Peek() *basic.Transaction {
 	return t.heads[0]
 }
 
-// Shift replaces the current best head with the next one from the same account.
 func (t *TxsByPriceAndNonce) Shift() {
 	acc := tpcrtypes.Address(t.heads[0].Head.FromAddr)
 	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
@@ -1992,9 +1923,6 @@ func (t *TxsByPriceAndNonce) Shift() {
 	heap.Pop(&t.heads)
 }
 
-// Pop removes the best transaction, *not* replacing it with the next one from
-// the same account. This should be used when a transaction cannot be executed
-// and hence all subsequent ones should be discarded from the same account.
 func (t *TxsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }

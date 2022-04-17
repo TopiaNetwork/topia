@@ -9,15 +9,18 @@ import (
 
 type consensusVoteCollector struct {
 	sync.Mutex
-	log       tplog.Logger
-	threshold uint64
-	votes     []*VoteMessage
-	dkgBls    DKGBls
+	log          tplog.Logger
+	latestHeight uint64
+	threshold    uint64
+	votes        []*VoteMessage
+	dkgBls       DKGBls
 }
 
-func newConsensusVoteCollector(log tplog.Logger) *consensusVoteCollector {
+func newConsensusVoteCollector(log tplog.Logger, latestHeight uint64, dkgBls DKGBls) *consensusVoteCollector {
 	return &consensusVoteCollector{
-		log: log,
+		log:          log,
+		latestHeight: latestHeight,
+		dkgBls:       dkgBls,
 	}
 }
 

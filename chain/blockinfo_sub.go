@@ -111,6 +111,11 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	}
 
 	latestBlock, err := csState.GetLatestBlock()
+	if err != nil {
+		err = fmt.Errorf("Can't get the latest block: %v, can't process pubsub message: height=%d", err, block.Head.Height)
+		return err
+	}
+
 	if latestBlock.Head.Height >= block.Head.Height {
 		bsp.log.Warnf("Receive delay PubSubMessageBlockInfo: height=%d, latest block height=%d", block.Head.Height, latestBlock.Head.Height)
 		return nil

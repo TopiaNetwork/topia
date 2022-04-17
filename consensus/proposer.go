@@ -34,6 +34,7 @@ type consensusProposer struct {
 	marshaler               codec.Marshaler
 	ledger                  ledger.Ledger
 	cryptService            tpcrt.CryptService
+	dkgBls                  DKGBls
 	proposeMaxInterval      time.Duration
 	isProposing             uint32
 	lastBasedOn             uint64 //the block height which self-proposer is based on
@@ -70,14 +71,13 @@ func newConsensusProposer(log tplog.Logger,
 		isProposing:             0,
 		ppmPropList:             list.New(),
 		validator:               validator,
-		voteCollector:           newConsensusVoteCollector(log),
 	}
 
 	return csProposer
 }
 
 func (p *consensusProposer) updateDKGBls(dkgBls DKGBls) {
-	p.voteCollector.updateDKGBls(dkgBls)
+	p.dkgBls = dkgBls
 }
 
 func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block) ([]byte, error) {
@@ -228,6 +228,12 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 			select {
 			case voteMsg := <-p.voteMsgChan:
 				p.log.Infof("Received vote message, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
+
+				if voteMsg.StateVersion != (p.voteCollector.latestHeight + 1) {
+					p.log.Errorf("Received invalid vote message, state version %d, latest height %d, self node %s", voteMsg.StateVersion, p.voteCollector.latestHeight, p.nodeID)
+					continue
+				}
+
 				aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
 				if err != nil {
 					p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
@@ -343,6 +349,8 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	}
 
 	p.log.Infof("Message deliver ready:vstate version %d, propose Block height %d,  self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
+
+	p.voteCollector = newConsensusVoteCollector(p.log, latestBlock.Head.Height, p.dkgBls)
 
 	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
 		p.log.Errorf("Deliver propose message err: latest epoch =%d, latest height=%d, self node=%s, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)

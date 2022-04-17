@@ -49,7 +49,7 @@ func (v *consensusValidator) judgeLocalMaxPriBestForProposer(maxPri []byte, late
 			cachedMaxPri := bhCached.MaxPri
 
 			if new(big.Int).SetBytes(maxPri).Cmp(new(big.Int).SetBytes(cachedMaxPri)) <= 0 {
-				err = fmt.Errorf("Cached propose msg bock max pri bigger")
+				err = fmt.Errorf("Cached propose msg bock max pri bigger,cached info: chainID=%s, height=%d, state version %d", v.propMsgCached.ChainID, bhCached.Height, v.propMsgCached.StateVersion)
 				v.log.Errorf("%v", err)
 				return false, err
 			}

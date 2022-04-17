@@ -3,6 +3,7 @@ package chain
 import (
 	"context"
 	"errors"
+	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/configuration"
@@ -104,6 +105,10 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	bsp.log.Infof("Process pubsub message: height=%d, result status %s", block.Head.Height, blockRS.Head.Status.String())
 
 	csState := state.GetStateBuilder().CreateCompositionState(bsp.log, bsp.nodeID, bsp.ledger, block.Head.Height)
+	if csState == nil {
+		err = fmt.Errorf("Nil csState and can't process pubsub message: height=%d", block.Head.Height)
+		return err
+	}
 
 	latestBlock, err := csState.GetLatestBlock()
 	if latestBlock.Head.Height >= block.Head.Height {

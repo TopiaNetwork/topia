@@ -67,7 +67,7 @@ func (c *chain) dispatch(actorCtx actor.Context, data []byte) {
 }
 
 func (c *chain) Start(sysActor *actor.ActorSystem, network tpnet.Network) error {
-	actorPID, err := CreateChainActor(c.level, c.log, sysActor, c)
+	actorPID, err := CreateChainActor(c.log, sysActor, c)
 	if err != nil {
 		c.log.Panicf("CreateChainActor error: %v", err)
 		return err

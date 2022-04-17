@@ -271,15 +271,6 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		p.isProposing = 0
 	}()
 
-	p.syncPPMPropList.RLock()
-	if p.ppmPropList.Len() == 0 {
-		err := fmt.Errorf("Current ppm prop list size 0")
-		p.log.Infof("%s", err.Error())
-		p.syncPPMPropList.RUnlock()
-		return err
-	}
-	p.syncPPMPropList.RUnlock()
-
 	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 	defer csStateRN.Stop()
 
@@ -299,6 +290,12 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
+	pppProp, err := p.getAvailPPMProp(latestBlock.Head.Height)
+	if err != nil {
+		p.log.Errorf("%v", err)
+		return err
+	}
+
 	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock)
 	if !canPropose {
 		err = fmt.Errorf("Can't propose block at the epoch : epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
@@ -311,7 +308,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		p.log.Errorf("Can't get state root: %v", err)
 		return err
 	}
-	proposeBlock, err := p.produceProposeBlock(csStateRN.ChainID(), latestEpoch, latestBlock, vrfProof, maxPri, stateRoot)
+	proposeBlock, err := p.produceProposeBlock(csStateRN.ChainID(), latestEpoch, latestBlock, pppProp, vrfProof, maxPri, stateRoot)
 	if err != nil {
 		p.log.Errorf("Produce propose block error: epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
 		return err
@@ -416,22 +413,36 @@ func (p *consensusProposer) createBlockHead(chainID tpchaintypes.ChainID, epoch 
 	}, frontPPMProp.StateVersion, nil
 }
 
+func (p *consensusProposer) getAvailPPMProp(latestHeight uint64) (*PreparePackedMessageProp, error) {
+	p.syncPPMPropList.RLock()
+	defer p.syncPPMPropList.RUnlock()
+
+	var frontPPMProp *PreparePackedMessageProp
+	for p.ppmPropList.Len() > 0 {
+		frontEle := p.ppmPropList.Front()
+		frontPPMProp = frontEle.Value.(*PreparePackedMessageProp)
+		if frontPPMProp.StateVersion != latestHeight+1 {
+			break
+		} else if frontPPMProp.StateVersion < latestHeight+1 {
+			p.ppmPropList.Remove(frontEle)
+		}
+	}
+	if frontPPMProp == nil {
+		err := fmt.Errorf("Can't get prepare packed message prop: expected state version %d", latestHeight+1)
+		return nil, err
+	}
+
+	return frontPPMProp, nil
+}
+
 func (p *consensusProposer) produceProposeBlock(chainID tpchaintypes.ChainID,
 	latestEpoch *tpcmm.EpochInfo,
 	latestBlock *tpchaintypes.Block,
+	ppmProp *PreparePackedMessageProp,
 	vrfProof []byte,
 	maxPri []byte,
 	stateRoot []byte) (*ProposeMessage, error) {
-	p.syncPPMPropList.RLock()
-	frontPPMProp := p.ppmPropList.Front().Value.(*PreparePackedMessageProp)
-	if frontPPMProp.StateVersion != latestBlock.Head.Height+1 {
-		err := fmt.Errorf("Invalid prepare packed message prop: expected front state version %d, actual %d", latestBlock.Head.Height+1, frontPPMProp.StateVersion)
-		p.syncPPMPropList.RUnlock()
-		return nil, err
-	}
-	p.syncPPMPropList.RUnlock()
-
-	newBlockHead, stateVersion, err := p.createBlockHead(chainID, latestEpoch.Epoch, vrfProof, maxPri, frontPPMProp, latestBlock, stateRoot)
+	newBlockHead, stateVersion, err := p.createBlockHead(chainID, latestEpoch.Epoch, vrfProof, maxPri, ppmProp, latestBlock, stateRoot)
 	if err != nil {
 		p.log.Errorf("Create block failed: %v", err)
 		return nil, err
@@ -448,8 +459,8 @@ func (p *consensusProposer) produceProposeBlock(chainID tpchaintypes.ChainID,
 		Epoch:         latestEpoch.Epoch,
 		Round:         latestBlock.Head.Height,
 		StateVersion:  stateVersion,
-		TxHashs:       frontPPMProp.TxHashs,
-		TxResultHashs: frontPPMProp.TxResultHashs,
+		TxHashs:       ppmProp.TxHashs,
+		TxResultHashs: ppmProp.TxResultHashs,
 		BlockHead:     newBlockHeadBytes,
 	}, nil
 }

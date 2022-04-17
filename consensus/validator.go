@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"math/big"
 	"sync"
 	"time"
@@ -34,7 +35,7 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 	}
 }
 
-func (v *consensusValidator) judgeLocalMaxPriBestForProposer(maxPri []byte) (bool, error) {
+func (v *consensusValidator) judgeLocalMaxPriBestForProposer(maxPri []byte, latestBlock *tpchaintypes.Block) (bool, error) {
 	v.syncPropMsgCached.RLock()
 	defer v.syncPropMsgCached.RUnlock()
 
@@ -44,12 +45,14 @@ func (v *consensusValidator) judgeLocalMaxPriBestForProposer(maxPri []byte) (boo
 			v.log.Errorf("Can't get cached propose msg bock head info: %v", err)
 			return false, err
 		}
-		cachedMaxPri := bhCached.MaxPri
+		if bytes.Equal(latestBlock.Head.ChainID, v.propMsgCached.ChainID) && latestBlock.Head.Height <= (bhCached.Height+1) {
+			cachedMaxPri := bhCached.MaxPri
 
-		if new(big.Int).SetBytes(maxPri).Cmp(new(big.Int).SetBytes(cachedMaxPri)) <= 0 {
-			err = fmt.Errorf("Cached propose msg bock max pri bigger")
-			v.log.Errorf("%v", err)
-			return false, err
+			if new(big.Int).SetBytes(maxPri).Cmp(new(big.Int).SetBytes(cachedMaxPri)) <= 0 {
+				err = fmt.Errorf("Cached propose msg bock max pri bigger")
+				v.log.Errorf("%v", err)
+				return false, err
+			}
 		}
 	}
 
@@ -71,8 +74,6 @@ func (v *consensusValidator) canProcessForwardProposeMsg(ctx context.Context, ma
 
 	if v.propMsgCached != nil &&
 		bytes.Compare(propMsg.ChainID, v.propMsgCached.ChainID) == 0 &&
-		propMsg.Version == v.propMsgCached.Version &&
-		propMsg.Epoch == v.propMsgCached.Epoch &&
 		propMsg.Round == v.propMsgCached.Round {
 		bhCached, err := v.propMsgCached.BlockHeadInfo()
 		if err != nil {

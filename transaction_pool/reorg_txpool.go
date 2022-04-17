@@ -95,7 +95,9 @@ func (pool *transactionPool) requestReset(oldBlockHead *types.BlockHead, newBloc
 }
 
 func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *types.BlockHead) error {
-	t0 := time.Now()
+	defer func(t0 time.Time) {
+		pool.log.Infof("reset cost time: ", time.Since(t0))
+	}(time.Now())
 	var reInject []*basic.Transaction
 	if oldBlockHead != nil && types.BlockHash(oldBlockHead.Hash) != types.BlockHash(newBlockHead.Hash) {
 
@@ -116,14 +118,14 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *types.BlockHead) 
 				if newBlockHeight >= oldBlockHeight {
 
 					pool.log.Warnf("Transcation pool reset with missing oldhead",
-						"old", types.BlockHash(oldBlockHead.Hash),
-						"new", types.BlockHash(newBlockHead.Hash))
+						"oldhead hash", types.BlockHash(oldBlockHead.Hash),
+						"newhead hash", types.BlockHash(newBlockHead.Hash))
 					return nil
 				}
 
 				pool.log.Debugf("Skipping transaction reset caused by setHead",
-					"old", types.BlockHash(oldBlockHead.Hash), "oldnum", oldBlockHeight,
-					"new", types.BlockHash(newBlockHead.Hash), "newnum", newBlockHeight)
+					"oldhead hash", types.BlockHash(oldBlockHead.Hash), "oldnum", oldBlockHeight,
+					"newhead hash", types.BlockHash(newBlockHead.Hash), "newnum", newBlockHeight)
 			} else {
 
 				for rem.Head.Height > add.Head.Height {
@@ -187,7 +189,6 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *types.BlockHead) 
 				reInject = basic.TxDifference(discarded, included)
 			}
 		}
-		pool.log.Infof("reset cost time:", time.Since(t0))
 	}
 	if newBlockHead == nil {
 		newBlockHead = pool.query.CurrentBlock().GetHead()

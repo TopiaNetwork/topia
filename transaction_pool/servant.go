@@ -1,21 +1,21 @@
 package transactionpool
 
 import (
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"math/big"
 
 	"github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain/types"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/network/p2p"
 )
 
-type ChainHeadEvent struct{ Block *types.Block }
+type BlockAddedEvent struct{ Block *types.Block }
 
 type TransactionPoolServant interface {
 	CurrentBlock() *types.Block
 	GetBlock(hash types.BlockHash, num uint64) *types.Block
 	StateAt(root types.BlockHash) (*StatePoolDB, error)
-	SubChainHeadEvent(ch chan<- ChainHeadEvent) p2p.P2PPubSubService
+	SubChainHeadEvent(ch chan<- BlockAddedEvent) p2p.P2PPubSubService
 	GetMaxGasLimit() uint64
 }
 

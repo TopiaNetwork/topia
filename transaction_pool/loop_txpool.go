@@ -12,7 +12,7 @@ func (pool *transactionPool) loopChanSelect() {
 	pool.wg.Add(1)
 	go pool.loopChanRemoveTxHashs()
 	pool.wg.Add(1)
-	go pool.loopResetIfNewHead()
+	go pool.loopResetIfBlockAdded()
 	pool.wg.Add(1)
 	go pool.loopRemoveTxForUptoLifeTime()
 	pool.wg.Add(1)
@@ -54,12 +54,11 @@ func (pool *transactionPool) loopSaveAllIfShutDown() {
 	for {
 		select {
 		// System shutdown.  When the system is shut down, save to the files locals/remotes/configs
-		case <-pool.chanSysShutDown:
+		case <-pool.chanSysShutdown:
 			close(pool.chanReorgShutdown)
-			pool.saveAllWhenSysShutDown()
-
 			close(pool.chanRmTxs)
-			close(pool.chanChainHead)
+			close(pool.chanBlockAdded)
+			pool.saveAllWhenSysShutDown()
 			return
 		case <-pool.ctx.Done():
 			pool.log.Info("Systemshutdown stopped")
@@ -69,11 +68,11 @@ func (pool *transactionPool) loopSaveAllIfShutDown() {
 
 }
 
-func (pool *transactionPool) loopResetIfNewHead() {
+func (pool *transactionPool) loopResetIfBlockAdded() {
 	defer pool.wg.Done()
 	defer func() {
 		if err := recover(); err != nil {
-			pool.log.Errorf("resetIfNewHead err:", err, debug.Stack())
+			pool.log.Errorf("loopResetIfBlockAdded err:", err, debug.Stack())
 		}
 	}()
 	// Track the previous head headers for transaction reorgs
@@ -82,7 +81,7 @@ func (pool *transactionPool) loopResetIfNewHead() {
 	for {
 		select {
 		// Handle ChainHeadEvent
-		case ev := <-pool.chanChainHead:
+		case ev := <-pool.chanBlockAdded:
 			if ev.Block != nil {
 				pool.requestReset(head.Head, ev.Block.Head)
 				head = ev.Block

@@ -305,13 +305,13 @@ func (l *txCoreList) LastElementWithHighestNonce() *basic.Transaction {
 }
 
 type pendingTxs struct {
-	Mu         sync.RWMutex
-	addrTxList map[tpcrtypes.Address]*txCoreList
+	Mu                sync.RWMutex
+	mapAddrTxCoreList map[tpcrtypes.Address]*txCoreList
 }
 
 func newPendingTxs() *pendingTxs {
 	addtxs := &pendingTxs{
-		addrTxList: make(map[tpcrtypes.Address]*txCoreList, 0),
+		mapAddrTxCoreList: make(map[tpcrtypes.Address]*txCoreList, 0),
 	}
 	return addtxs
 }
@@ -337,7 +337,7 @@ func (pendingmap *pendingsMap) getAllCommitTxs() []*basic.Transaction {
 	for _, pendingtxs := range pendingmap.pending {
 		pendingtxs.Mu.RLock()
 		pendingtxs.Mu.RUnlock()
-		for _, txList := range pendingtxs.addrTxList {
+		for _, txList := range pendingtxs.mapAddrTxCoreList {
 			for _, tx := range txList.txs.cache {
 				txs = append(txs, tx)
 			}
@@ -356,7 +356,7 @@ func (pendingmap *pendingsMap) getTxsByCategory(category basic.TransactionCatego
 	}
 	pendingcat.Mu.RLock()
 	defer pendingcat.Mu.RUnlock()
-	for _, list := range pendingcat.addrTxList {
+	for _, list := range pendingcat.mapAddrTxCoreList {
 		txs := list.Flatten()
 		if len(txs) > 0 {
 			pending = append(pending, txs...)
@@ -386,7 +386,7 @@ func (pendingmap *pendingsMap) demoteUnexecutablesByCategory(category basic.Tran
 	}
 	pendingcat.Mu.Lock()
 	defer pendingcat.Mu.Unlock()
-	for addr, list := range pendingcat.addrTxList {
+	for addr, list := range pendingcat.mapAddrTxCoreList {
 		nonce := f1(addr)
 		olds := list.RemovedTxForLessNonce(nonce)
 		for _, tx := range olds {
@@ -402,7 +402,7 @@ func (pendingmap *pendingsMap) demoteUnexecutablesByCategory(category basic.Tran
 
 		}
 		if list.Empty() {
-			delete(pendingcat.addrTxList, addr)
+			delete(pendingcat.mapAddrTxCoreList, addr)
 		}
 
 	}
@@ -412,7 +412,7 @@ func (pendingmap *pendingsMap) getAddrTxsByCategory(category basic.TransactionCa
 	pendingmap.Mu.RLock()
 	defer pendingmap.Mu.RUnlock()
 	pending := make(map[tpcrtypes.Address][]*basic.Transaction)
-	for addr, list := range pendingmap.pending[category].addrTxList {
+	for addr, list := range pendingmap.pending[category].mapAddrTxCoreList {
 		txs := list.Flatten()
 		if len(txs) > 0 {
 			pending[addr] = txs
@@ -429,7 +429,7 @@ func (pendingmap *pendingsMap) getAddrTxListOfCategory(category basic.Transactio
 	}
 	pendingcat.Mu.RLock()
 	defer pendingcat.Mu.RUnlock()
-	if maptxlist := pendingcat.addrTxList; maptxlist != nil {
+	if maptxlist := pendingcat.mapAddrTxCoreList; maptxlist != nil {
 		return maptxlist
 	}
 
@@ -445,7 +445,7 @@ func (pendingmap *pendingsMap) noncesForAddrTxListOfCategory(category basic.Tran
 	}
 	pendingcat.Mu.Lock()
 	defer pendingcat.Mu.Unlock()
-	if maptxlist := pendingmap.pending[category].addrTxList; maptxlist != nil {
+	if maptxlist := pendingmap.pending[category].mapAddrTxCoreList; maptxlist != nil {
 		nonces := make(map[tpcrtypes.Address]uint64, len(maptxlist))
 		for addr, list := range maptxlist {
 			highestPending := list.LastElementWithHighestNonce()
@@ -465,7 +465,7 @@ func (pendingmap *pendingsMap) getCommitTxsCategory(category basic.TransactionCa
 	pendingcat.Mu.RLock()
 	defer pendingcat.Mu.RUnlock()
 	var txs = make([]*basic.Transaction, 0)
-	maptxlist := pendingcat.addrTxList
+	maptxlist := pendingcat.mapAddrTxCoreList
 	if maptxlist == nil {
 		return nil
 	}
@@ -489,7 +489,7 @@ func (pendingmap *pendingsMap) getStatsOfCategory(category basic.TransactionCate
 	pendingcat.Mu.RLock()
 	defer pendingcat.Mu.RUnlock()
 	pending := 0
-	if maptxlist := pendingcat.addrTxList; maptxlist != nil {
+	if maptxlist := pendingcat.mapAddrTxCoreList; maptxlist != nil {
 		for _, list := range maptxlist {
 			pending += list.Len()
 		}
@@ -508,7 +508,7 @@ func (pendingmap *pendingsMap) truncatePendingByCategoryFun1(category basic.Tran
 	pendingcat.Mu.Lock()
 	defer pendingcat.Mu.Unlock()
 	pending := uint64(0)
-	for _, list := range pendingcat.addrTxList {
+	for _, list := range pendingcat.mapAddrTxCoreList {
 		pending += uint64(list.Len())
 	}
 	return pending
@@ -522,7 +522,7 @@ func (pendingmap *pendingsMap) truncatePendingByCategoryFun2(category basic.Tran
 		pendingcat = newPendingTxs()
 	}
 	var greyAccounts map[tpcrtypes.Address]int
-	for addr, list := range pendingmap.pending[category].addrTxList {
+	for addr, list := range pendingmap.pending[category].mapAddrTxCoreList {
 		// Only evict transactions from high rollers
 		if f1(addr) && uint64(list.Len()) > PendingAccountSegments {
 			greyAccounts[addr] = list.Len()
@@ -540,7 +540,7 @@ func (pendingmap *pendingsMap) truncatePendingByCategoryFun3(f31 func(category b
 	}
 	pendingcat.Mu.Lock()
 	defer pendingcat.Mu.Unlock()
-	if list := pendingcat.addrTxList[addr]; list != nil {
+	if list := pendingcat.mapAddrTxCoreList[addr]; list != nil {
 		caps := list.CapLimitTxs(list.Len() - 1)
 		for _, tx := range caps {
 			txId, _ := tx.HashHex()
@@ -560,7 +560,7 @@ func (pendingmap *pendingsMap) getTxListByAddrOfCategory(category basic.Transact
 	}
 	pendingcat.Mu.RLock()
 	defer pendingcat.Mu.RUnlock()
-	if txlist := pendingcat.addrTxList[addr]; txlist != nil {
+	if txlist := pendingcat.mapAddrTxCoreList[addr]; txlist != nil {
 		return txlist
 	}
 	return nil
@@ -576,7 +576,7 @@ func (pendingmap *pendingsMap) addTxToTxListByAddrOfCategory(
 	pendingcat.Mu.Lock()
 	defer pendingcat.Mu.Unlock()
 
-	if txlist := pendingcat.addrTxList[addr]; txlist != nil {
+	if txlist := pendingcat.mapAddrTxCoreList[addr]; txlist != nil {
 		return txlist.txCoreAdd(tx)
 	}
 	return false, nil
@@ -594,14 +594,14 @@ func (pendingmap *pendingsMap) getTxListRemoveByAddrOfCategory(
 	}
 	pendingcat.Mu.Lock()
 	defer pendingcat.Mu.Unlock()
-	if list := pendingcat.addrTxList[addr]; list != nil {
+	if list := pendingcat.mapAddrTxCoreList[addr]; list != nil {
 		removed, invalids := list.Remove(tx)
 		if !removed {
 			return
 		}
 
 		if list.Empty() {
-			delete(pendingcat.addrTxList, addr)
+			delete(pendingcat.mapAddrTxCoreList, addr)
 		}
 
 		// Postpone any invalidated transactions
@@ -627,7 +627,7 @@ func (pendingmap *pendingsMap) replaceTxOfAddrOfCategory(category basic.Transact
 	}
 	pendingcat.Mu.Lock()
 	defer pendingcat.Mu.Unlock()
-	if list := pendingcat.addrTxList[from]; list != nil && list.WhetherSameNonce(tx) {
+	if list := pendingcat.mapAddrTxCoreList[from]; list != nil && list.WhetherSameNonce(tx) {
 		inserted, old := list.txCoreAdd(tx)
 		if !inserted {
 			return false, ErrReplaceUnderpriced
@@ -648,7 +648,7 @@ func (pendingmap *pendingsMap) setTxListOfCategory(category basic.TransactionCat
 	if pendingcat := pendingmap.pending[category]; pendingcat != nil {
 		pendingcat.Mu.Lock()
 		defer pendingcat.Mu.Unlock()
-		pendingcat.addrTxList[addr] = txs
+		pendingcat.mapAddrTxCoreList[addr] = txs
 	}
 
 }
@@ -926,6 +926,18 @@ func (queuemap *queuesMap) getTxListRemoveFutureByAddrOfCategory(tx *basic.Trans
 	}
 }
 
+func (queuemap *queuesMap) getAddrTxsByCategory(category basic.TransactionCategory) map[tpcrtypes.Address][]*basic.Transaction {
+	queuemap.Mu.RLock()
+	defer queuemap.Mu.RUnlock()
+	queue := make(map[tpcrtypes.Address][]*basic.Transaction)
+	for addr, list := range queuemap.queue[category].mapAddrTxCoreList {
+		txs := list.Flatten()
+		if len(txs) > 0 {
+			queue[addr] = txs
+		}
+	}
+	return queue
+}
 func (queuemap *queuesMap) getAddrTxListOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address]*txCoreList {
 	queuemap.Mu.RLock()
 	defer queuemap.Mu.RUnlock()

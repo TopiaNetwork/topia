@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 )
 
 func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
@@ -134,7 +135,7 @@ func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
 	pool.wg.Add(1)
 	go func() {
 		pool.wg.Done()
-		pool.chanSysShutDown <- errors.New("shut down")
+		pool.chanSysShutdown <- errors.New("shut down")
 	}()
 	pool.wg.Wait()
 
@@ -180,9 +181,9 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	hashs = append(hashs, KeyR2)
 
 	pool.wg.Add(1)
-	go pool.loopResetIfNewHead()
-	newheadevent := &ChainHeadEvent{NewBlock}
-	pool.chanChainHead <- *newheadevent
+	go pool.loopResetIfBlockAdded()
+	newheadevent := &BlockAddedEvent{NewBlock}
+	pool.chanBlockAdded <- *newheadevent
 }
 
 func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
@@ -386,9 +387,9 @@ func Test_transactionPool_loop(t *testing.T) {
 
 	waitChannel := make(chan struct{})
 
-	newheadevent := &ChainHeadEvent{NewBlock}
-	pool.chanChainHead <- *newheadevent
-	pool.chanSysShutDown <- errors.New("shut down")
+	newheadevent := &BlockAddedEvent{NewBlock}
+	pool.chanBlockAdded <- *newheadevent
+	pool.chanSysShutdown <- errors.New("shut down")
 
 	<-waitChannel
 	time.Sleep(20 * time.Second)

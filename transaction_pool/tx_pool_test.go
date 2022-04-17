@@ -338,7 +338,7 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 		ctx:                 ctx,
 		ActivationIntervals: newActivationInterval(),
 		TxHashCategory:      newTxHashCategory(),
-		chanChainHead:       make(chan ChainHeadEvent, chainHeadChanSize),
+		chanBlockAdded:      make(chan BlockAddedEvent, ChanBlockAddedSize),
 		chanReqReset:        make(chan *txPoolResetHeads),
 		chanReqPromote:      make(chan *accountSet),
 		chanReorgDone:       make(chan chan struct{}),
@@ -653,7 +653,7 @@ func Test_transactionPool_Pending(t *testing.T) {
 	pool.AddTx(TxR1, false)
 	pool.AddTx(TxR2, false)
 	pool.turnTx(From1, Key1, Tx1)
-	pending := pool.PendingOfCategory(Category1)
+	pending := pool.PendingMapAddrTxsOfCategory(Category1)
 	for _, txs := range pending {
 		for _, tx := range txs {
 			if !reflect.DeepEqual(tx, Tx1) {
@@ -686,7 +686,7 @@ func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 	_ = pool.turnTx(From1, Key2, Tx2)
 	_ = pool.turnTx(From2, KeyR1, TxR1)
 	_ = pool.turnTx(From2, KeyR2, TxR2)
-	pending := pool.PendingOfCategory(Category1)
+	pending := pool.PendingMapAddrTxsOfCategory(Category1)
 	txs := make([]*basic.Transaction, 0)
 	txSet := NewTxsByPriceAndNonce(pending)
 	var cnt int
@@ -756,7 +756,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	_ = pool.turnTx(From1, Key2, Tx2)
 	_ = pool.turnTx(From2, KeyR1, TxR1)
 	_ = pool.turnTx(From2, KeyR2, TxR2)
-	pending := pool.PendingOfCategory(Category1)
+	pending := pool.PendingMapAddrTxsOfCategory(Category1)
 	txs := make([]*basic.Transaction, 0)
 	for _, v := range pending {
 		for _, tx := range v {

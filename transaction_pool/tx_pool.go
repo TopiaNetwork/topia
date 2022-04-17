@@ -32,8 +32,8 @@ const (
 )
 
 const (
-	chainHeadChanSize = 10
-	MOD_NAME          = "TransactionPool"
+	ChanBlockAddedSize = 10
+	MOD_NAME           = "TransactionPool"
 )
 
 var (
@@ -47,6 +47,7 @@ var (
 	ErrOversizedData      = errors.New("transaction overSized data")
 	ErrTxUpdate           = errors.New("can not update tx")
 	ErrPendingIsNil       = errors.New("pending is nil")
+	ErrQueueIsNil         = errors.New("Queue is nil")
 	ErrUnRooted           = errors.New("UnRooted new chain")
 	ErrQueueEmpty         = errors.New("queue is empty")
 )
@@ -69,14 +70,15 @@ type TransactionPool interface {
 	Start(sysActor *actor.ActorSystem, network network.Network) error
 
 	PickTxs(txType PickTxType) []*basic.Transaction
+	SysShutDown()
 }
 
 type transactionPool struct {
 	nodeId string
 	config TransactionPoolConfig
 
-	chanSysShutDown   chan error
-	chanChainHead     chan ChainHeadEvent
+	chanSysShutdown   chan error
+	chanBlockAdded    chan BlockAddedEvent
 	chanReqReset      chan *txPoolResetHeads
 	chanReqPromote    chan *accountSet
 	chanReorgDone     chan chan struct{}
@@ -117,7 +119,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 		allTxsForLook:       newAllTxsLookupMap(),
 		ActivationIntervals: newActivationInterval(),
 		TxHashCategory:      newTxHashCategory(),
-		chanChainHead:       make(chan ChainHeadEvent, chainHeadChanSize),
+		chanBlockAdded:      make(chan BlockAddedEvent, ChanBlockAddedSize),
 		chanReqReset:        make(chan *txPoolResetHeads),
 		chanReqPromote:      make(chan *accountSet),
 		chanReorgDone:       make(chan chan struct{}),
@@ -252,13 +254,10 @@ func (pool *transactionPool) BroadCastTx(tx *basic.Transaction) error {
 	return nil
 }
 
-func (pool *transactionPool) PendingOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address][]*basic.Transaction {
-	return pool.pendings.getAddrTxsByCategory(category)
-}
-
 func (pool *transactionPool) Pending() ([]*basic.Transaction, error) {
-	t0 := time.Now()
-
+	defer func(t0 time.Time) {
+		pool.log.Infof("get Pending txs list cost time:", time.Since(t0))
+	}(time.Now())
 	TxList := make([]*basic.Transaction, 0)
 	for category, _ := range pool.allTxsForLook.getAll() {
 		TxList = append(TxList, pool.pendings.getTxsByCategory(category)...)
@@ -266,8 +265,46 @@ func (pool *transactionPool) Pending() ([]*basic.Transaction, error) {
 	if len(TxList) == 0 {
 		return nil, ErrPendingIsNil
 	}
-	pool.log.Infof("Pending cost time:", time.Since(t0))
 	return TxList, nil
+}
+func (pool *transactionPool) PendingTxsForCatgory(category basic.TransactionCategory) []*basic.Transaction {
+	defer func(t0 time.Time) {
+		pool.log.Infof("get Pending txs list For Catgory", category, "cost time: ", time.Since(t0))
+	}(time.Now())
+	return pool.pendings.getTxsByCategory(category)
+}
+
+func (pool *transactionPool) PendingMapAddrTxsOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address][]*basic.Transaction {
+	defer func(t0 time.Time) {
+		pool.log.Infof("get Pending MapAddrTxs Of Category", category, "cost time: ", time.Since(t0))
+	}(time.Now())
+	return pool.pendings.getAddrTxsByCategory(category)
+}
+
+func (pool *transactionPool) Queue() ([]*basic.Transaction, error) {
+	defer func(t0 time.Time) {
+		pool.log.Infof("get Queue txs, cost time:", time.Since(t0))
+	}(time.Now())
+	TxList := make([]*basic.Transaction, 0)
+	for category, _ := range pool.allTxsForLook.getAll() {
+		TxList = append(TxList, pool.queues.getTxsByCategory(category)...)
+	}
+	if len(TxList) == 0 {
+		return nil, ErrQueueIsNil
+	}
+	return TxList, nil
+}
+func (pool *transactionPool) QueueTxsForCatgory(category basic.TransactionCategory) []*basic.Transaction {
+	defer func(t0 time.Time) {
+		pool.log.Infof("get Queue Txs For Catgory", category, "cost time: ", time.Since(t0))
+	}(time.Now())
+	return pool.queues.getTxsByCategory(category)
+}
+func (pool *transactionPool) QueueMapAddrTxsOfCategory(category basic.TransactionCategory) map[tpcrtypes.Address][]*basic.Transaction {
+	defer func(t0 time.Time) {
+		pool.log.Infof("get Queue MapAddrTxs Of Category", category, "cost time: ", time.Since(t0))
+	}(time.Now())
+	return pool.queues.getAddrTxsByCategory(category)
 }
 
 func (pool *transactionPool) LocalAccounts() []tpcrtypes.Address {
@@ -333,7 +370,9 @@ func (pool *transactionPool) addTxsLocked(txs []*basic.Transaction, local bool) 
 }
 
 func (pool *transactionPool) UpdateTx(tx *basic.Transaction, txKey string) error {
-	t0 := time.Now()
+	defer func(t0 time.Time) {
+		pool.log.Infof("Update transaction cost time:", time.Since(t0))
+	}(time.Now())
 	category := basic.TransactionCategory(tx.Head.Category)
 
 	tx2 := pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txKey)
@@ -344,7 +383,6 @@ func (pool *transactionPool) UpdateTx(tx *basic.Transaction, txKey string) error
 			GasPrice(tx2) <= GasPrice(tx) {
 			pool.RemoveTxByKey(txKey)
 			pool.add(tx, false)
-			pool.log.Infof("Update transaction cost time:", time.Since(t0))
 		}
 		return nil
 	default:
@@ -409,15 +447,14 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 }
 
 func (pool *transactionPool) RemoveTxHashs(hashs []string) []error {
-	t0 := time.Now()
+	defer func(t0 time.Time) {
+		pool.log.Infof("transaction pool RemoveTxHashs cost time:", time.Since(t0))
+	}(time.Now())
 	errs := make([]error, 0)
 	for _, txHash := range hashs {
 		if err := pool.RemoveTxByKey(txHash); err != nil {
 			errs = append(errs, err)
 		}
-	}
-	if len(errs) == 0 {
-		pool.log.Infof("RemoveTxHashs cost time:", time.Since(t0))
 	}
 	return errs
 }
@@ -711,26 +748,28 @@ func (pool *transactionPool) demoteUnexecutables(category basic.TransactionCateg
 
 // PickTxs if txsType is 0,pick current pending txs,if 1 pick txs sorted by price and nonce
 func (pool *transactionPool) PickTxs(txType PickTxType) (txs []*basic.Transaction) {
-	t0 := time.Now()
-
+	defer func(t0 time.Time) {
+		pool.log.Infof("PickTxs cost time:", time.Since(t0))
+	}(time.Now())
 	txs = make([]*basic.Transaction, 0)
 	switch txType {
 	case PickTransactionsFromPending:
 		txs = pool.pendings.getAllCommitTxs()
-		pool.log.Infof("Pick ", txType, "transaction cost time: ", time.Since(t0))
 
 		return txs
 	case PickTransactionsSortedByGasPriceAndNonce:
 		for category, _ := range pool.allTxsForLook.getAll() {
 			txs = append(txs, pool.CommitTxsByPriceAndNonce(category)...)
 		}
-		pool.log.Infof("Pick ", txType, "transaction cost time: ", time.Since(t0))
 		return txs
 	default:
 		return nil
 	}
 }
 func (pool *transactionPool) PickTxsOfCategory(category basic.TransactionCategory, txType PickTxType) []*basic.Transaction {
+	defer func(t0 time.Time) {
+		pool.log.Infof("PickTxs of category:", category, "cost time:", time.Since(t0))
+	}(time.Now())
 	switch txType {
 	case PickTransactionsFromPending:
 		return pool.CommitTxsForPending(category)
@@ -741,15 +780,19 @@ func (pool *transactionPool) PickTxsOfCategory(category basic.TransactionCategor
 		return nil
 	}
 }
+func (pool *transactionPool) SysShutDown() {
+	pool.chanSysShutdown <- errors.New("System Shutdown")
+}
 
 // CommitTxsForPending  : Block packaged transactions for pending
 func (pool *transactionPool) CommitTxsForPending(category basic.TransactionCategory) []*basic.Transaction {
+
 	return pool.pendings.getCommitTxsCategory(category)
 }
 
 // CommitTxsByPriceAndNonce  : Block packaged transactions sorted by price and nonce
 func (pool *transactionPool) CommitTxsByPriceAndNonce(category basic.TransactionCategory) []*basic.Transaction {
-	txSet := NewTxsByPriceAndNonce(pool.PendingOfCategory(category))
+	txSet := NewTxsByPriceAndNonce(pool.PendingMapAddrTxsOfCategory(category))
 	txs := make([]*basic.Transaction, 0)
 	for {
 		tx := txSet.Peek()

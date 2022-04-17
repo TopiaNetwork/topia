@@ -43,10 +43,10 @@ func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
 
 func (handler *transactionPoolHandler) processBlockAddedEvent(ctx context.Context, data interface{}) error {
 	if block, ok := data.(*tpchaintypes.Block); ok {
-		newChainHead := &ChainHeadEvent{
+		newChainHead := &BlockAddedEvent{
 			block,
 		}
-		handler.txPool.chanChainHead <- *newChainHead
+		handler.txPool.chanBlockAdded <- *newChainHead
 	}
 	return nil
 }

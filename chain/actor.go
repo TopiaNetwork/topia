@@ -4,7 +4,6 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 
 	tplog "github.com/TopiaNetwork/topia/log"
-	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
 
 type NodeActor struct {
@@ -13,8 +12,7 @@ type NodeActor struct {
 	chain *chain
 }
 
-func CreateChainActor(level tplogcmm.LogLevel, parentLog tplog.Logger, sysActor *actor.ActorSystem, chain *chain) (*actor.PID, error) {
-	log := tplog.CreateModuleLogger(level, MOD_NAME, parentLog)
+func CreateChainActor(log tplog.Logger, sysActor *actor.ActorSystem, chain *chain) (*actor.PID, error) {
 	nActor := &NodeActor{
 		log:   log,
 		chain: chain,

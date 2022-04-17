@@ -421,7 +421,7 @@ func (p *consensusProposer) getAvailPPMProp(latestHeight uint64) (*PreparePacked
 	for p.ppmPropList.Len() > 0 {
 		frontEle := p.ppmPropList.Front()
 		frontPPMProp = frontEle.Value.(*PreparePackedMessageProp)
-		if frontPPMProp.StateVersion != latestHeight+1 {
+		if frontPPMProp.StateVersion == latestHeight+1 {
 			break
 		} else if frontPPMProp.StateVersion < latestHeight+1 {
 			p.ppmPropList.Remove(frontEle)

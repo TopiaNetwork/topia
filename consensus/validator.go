@@ -45,7 +45,7 @@ func (v *consensusValidator) judgeLocalMaxPriBestForProposer(maxPri []byte, late
 			v.log.Errorf("Can't get cached propose msg bock head info: %v", err)
 			return false, err
 		}
-		if bytes.Equal(latestBlock.Head.ChainID, v.propMsgCached.ChainID) && latestBlock.Head.Height <= (bhCached.Height+1) {
+		if bytes.Equal(latestBlock.Head.ChainID, v.propMsgCached.ChainID) && bhCached.Height >= (latestBlock.Head.Height+1) {
 			cachedMaxPri := bhCached.MaxPri
 
 			if new(big.Int).SetBytes(maxPri).Cmp(new(big.Int).SetBytes(cachedMaxPri)) <= 0 {

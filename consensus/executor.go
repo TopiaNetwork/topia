@@ -344,13 +344,15 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return err
 	}
 
+	e.log.Infof("Deliver prepare packed message to execute network successfully: state version %d， self node %s", packedMsgExe.StateVersion, e.nodeID)
+
 	err = e.deliver.deliverPreparePackagedMessageProp(ctx, packedMsgProp)
 	if err != nil {
 		e.log.Errorf("Deliver prepare packed message to propose network failed: err=%v", err)
 		return err
 	}
 
-	e.log.Infof("Deliver prepare packed message to propose network successfully: self node %s", e.nodeID)
+	e.log.Infof("Deliver prepare packed message to propose network successfully: state version %d， self node %s", packedMsgProp.StateVersion, e.nodeID)
 
 	return nil
 }

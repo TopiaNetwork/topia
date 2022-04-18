@@ -424,7 +424,8 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 	}
 	addr := tpcrtypes.Address(tx.Head.FromAddr)
 	// Remove it from the list of known transactions
-	pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key)
+	txSegmentSize := pool.config.TxSegmentSize
+	pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key, txSegmentSize)
 	// Remove it from the list of sortedByPriced
 	pool.sortedLists.removedPricedlistByCategory(category, 1)
 	data := "txPool remove a " + string(category) + "tx,txHash is " + key
@@ -466,7 +467,7 @@ func (pool *transactionPool) Get(category basic.TransactionCategory, key string)
 func (pool *transactionPool) queueAddTx(key string, tx *basic.Transaction, local bool, addAll bool) (bool, error) {
 	// Try to insert the transaction into the future queue
 	f1 := func(category basic.TransactionCategory, key string) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key)
+		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key, pool.config.TxSegmentSize)
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
 
 	}
@@ -477,7 +478,7 @@ func (pool *transactionPool) queueAddTx(key string, tx *basic.Transaction, local
 		pool.log.Errorf("Missing transaction in lookup set, please report the issue ", "TxID", key)
 	}
 	f4 := func(category basic.TransactionCategory, tx *basic.Transaction, local bool) {
-		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, local)
+		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, local, pool.config.TxSegmentSize)
 		pool.ActivationIntervals.setTxActiv(key, time.Now())
 	}
 	f5 := func(key string, category basic.TransactionCategory, local bool) {
@@ -508,7 +509,8 @@ func (pool *transactionPool) GetLocalTxs(category basic.TransactionCategory) map
 }
 
 func (pool *transactionPool) ValidateTx(tx *basic.Transaction, local bool) error {
-	if uint64(tx.Size()) > txMaxSize {
+
+	if uint64(tx.Size()) > uint64(pool.config.TxMaxSegmentSize) {
 		return ErrOversizedData
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
@@ -554,8 +556,8 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 		return false, ErrAlreadyKnown
 	}
 
-	// If the transaction pool is full, discard underpriced transactions
-	if uint64(pool.allTxsForLook.getSegmentFromAllTxsLookupByCategory(category)+numSegments(tx)) > pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal {
+	// If the transaction pool is full, discard underpriced transactions f
+	if uint64(pool.allTxsForLook.getSegmentFromAllTxsLookupByCategory(category)+numSegments(tx, pool.config.TxSegmentSize)) > pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.sortedLists.getPricedlistByCategory(category).Underpriced(tx) {
 			gasprice := GasPrice(tx)
@@ -568,8 +570,8 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 		}
 
 		segment := pool.allTxsForLook.getSegmentFromAllTxsLookupByCategory(category) -
-			int(pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal) + numSegments(tx)
-		drop, success := pool.sortedLists.DiscardFromPricedlistByCategor(category, segment, isLocal)
+			int(pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal) + numSegments(tx, pool.config.TxSegmentSize)
+		drop, success := pool.sortedLists.DiscardFromPricedlistByCategor(category, segment, isLocal, pool.config.TxSegmentSize)
 
 		// Special case, we still can't make the room for the new remote one.
 		if !isLocal && !success {
@@ -590,13 +592,13 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 	// Try to replace an existing transaction in the pending pool
 	from := tpcrtypes.Address(tx.Head.FromAddr)
 	f1 := func(category basic.TransactionCategory, txId string) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
 	}
 	f2 := func(category basic.TransactionCategory) {
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
 	}
 	f3 := func(category basic.TransactionCategory, tx *basic.Transaction, isLocal bool) {
-		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, isLocal)
+		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, isLocal, pool.config.TxSegmentSize)
 	}
 	f4 := func(category basic.TransactionCategory, tx *basic.Transaction, isLocal bool) {
 		pool.sortedLists.putTxToPricedlistByCategory(category, tx, isLocal)
@@ -641,7 +643,7 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId string, tx *bas
 	inserted, old := pool.pendings.addTxToTxListByAddrOfCategory(category, addr, tx)
 	if !inserted {
 		// An older transaction was existed, discard this
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
 		return false
 	} else {
@@ -650,7 +652,7 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId string, tx *bas
 
 	if old != nil {
 		oldkey, _ := old.HashHex()
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey)
+		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey, pool.config.TxSegmentSize)
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
 	}
 	// Successful replace tx, bump the ActivationInterval
@@ -683,7 +685,7 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 	for _, addr := range accounts {
 		f1 := func(address tpcrtypes.Address) uint64 { return pool.curState.GetNonce(address) }
 		f2 := func(transactionCategory basic.TransactionCategory, string2 string) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, string2)
+			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, string2, pool.config.TxSegmentSize)
 		}
 		forwardsCnt := pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2)
 
@@ -699,14 +701,14 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 			return inserted, old
 		}
 		ft2 := func(category basic.TransactionCategory, txId string) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
 			pool.sortedLists.removedPricedlistByCategory(category, 1)
 		}
 		ft3 := func(category basic.TransactionCategory, addr tpcrtypes.Address, tx *basic.Transaction) {
 			pool.queues.removeTxFromTxListByAddrOfCategory(category, addr, tx)
 		}
 		ft4 := func(category basic.TransactionCategory, oldkey string) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey)
+			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey, pool.config.TxSegmentSize)
 			pool.sortedLists.removedPricedlistByCategory(category, 1)
 		}
 		ft5 := func(txId string) { pool.ActivationIntervals.setTxActiv(txId, time.Now()) }
@@ -717,7 +719,7 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 		// Drop all transactions over the allowed limit
 		fl1 := func(addr tpcrtypes.Address) bool { return !pool.locals.contains(addr) }
 		fl2 := func(category basic.TransactionCategory, txId string) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
 			pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
 		}
 		capsCnt := pool.queues.replaceExecutablesDropOverLimit(fl1, fl2, pool.config.QueueMaxTxsAccount, category, addr)
@@ -734,7 +736,7 @@ func (pool *transactionPool) demoteUnexecutables(category basic.TransactionCateg
 	// Iterate over all accounts and demote any non-executable transactions
 	f1 := func(address tpcrtypes.Address) uint64 { return pool.curState.GetNonce(address) }
 	f2 := func(category basic.TransactionCategory, txId string) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
 		pool.log.Tracef("Removed old pending transaction", "txId", txId)
 	}
 	f3 := func(hash string, tx *basic.Transaction) {

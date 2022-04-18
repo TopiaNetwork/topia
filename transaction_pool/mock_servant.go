@@ -93,7 +93,7 @@ func (mr *MockTransactionPoolServantMockRecorder) StateAt(root interface{}) *gom
 }
 
 // SubChainHeadEvent mocks base method.
-func (m *MockTransactionPoolServant) SubChainHeadEvent(ch chan<- ChainHeadEvent) p2p.P2PPubSubService {
+func (m *MockTransactionPoolServant) SubChainHeadEvent(ch chan<- BlockAddedEvent) p2p.P2PPubSubService {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubChainHeadEvent", ch)
 	ret0, _ := ret[0].(p2p.P2PPubSubService)

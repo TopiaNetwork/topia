@@ -19,7 +19,9 @@ type TransactionPoolConfig struct {
 	PathConfig   string
 	ReStoredDur  time.Duration
 
-	GasPriceLimit uint64
+	GasPriceLimit    uint64
+	TxSegmentSize    int
+	TxMaxSegmentSize int
 
 	PendingAccountSegments uint64 // Number of executable transaction slots guaranteed per account
 	PendingGlobalSegments  uint64 // Maximum number of executable transaction slots for all accounts
@@ -43,7 +45,11 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	PathConfig:  "configuration/txPoolConfigs.json",
 	ReStoredDur: 30 * time.Minute,
 
-	GasPriceLimit:          1000,     // 1000
+	GasPriceLimit: 1000, // 1000
+
+	TxSegmentSize:    32 * 1024,
+	TxMaxSegmentSize: 4 * 32 * 1024,
+
 	PendingAccountSegments: 64,       //64
 	PendingGlobalSegments:  8192,     //8192
 	QueueMaxTxsAccount:     64,       //64

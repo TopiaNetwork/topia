@@ -34,7 +34,7 @@ func (pool *transactionPool) truncatePendingByCategory(category basic.Transactio
 
 		//The accounts with the most backlogged transactions are first dumped
 		f31 := func(category basic.TransactionCategory, txId string) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
 			pool.log.Tracef("Removed fairness-exceeding pending transaction", "txKey", txId)
 		}
 		for pendingCnt > pool.config.PendingGlobalSegments && len(greyAccounts) > 0 {
@@ -64,7 +64,7 @@ func (pool *transactionPool) truncateQueueByCategory(category basic.TransactionC
 		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, key)
 	}
 	f4 := func(category basic.TransactionCategory, txId string) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
 		// Remove it from the list of sortedByPriced
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
 		data := "txPool remove a " + string(category) + "tx,txHash is " + txId
@@ -74,7 +74,7 @@ func (pool *transactionPool) truncateQueueByCategory(category basic.TransactionC
 		pool.pendings.getTxListRemoveByAddrOfCategory(f51, tx, category, addr)
 	}
 	f511 := func(category basic.TransactionCategory, txid string) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txid)
+		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txid, pool.config.TxSegmentSize)
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
 	}
 	f512 := func(category basic.TransactionCategory, txId string) *basic.Transaction {

@@ -153,7 +153,7 @@ func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {
 func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
 	txProofs, txRSProofs, err := handler.exeScheduler.PackedTxProofForValidity(context.Background(), msg.StateVersion, msg.TxHashs, msg.TxResultHashs)
 	if err != nil {
-		handler.log.Errorf("Get tx proofs and tx result proof err: %v", err)
+		handler.log.Errorf("Get tx proofs and tx result proof err: %v, self node %s", err, handler.deliver.deliverNetwork().ID())
 		return err
 	}
 

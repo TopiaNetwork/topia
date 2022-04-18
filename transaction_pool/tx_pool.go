@@ -131,11 +131,11 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 	}
 	//subscribe
 	//pool.network.Subscribe(ctx, protocol.SyncProtocolID_Msg, message.TopicValidator())
-	pool.allTxsForLook.setAllTxsLookup(basic.TransactionCategory_Topia_Universal, newTxLookup())
 	pool.curMaxGasLimit = pool.query.GetMaxGasLimit()
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
-
+	pool.allTxsForLook = newAllTxsLookupMap()
+	pool.sortedLists = newTxSortedList()
 	poolHandler := NewTransactionPoolHandler(poolLog, pool)
 	pool.handler = poolHandler
 
@@ -146,7 +146,18 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 			pool.locals.add(addr)
 		}
 	}
-	pool.sortedLists = newTxSortedList(pool.allTxsForLook.getAllTxsLookupByCategory(basic.TransactionCategory_Topia_Universal))
+	if !pool.config.NoLocalFile {
+		for category := range pool.config.PathLocal {
+			pool.newTxListStructs(category)
+			pool.loadLocal(category, pool.config.NoLocalFile, pool.config.PathLocal[category])
+		}
+	}
+	if !pool.config.NoRemoteFile {
+		for category := range pool.config.PathRemote {
+			pool.newTxListStructs(category)
+			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
+		}
+	}
 
 	pool.Reset(nil, pool.query.CurrentBlock().GetHead())
 
@@ -162,8 +173,30 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 
 	return pool
 }
+func (pool *transactionPool) newTxListStructs(category basic.TransactionCategory) {
+	if _, ok := pool.queues.queue[category]; !ok {
+		pool.queues.queue[category] = newQueueTxs()
+	}
+	if _, ok := pool.pendings.pending[category]; !ok {
+		pool.pendings.pending[category] = newPendingTxs()
+	}
+	if _, ok := pool.allTxsForLook.all[category]; !ok {
+		pool.allTxsForLook.all[category] = newTxForLookup()
+	}
+	if _, ok := pool.sortedLists.Pricedlist[category]; !ok {
+		pool.sortedLists.setTxSortedListByCategory(category, pool.allTxsForLook.getAllTxsLookupByCategory(category))
+	}
+}
+func (pool *transactionPool) DropCategoryFromStruct(category basic.TransactionCategory) {
+	pool.sortedLists.ifEmptyDropCategory(category)
+	pool.allTxsForLook.ifEmptyDropCategory(category)
+	pool.pendings.ifEmptyDropCategory(category)
+	pool.queues.ifEmptyDropCategory(category)
+}
 
 func (pool *transactionPool) AddTx(tx *basic.Transaction, local bool) error {
+	category := basic.TransactionCategory(tx.Head.Category)
+	pool.newTxListStructs(category)
 	if local {
 		err := pool.AddLocal(tx)
 		if err != nil {
@@ -444,6 +477,7 @@ func (pool *transactionPool) RemoveTxByKey(key string) error {
 	}
 	pool.queues.getTxListRemoveFutureByAddrOfCategory(tx, f2, key, category, addr)
 
+	pool.DropCategoryFromStruct(category)
 	return nil
 }
 

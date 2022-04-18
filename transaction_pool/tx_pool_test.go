@@ -353,7 +353,7 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
-	pool.sortedLists = newTxSortedList(pool.allTxsForLook.getAllTxsLookupByCategory(Category1))
+	pool.sortedLists = newTxSortedList()
 
 	poolHandler := NewTransactionPoolHandler(poolLog, pool)
 

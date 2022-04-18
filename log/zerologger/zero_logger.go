@@ -76,6 +76,10 @@ func (zl *ZeroLogger) Panicf(format string, args ...interface{}) {
 	zl.log.Panic().Msgf(format, args...)
 }
 
+func (zl *ZeroLogger) Level() zerolog.Level {
+	return zl.log.GetLevel()
+}
+
 func (zl *ZeroLogger) UpdateLoggerLevel(level logcomm.LogLevel) {
 	zxNew := zl.log.Level(logcomm.ToZerologLevel(level))
 	zl.log = &zxNew
@@ -83,6 +87,14 @@ func (zl *ZeroLogger) UpdateLoggerLevel(level logcomm.LogLevel) {
 
 func (zl *ZeroLogger) CreateModuleLogger(level zerolog.Level, module string) *ZeroLogger {
 	mLog := zl.log.With().Str("module", module).Logger().Level(level)
+
+	return &ZeroLogger{
+		&mLog,
+	}
+}
+
+func (zl *ZeroLogger) CreateSubModuleLogger(subModule string) *ZeroLogger {
+	mLog := zl.log.With().Str("sub_module", subModule).Logger()
 
 	return &ZeroLogger{
 		&mLog,

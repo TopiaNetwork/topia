@@ -32,6 +32,8 @@ type ConsensusHandler interface {
 
 	ProcessBlockAdded(block *tpchaintypes.Block) error
 
+	ProcessEpochNew(epoch *tpcmm.EpochInfo) error
+
 	ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error
 
 	ProcessDKGDeal(msg *DKGDealMessage) error
@@ -41,12 +43,14 @@ type ConsensusHandler interface {
 
 type consensusHandler struct {
 	log                     tplog.Logger
-	blockAddedCh            chan *tpchaintypes.Block
+	epochNew                chan *tpcmm.EpochInfo
 	preprePackedMsgExeChan  chan *PreparePackedMessageExe
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
 	proposeMsgChan          chan *ProposeMessage
 	voteMsgChan             chan *VoteMessage
 	commitMsgChan           chan *CommitMessage
+	blockAddedEpochCh       chan *tpchaintypes.Block
+	blockAddedProposerCh    chan *tpchaintypes.Block
 	partPubKey              chan *DKGPartPubKeyMessage
 	dealMsgCh               chan *DKGDealMessage
 	dealRespMsgCh           chan *DKGDealRespMessage
@@ -57,11 +61,14 @@ type consensusHandler struct {
 }
 
 func NewConsensusHandler(log tplog.Logger,
-	blockAddedCh chan *tpchaintypes.Block,
+	epochNew chan *tpcmm.EpochInfo,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
 	voteMsgChan chan *VoteMessage,
+	commitMsgChan chan *CommitMessage,
+	blockAddedEpochCh chan *tpchaintypes.Block,
+	blockAddedProposerCh chan *tpchaintypes.Block,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
@@ -71,11 +78,14 @@ func NewConsensusHandler(log tplog.Logger,
 	exeScheduler execution.ExecutionScheduler) *consensusHandler {
 	return &consensusHandler{
 		log:                     log,
-		blockAddedCh:            blockAddedCh,
+		epochNew:                epochNew,
 		preprePackedMsgExeChan:  preprePackedMsgExeChan,
 		preprePackedMsgPropChan: preprePackedMsgPropChan,
 		proposeMsgChan:          proposeMsgChan,
 		voteMsgChan:             voteMsgChan,
+		commitMsgChan:           commitMsgChan,
+		blockAddedEpochCh:       blockAddedEpochCh,
+		blockAddedProposerCh:    blockAddedProposerCh,
 		partPubKey:              partPubKey,
 		dealMsgCh:               dealMsgCh,
 		dealRespMsgCh:           dealRespMsgCh,
@@ -143,7 +153,7 @@ func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {
 func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
 	txProofs, txRSProofs, err := handler.exeScheduler.PackedTxProofForValidity(context.Background(), msg.StateVersion, msg.TxHashs, msg.TxResultHashs)
 	if err != nil {
-		handler.log.Errorf("Get tx proofs and tx result proof err: %v", err)
+		handler.log.Errorf("Get tx proofs and tx result proof err: %v, self node %s", err, handler.deliver.deliverNetwork().ID())
 		return err
 	}
 
@@ -167,26 +177,20 @@ func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {
 }
 
 func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
-	var blockHead tpchaintypes.BlockHead
-	err := handler.marshaler.Unmarshal(msg.BlockHead, &blockHead)
-	if err != nil {
-		handler.log.Errorf("Unmarshal block failed: %v", err)
-		return err
-	}
-
-	/*
-		err = handler.ledger.GetBlockStore().CommitBlock(&block)
-		if err != nil {
-			handler.log.Errorf("Can't commit block height =%d, err=%v", blockHead.Height, err)
-			return err
-		}
-	*/
+	handler.commitMsgChan <- msg
 
 	return nil
 }
 
 func (handler *consensusHandler) ProcessBlockAdded(block *tpchaintypes.Block) error {
-	handler.blockAddedCh <- block
+	handler.blockAddedEpochCh <- block
+	handler.blockAddedProposerCh <- block
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessEpochNew(epoch *tpcmm.EpochInfo) error {
+	handler.epochNew <- epoch
 
 	return nil
 }

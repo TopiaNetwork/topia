@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
-	txfactory "github.com/TopiaNetwork/topia/transaction"
+	tx "github.com/TopiaNetwork/topia/transaction"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
@@ -34,6 +35,7 @@ func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, tx
 
 	for _, txItem := range ept.packedTxs.TxList {
 		txRS := txfactory.CreatTransactionAction(txItem).Execute(ctx, log, txServant)
+
 		if txRS == nil {
 			txHexHash, _ := txItem.HashHex()
 			err := fmt.Errorf("tx %s execute error", txHexHash)

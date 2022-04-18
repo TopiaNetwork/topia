@@ -198,3 +198,11 @@ func CreateModuleLogger(level logcomm.LogLevel, module string, l Logger) Logger 
 
 	return nil
 }
+
+func CreateSubModuleLogger(subModule string, l Logger) Logger {
+	if zl, ok := l.(*zerologger.ZeroLogger); ok {
+		return zl.CreateSubModuleLogger(subModule)
+	}
+
+	return nil
+}

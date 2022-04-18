@@ -163,7 +163,7 @@ func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 	d.remoteDealsSync.Lock()
 	defer d.remoteDealsSync.Unlock()
 
-	d.log.Infof("Process deal: %d", deal.Index)
+	d.log.Debugf("Process deal: %d", deal.Index)
 
 	for _, dl := range d.remoteDeals {
 		dlBytes, _ := dl.MarshalMsg(nil)
@@ -174,12 +174,6 @@ func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 			return nil, err
 		}
 	}
-
-	d.remoteRespsSync.RLock()
-	for _, dealResp := range d.remoteAdvanResp {
-		d.log.Infof("Current deal resp: index=%d, issIndex=%d", dealResp.Index, dealResp.Response.Index)
-	}
-	d.remoteRespsSync.RUnlock()
 
 	d.remoteDeals = append(d.remoteDeals, deal)
 
@@ -212,13 +206,7 @@ func (d *dkgCrypt) addAdvanceResp(resp *dkg.Response) error {
 }
 
 func (d *dkgCrypt) processResp(resp *dkg.Response) error {
-	d.log.Infof("Process deal resp : index=%d, issIndex=%d", resp.Index, resp.Response.Index)
-
-	d.remoteDealsSync.RLock()
-	for _, deal := range d.remoteDeals {
-		d.log.Infof("Current deal: index=%d", deal.Index)
-	}
-	d.remoteDealsSync.RUnlock()
+	d.log.Debugf("Process deal resp : index=%d, issIndex=%d", resp.Index, resp.Response.Index)
 
 	j, err := d.dkGenerator.ProcessResponse(resp)
 	if err != nil {
@@ -254,7 +242,7 @@ func (d *dkgCrypt) processAdvanceResp() error {
 	return nil
 }
 
-func (d *dkgCrypt) finished() bool {
+func (d *dkgCrypt) Finished() bool {
 	return d.dkGenerator.Certified()
 }
 

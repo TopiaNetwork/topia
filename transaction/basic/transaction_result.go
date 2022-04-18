@@ -11,7 +11,7 @@ import (
 	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
-func TxResultRoot(txResults []TransactionResult, txs []*Transaction) []byte {
+func TxResultRoot(txResults []TransactionResult, txs []Transaction) []byte {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
 	for _, txR := range txResults {
 		txBytes, _ := txR.HashBytes()

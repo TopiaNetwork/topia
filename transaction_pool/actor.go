@@ -39,7 +39,7 @@ func (ta *TransactionPoolActor) Receive(context actor.Context) {
 	case *actor.Restarting:
 		ta.log.Info("Restarting, actor is about to restart")
 	case []byte:
-		ta.txPool.Dispatch(context, msg)
+		ta.txPool.dispatch(context, msg)
 	default:
 		ta.log.Error("TransactionPool actor receive invalid msg")
 	}

@@ -49,11 +49,10 @@ func (TransactionResultUniversal_ResultStatus) EnumDescriptor() ([]byte, []int) 
 }
 
 type TransactionUniversalHead struct {
-	Version              uint32 `protobuf:"varint,1,opt,name=Version,proto3" json:"version"`
-	FeePayer             []byte `protobuf:"bytes,2,opt,name=FeePayer,proto3" json:"feePayer,omitempty"`
-	GasPrice             uint64 `protobuf:"varint,3,opt,name=GasPrice,proto3" json:"gasPrice,omitempty"`
-	GasLimit             uint64 `protobuf:"varint,4,opt,name=GasLimit,proto3" json:"gasLimit,omitempty"`
-	Nonce                uint64
+	Version              uint32   `protobuf:"varint,1,opt,name=Version,proto3" json:"version"`
+	FeePayer             []byte   `protobuf:"bytes,2,opt,name=FeePayer,proto3" json:"feePayer,omitempty"`
+	GasPrice             uint64   `protobuf:"varint,3,opt,name=GasPrice,proto3" json:"gasPrice,omitempty"`
+	GasLimit             uint64   `protobuf:"varint,4,opt,name=GasLimit,proto3" json:"gasLimit,omitempty"`
 	Type                 uint32   `protobuf:"varint,5,opt,name=Type,proto3" json:"type"`
 	FeePayerSignature    []byte   `protobuf:"bytes,6,opt,name=FeePayerSignature,proto3" json:"feePayerSignature,omitempty"`
 	Options              uint32   `protobuf:"varint,7,opt,name=Options,proto3" json:"options,omitempty"`

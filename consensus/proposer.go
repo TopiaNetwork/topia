@@ -4,15 +4,16 @@ import (
 	"container/list"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/topia/chain/types"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -26,15 +27,17 @@ type consensusProposer struct {
 	log                     tplog.Logger
 	nodeID                  string
 	priKey                  tpcrtypes.PrivateKey
-	blockAddedCh            chan *types.Block
+	blockAddedCh            chan *tpchaintypes.Block
 	preprePackedMsgPropChan chan *PreparePackedMessageProp
 	voteMsgChan             chan *VoteMessage
 	deliver                 messageDeliverI
 	marshaler               codec.Marshaler
 	ledger                  ledger.Ledger
 	cryptService            tpcrt.CryptService
+	dkgBls                  DKGBls
 	proposeMaxInterval      time.Duration
 	isProposing             uint32
+	lastBasedOn             uint64 //the block height which self-proposer is based on
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -44,9 +47,9 @@ type consensusProposer struct {
 func newConsensusProposer(log tplog.Logger,
 	nodeID string,
 	priKey tpcrtypes.PrivateKey,
-	blockAddedCh chan *types.Block,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	voteMsgChan chan *VoteMessage,
+	blockAddedCh chan *tpchaintypes.Block,
 	crypt tpcrt.CryptService,
 	proposeMaxInterval time.Duration,
 	deliver messageDeliverI,
@@ -54,7 +57,7 @@ func newConsensusProposer(log tplog.Logger,
 	marshaler codec.Marshaler,
 	validator *consensusValidator) *consensusProposer {
 	csProposer := &consensusProposer{
-		log:                     log,
+		log:                     tplog.CreateSubModuleLogger("proposer", log),
 		nodeID:                  nodeID,
 		priKey:                  priKey,
 		blockAddedCh:            blockAddedCh,
@@ -68,17 +71,16 @@ func newConsensusProposer(log tplog.Logger,
 		isProposing:             0,
 		ppmPropList:             list.New(),
 		validator:               validator,
-		voteCollector:           newConsensusVoteCollector(log),
 	}
 
 	return csProposer
 }
 
 func (p *consensusProposer) updateDKGBls(dkgBls DKGBls) {
-	p.voteCollector.updateDKGBls(dkgBls)
+	p.dkgBls = dkgBls
 }
 
-func (p *consensusProposer) getVrfInputData(block *types.Block) ([]byte, error) {
+func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block) ([]byte, error) {
 	hasher := tpcmm.NewBlake2bHasher(0)
 
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, block.Head.Epoch); err != nil {
@@ -104,10 +106,10 @@ func (p *consensusProposer) getVrfInputData(block *types.Block) ([]byte, error) 
 	return hasher.Bytes(), nil
 }
 
-func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, block *types.Block) (bool, []byte, []byte, error) {
+func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, latestBlock *tpchaintypes.Block) (bool, []byte, []byte, error) {
 	proposerSel := NewProposerSelector(ProposerSelectionType_Poiss, p.cryptService)
 
-	vrfData, err := p.getVrfInputData(block)
+	vrfData, err := p.getVrfInputData(latestBlock)
 	if err != nil {
 		p.log.Errorf("Can't get proposer selector vrf data: %v", err)
 		return false, nil, nil, err
@@ -131,10 +133,11 @@ func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateRead
 	}
 
 	winCount := proposerSel.SelectProposer(vrfProof, big.NewInt(int64(localNodeWeight)), big.NewInt(int64(totalActiveProposerWeight)))
+	p.log.Infof("Propose block at the latest height %d: winCount=%d", latestBlock.Head.Height, winCount)
 	if winCount >= 1 {
 		maxPri := proposerSel.MaxPriority(vrfProof, winCount)
 
-		bestPri, err := p.validator.judgeLocalMaxPriBestForProposer(maxPri)
+		bestPri, err := p.validator.judgeLocalMaxPriBestForProposer(maxPri, latestBlock)
 		if !bestPri {
 			return false, nil, nil, err
 		}
@@ -150,6 +153,7 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 		for {
 			select {
 			case ppmProp := <-p.preprePackedMsgPropChan:
+				p.log.Infof("Received prepare message from remote, state version %d self node %s", ppmProp.StateVersion, p.nodeID)
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 					defer csStateRN.Stop()
@@ -194,7 +198,7 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 }
 
 func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
-	var blockHead types.BlockHead
+	var blockHead tpchaintypes.BlockHead
 	err := p.marshaler.Unmarshal(msg.BlockHead, &blockHead)
 	if err != nil {
 		p.log.Errorf("Unmarshal block failed: %v", err)
@@ -223,6 +227,13 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 		for {
 			select {
 			case voteMsg := <-p.voteMsgChan:
+				p.log.Infof("Received vote message, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
+
+				if voteMsg.StateVersion != (p.voteCollector.latestHeight + 1) {
+					p.log.Errorf("Received invalid vote message, state version %d, latest height %d, self node %s", voteMsg.StateVersion, p.voteCollector.latestHeight, p.nodeID)
+					continue
+				}
+
 				aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
 				if err != nil {
 					p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
@@ -240,11 +251,13 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 					continue
 				}
 
-				err = p.deliver.deliverCommitMessage(context.Background(), commitMsg)
+				err = p.deliver.deliverCommitMessage(ctx, commitMsg)
 				if err != nil {
 					p.log.Errorf("Can't deliver commit message: %v", err)
 					continue
 				}
+
+				p.log.Infof("Deliver commit message successfully, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
 
 				p.voteCollector.reset()
 
@@ -256,7 +269,7 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 	}()
 }
 
-func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, addedBlock *types.Block) error {
+func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, addedBlock *tpchaintypes.Block) error {
 	if !atomic.CompareAndSwapUint32(&p.isProposing, 0, 1) {
 		err := fmt.Errorf("Self node %s is proposing", p.nodeID)
 		p.log.Infof("%s", err.Error())
@@ -265,15 +278,6 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	defer func() {
 		p.isProposing = 0
 	}()
-
-	p.syncPPMPropList.RLock()
-	if p.ppmPropList.Len() == 0 {
-		err := fmt.Errorf("Current ppm prop list size 0")
-		p.log.Infof("%s", err.Error())
-		p.syncPPMPropList.RUnlock()
-		return err
-	}
-	p.syncPPMPropList.RUnlock()
 
 	csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
 	defer csStateRN.Stop()
@@ -294,9 +298,25 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
+	if p.lastBasedOn > 0 && p.lastBasedOn >= latestBlock.Head.Height {
+		err = fmt.Errorf("Have launched proposing block at height %d, latest height %d", p.lastBasedOn, latestBlock.Head.Height)
+		p.log.Warnf("%v", err)
+		return err
+	}
+
+	pppProp, err := p.getAvailPPMProp(latestBlock.Head.Height)
+	if err != nil {
+		p.log.Errorf("%v", err)
+		return err
+	}
+
+	p.log.Infof("Avail PPM prop state version %d", pppProp.StateVersion)
+
+	p.lastBasedOn = latestBlock.Head.Height
+
 	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock)
 	if !canPropose {
-		err = fmt.Errorf("Can't propose block at the epoch : epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
+		err = fmt.Errorf("Can't propose block at the epoch : latest epoch=%d, latest height=%d, self node=%s, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)
 		p.log.Infof("%s", err.Error())
 		return err
 	}
@@ -306,29 +326,47 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		p.log.Errorf("Can't get state root: %v", err)
 		return err
 	}
-	proposeBlock, err := p.produceProposeBlock(csStateRN.ChainID(), latestEpoch, latestBlock, vrfProof, maxPri, stateRoot)
+	proposeBlock, err := p.produceProposeBlock(csStateRN.ChainID(), latestEpoch, latestBlock, pppProp, vrfProof, maxPri, stateRoot)
 	if err != nil {
-		p.log.Errorf("Produce propose block error: epoch=%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
+		p.log.Errorf("Produce propose block error: latest epoch=%d, latest height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
 		return err
 	}
 
 	if can := p.validator.canProcessForwardProposeMsg(ctx, maxPri, proposeBlock); !can {
-		err = fmt.Errorf("Can't delive propose message: epoch=%d, height=%d", latestBlock.Head.Epoch, latestBlock.Head.Height)
+		err = fmt.Errorf("Can't delive propose message: latest epoch=%d,latest height=%d", latestBlock.Head.Epoch, latestBlock.Head.Height)
 		p.log.Infof("%s", err.Error())
 		return err
 	}
 
-	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
-		p.log.Errorf("Consensus deliver propose message err: epoch =%d, height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)
+	waitCount := 1
+	for !p.deliver.isReady() && waitCount <= 10 {
+		p.log.Warnf("Message deliver not ready now for delivering propose message, wait 50ms, no. %d", waitCount)
+		time.Sleep(50 * time.Millisecond)
+		waitCount++
+	}
+	if waitCount > 10 {
+		err = errors.New("Finally nil dkgBls and can't deliver propose message")
+		p.log.Errorf("%v", err)
 		return err
 	}
+
+	p.log.Infof("Message deliver ready:vstate version %d, propose Block height %d,  self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
+
+	p.voteCollector = newConsensusVoteCollector(p.log, latestBlock.Head.Height, p.dkgBls)
+
+	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
+		p.log.Errorf("Deliver propose message err: latest epoch =%d, latest height=%d, self node=%s, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)
+		return err
+	}
+
+	p.log.Infof("Propose block sucessfully: state version %d, propose Block height %d, self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
 
 	return nil
 }
 
 func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 	go func() {
-		timer := time.NewTimer(p.proposeMaxInterval)
+		timer := time.NewTicker(p.proposeMaxInterval)
 		defer timer.Stop()
 		for {
 			select {
@@ -340,7 +378,6 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 				if err := p.proposeBlockSpecification(ctx, nil); err != nil {
 					continue
 				}
-				timer.Reset(p.proposeMaxInterval)
 			case <-ctx.Done():
 				p.log.Info("Consensus proposer epoch exit")
 				return
@@ -357,7 +394,7 @@ func (p *consensusProposer) start(ctx context.Context) {
 	p.receiveVoteMessagStart(ctx)
 }
 
-func (p *consensusProposer) createBlockHead(chainID types.ChainID, epoch uint64, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *types.Block, stateRoot []byte) (*types.BlockHead, uint64, error) {
+func (p *consensusProposer) createBlockHead(chainID tpchaintypes.ChainID, epoch uint64, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, stateRoot []byte) (*tpchaintypes.BlockHead, uint64, error) {
 	blockHashBytes, err := latestBlock.HashBytes()
 	if err != nil {
 		p.log.Errorf("Can't get the hash bytes of block height %d: %v", latestBlock.Head.Height, err)
@@ -376,9 +413,9 @@ func (p *consensusProposer) createBlockHead(chainID types.ChainID, epoch uint64,
 		return nil, 0, err
 	}
 
-	return &types.BlockHead{
+	return &tpchaintypes.BlockHead{
 		ChainID:         []byte(chainID),
-		Version:         types.BLOCK_VER,
+		Version:         tpchaintypes.BLOCK_VER,
 		Height:          latestBlock.Head.Height + 1,
 		Epoch:           epoch,
 		Round:           latestBlock.Head.Height,
@@ -396,22 +433,36 @@ func (p *consensusProposer) createBlockHead(chainID types.ChainID, epoch uint64,
 	}, frontPPMProp.StateVersion, nil
 }
 
-func (p *consensusProposer) produceProposeBlock(chainID types.ChainID,
+func (p *consensusProposer) getAvailPPMProp(latestHeight uint64) (*PreparePackedMessageProp, error) {
+	p.syncPPMPropList.RLock()
+	defer p.syncPPMPropList.RUnlock()
+
+	var frontPPMProp *PreparePackedMessageProp
+	for p.ppmPropList.Len() > 0 {
+		frontEle := p.ppmPropList.Front()
+		frontPPMProp = frontEle.Value.(*PreparePackedMessageProp)
+		if frontPPMProp.StateVersion == latestHeight+1 {
+			break
+		} else if frontPPMProp.StateVersion < latestHeight+1 {
+			p.ppmPropList.Remove(frontEle)
+		}
+	}
+	if frontPPMProp == nil || frontPPMProp.StateVersion == latestHeight {
+		err := fmt.Errorf("Can't get prepare packed message prop: there is no expected state version %d, total PPM prop %d, self node=%s", latestHeight+1, p.ppmPropList.Len(), p.nodeID)
+		return nil, err
+	}
+
+	return frontPPMProp, nil
+}
+
+func (p *consensusProposer) produceProposeBlock(chainID tpchaintypes.ChainID,
 	latestEpoch *tpcmm.EpochInfo,
-	latestBlock *types.Block,
+	latestBlock *tpchaintypes.Block,
+	ppmProp *PreparePackedMessageProp,
 	vrfProof []byte,
 	maxPri []byte,
 	stateRoot []byte) (*ProposeMessage, error) {
-	p.syncPPMPropList.RLock()
-	frontPPMProp := p.ppmPropList.Front().Value.(*PreparePackedMessageProp)
-	if frontPPMProp.StateVersion != latestBlock.Head.Height+1 {
-		err := fmt.Errorf("Invalid prepare packed message prop: expected front state version %d, actual %d", latestBlock.Head.Height+1, frontPPMProp.StateVersion)
-		p.syncPPMPropList.RUnlock()
-		return nil, err
-	}
-	p.syncPPMPropList.RUnlock()
-
-	newBlockHead, stateVersion, err := p.createBlockHead(chainID, latestEpoch.Epoch, vrfProof, maxPri, frontPPMProp, latestBlock, stateRoot)
+	newBlockHead, stateVersion, err := p.createBlockHead(chainID, latestEpoch.Epoch, vrfProof, maxPri, ppmProp, latestBlock, stateRoot)
 	if err != nil {
 		p.log.Errorf("Create block failed: %v", err)
 		return nil, err
@@ -428,8 +479,8 @@ func (p *consensusProposer) produceProposeBlock(chainID types.ChainID,
 		Epoch:         latestEpoch.Epoch,
 		Round:         latestBlock.Head.Height,
 		StateVersion:  stateVersion,
-		TxHashs:       frontPPMProp.TxHashs,
-		TxResultHashs: frontPPMProp.TxResultHashs,
+		TxHashs:       ppmProp.TxHashs,
+		TxResultHashs: ppmProp.TxResultHashs,
 		BlockHead:     newBlockHeadBytes,
 	}, nil
 }

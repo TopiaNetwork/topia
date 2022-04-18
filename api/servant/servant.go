@@ -34,7 +34,9 @@ type APIServant interface {
 
 	GetBlockByHeight(height uint64) (*tpchaintypes.Block, error)
 
-	GetBlockByHash(txHashHex string) (*tpchaintypes.Block, error)
+	GetBlockByHash(hashHex string) (*tpchaintypes.Block, error)
+
+	GetBlockByTxHash(txHashHex string) (*tpchaintypes.Block, error)
 
 	ExecuteTxSim(ctx context.Context, tx *txbasic.Transaction) (*txbasic.TransactionResult, error)
 
@@ -104,7 +106,12 @@ func (s *apiServant) GetBlockByHeight(height uint64) (*tpchaintypes.Block, error
 	panic("implement me")
 }
 
-func (s *apiServant) GetBlockByHash(txHashHex string) (*tpchaintypes.Block, error) {
+func (s *apiServant) GetBlockByHash(hashHex string) (*tpchaintypes.Block, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *apiServant) GetBlockByTxHash(txHashHex string) (*tpchaintypes.Block, error) {
 	//TODO implement me
 	panic("implement me")
 }

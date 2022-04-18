@@ -8,6 +8,8 @@ type DKGBls interface {
 	RecoverSig(msg []byte, sigs [][]byte) ([]byte, error)
 
 	Threshold() int
+
+	Finished() bool
 }
 
 type DKGBLSUpdater interface {

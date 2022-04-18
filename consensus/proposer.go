@@ -304,13 +304,15 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		return err
 	}
 
-	p.lastBasedOn = latestBlock.Head.Height
-
 	pppProp, err := p.getAvailPPMProp(latestBlock.Head.Height)
 	if err != nil {
 		p.log.Errorf("%v", err)
 		return err
 	}
+
+	p.log.Infof("Avail PPM prop state version %d", pppProp.StateVersion)
+
+	p.lastBasedOn = latestBlock.Head.Height
 
 	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock)
 	if !canPropose {
@@ -445,8 +447,8 @@ func (p *consensusProposer) getAvailPPMProp(latestHeight uint64) (*PreparePacked
 			p.ppmPropList.Remove(frontEle)
 		}
 	}
-	if frontPPMProp == nil {
-		err := fmt.Errorf("Can't get prepare packed message prop: expected state version %d", latestHeight+1)
+	if frontPPMProp == nil || frontPPMProp.StateVersion == latestHeight {
+		err := fmt.Errorf("Can't get prepare packed message prop: there is no expected state version %d, total PPM prop %d, self node=%s", latestHeight+1, p.ppmPropList.Len(), p.nodeID)
 		return nil, err
 	}
 

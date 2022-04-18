@@ -51,7 +51,6 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 
 			if sVer == stateVersion {
 				log.Warnf("Existed CompositionState for stateVersion %d has been commited, so ignore subsequent disposing", stateVersion)
-				delete(compStateVerMap, stateVersion)
 				return nil
 			}
 		} else {
@@ -61,11 +60,6 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 				return compState
 			}
 		}
-
-		if availCompStateCnt >= MaxAvail_Count {
-			log.Errorf("Can't create new CompositionState because of reaching max available value %d: stateVersion %d", MaxAvail_Count, stateVersion)
-			return nil
-		}
 	}
 
 	if availCompStateCnt >= MaxAvail_Count {
@@ -74,7 +68,7 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 	}
 
 	if compStateRTN == nil {
-		compStateRTN = CreateCompositionState(log, ledger)
+		compStateRTN = CreateCompositionState(log, ledger, stateVersion)
 		compStateVerMap[stateVersion] = compStateRTN
 	}
 

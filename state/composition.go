@@ -97,6 +97,8 @@ type CompositionState interface {
 	statenode.NodeValidatorState
 	staetround.EpochState
 
+	StateVersion() uint64
+
 	CompSState() CompSState
 
 	StateRoot() ([]byte, error)
@@ -128,9 +130,10 @@ type compositionState struct {
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
 	staetround.EpochState
-	log    tplog.Logger
-	ledger ledger.Ledger
-	state  atomic.Uint32 //CompSState
+	log          tplog.Logger
+	ledger       ledger.Ledger
+	stateVersion uint64
+	state        atomic.Uint32 //CompSState
 }
 
 type nodeNetWorkStateWapper struct {
@@ -145,7 +148,7 @@ func NewNodeNetWorkStateWapper(log tplog.Logger, ledger ledger.Ledger) NodeNetWo
 	}
 }
 
-func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger) CompositionState {
+func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
 	stateStore, _ := ledger.CreateStateStore()
 
 	inactiveState := statenode.NewNodeInactiveState(stateStore)
@@ -155,6 +158,7 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger) CompositionS
 	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
 	compS := &compositionState{
 		log:                log,
+		stateVersion:       stateVersion,
 		ledger:             ledger,
 		StateStore:         stateStore,
 		AccountState:       stateaccount.NewAccountState(stateStore),
@@ -259,6 +263,10 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 	tree.Update(roundRoot, roundRoot)
 
 	return tree.Root(), nil
+}
+
+func (cs *compositionState) StateVersion() uint64 {
+	return cs.stateVersion
 }
 
 func (cs *compositionState) CompSState() CompSState {

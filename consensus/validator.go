@@ -99,18 +99,28 @@ func (v *consensusValidator) start(ctx context.Context) {
 		for {
 			select {
 			case propMsg := <-v.proposeMsgChan:
-				v.log.Infof("Received propose message, state version %d self node %s", propMsg.StateVersion, v.nodeID)
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
 					defer csStateRN.Stop()
+
+					latestBlock, err := csStateRN.GetLatestBlock()
+					if err != nil {
+						v.log.Errorf("Can't get latest block head info: %v, self node %s", err, v.nodeID)
+						return err
+					}
+					if propMsg.StateVersion <= latestBlock.Head.Height {
+						err = fmt.Errorf("Received delayed propose message, state version %d, latest height %d,  self node %s", propMsg.StateVersion, latestBlock.Head.Height, v.nodeID)
+						v.log.Warnf("%v", err)
+						return err
+					}
+
+					v.log.Infof("Received propose message, state version %d, latest height %d, epoch %d, self node %s", propMsg.StateVersion, latestBlock.Head.Height, propMsg.Epoch, v.nodeID)
 
 					bh, err := propMsg.BlockHeadInfo()
 					if err != nil {
 						v.log.Errorf("Can't get propose block head info: %v", err)
 						return err
 					}
-
-					v.log.Infof("Validator received new propose message: self nodeID %s, epoch %d, stateVersion %d", v.nodeID, propMsg.Epoch, propMsg.StateVersion)
 
 					if can := v.canProcessForwardProposeMsg(ctx, bh.MaxPri, propMsg); !can {
 						err = errors.New("Can't vote received propose msg")

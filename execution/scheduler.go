@@ -129,6 +129,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 
 	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txbasic.NewTansactionServant(compState, compState))
 	if err == nil {
+		compState.UpdataCompSState(state.CompSState_Normal)
 		scheduler.lastStateVersion.Store(txPacked.StateVersion)
 		exePackedTxs.packedTxsRS = packedTxsRS
 		scheduler.exePackedTxsList.PushBack(exePackedTxs)
@@ -363,6 +364,8 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 			return errCMMBlock
 		}
 		*/
+
+		exeTxsF.compState.UpdataCompSState(state.CompSState_Commited)
 
 		eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 

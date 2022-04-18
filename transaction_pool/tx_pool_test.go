@@ -834,7 +834,7 @@ func Test_transactionPool_Size(t *testing.T) {
 	pool.AddTx(TxR1, false)
 	pool.AddTx(TxR2, false)
 	want := 4
-	if got := pool.allTxsForLook.all[Category1].Count(); want != got {
+	if got := pool.allTxsForLook.getCountFromAllTxsLookupByCategory(Category1); want != got {
 		t.Error("want", want, "got", got)
 	}
 }

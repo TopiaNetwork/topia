@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/TopiaNetwork/topia/chain"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool"
@@ -183,7 +182,7 @@ func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Contex
 		exeTxsF := scheduler.exePackedTxsList.Front().Value.(*executionPackedTxs)
 		if exeTxsF.StateVersion() != stateVersion {
 			err := fmt.Errorf("Invalid state version: expected %d, actual %d", exeTxsF.StateVersion(), stateVersion)
-			scheduler.log.Errorf("%v")
+			scheduler.log.Errorf("%v", err)
 			return nil, nil, err
 		}
 
@@ -228,7 +227,7 @@ func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Contex
 		return txProofs, txRSProofs, nil
 	}
 
-	return nil, nil, errors.New("Not exist packed txs")
+	return nil, nil, fmt.Errorf("No any packed txs at present, state version %d to verify", stateVersion)
 }
 
 func (scheduler *executionScheduler) ConstructBlockAndBlockResult(marshaler codec.Marshaler, blockHead *tpchaintypes.BlockHead, compState state.CompositionState, packedTxs *PackedTxs, packedTxsRS *PackedTxsResult) (*tpchaintypes.Block, *tpchaintypes.BlockResult, error) {
@@ -366,6 +365,8 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 		*/
 
 		exeTxsF.compState.UpdataCompSState(state.CompSState_Commited)
+
+		scheduler.log.Infof("CompositionState changes to commited: state version %d, by commit packed tx", exeTxsF.compState.StateVersion())
 
 		eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 

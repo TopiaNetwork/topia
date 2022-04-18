@@ -1,11 +1,9 @@
 package state
 
 import (
-	"sync"
-	"time"
-
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
+	"sync"
 )
 
 /* CompositionStateBuilder is only for proposer and validator
@@ -17,6 +15,7 @@ var stateBuilder *CompositionStateBuilder
 var once sync.Once
 
 const Wait_StateStore_Time = 50 //ms
+const MaxAvail_Count = 3
 
 func GetStateBuilder() *CompositionStateBuilder {
 	once.Do(func() {
@@ -43,33 +42,43 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 		builder.compStateMap[nodeID] = compStateVerMap
 	}
 
-	if compState, ok := compStateVerMap[stateVersion]; ok {
-		log.Infof("Exist CompositionState for stateVersion %d", stateVersion)
-		return compState
-	}
+	var compStateRTN CompositionState
 
-	if stateVersion > 1 {
-		compState, ok := compStateVerMap[stateVersion-1]
-		if ok {
-			i := 1
-			for ; compState.PendingStateStore() >= 3 && i <= 3; i++ {
-				log.Warnf("Last CompositionState hasn't been commited, need waiting for %d ms, no. %d ", Wait_StateStore_Time, i)
-				time.Sleep(Wait_StateStore_Time * time.Millisecond)
-			}
-			if i > 3 {
-				log.Errorf("Can't create new CompositionState because of last state version not been commited: stateVersion %d", stateVersion)
+	availCompStateCnt := 0
+	for sVer, compState := range compStateVerMap {
+		if compState.CompSState() == CompSState_Commited {
+			delete(compStateVerMap, stateVersion)
+
+			if sVer == stateVersion {
+				log.Warnf("Existed CompositionState for stateVersion %d has been commited, so ignore subsequent disposing", stateVersion)
+				delete(compStateVerMap, stateVersion)
 				return nil
 			}
+		} else {
+			availCompStateCnt++
+			if sVer == stateVersion {
+				log.Infof("Existed CompositionState for stateVersion %d", stateVersion)
+				return compState
+			}
+		}
 
-			delete(compStateVerMap, stateVersion-1)
+		if availCompStateCnt >= MaxAvail_Count {
+			log.Errorf("Can't create new CompositionState because of reaching max available value %d: stateVersion %d", MaxAvail_Count, stateVersion)
+			return nil
 		}
 	}
 
-	compState := CreateCompositionState(log, ledger)
+	if availCompStateCnt >= MaxAvail_Count {
+		log.Errorf("Can't create new CompositionState because of reaching max available value %d: stateVersion %d", MaxAvail_Count, stateVersion)
+		return nil
+	}
 
-	compStateVerMap[stateVersion] = compState
+	if compStateRTN == nil {
+		compStateRTN = CreateCompositionState(log, ledger)
+		compStateVerMap[stateVersion] = compStateRTN
+	}
 
-	return compState
+	return compStateRTN
 }
 
 func (builder *CompositionStateBuilder) CompositionState(nodeID string, stateVersion uint64) CompositionState {

@@ -35,6 +35,8 @@ func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
 	if err := handler.txPool.ValidateTx(tx, false); err != nil {
 		return err
 	}
+	category := basic.TransactionCategory(tx.Head.Category)
+	handler.txPool.newTxListStructs(category)
 	if err := handler.txPool.AddTx(tx, false); err != nil {
 		return err
 	}

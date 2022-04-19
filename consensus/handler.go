@@ -152,19 +152,20 @@ func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {
 
 func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
 	txProofs, txRSProofs, err := handler.exeScheduler.PackedTxProofForValidity(context.Background(), msg.StateVersion, msg.TxHashs, msg.TxResultHashs)
-	if err != nil {
-		handler.log.Errorf("Get tx proofs and tx result proof err: %v, self node %s", err, handler.deliver.deliverNetwork().ID())
-		return err
-	}
 
 	validateResp := &ExeResultValidateRespMessage{
-		ChainID:        msg.ChainID,
-		Version:        msg.Version,
-		Epoch:          msg.Epoch,
-		Round:          msg.Round,
-		StateVersion:   msg.StateVersion,
-		TxProofs:       txProofs,
-		TxResultProofs: txRSProofs,
+		ChainID:      msg.ChainID,
+		Version:      msg.Version,
+		Epoch:        msg.Epoch,
+		Round:        msg.Round,
+		StateVersion: msg.StateVersion,
+	}
+
+	if err != nil {
+		handler.log.Errorf("Can 't get tx proofs and tx result proof of ExeResultValidateReqMessage: state version %d,  err %v, self node %s", msg.StateVersion, err, handler.deliver.deliverNetwork().ID())
+	} else {
+		validateResp.TxProofs = txProofs
+		validateResp.TxResultProofs = txRSProofs
 	}
 
 	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp)

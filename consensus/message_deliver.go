@@ -2,13 +2,9 @@ package consensus
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"github.com/AsynkronIT/protoactor-go/actor"
-	"go.uber.org/atomic"
-	"math/big"
-
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
@@ -19,6 +15,7 @@ import (
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
+	"go.uber.org/atomic"
 )
 
 type DeliverStrategy byte
@@ -27,6 +24,10 @@ const (
 	DeliverStrategy_Unknown = iota
 	DeliverStrategy_All
 	DeliverStrategy_Specifically
+)
+
+const (
+	TxsResultValidity_MaxExecutor = 2
 )
 
 type messageDeliverI interface {
@@ -309,8 +310,9 @@ func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, m
 	defer csStateRN.Stop()
 
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RespThreshold, float32(1.0))
 
-	var randExecutorID string
+	randExecutorID := make([]string, TxsResultValidity_MaxExecutor)
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
 		peerIDs, err := csStateRN.GetActiveExecutorIDs()
@@ -319,16 +321,14 @@ func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, m
 			return nil, err
 		}
 
-		maxIndex := big.NewInt(int64(len(peerIDs) - 1))
-		randIndex, err := rand.Int(rand.Reader, maxIndex)
-		if err != nil {
-			md.log.Errorf("Can't get rand active executor nodes index: err=%v", err)
-			return nil, err
+		randIndexs := tpcmm.GenerateRandomNumber(0, len(peerIDs), TxsResultValidity_MaxExecutor)
+		for i := 0; i < len(randExecutorID); i++ {
+			randExecutorID[i] = peerIDs[randIndexs[i]]
 		}
-		randExecutorID = peerIDs[randIndex.Uint64()]
-		md.log.Debugf("Rand active executor nodes: %d, ", randIndex.Uint64(), peerIDs[randIndex.Uint64()])
 
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, []string{randExecutorID})
+		md.log.Debugf("Rand active executor nodes: %v", randExecutorID)
+
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, randExecutorID)
 	}
 
 	sigData, err := md.cryptService.Sign(md.priKey, msg.TxAndResultHashsData())
@@ -393,6 +393,8 @@ func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Contex
 	}
 
 	actorCtx.Respond(msgBytes)
+
+	md.log.Infof("Successfully deliver result validate resp message: state version %d, self node %s", msg.StateVersion, md.nodeID)
 
 	return nil
 }

@@ -118,7 +118,28 @@ func (md *messageDeliver) deliverSendWithRespCommon(ctx context.Context, protoco
 		return nil, err
 	}
 
-	return md.network.SendWithResponse(ctx, protocolID, moduleName, csMsgBytes)
+	sendCycleMaxCount := 3
+	for sendCycleMaxCount > 0 {
+		var respData [][]byte
+		sendCycleMaxCount--
+		resps, err := md.network.SendWithResponse(ctx, protocolID, moduleName, csMsgBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, resp := range resps {
+			if resp.Err == nil {
+				respData = append(respData, resp.RespData)
+			}
+		}
+
+		if len(respData) > 0 {
+			return respData, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Network exception and can't get the final response: protocolID %s, consensusMsg %s, self node %s", protocolID, msgType.String(), md.nodeID)
+
 }
 
 func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error {

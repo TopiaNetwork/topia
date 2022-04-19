@@ -522,7 +522,7 @@ func (p2p *P2PService) Send(ctx context.Context, protocolID string, moduleName s
 	return nil
 }
 
-func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, moduleName string, data []byte) ([][]byte, error) {
+func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, moduleName string, data []byte) ([]message.SendResponse, error) {
 	var peerIDList []peer.ID
 	if ctx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
 		peerList := ctx.Value(tpnetcmn.NetContextKey_PeerList).([]string)
@@ -567,13 +567,17 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 
 	startTime := time.Now()
 
-	respCh := make(chan *message.NetworkMessage, len(peerIDList))
-	var wg sync.WaitGroup
+	respCh := make(chan *message.SendResponse, len(peerIDList))
+	var respList []message.SendResponse
+
+	forceEndChs := make(map[string]chan struct{}, len(peerIDList))
 	for _, id := range peerIDList {
-		wg.Add(1)
+		forceEndChs[id.String()] = make(chan struct{})
+	}
+
+	for _, id := range peerIDList {
 		go func(peerID peer.ID) {
 			defer func() {
-				wg.Done()
 				singleDuration := time.Since(startTime)
 				p2p.log.Debugf("Send time %d ms from peer %s to peer %s", singleDuration.Microseconds(), p2p.host.ID().String(), peerID.String())
 			}()
@@ -591,6 +595,8 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 					return
 				}
 			*/
+
+			sendResp := &message.SendResponse{NodeID: peerID.String()}
 
 			stream, err := p2p.host.NewStream(
 				network.WithNoDial(ctx, "should already have connection"),
@@ -611,9 +617,12 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 			}
 
 			_ = stream.SetWriteDeadline(time.Now().Add(tpnetprotoc.WriteReqDeadline))
-			if err := p2p.streamService.writeMessage(stream, msg); err != nil {
+			if err = p2p.streamService.writeMessage(stream, msg); err != nil {
 				_ = stream.SetWriteDeadline(time.Time{})
-				p2p.log.Errorf("Stream sendMessage error: stream=%s, err=%s", stream.ID(), err.Error())
+				err = fmt.Errorf("Stream sendMessage error: stream=%s, err=%s", stream.ID(), err.Error())
+				p2p.log.Errorf("%v", err)
+				sendResp.Err = err
+				respCh <- sendResp
 				return
 			}
 			_ = stream.SetWriteDeadline(time.Time{}) // clear deadline // FIXME: Needs
@@ -621,16 +630,18 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 
 			resp, err := p2p.streamService.readMessage(stream)
 			if err == nil {
-				respCh <- resp
+				sendResp.RespData = resp.Data
+				respCh <- sendResp
 			} else {
-				p2p.log.Errorf("read resp error %v", err)
+				err = fmt.Errorf("read resp error %v", err)
+				p2p.log.Errorf("%v", err)
+				sendResp.Err = err
+				respCh <- sendResp
 			}
+
+			return
 		}(id)
 	}
-	wg.Wait()
-
-	dur := time.Since(startTime)
-	p2p.log.Debugf("received resp %d after %d ms", len(respCh), dur.Microseconds())
 
 	threshold := 1
 	if ctx.Value(tpnetcmn.NetContextKey_RespThreshold) != nil {
@@ -639,14 +650,16 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 	}
 
 	respLen := 0
-	var respList [][]byte
 	for r := range respCh {
 		respLen++
-		respList = append(respList, r.Data)
+		respList = append(respList, *r)
 		if respLen >= len(respCh) || respLen >= threshold {
 			break
 		}
 	}
+
+	dur := time.Since(startTime)
+	p2p.log.Debugf("received resp %d after %d ms", len(respCh), dur.Microseconds())
 
 	return respList, nil
 }

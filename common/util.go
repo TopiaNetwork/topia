@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"math/rand"
 	"sort"
+	"time"
 
 	mapset "github.com/deckarep/golang-set"
 )
@@ -99,4 +101,31 @@ func IsHex(str string) bool {
 		}
 	}
 	return true
+}
+
+//Generate count randon number in [start, end)
+func GenerateRandomNumber(start int, end int, count int) []int {
+	if end < start || (end-start) < count {
+		return nil
+	}
+
+	nums := make([]int, 0)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for len(nums) < count {
+		num := r.Intn((end - start)) + start
+
+		exist := false
+		for _, v := range nums {
+			if v == num {
+				exist = true
+				break
+			}
+		}
+
+		if !exist {
+			nums = append(nums, num)
+		}
+	}
+
+	return nums
 }

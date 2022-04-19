@@ -42,34 +42,40 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 		builder.compStateMap[nodeID] = compStateVerMap
 	}
 
-	var compStateRTN CompositionState
-
+	needCreation := true
 	availCompStateCnt := 0
+	var compStateRTN CompositionState
+	var availCompStateVersions []uint64
 	for sVer, compState := range compStateVerMap {
 		if compState.CompSState() == CompSState_Commited {
 			delete(compStateVerMap, stateVersion)
 
 			if sVer == stateVersion {
 				log.Warnf("Existed CompositionState for stateVersion %d has been commited, so ignore subsequent disposing", stateVersion)
-				return nil
+				compStateRTN = nil
+				needCreation = false
 			}
 		} else {
 			availCompStateCnt++
+			availCompStateVersions = append(availCompStateVersions, sVer)
 			if sVer == stateVersion {
 				log.Infof("Existed CompositionState for stateVersion %d", stateVersion)
-				return compState
+				compStateRTN = compState
+				needCreation = false
 			}
 		}
 	}
 
 	if availCompStateCnt >= MaxAvail_Count {
-		log.Errorf("Can't create new CompositionState because of reaching max available value %d: stateVersion %d", MaxAvail_Count, stateVersion)
+		log.Errorf("Can't create new CompositionState because of reaching max available value %d: availCompStateCnt %d, stateVersion %d, availCompStateVersions %v, self node %s",
+			MaxAvail_Count, availCompStateCnt, stateVersion, availCompStateVersions, nodeID)
 		return nil
 	}
 
-	if compStateRTN == nil {
+	if needCreation {
 		compStateRTN = CreateCompositionState(log, ledger, stateVersion)
 		compStateVerMap[stateVersion] = compStateRTN
+		log.Infof("Create new CompositionState for stateVersion %d，self node %s", stateVersion, nodeID)
 	}
 
 	return compStateRTN

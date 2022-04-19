@@ -88,6 +88,14 @@ const (
 	CompSState_Commited
 )
 
+type TakenUpState uint32
+
+const (
+	TakenUpState_Unknown TakenUpState = iota
+	TakenUpState_Idle
+	TakenUpState_Busy
+)
+
 type CompositionState interface {
 	stateaccount.AccountState
 	statechain.ChainState
@@ -101,6 +109,8 @@ type CompositionState interface {
 
 	CompSState() CompSState
 
+	TakenUpState() TakenUpState
+
 	StateRoot() ([]byte, error)
 
 	StateLatestVersion() (uint64, error)
@@ -109,7 +119,9 @@ type CompositionState interface {
 
 	PendingStateStore() int32
 
-	UpdataCompSState(state CompSState)
+	UpdateCompSState(state CompSState)
+
+	UpdateTakenUpState(state TakenUpState) TakenUpState
 
 	Commit() error
 
@@ -134,6 +146,7 @@ type compositionState struct {
 	ledger       ledger.Ledger
 	stateVersion uint64
 	state        atomic.Uint32 //CompSState
+	takenUPState atomic.Uint32 //TakenUpState
 }
 
 type nodeNetWorkStateWapper struct {
@@ -172,6 +185,7 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion
 	}
 
 	compS.state.Store(uint32(CompSState_Idle))
+	compS.takenUPState.Store(uint32(TakenUpState_Idle))
 
 	return compS
 }
@@ -273,8 +287,16 @@ func (cs *compositionState) CompSState() CompSState {
 	return CompSState(cs.state.Load())
 }
 
-func (cs *compositionState) UpdataCompSState(state CompSState) {
+func (cs *compositionState) TakenUpState() TakenUpState {
+	return TakenUpState(cs.state.Load())
+}
+
+func (cs *compositionState) UpdateCompSState(state CompSState) {
 	cs.state.Swap(uint32(state))
+}
+
+func (cs *compositionState) UpdateTakenUpState(state TakenUpState) TakenUpState {
+	return TakenUpState(cs.takenUPState.Swap(uint32(state)))
 }
 
 func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() ([]string, error) {

@@ -96,6 +96,12 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 	scheduler.schedulerState.Store(uint32(SchedulerState_Executing))
 	defer scheduler.schedulerState.Store(uint32(SchedulerState_Idle))
 
+	if compState.UpdateTakenUpState(state.TakenUpState_Busy) == state.TakenUpState_Busy {
+		err := fmt.Errorf("csState is busy and can't execute packed tx: state version=%d", compState.StateVersion())
+		return nil, err
+	}
+	defer compState.UpdateTakenUpState(state.TakenUpState_Idle)
+
 	if scheduler.exePackedTxsList.Len() != 0 {
 		exeTxsItem := scheduler.exePackedTxsList.Front()
 		exeTxsF := exeTxsItem.Value.(*executionPackedTxs)
@@ -128,7 +134,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 
 	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txbasic.NewTansactionServant(compState, compState))
 	if err == nil {
-		compState.UpdataCompSState(state.CompSState_Normal)
+		compState.UpdateCompSState(state.CompSState_Normal)
 		scheduler.lastStateVersion.Store(txPacked.StateVersion)
 		exePackedTxs.packedTxsRS = packedTxsRS
 		scheduler.exePackedTxsList.PushBack(exePackedTxs)
@@ -364,7 +370,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 		}
 		*/
 
-		exeTxsF.compState.UpdataCompSState(state.CompSState_Commited)
+		exeTxsF.compState.UpdateCompSState(state.CompSState_Commited)
 
 		scheduler.log.Infof("CompositionState changes to commited: state version %d, by commit packed tx", exeTxsF.compState.StateVersion())
 

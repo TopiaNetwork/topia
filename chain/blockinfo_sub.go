@@ -110,6 +110,12 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 		return err
 	}
 
+	if csState.UpdateTakenUpState(state.TakenUpState_Busy) == state.TakenUpState_Busy {
+		err = fmt.Errorf("csState is busy and can't process pubsub message: height=%d", block.Head.Height)
+		return err
+	}
+	defer csState.UpdateTakenUpState(state.TakenUpState_Idle)
+
 	latestBlock, err := csState.GetLatestBlock()
 	if err != nil {
 		err = fmt.Errorf("Can't get the latest block: %v, can't process pubsub message: height=%d", err, block.Head.Height)
@@ -156,7 +162,7 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	csState.Commit()
 	//ToDo Save new block and block result to block store
 
-	csState.UpdataCompSState(state.CompSState_Commited)
+	csState.UpdateCompSState(state.CompSState_Commited)
 
 	bsp.log.Infof("CompositionState changes to commited: state version %d, by sub block info", csState.StateVersion())
 

@@ -406,7 +406,7 @@ func TestMultiRoleNodes(t *testing.T) {
 	nParams = append(nParams, validatorParams...)
 	for _, nodeP := range nParams {
 		nodeP.compState.Commit()
-		nodeP.compState.UpdataCompSState(state.CompSState_Commited)
+		nodeP.compState.UpdateCompSState(state.CompSState_Commited)
 		t.Logf("DKG PriKey = %s, nodeType=%s", nodeP.config.CSConfig.InitDKGPrivKey, nodeP.nodeType)
 	}
 

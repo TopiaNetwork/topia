@@ -653,7 +653,7 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 	for r := range respCh {
 		respLen++
 		respList = append(respList, *r)
-		if respLen >= len(respCh) || respLen >= threshold {
+		if respLen >= cap(respCh) || respLen >= threshold {
 			break
 		}
 	}

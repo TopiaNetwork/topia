@@ -123,7 +123,7 @@ func (v *consensusValidator) start(ctx context.Context) {
 					}
 
 					if can := v.canProcessForwardProposeMsg(ctx, bh.MaxPri, propMsg); !can {
-						err = errors.New("Can't vote received propose msg")
+						err = fmt.Errorf("Can't vote received propose msg: state version %d, self node %s", propMsg.StateVersion, v.nodeID)
 						v.log.Infof("%s", err.Error())
 						return err
 					}

@@ -2,11 +2,10 @@ package system_interaction
 
 import (
 	"context"
-	"testing"
-	"time"
-
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/stretchr/testify/require"
+	"testing"
+	"time"
 
 	"github.com/TopiaNetwork/topia/codec"
 	"github.com/TopiaNetwork/topia/integration/mock"
@@ -60,12 +59,12 @@ func TestBlockRequest(t *testing.T) {
 
 	ctx1 := context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 
-	respBytes, err := network1.SendWithResponse(ctx1, protocol.SyncProtocolID_Block, "sync", syncData)
+	resps, err := network1.SendWithResponse(ctx1, protocol.SyncProtocolID_Block, "sync", syncData)
 	require.Equal(t, nil, err)
-	require.Equal(t, 1, len(respBytes))
+	require.Equal(t, 1, len(resps))
 
 	var resp sync.SyncMessage
-	err = syncer1.Marshaler().Unmarshal(respBytes[0], &resp)
+	err = syncer1.Marshaler().Unmarshal(resps[0].RespData, &resp)
 	require.Equal(t, nil, err)
 	require.Equal(t, sync.SyncMessage_BlockResponse, resp.MsgType)
 

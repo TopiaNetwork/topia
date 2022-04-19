@@ -31,7 +31,7 @@ type Network interface {
 
 	Send(ctx context.Context, protocolID string, moduleName string, data []byte) error
 
-	SendWithResponse(ctx context.Context, protocolID string, moduleName string, data []byte) ([][]byte, error)
+	SendWithResponse(ctx context.Context, protocolID string, moduleName string, data []byte) ([]message.SendResponse, error)
 
 	Subscribe(ctx context.Context, topic string, validators ...message.PubSubMessageValidator) error
 
@@ -74,7 +74,7 @@ func (net *network) Send(ctx context.Context, protocolID string, moduleName stri
 	return net.p2p.Send(ctx, protocolID, moduleName, data)
 }
 
-func (net *network) SendWithResponse(ctx context.Context, protocolID string, moduleName string, data []byte) ([][]byte, error) {
+func (net *network) SendWithResponse(ctx context.Context, protocolID string, moduleName string, data []byte) ([]message.SendResponse, error) {
 	return net.p2p.SendWithResponse(ctx, protocolID, moduleName, data)
 }
 

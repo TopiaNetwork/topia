@@ -104,22 +104,30 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 
 	bsp.log.Infof("Process pubsub message: height=%d, result status %s", block.Head.Height, blockRS.Head.Status.String())
 
+	csStateRN := state.CreateCompositionStateReadonly(bsp.log, bsp.ledger)
+	latestBlock, err := csStateRN.GetLatestBlock()
+	if err != nil {
+		err = fmt.Errorf("Can't get the latest block: %v, can't process pubsub message: height=%d", err, block.Head.Height)
+		csStateRN.Stop()
+		return err
+	}
+	csStateRN.Stop()
+	if latestBlock.Head.Height >= block.Head.Height {
+		bsp.log.Warnf("Receive delay PubSubMessageBlockInfo: height=%d, latest block height=%d", block.Head.Height, latestBlock.Head.Height)
+		return nil
+	}
+
 	csState := state.GetStateBuilder().CreateCompositionState(bsp.log, bsp.nodeID, bsp.ledger, block.Head.Height)
 	if csState == nil {
 		err = fmt.Errorf("Nil csState and can't process pubsub message: height=%d", block.Head.Height)
 		return err
 	}
 
-	latestBlock, err := csState.GetLatestBlock()
-	if err != nil {
-		err = fmt.Errorf("Can't get the latest block: %v, can't process pubsub message: height=%d", err, block.Head.Height)
+	if csState.UpdateTakenUpState(state.TakenUpState_Busy) == state.TakenUpState_Busy {
+		err = fmt.Errorf("csState is busy and can't process pubsub message: height=%d", block.Head.Height)
 		return err
 	}
-
-	if latestBlock.Head.Height >= block.Head.Height {
-		bsp.log.Warnf("Receive delay PubSubMessageBlockInfo: height=%d, latest block height=%d", block.Head.Height, latestBlock.Head.Height)
-		return nil
-	}
+	defer csState.UpdateTakenUpState(state.TakenUpState_Idle)
 
 	err = csState.SetLatestBlock(block)
 	if err != nil {
@@ -156,7 +164,7 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	csState.Commit()
 	//ToDo Save new block and block result to block store
 
-	csState.UpdataCompSState(state.CompSState_Commited)
+	csState.UpdateCompSState(state.CompSState_Commited)
 
 	bsp.log.Infof("CompositionState changes to commited: state version %d, by sub block info", csState.StateVersion())
 

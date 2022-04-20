@@ -372,7 +372,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context, stateVe
 
 		exeTxsF.compState.UpdateCompSState(state.CompSState_Commited)
 
-		scheduler.log.Infof("CompositionState changes to commited: state version %d, by commit packed tx", exeTxsF.compState.StateVersion())
+		scheduler.log.Infof("CompositionState changes to commited: state version %d, by commit packed tx, self node %s", exeTxsF.compState.StateVersion(), scheduler.nodeID)
 
 		eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 

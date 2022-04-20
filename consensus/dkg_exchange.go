@@ -17,6 +17,10 @@ import (
 )
 
 const (
+	PreparePackedExeChannel_Size  = 10
+	PreparePackedPropChannel_Size = 10
+	ProposeChannel_Size           = 10
+
 	PartPubKeyChannel_Size  = 500
 	DealMSGChannel_Size     = 500
 	DealRespMsgChannel_Size = 500

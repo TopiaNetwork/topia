@@ -162,7 +162,7 @@ func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Conte
 	}
 
 	if err != nil {
-		handler.log.Errorf("Can 't get tx proofs and tx result proof of ExeResultValidateReqMessage: state version %d,  err %v, self node %s", msg.StateVersion, err, handler.deliver.deliverNetwork().ID())
+		handler.log.Errorf("Can't get tx proofs and tx result proof of ExeResultValidateReqMessage: state version %d,  err %v, self node %s", msg.StateVersion, err, handler.deliver.deliverNetwork().ID())
 	} else {
 		validateResp.TxProofs = txProofs
 		validateResp.TxResultProofs = txRSProofs

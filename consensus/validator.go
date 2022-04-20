@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"math/big"
@@ -141,7 +140,7 @@ func (v *consensusValidator) start(ctx context.Context) {
 						waitCount++
 					}
 					if waitCount > 10 {
-						err := errors.New("Finally nil dkgBls and can't deliver vote message")
+						err = fmt.Errorf("Finally nil dkgBls and can't deliver vote message, self node %s", v.nodeID)
 						v.log.Errorf("%v", err)
 						return err
 					}

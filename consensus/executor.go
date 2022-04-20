@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"time"
@@ -67,12 +66,15 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 		for {
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
-				e.log.Infof("Received PreparePackedMessageExe from other executor, StateVersion %d self node %s", perparePMExe.StateVersion, e.nodeID)
+				e.log.Infof("Received PreparePackedMessageExe from other executor, StateVersion %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
-				if compState == nil {
-					err := errors.New("Can't  CreateCompositionState when received new PreparePackedMessageExe")
-					e.log.Errorf("%v", err)
-					continue
+
+				waitCount := 1
+				for compState == nil {
+					e.log.Warnf("Can't CreateCompositionState when received new PreparePackedMessageExe, StateVersion %d, self node %s, waitCount %d", perparePMExe.StateVersion, e.nodeID, waitCount)
+					compState = state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
+					waitCount++
+					time.Sleep(50 * time.Millisecond)
 				}
 
 				latestBlock, err := compState.GetLatestBlock()

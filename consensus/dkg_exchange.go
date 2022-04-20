@@ -325,7 +325,7 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 				ex.log.Infof("Node %s process deal response successed %d epoch=%d", ex.nodeID, resp.Index, dealRespMsg.Epoch)
 
 				if ex.dkgCrypt.Finished() {
-					ex.log.Infof("DKG exchange finished: node %s", ex.nodeID)
+					ex.log.Infof("DKG exchange finished: self node %s", ex.nodeID)
 					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
 					ex.finishedCh <- true
 

@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -133,7 +132,7 @@ func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateRead
 	}
 
 	winCount := proposerSel.SelectProposer(vrfProof, big.NewInt(int64(localNodeWeight)), big.NewInt(int64(totalActiveProposerWeight)))
-	p.log.Infof("Propose block at the latest height %d: winCount=%d", latestBlock.Head.Height, winCount)
+	p.log.Infof("Propose block based on the latest height %d: winCount %d, weight proportion %d/%d, self node=%s", latestBlock.Head.Height, winCount, localNodeWeight, totalActiveProposerWeight, p.nodeID)
 	if winCount >= 1 {
 		maxPri := proposerSel.MaxPriority(vrfProof, winCount)
 
@@ -345,12 +344,12 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		waitCount++
 	}
 	if waitCount > 10 {
-		err = errors.New("Finally nil dkgBls and can't deliver propose message")
+		err = fmt.Errorf("Finally nil dkgBls and can't deliver propose message, self node %s", p.nodeID)
 		p.log.Errorf("%v", err)
 		return err
 	}
 
-	p.log.Infof("Message deliver ready:vstate version %d, propose Block height %d,  self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
+	p.log.Infof("Message deliver ready:state version %d, propose Block height %d, self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
 
 	p.voteCollector = newConsensusVoteCollector(p.log, latestBlock.Head.Height, p.dkgBls)
 

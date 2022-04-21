@@ -35,6 +35,8 @@ type messageDeliverI interface {
 
 	deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error
 
+	deliverPreparePackagedMessageExeIndication(ctx context.Context, launcherID string, msg *PreparePackedMessageExeIndication) error
+
 	deliverPreparePackagedMessageProp(ctx context.Context, msg *PreparePackedMessageProp) error
 
 	deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error
@@ -154,7 +156,7 @@ func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, 
 	}
 	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
 	if err != nil {
-		md.log.Errorf("Can't convert to pub key when deliverPreparePackedMessageExe err: %v", err)
+		md.log.Errorf("Can't convert to pub key when deliver PreparePackedMessageExe err: %v", err)
 		return err
 	}
 
@@ -193,18 +195,57 @@ func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, 
 	return nil
 }
 
+func (md *messageDeliver) deliverPreparePackagedMessageExeIndication(ctx context.Context, launcherID string, msg *PreparePackedMessageExeIndication) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
+	sigData, err := md.cryptService.Sign(md.priKey, msg.DataBytes())
+	if err != nil {
+		md.log.Errorf("Can't sign when deliver PreparePackedMessageExeIndication err: %v", err)
+		return err
+	}
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't convert to pub key when deliver PreparePackedMessageExeIndication err: %v", err)
+		return err
+	}
+
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("Deliver PreparePackedMessageExeIndication marshal err: %v", err)
+		return err
+	}
+
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, []string{launcherID})
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.deliverSendCommon(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_PrepareExeIndic, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send prepare packed message indication to execute network failed: err=%v", err)
+		return err
+	}
+
+	return nil
+}
+
 func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context, msg *PreparePackedMessageProp) error {
 	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
 	defer csStateRN.Stop()
 
 	sigData, err := md.cryptService.Sign(md.priKey, msg.TxHashsData())
 	if err != nil {
-		md.log.Errorf("Can't sign PreparePackedMessageProp when deliverPreparePackagedMessageProp err: %v", err)
+		md.log.Errorf("Can't sign PreparePackedMessageProp when deliver PreparePackagedMessageProp err: %v", err)
 		return err
 	}
 	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
 	if err != nil {
-		md.log.Errorf("Can't convert to pub key when deliverPreparePackagedMessageProp err: %v", err)
+		md.log.Errorf("Can't convert to pub key when deliver PreparePackagedMessageProp err: %v", err)
 		return err
 	}
 

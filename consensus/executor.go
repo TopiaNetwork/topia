@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"sync"
 	"time"
 
 	"github.com/TopiaNetwork/topia/codec"
@@ -91,7 +92,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 
 				if bytes.Compare(latestBlockHash, perparePMExe.ParentBlockHash) != 0 {
 					e.log.Errorf("Invalid parent block ref: expected %v, actual %v", latestBlockHash, perparePMExe.ParentBlockHash)
-					continue
+					//continue, tmp
 				}
 
 				var receivedTxList []txbasic.Transaction
@@ -360,10 +361,6 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return err
 	}
 
-	canForward := make(chan bool)
-	activeExecutors, _ := compState.GetActiveExecutorIDs()
-	e.receivePreparePackedMessageExeIndicationStart(ctx, len(activeExecutors), canForward)
-
 	var packedTxs execution.PackedTxs
 
 	packedTxs.StateVersion = maxStateVer + 1
@@ -382,15 +379,37 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return err
 	}
 
-	err = e.deliver.deliverPreparePackagedMessageExe(ctx, packedMsgExe)
-	if err != nil {
-		e.log.Errorf("Deliver prepare packed message to execute network failed: err=%v", err)
-		return err
-	}
+	activeExecutors, _ := compState.GetActiveExecutorIDs()
 
-	<-canForward
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(requiredCount int) {
+		recvCount := 1 //Contain self
+		defer wg.Done()
+		for {
+			select {
+			case perparePMExeIndic := <-e.preparePackedMsgExeIndicChan:
+				recvCount++
+				e.log.Infof("Received PreparePackedMessageExeIndication from other executor, state version %d, received %d required %d,  self node %s", perparePMExeIndic.StateVersion, recvCount, requiredCount, e.nodeID)
+				if recvCount == requiredCount {
+					return
+				}
+			}
+		}
+	}(len(activeExecutors))
 
-	e.log.Infof("Deliver prepare packed message to execute network successfully: state version %d， self node %s", packedMsgExe.StateVersion, e.nodeID)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err = e.deliver.deliverPreparePackagedMessageExe(ctx, packedMsgExe)
+		if err != nil {
+			e.log.Errorf("Deliver prepare packed message to execute network failed: err=%v", err)
+			return
+		}
+		e.log.Infof("Deliver prepare packed message to execute network successfully: state version %d， self node %s", packedMsgExe.StateVersion, e.nodeID)
+	}()
+
+	wg.Wait()
 
 	err = e.deliver.deliverPreparePackagedMessageProp(ctx, packedMsgProp)
 	if err != nil {

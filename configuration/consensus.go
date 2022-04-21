@@ -14,6 +14,7 @@ type ConsensusConfiguration struct {
 	InitDKGPartPubKeys       []string
 	ExecutionPrepareInterval time.Duration
 	ProposerBlockMaxInterval time.Duration
+	BlockMaxCyclePeriod      time.Duration
 }
 
 func DefConsensusConfiguration() *ConsensusConfiguration {
@@ -22,6 +23,7 @@ func DefConsensusConfiguration() *ConsensusConfiguration {
 		DKGStartBeforeEpoch:      10,
 		CrptyType:                tpcrtypes.CryptType_Ed25519,
 		ExecutionPrepareInterval: 500 * time.Millisecond,
-		ProposerBlockMaxInterval: 2500 * time.Millisecond,
+		ProposerBlockMaxInterval: 1000 * time.Millisecond,
+		BlockMaxCyclePeriod:      5000 * time.Millisecond,
 	}
 }

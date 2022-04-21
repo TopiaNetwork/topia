@@ -20,6 +20,8 @@ type ConsensusHandler interface {
 
 	ProcessPreparePackedMsgExe(msg *PreparePackedMessageExe) error
 
+	ProcessPreparePackedMsgExeIndication(msg *PreparePackedMessageExeIndication) error
+
 	ProcessPreparePackedMsgProp(msg *PreparePackedMessageProp) error
 
 	ProcessPropose(msg *ProposeMessage) error
@@ -42,27 +44,29 @@ type ConsensusHandler interface {
 }
 
 type consensusHandler struct {
-	log                     tplog.Logger
-	epochNew                chan *tpcmm.EpochInfo
-	preprePackedMsgExeChan  chan *PreparePackedMessageExe
-	preprePackedMsgPropChan chan *PreparePackedMessageProp
-	proposeMsgChan          chan *ProposeMessage
-	voteMsgChan             chan *VoteMessage
-	commitMsgChan           chan *CommitMessage
-	blockAddedEpochCh       chan *tpchaintypes.Block
-	blockAddedProposerCh    chan *tpchaintypes.Block
-	partPubKey              chan *DKGPartPubKeyMessage
-	dealMsgCh               chan *DKGDealMessage
-	dealRespMsgCh           chan *DKGDealRespMessage
-	ledger                  ledger.Ledger
-	marshaler               codec.Marshaler
-	deliver                 messageDeliverI
-	exeScheduler            execution.ExecutionScheduler
+	log                         tplog.Logger
+	epochNew                    chan *tpcmm.EpochInfo
+	preprePackedMsgExeChan      chan *PreparePackedMessageExe
+	preprePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
+	preprePackedMsgPropChan     chan *PreparePackedMessageProp
+	proposeMsgChan              chan *ProposeMessage
+	voteMsgChan                 chan *VoteMessage
+	commitMsgChan               chan *CommitMessage
+	blockAddedEpochCh           chan *tpchaintypes.Block
+	blockAddedProposerCh        chan *tpchaintypes.Block
+	partPubKey                  chan *DKGPartPubKeyMessage
+	dealMsgCh                   chan *DKGDealMessage
+	dealRespMsgCh               chan *DKGDealRespMessage
+	ledger                      ledger.Ledger
+	marshaler                   codec.Marshaler
+	deliver                     messageDeliverI
+	exeScheduler                execution.ExecutionScheduler
 }
 
 func NewConsensusHandler(log tplog.Logger,
 	epochNew chan *tpcmm.EpochInfo,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
+	preprePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
 	voteMsgChan chan *VoteMessage,
@@ -77,22 +81,23 @@ func NewConsensusHandler(log tplog.Logger,
 	deliver messageDeliverI,
 	exeScheduler execution.ExecutionScheduler) *consensusHandler {
 	return &consensusHandler{
-		log:                     log,
-		epochNew:                epochNew,
-		preprePackedMsgExeChan:  preprePackedMsgExeChan,
-		preprePackedMsgPropChan: preprePackedMsgPropChan,
-		proposeMsgChan:          proposeMsgChan,
-		voteMsgChan:             voteMsgChan,
-		commitMsgChan:           commitMsgChan,
-		blockAddedEpochCh:       blockAddedEpochCh,
-		blockAddedProposerCh:    blockAddedProposerCh,
-		partPubKey:              partPubKey,
-		dealMsgCh:               dealMsgCh,
-		dealRespMsgCh:           dealRespMsgCh,
-		ledger:                  ledger,
-		marshaler:               marshaler,
-		deliver:                 deliver,
-		exeScheduler:            exeScheduler,
+		log:                         log,
+		epochNew:                    epochNew,
+		preprePackedMsgExeChan:      preprePackedMsgExeChan,
+		preprePackedMsgExeIndicChan: preprePackedMsgExeIndicChan,
+		preprePackedMsgPropChan:     preprePackedMsgPropChan,
+		proposeMsgChan:              proposeMsgChan,
+		voteMsgChan:                 voteMsgChan,
+		commitMsgChan:               commitMsgChan,
+		blockAddedEpochCh:           blockAddedEpochCh,
+		blockAddedProposerCh:        blockAddedProposerCh,
+		partPubKey:                  partPubKey,
+		dealMsgCh:                   dealMsgCh,
+		dealRespMsgCh:               dealRespMsgCh,
+		ledger:                      ledger,
+		marshaler:                   marshaler,
+		deliver:                     deliver,
+		exeScheduler:                exeScheduler,
 	}
 }
 
@@ -116,6 +121,28 @@ func (handler *consensusHandler) ProcessPreparePackedMsgExe(msg *PreparePackedMe
 		handler.preprePackedMsgExeChan <- msg
 	} else {
 		err = fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe", id)
+		handler.log.Errorf("%v", err)
+	}
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessPreparePackedMsgExeIndication(msg *PreparePackedMessageExeIndication) error {
+	csStateRN := state.CreateCompositionStateReadonly(handler.log, handler.ledger)
+	defer csStateRN.Stop()
+
+	id := handler.deliver.deliverNetwork().ID()
+
+	activeExeIds, err := csStateRN.GetActiveExecutorIDs()
+	if err != nil {
+		handler.log.Errorf("Can't get active executor ids: %v", err)
+		return err
+	}
+
+	if tpcmm.IsContainString(id, activeExeIds) {
+		handler.preprePackedMsgExeIndicChan <- msg
+	} else {
+		err = fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe indication", id)
 		handler.log.Errorf("%v", err)
 	}
 
@@ -162,7 +189,7 @@ func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Conte
 	}
 
 	if err != nil {
-		handler.log.Errorf("Can 't get tx proofs and tx result proof of ExeResultValidateReqMessage: state version %d,  err %v, self node %s", msg.StateVersion, err, handler.deliver.deliverNetwork().ID())
+		handler.log.Errorf("Can't get tx proofs and tx result proof of ExeResultValidateReqMessage: state version %d,  err %v, self node %s", msg.StateVersion, err, handler.deliver.deliverNetwork().ID())
 	} else {
 		validateResp.TxProofs = txProofs
 		validateResp.TxResultProofs = txRSProofs

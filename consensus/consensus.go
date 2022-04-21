@@ -78,9 +78,10 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
 	epochNewCh := make(chan *tpcmm.EpochInfo)
-	preprePackedMsgExeChan := make(chan *PreparePackedMessageExe)
-	preprePackedMsgPropChan := make(chan *PreparePackedMessageProp)
-	proposeMsgChan := make(chan *ProposeMessage)
+	preprePackedMsgExeChan := make(chan *PreparePackedMessageExe, PreparePackedExeChannel_Size)
+	preprePackedMsgExeIndicChan := make(chan *PreparePackedMessageExeIndication, PreparePackedExeIndicChannel_Size)
+	preprePackedMsgPropChan := make(chan *PreparePackedMessageProp, PreparePackedPropChannel_Size)
+	proposeMsgChan := make(chan *ProposeMessage, ProposeChannel_Size)
 	voteMsgChan := make(chan *VoteMessage)
 	commitMsgChan := make(chan *CommitMessage)
 	blockAddedEpochCh := make(chan *tpchaintypes.Block)
@@ -102,13 +103,13 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 
 	exeScheduler := execution.NewExecutionScheduler(nodeID, log, config, txPool)
 
-	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
+	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, preprePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
 	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, ledger, deliver)
-	proposer := newConsensusProposer(consLog, nodeID, priKey, preprePackedMsgPropChan, voteMsgChan, blockAddedProposerCh, cryptS, csConfig.ProposerBlockMaxInterval, deliver, ledger, marshaler, validator)
+	proposer := newConsensusProposer(consLog, nodeID, priKey, preprePackedMsgPropChan, voteMsgChan, blockAddedProposerCh, cryptS, csConfig.ProposerBlockMaxInterval, csConfig.BlockMaxCyclePeriod, deliver, ledger, marshaler, validator)
 	dkgEx := newDKGExchange(consLog, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, csConfig.InitDKGPrivKey, deliver, ledger)
 
 	epService := newEpochService(consLog, nodeID, blockAddedEpochCh, epochNewCh, csConfig.EpochInterval, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
-	csHandler := NewConsensusHandler(consLog, epochNewCh, preprePackedMsgExeChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, commitMsgChan, blockAddedEpochCh, blockAddedProposerCh, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
+	csHandler := NewConsensusHandler(consLog, epochNewCh, preprePackedMsgExeChan, preprePackedMsgExeIndicChan, preprePackedMsgPropChan, proposeMsgChan, voteMsgChan, commitMsgChan, blockAddedEpochCh, blockAddedProposerCh, partPubKey, dealMsgCh, dealRespMsgCh, ledger, marshaler, deliver, exeScheduler)
 
 	dkgEx.addDKGBLSUpdater(deliver)
 	dkgEx.addDKGBLSUpdater(proposer)
@@ -140,6 +141,10 @@ func (cons *consensus) VerifyBlock(block *tpchaintypes.Block) error {
 
 func (cons *consensus) ProcessPreparePackedExe(msg *PreparePackedMessageExe) error {
 	return cons.handler.ProcessPreparePackedMsgExe(msg)
+}
+
+func (cons *consensus) ProcessPreparePackedExeIndication(msg *PreparePackedMessageExeIndication) error {
+	return cons.handler.ProcessPreparePackedMsgExeIndication(msg)
 }
 
 func (cons *consensus) ProcessPreparePackedProp(msg *PreparePackedMessageProp) error {
@@ -259,6 +264,14 @@ func (cons *consensus) dispatch(actorCtx actor.Context, data []byte) {
 			return
 		}
 		cons.ProcessPreparePackedExe(&msg)
+	case ConsensusMessage_PrepareExeIndic:
+		var msg PreparePackedMessageExeIndication
+		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+		if err != nil {
+			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+			return
+		}
+		cons.ProcessPreparePackedExeIndication(&msg)
 	case ConsensusMessage_PrepareProp:
 		var msg PreparePackedMessageProp
 		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)

@@ -20,17 +20,18 @@ message BlockHead {
   bytes  Proposer          = 8  [(gogoproto.jsontag) = "proposer"];
   bytes  Proof             = 9  [(gogoproto.jsontag) = "proof"];
   bytes  VRFProof          = 10 [(gogoproto.jsontag) = "vrfProof"];
-  bytes  MaxPri            = 11 [(gogoproto.jsontag) = "maxPri"];
-  bytes  VoteAggSignature  = 12 [(gogoproto.jsontag) = "voteAggSignature"];
-  uint32 TxCount           = 13 [(gogoproto.jsontag) = "txCount"];
-  bytes  TxRoot            = 14 [(gogoproto.jsontag) = "txRoot"];
-  bytes  TxResultRoot      = 15 [(gogoproto.jsontag) = "txResultHash"];
-  bytes  StateRoot         = 16 [(gogoproto.jsontag) = "txResultHash"];
-  bytes  GasFees           = 17 [(gogoproto.jsontag) = "gasFees"];
-  uint64 TimeStamp         = 18 [(gogoproto.jsontag) = "timeStamp"];
-  uint64 ElapsedSpan       = 19 [(gogoproto.jsontag) = "elaspedSpan"]; //unit ms
-  bytes  Hash              = 20 [(gogoproto.jsontag) = "hash"];
-  bytes  Reserved          = 21 [(gogoproto.jsontag) = "reserved"];
+  uint64 VRFProofHeight    = 11 [(gogoproto.jsontag) = "vrfProofHeight"];
+  bytes  MaxPri            = 12 [(gogoproto.jsontag) = "maxPri"];
+  bytes  VoteAggSignature  = 13 [(gogoproto.jsontag) = "voteAggSignature"];
+  uint32 TxCount           = 14 [(gogoproto.jsontag) = "txCount"];
+  bytes  TxRoot            = 15 [(gogoproto.jsontag) = "txRoot"];
+  bytes  TxResultRoot      = 16 [(gogoproto.jsontag) = "txResultHash"];
+  bytes  StateRoot         = 17 [(gogoproto.jsontag) = "txResultHash"];
+  bytes  GasFees           = 18 [(gogoproto.jsontag) = "gasFees"];
+  uint64 TimeStamp         = 19 [(gogoproto.jsontag) = "timeStamp"];
+  uint64 ElapsedSpan       = 20 [(gogoproto.jsontag) = "elaspedSpan"]; //unit ms
+  bytes  Hash              = 21 [(gogoproto.jsontag) = "hash"];
+  bytes  Reserved          = 22 [(gogoproto.jsontag) = "reserved"];
 }
 
 message BlockData {

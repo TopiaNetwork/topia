@@ -166,7 +166,7 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 
 	csState.UpdateCompSState(state.CompSState_Commited)
 
-	bsp.log.Infof("CompositionState changes to commited: state version %d, by sub block info", csState.StateVersion())
+	bsp.log.Infof("CompositionState changes to commited: state version %d, by sub block info, self node %s", csState.StateVersion(), bsp.nodeID)
 
 	if newEpoch != nil {
 		eventhub.GetEventHubManager().GetEventHub(bsp.nodeID).Trig(ctx, eventhub.EventName_EpochNew, newEpoch)

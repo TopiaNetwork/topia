@@ -3,9 +3,9 @@ package consensus
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"sync"
 	"time"
 
 	"github.com/TopiaNetwork/topia/codec"
@@ -20,18 +20,19 @@ import (
 )
 
 type consensusExecutor struct {
-	log                     tplog.Logger
-	nodeID                  string
-	priKey                  tpcrtypes.PrivateKey
-	txPool                  txpool.TransactionPool
-	marshaler               codec.Marshaler
-	ledger                  ledger.Ledger
-	exeScheduler            execution.ExecutionScheduler
-	deliver                 *messageDeliver
-	preparePackedMsgExeChan chan *PreparePackedMessageExe
-	commitMsgChan           chan *CommitMessage
-	cryptService            tpcrt.CryptService
-	prepareInterval         time.Duration
+	log                          tplog.Logger
+	nodeID                       string
+	priKey                       tpcrtypes.PrivateKey
+	txPool                       txpool.TransactionPool
+	marshaler                    codec.Marshaler
+	ledger                       ledger.Ledger
+	exeScheduler                 execution.ExecutionScheduler
+	deliver                      *messageDeliver
+	preparePackedMsgExeChan      chan *PreparePackedMessageExe
+	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
+	commitMsgChan                chan *CommitMessage
+	cryptService                 tpcrt.CryptService
+	prepareInterval              time.Duration
 }
 
 func newConsensusExecutor(log tplog.Logger,
@@ -43,22 +44,24 @@ func newConsensusExecutor(log tplog.Logger,
 	exeScheduler execution.ExecutionScheduler,
 	deliver *messageDeliver,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
+	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
 	commitMsgChan chan *CommitMessage,
 	cryptService tpcrt.CryptService,
 	prepareInterval time.Duration) *consensusExecutor {
 	return &consensusExecutor{
-		log:                     tplog.CreateSubModuleLogger("executor", log),
-		nodeID:                  nodeID,
-		priKey:                  priKey,
-		txPool:                  txPool,
-		marshaler:               marshaler,
-		ledger:                  ledger,
-		exeScheduler:            exeScheduler,
-		deliver:                 deliver,
-		preparePackedMsgExeChan: preprePackedMsgExeChan,
-		commitMsgChan:           commitMsgChan,
-		cryptService:            cryptService,
-		prepareInterval:         prepareInterval,
+		log:                          tplog.CreateSubModuleLogger("executor", log),
+		nodeID:                       nodeID,
+		priKey:                       priKey,
+		txPool:                       txPool,
+		marshaler:                    marshaler,
+		ledger:                       ledger,
+		exeScheduler:                 exeScheduler,
+		deliver:                      deliver,
+		preparePackedMsgExeChan:      preprePackedMsgExeChan,
+		preparePackedMsgExeIndicChan: preparePackedMsgExeIndicChan,
+		commitMsgChan:                commitMsgChan,
+		cryptService:                 cryptService,
+		prepareInterval:              prepareInterval,
 	}
 }
 
@@ -67,12 +70,16 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 		for {
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
-				e.log.Infof("Received PreparePackedMessageExe from other executor, StateVersion %d self node %s", perparePMExe.StateVersion, e.nodeID)
+				e.log.Infof("Received PreparePackedMessageExe from other executor, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
+
 				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
-				if compState == nil {
-					err := errors.New("Can't  CreateCompositionState when received new PreparePackedMessageExe")
-					e.log.Errorf("%v", err)
-					continue
+
+				waitCount := 1
+				for compState == nil {
+					e.log.Warnf("Can't CreateCompositionState when received new PreparePackedMessageExe, StateVersion %d, self node %s, waitCount %d", perparePMExe.StateVersion, e.nodeID, waitCount)
+					compState = state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
+					waitCount++
+					time.Sleep(50 * time.Millisecond)
 				}
 
 				latestBlock, err := compState.GetLatestBlock()
@@ -85,7 +92,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 
 				if bytes.Compare(latestBlockHash, perparePMExe.ParentBlockHash) != 0 {
 					e.log.Errorf("Invalid parent block ref: expected %v, actual %v", latestBlockHash, perparePMExe.ParentBlockHash)
-					continue
+					//continue, tmp
 				}
 
 				var receivedTxList []*txbasic.Transaction
@@ -119,8 +126,42 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					e.log.Errorf("Execute packed txs err from remote: %v, state version %d self node %s", err, txPacked.StateVersion, e.nodeID)
 				}
 				e.log.Infof("Execute Packed tx successfully from remote, state version %d self node %s", perparePMExe.StateVersion, e.nodeID)
+				//go func(ctxdl context.Context) {
+				msg := &PreparePackedMessageExeIndication{
+					ChainID:      perparePMExe.ChainID,
+					Version:      perparePMExe.Version,
+					Epoch:        perparePMExe.Epoch,
+					Round:        perparePMExe.Round,
+					StateVersion: perparePMExe.StateVersion,
+				}
+				err = e.deliver.deliverPreparePackagedMessageExeIndication(ctx, string(perparePMExe.Launcher), msg)
+				if err != nil {
+					e.log.Errorf("Deliver PreparePackedMessageExeIndication err: state version %d, launcher %s, self node %s, err %v", perparePMExe.StateVersion, string(perparePMExe.Launcher), e.nodeID, err)
+				}
+				e.log.Errorf("Deliver PreparePackedMessageExeIndication successfully: state version %d, launcher %s, self node %s", perparePMExe.StateVersion, string(perparePMExe.Launcher), e.nodeID)
+				//}(ctx)
 			case <-ctx.Done():
 				e.log.Info("Consensus executor receiveing prepare packed msg exe exit")
+				return
+			}
+		}
+	}()
+}
+
+func (e *consensusExecutor) receivePreparePackedMessageExeIndicationStart(ctx context.Context, requiredCount int, canForward chan bool) {
+	go func() {
+		recvCount := 1 //Contain self
+		for {
+			select {
+			case perparePMExeIndic := <-e.preparePackedMsgExeIndicChan:
+				recvCount++
+				e.log.Infof("Received PreparePackedMessageExeIndication from other executor, state version %d, received %d required %d,  self node %s", perparePMExeIndic.StateVersion, recvCount, requiredCount, e.nodeID)
+				if recvCount == requiredCount {
+					canForward <- true
+					return
+				}
+			case <-ctx.Done():
+				e.log.Info("Consensus executor receiveing prepare packed msg exe indication exit")
 				return
 			}
 		}
@@ -340,13 +381,37 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return err
 	}
 
-	err = e.deliver.deliverPreparePackagedMessageExe(ctx, packedMsgExe)
-	if err != nil {
-		e.log.Errorf("Deliver prepare packed message to execute network failed: err=%v", err)
-		return err
-	}
+	activeExecutors, _ := compState.GetActiveExecutorIDs()
 
-	e.log.Infof("Deliver prepare packed message to execute network successfully: state version %d， self node %s", packedMsgExe.StateVersion, e.nodeID)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(requiredCount int) {
+		recvCount := 1 //Contain self
+		defer wg.Done()
+		for {
+			select {
+			case perparePMExeIndic := <-e.preparePackedMsgExeIndicChan:
+				recvCount++
+				e.log.Infof("Received PreparePackedMessageExeIndication from other executor, state version %d, received %d required %d,  self node %s", perparePMExeIndic.StateVersion, recvCount, requiredCount, e.nodeID)
+				if recvCount == requiredCount {
+					return
+				}
+			}
+		}
+	}(len(activeExecutors))
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err = e.deliver.deliverPreparePackagedMessageExe(ctx, packedMsgExe)
+		if err != nil {
+			e.log.Errorf("Deliver prepare packed message to execute network failed: err=%v", err)
+			return
+		}
+		e.log.Infof("Deliver prepare packed message to execute network successfully: state version %d， self node %s", packedMsgExe.StateVersion, e.nodeID)
+	}()
+
+	wg.Wait()
 
 	err = e.deliver.deliverPreparePackagedMessageProp(ctx, packedMsgProp)
 	if err != nil {

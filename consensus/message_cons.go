@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	"github.com/lazyledger/smt"
@@ -14,6 +15,13 @@ func (m *PreparePackedMessageExe) TxsData() []byte {
 	}
 
 	return txsData
+}
+
+func (m *PreparePackedMessageExeIndication) DataBytes() []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, m.StateVersion)
+
+	return b
 }
 
 func (m *PreparePackedMessageProp) TxHashsData() []byte {

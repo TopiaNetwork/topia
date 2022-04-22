@@ -9,7 +9,8 @@ type Transaction struct {
 }
 
 func (tx *Transaction) SendTransaction(ctx context.Context, tran *basic.Transaction) error {
-	panic("implement me")
+	//panic("implement me")
+	return nil
 }
 
 func (tx *Transaction) TransactionByID(ctx context.Context, txHash basic.TxID) (*basic.Transaction, error) {

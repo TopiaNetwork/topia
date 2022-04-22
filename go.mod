@@ -22,6 +22,7 @@ require (
 	github.com/libp2p/go-libp2p-kad-dht v0.15.0
 	github.com/libp2p/go-libp2p-kbucket v0.4.7
 	github.com/libp2p/go-libp2p-pubsub v0.6.0
+	github.com/miguelmota/go-solidity-sha3 v0.1.1
 	github.com/multiformats/go-multiaddr v0.4.0
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/cobra v1.3.0

@@ -33,7 +33,7 @@ type Network interface {
 
 	SendWithResponse(ctx context.Context, protocolID string, moduleName string, data []byte) ([]message.SendResponse, error)
 
-	Subscribe(ctx context.Context, topic string, validators ...message.PubSubMessageValidator) error
+	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
 
 	UnSubscribe(topic string) error
 
@@ -78,8 +78,8 @@ func (net *network) SendWithResponse(ctx context.Context, protocolID string, mod
 	return net.p2p.SendWithResponse(ctx, protocolID, moduleName, data)
 }
 
-func (net *network) Subscribe(ctx context.Context, topic string, validators ...message.PubSubMessageValidator) error {
-	return net.p2p.Subscribe(ctx, topic, validators...)
+func (net *network) Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error {
+	return net.p2p.Subscribe(ctx, topic, localIgnore, validators...)
 }
 
 func (net *network) UnSubscribe(topic string) error {

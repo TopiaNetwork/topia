@@ -2,14 +2,15 @@ package configuration
 
 import (
 	"encoding/json"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/common"
 	"io/fs"
 	"io/ioutil"
+
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
 type GenesisData struct {
-	Epon        *common.EpochInfo
+	Epon        *tpcmm.EpochInfo
 	Block       *tpchaintypes.Block
 	BlockResult *tpchaintypes.BlockResult
 }

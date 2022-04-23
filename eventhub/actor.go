@@ -40,7 +40,7 @@ func (ea *EventActor) Receive(actorCtx actor.Context) {
 	case *actor.Restarting:
 		ea.log.Info("Restarting, actor is about to restart")
 	case *EventMsg:
-		ea.log.Infof("Received event message data=%v", msg)
+		ea.log.Infof("Received event message name=%v", msg.Name)
 		ctx := context.WithValue(context.Background(), "actorID", actorCtx.Self().Id)
 		ctx = context.WithValue(ctx, "actorAddr", actorCtx.Self().Address)
 		ea.evManager.disptach(ctx, ea.log, msg)

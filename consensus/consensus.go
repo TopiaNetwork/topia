@@ -74,6 +74,7 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	network tpnet.Network,
 	txPool txpool.TransactionPool,
 	ledger ledger.Ledger,
+	exeScheduler execution.ExecutionScheduler,
 	config *tpconfig.Configuration) Consensus {
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
@@ -100,8 +101,6 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	}
 
 	deliver := newMessageDeliver(consLog, nodeID, priKey, DeliverStrategy_Specifically, network, marshaler, cryptS, ledger)
-
-	exeScheduler := execution.NewExecutionScheduler(nodeID, log, config, txPool)
 
 	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, preprePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
 	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, ledger, deliver)

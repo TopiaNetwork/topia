@@ -36,7 +36,7 @@ func NewP2PPubSubService(ctx context.Context, log tplog.Logger, topicValidation 
 	}
 }
 
-func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, validators ...message.PubSubMessageValidator) error {
+func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error {
 	ps.Lock()
 	defer ps.Unlock()
 
@@ -73,7 +73,7 @@ func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, validat
 
 	ps.subs[topic] = s
 
-	go func(ctxPUB context.Context, subscr *pubsub.Subscription) {
+	go func(ctxPUB context.Context, subscr *pubsub.Subscription, isLocalIgnore bool) {
 		for {
 			psMsg, err := subscr.Next(ctxPUB)
 			if err != nil {
@@ -86,6 +86,11 @@ func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, validat
 			}
 
 			if pubMsg, ok := psMsg.ValidatorData.(*message.NetworkPubSubMessage); ok {
+				if isLocalIgnore && pubMsg.FromPeerID == ps.p2pService.ID().String() {
+					ps.log.Infof("Local sub message ignore peerID=%s", pubMsg.FromPeerID)
+					continue
+				}
+
 				for _, pubModName := range pubMsg.ModuleNames {
 					err := ps.p2pService.dispatch(pubModName, pubMsg.Data)
 					if err != nil {
@@ -96,7 +101,7 @@ func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, validat
 				ps.log.Errorf("invalid pubsub message from peerID=%s", pubMsg.FromPeerID)
 			}
 		}
-	}(ctx, s)
+	}(ctx, s, localIgnore)
 
 	return err
 }

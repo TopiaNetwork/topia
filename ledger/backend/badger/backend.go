@@ -60,8 +60,9 @@ type badgerIterator struct {
 // granular than our version interval, and map versions to the corresponding timestamp.
 type versionManager struct {
 	*tplgcmm.VersionManager
-	vmap   map[uint64]uint64
-	lastTs uint64
+	vmap    map[uint64]uint64
+	tsCount uint64
+	lastTs  uint64
 }
 
 // NewDB creates or loads a BadgerBackend key-value database inside the given directory.
@@ -187,7 +188,8 @@ func (b *BadgerBackend) ReaderAt(version uint64) (tplgcmm.DBReader, error) {
 func (b *BadgerBackend) ReadWriter() tplgcmm.DBReadWriter {
 	atomic.AddInt32(&b.openWriters, 1)
 	b.mtx.RLock()
-	ts := b.vmgr.lastTs
+	ts := b.vmgr.tsCount //allow multi writer, so take place "b.vmgr.lastTs" with "b.vmgr.tsCount"
+	b.vmgr.tsCount++
 	b.mtx.RUnlock()
 	return &badgerWriter{badgerTxn{txn: b.db.NewTransactionAt(ts, true), db: b}, false}
 }
@@ -508,6 +510,7 @@ func (vm *versionManager) Copy() *versionManager {
 		VersionManager: vm.VersionManager.Copy(),
 		vmap:           vmap,
 		lastTs:         vm.lastCommitTs(),
+		tsCount:        vm.tsCount,
 	}
 }
 

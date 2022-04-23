@@ -50,12 +50,12 @@ func NewTransactionPoolMock(log tplog.Logger, nodeID string, cryptService tpcrt.
 	return txPool
 }
 
-func (txm *TransactionPoolMock) AddTx(tx *txbasic.Transaction) error {
+func (txm *TransactionPoolMock) AddTx(tx *txbasic.Transaction, local bool) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) RemoveTxByKey(key txpool.TxKey) error {
+func (txm *TransactionPoolMock) RemoveTxByKey(key string) error {
 	txm.sync.Lock()
 	defer txm.sync.Unlock()
 
@@ -70,23 +70,30 @@ func (txm *TransactionPoolMock) RemoveTxByKey(key txpool.TxKey) error {
 	return nil
 }
 
-func (txm *TransactionPoolMock) Reset() error {
+func (txm *TransactionPoolMock) RemoveTxHashs(hashs []string) []error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) UpdateTx(tx *txbasic.Transaction) error {
+func (txm *TransactionPoolMock) Reset(oldHead, newHead *tpchaintypes.BlockHead) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) Pending() ([]txbasic.Transaction, error) {
+func (txm *TransactionPoolMock) UpdateTx(tx *txbasic.Transaction, txKey string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) Pending() ([]*txbasic.Transaction, error) {
 	txm.sync.Lock()
 	defer txm.sync.Unlock()
 
-	newTxs := make([]txbasic.Transaction, len(txm.pendingTxs))
+	newTxs := make([]*txbasic.Transaction, len(txm.pendingTxs))
 
-	copy(newTxs, txm.pendingTxs)
+	for i, tx := range txm.pendingTxs {
+		newTxs[i] = &tx
+	}
 
 	return newTxs, nil
 }
@@ -103,7 +110,7 @@ func (txm *TransactionPoolMock) processBlockAddedEvent(ctx context.Context, data
 			var tx txbasic.Transaction
 			marshaler.Unmarshal(txBytes, &tx)
 			txHash, _ := tx.HashHex()
-			txm.RemoveTxByKey(txpool.TxKey(txHash))
+			txm.RemoveTxByKey(txHash)
 		}
 
 		return nil
@@ -153,3 +160,14 @@ func (txm *TransactionPoolMock) Start(sysActor *actor.ActorSystem, network tpnet
 	eventhub.GetEventHubManager().GetEventHub(txm.nodeID).Observe(ctx, eventhub.EventName_BlockAdded, txm.processBlockAddedEvent)
 	return nil
 }
+
+func (txm *TransactionPoolMock) PickTxs(txType txpool.PickTxType) []*txbasic.Transaction {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) SysShutDown() {
+	//TODO implement me
+	panic("implement me")
+}
+

@@ -97,14 +97,14 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 
 				var receivedTxList []*txbasic.Transaction
 				for i := 0; i < len(perparePMExe.Txs); i++ {
-					var tx *txbasic.Transaction
+					var tx txbasic.Transaction
 
 					err = e.marshaler.Unmarshal(perparePMExe.Txs[i], &tx)
 					if err != nil {
 						e.log.Errorf("Invalid tx from pepare packed msg exe: marshal err %v", err)
 						break
 					}
-					receivedTxList = append(receivedTxList, tx)
+					receivedTxList = append(receivedTxList, &tx)
 				}
 				if err != nil {
 					continue
@@ -192,6 +192,11 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 					}
 
 					deltaHeight := int(bh.Height) - int(latestBlock.Head.Height)
+					if deltaHeight <= 0 {
+						err = fmt.Errorf("Received commit message is delayed, StateVersion %d, latest height %d", commitMsg.StateVersion, latestBlock.Head.Height)
+						e.log.Infof("%s", err.Error())
+						return err
+					}
 
 					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, deltaHeight, e.marshaler, e.deliver.network, e.ledger)
 					if err != nil {
@@ -325,7 +330,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 	}
 
 	for i := 0; i < len(txList); i++ {
-		txBytes, _ := e.marshaler.Marshal(&txList[i])
+		txBytes, _ := e.marshaler.Marshal(txList[i])
 		exePPM.Txs = append(exePPM.Txs, txBytes)
 
 		txHashBytes, _ := txList[i].HashBytes()

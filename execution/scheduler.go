@@ -140,7 +140,16 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 
 		for _, tx := range txPacked.TxList {
 			txHash, _ := tx.HashHex()
-			scheduler.txPool.RemoveTxByKey(txpool.TxKey(txHash))
+			scheduler.txPool.RemoveTxByKey(txHash)
+		}
+
+		if scheduler.exePackedTxsList.Len() >= int(scheduler.config.CSConfig.MaxPrepareMsgCache) {
+			iCycle := int(float32(scheduler.config.CSConfig.MaxPrepareMsgCache) * 0.2)
+			for iCycle > 0 {
+				topPackedTxs := scheduler.exePackedTxsList.Front()
+				scheduler.exePackedTxsList.Remove(topPackedTxs)
+				iCycle--
+			}
 		}
 
 		return packedTxsRS, nil
@@ -184,9 +193,20 @@ func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Contex
 	}
 
 	if scheduler.exePackedTxsList.Len() > 0 {
-		exeTxsF := scheduler.exePackedTxsList.Front().Value.(*executionPackedTxs)
-		if exeTxsF.StateVersion() != stateVersion {
-			err := fmt.Errorf("Invalid state version: expected %d, actual %d", exeTxsF.StateVersion(), stateVersion)
+		var scanedStateVer []uint64
+		var exeTxsF *executionPackedTxs
+		exeTxsItem := scheduler.exePackedTxsList.Front()
+		for exeTxsItem != nil {
+			exeTxsF = exeTxsItem.Value.(*executionPackedTxs)
+			scanedStateVer = append(scanedStateVer, exeTxsF.StateVersion())
+			if exeTxsF.StateVersion() != stateVersion {
+				exeTxsItem = exeTxsItem.Next()
+			} else {
+				break
+			}
+		}
+		if exeTxsItem == nil {
+			err := fmt.Errorf("Can't find state version to verify: expected %d, existed packed txs state versions %v", stateVersion, scanedStateVer)
 			scheduler.log.Errorf("%v", err)
 			return nil, nil, err
 		}
@@ -303,7 +323,7 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 
 	compState := state.GetStateBuilder().CreateCompositionState(scheduler.log, scheduler.nodeID, ledger, stateVersion, requester)
 	if compState == nil {
-		err := fmt.Errorf("Nil csState and can't commit block whose height %d, latest block height=%d, self node %s", block.Head.Height, latestBlock.Head.Height, scheduler.nodeID)
+		err := fmt.Errorf("Nil csState and can't commit block whose height %d, latest block height %d, self node %s", block.Head.Height, latestBlock.Head.Height, scheduler.nodeID)
 		return err
 	}
 	compState.Lock()
@@ -399,11 +419,20 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 	defer scheduler.schedulerState.Store(uint32(SchedulerState_Idle))
 
 	if scheduler.exePackedTxsList.Len() != 0 {
+		var scanedStateVer []uint64
+		var exeTxsF *executionPackedTxs
 		exeTxsItem := scheduler.exePackedTxsList.Front()
-		exeTxsF := exeTxsItem.Value.(*executionPackedTxs)
-
-		if stateVersion != exeTxsF.StateVersion() {
-			err := fmt.Errorf("Invalid stateVersion to commit: expected %d, actual %d", exeTxsF.StateVersion(), stateVersion)
+		for exeTxsItem != nil {
+			exeTxsF = exeTxsItem.Value.(*executionPackedTxs)
+			scanedStateVer = append(scanedStateVer, exeTxsF.StateVersion())
+			if stateVersion != exeTxsF.StateVersion() {
+				exeTxsItem = exeTxsItem.Next()
+			} else {
+				break
+			}
+		}
+		if exeTxsItem == nil {
+			err := fmt.Errorf("Can't find state version to commit: expected %d, existed packed txs state versions %v", stateVersion, scanedStateVer)
 			scheduler.log.Errorf("%v", err)
 			return err
 		}
@@ -444,7 +473,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 			return err
 		}
 
-		scheduler.exePackedTxsList.Remove(exeTxsItem)
+		//scheduler.exePackedTxsList.Remove(exeTxsItem)
 
 		blockBytes, err := marshaler.Marshal(block)
 		if err != nil {

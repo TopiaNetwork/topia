@@ -33,6 +33,11 @@ func (md *messageDeliverMock) deliverPreparePackagedMessageExe(ctx context.Conte
 	panic("implement me")
 }
 
+func (md *messageDeliverMock) deliverPreparePackagedMessageExeIndication(ctx context.Context, launcherID string, msg *PreparePackedMessageExeIndication) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (md *messageDeliverMock) deliverPreparePackagedMessageProp(ctx context.Context, msg *PreparePackedMessageProp) error {
 	//TODO implement me
 	panic("implement me")

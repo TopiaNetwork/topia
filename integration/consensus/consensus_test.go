@@ -14,6 +14,7 @@ import (
 	"github.com/TopiaNetwork/topia/consensus"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/eventhub"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/integration/mock"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
@@ -54,6 +55,7 @@ type nodeParams struct {
 	network         tpnet.Network
 	txPool          txpool.TransactionPool
 	ledger          ledger.Ledger
+	scheduler       execution.ExecutionScheduler
 	cs              consensus.Consensus
 	chain           chain.Chain
 	config          *tpconfig.Configuration
@@ -290,9 +292,11 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
-		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, config)
+		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, txPool)
 
-		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1)
+		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, exeScheduler, config)
+
+		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
 
 		var latestEpochInfo *tpcmm.EpochInfo
 		var latestBlock *tpchaintypes.Block
@@ -348,6 +352,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			network:         network,
 			txPool:          txPool,
 			ledger:          l,
+			scheduler:       exeScheduler,
 			chain:           chain,
 			config:          newConfig,
 			sysActor:        sysActor,
@@ -375,6 +380,7 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 			nParams[i].network,
 			nParams[i].txPool,
 			nParams[i].ledger,
+			nParams[i].scheduler,
 			nParams[i].config,
 		)
 

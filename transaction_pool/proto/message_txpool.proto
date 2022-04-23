@@ -17,5 +17,6 @@ message TxPoolMessage {
 }
 
 message TxMessage{
-
+     bytes Data = 1  [(gogoproto.jsontag) = "data"];
 }
+

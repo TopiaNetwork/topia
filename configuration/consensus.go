@@ -15,6 +15,7 @@ type ConsensusConfiguration struct {
 	ExecutionPrepareInterval time.Duration
 	ProposerBlockMaxInterval time.Duration
 	BlockMaxCyclePeriod      time.Duration
+	MaxPrepareMsgCache       uint64
 }
 
 func DefConsensusConfiguration() *ConsensusConfiguration {
@@ -25,5 +26,6 @@ func DefConsensusConfiguration() *ConsensusConfiguration {
 		ExecutionPrepareInterval: 500 * time.Millisecond,
 		ProposerBlockMaxInterval: 1000 * time.Millisecond,
 		BlockMaxCyclePeriod:      5000 * time.Millisecond,
+		MaxPrepareMsgCache:       50,
 	}
 }

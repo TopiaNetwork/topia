@@ -88,7 +88,7 @@ func (builder *CompositionStateBuilder) CreateCompositionState(log tplog.Logger,
 		}()
 	}
 
-	if availCompStateCnt >= MaxAvail_Count {
+	if availCompStateCnt >= MaxAvail_Count && needCreation {
 		log.Errorf("Can't create new CompositionState because of reaching max available value %d: availCompStateCnt %d, stateVersion %d, availCompStateVersions %v, requester=%s, self node %s",
 			MaxAvail_Count, availCompStateCnt, stateVersion, availCompStateVersions, requester, nodeID)
 		return nil

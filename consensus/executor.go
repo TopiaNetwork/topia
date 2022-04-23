@@ -72,12 +72,12 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 			case perparePMExe := <-e.preparePackedMsgExeChan:
 				e.log.Infof("Received PreparePackedMessageExe from other executor, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 
-				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
+				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
 
 				waitCount := 1
 				for compState == nil {
 					e.log.Warnf("Can't CreateCompositionState when received new PreparePackedMessageExe, StateVersion %d, self node %s, waitCount %d", perparePMExe.StateVersion, e.nodeID, waitCount)
-					compState = state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
+					compState = state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
 					waitCount++
 					time.Sleep(50 * time.Millisecond)
 				}
@@ -192,7 +192,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 
 					deltaHeight := int(bh.Height) - int(latestBlock.Head.Height)
 
-					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, deltaHeight, e.marshaler, e.ledger.GetBlockStore(), e.deliver.network)
+					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, deltaHeight, e.marshaler, e.deliver.network, e.ledger)
 					if err != nil {
 						e.log.Errorf("Commit packed tx err: %v", err)
 						return err
@@ -354,7 +354,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return err
 	}
 
-	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, maxStateVer+1)
+	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, maxStateVer+1, "executor_exepreparer")
 	if compState == nil {
 		err = fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", maxStateVer+1)
 		e.log.Errorf("%v", err)

@@ -2,6 +2,7 @@ package chain
 
 import (
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/TopiaNetwork/topia/chain/types"
 
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -20,7 +21,7 @@ func CreateChainActor(log tplog.Logger, sysActor *actor.ActorSystem, chain *chai
 	props := actor.PropsFromProducer(func() actor.Actor {
 		return nActor
 	})
-	pid, err := sysActor.Root.SpawnNamed(props, MOD_ACTOR_NAME)
+	pid, err := sysActor.Root.SpawnNamed(props, types.MOD_ACTOR_NAME)
 
 	nActor.pid = pid
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/TopiaNetwork/topia/configuration"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 
@@ -12,11 +13,6 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
-)
-
-const (
-	MOD_NAME       = "chain"
-	MOD_ACTOR_NAME = "chain_actor"
 )
 
 type Chain interface {
@@ -39,11 +35,12 @@ func NewChain(level tplogcmm.LogLevel,
 	nodeID string,
 	codecType codec.CodecType,
 	ledger ledger.Ledger,
+	scheduler execution.ExecutionScheduler,
 	config *configuration.Configuration) Chain {
-	chainLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
+	chainLog := tplog.CreateModuleLogger(level, tpchaintypes.MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
 
-	blkSubPro := NewBlockInfoSubProcessor(chainLog, nodeID, marshaler, ledger, config)
+	blkSubPro := NewBlockInfoSubProcessor(chainLog, nodeID, marshaler, ledger, scheduler, config)
 
 	return &chain{
 		log:           chainLog,
@@ -73,9 +70,9 @@ func (c *chain) Start(sysActor *actor.ActorSystem, network tpnet.Network) error 
 		return err
 	}
 
-	network.RegisterModule(MOD_NAME, actorPID, c.marshaler)
+	network.RegisterModule(tpchaintypes.MOD_NAME, actorPID, c.marshaler)
 
-	err = network.Subscribe(context.Background(), tpnetprotoc.PubSubProtocolID_BlockInfo, c.blkSubProcess.Validate)
+	err = network.Subscribe(context.Background(), tpnetprotoc.PubSubProtocolID_BlockInfo, true, c.blkSubProcess.Validate)
 	if err != nil {
 		c.log.Panicf("Chain subscribe block info pubsub err: %v", err)
 		return err

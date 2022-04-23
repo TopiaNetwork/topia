@@ -160,15 +160,15 @@ func TestPubSub(t *testing.T) {
 		return p2p2.dhtServices[DHTServiceType_General].dht.RoutingTable().Find(p2p1.ID()) != ""
 	}, time.Second*5, ticksForAssertEventually, "dht servers p2p2 failed to connect")
 
-	err := p2p1.Subscribe(context.Background(), "/topia/testing", func(ctx context.Context, isLocal bool, data []byte) message.ValidationResult {
-		t.Logf("Received data: %v, isLocal=%v", string(data), isLocal)
+	err := p2p1.Subscribe(context.Background(), "/topia/testing", false, func(ctx context.Context, isLocal bool, data []byte) message.ValidationResult {
+		t.Logf("p2p1 Received data: %v, isLocal=%v", string(data), isLocal)
 		assert.Equal(t, false, isLocal)
 		return message.ValidationAccept
 	})
 	assert.Equal(t, nil, err)
 
-	err = p2p2.Subscribe(context.Background(), "/topia/testing", func(ctx context.Context, isLocal bool, data []byte) message.ValidationResult {
-		t.Logf("Received data: %v, isLocal=%v", string(data), isLocal)
+	err = p2p2.Subscribe(context.Background(), "/topia/testing", false, func(ctx context.Context, isLocal bool, data []byte) message.ValidationResult {
+		t.Logf("p2p2 Received data: %v, isLocal=%v", string(data), isLocal)
 		assert.Equal(t, true, isLocal)
 		return message.ValidationAccept
 	})

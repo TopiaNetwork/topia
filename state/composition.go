@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"go.uber.org/atomic"
 	"math/big"
+	"sync"
 
 	"github.com/lazyledger/smt"
 
@@ -109,8 +110,6 @@ type CompositionState interface {
 
 	CompSState() CompSState
 
-	TakenUpState() TakenUpState
-
 	StateRoot() ([]byte, error)
 
 	StateLatestVersion() (uint64, error)
@@ -121,7 +120,9 @@ type CompositionState interface {
 
 	UpdateCompSState(state CompSState)
 
-	UpdateTakenUpState(state TakenUpState) TakenUpState
+	Lock()
+
+	Unlock()
 
 	Commit() error
 
@@ -146,7 +147,7 @@ type compositionState struct {
 	ledger       ledger.Ledger
 	stateVersion uint64
 	state        atomic.Uint32 //CompSState
-	takenUPState atomic.Uint32 //TakenUpState
+	sync         sync.RWMutex
 }
 
 type nodeNetWorkStateWapper struct {
@@ -185,7 +186,6 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion
 	}
 
 	compS.state.Store(uint32(CompSState_Idle))
-	compS.takenUPState.Store(uint32(TakenUpState_Idle))
 
 	return compS
 }
@@ -287,16 +287,16 @@ func (cs *compositionState) CompSState() CompSState {
 	return CompSState(cs.state.Load())
 }
 
-func (cs *compositionState) TakenUpState() TakenUpState {
-	return TakenUpState(cs.state.Load())
-}
-
 func (cs *compositionState) UpdateCompSState(state CompSState) {
 	cs.state.Swap(uint32(state))
 }
 
-func (cs *compositionState) UpdateTakenUpState(state TakenUpState) TakenUpState {
-	return TakenUpState(cs.takenUPState.Swap(uint32(state)))
+func (cs *compositionState) Lock() {
+	cs.sync.Lock()
+}
+
+func (cs *compositionState) Unlock() {
+	cs.sync.Unlock()
 }
 
 func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() ([]string, error) {

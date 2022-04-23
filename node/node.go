@@ -6,6 +6,7 @@ import (
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/execution"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -67,11 +68,12 @@ func NewNode(endPoint string, seed string) *Node {
 
 	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
 	nodeID := network.ID()
-	evHub := eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 	txPool := txpool.NewTransactionPool(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
-	cons := consensus.NewConsensus(compStateRN.ChainID(), nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, config)
+	exeScheduler := execution.NewExecutionScheduler(nodeID, mainLog, config, txPool)
+	evHub := eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
+	cons := consensus.NewConsensus(compStateRN.ChainID(), nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, exeScheduler, config)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
-	chain := chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, codec.CodecType_PROTO, ledger, config)
+	chain := chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, codec.CodecType_PROTO, ledger, exeScheduler, config)
 
 	return &Node{
 		log:       mainLog,

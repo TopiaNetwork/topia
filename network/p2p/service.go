@@ -713,8 +713,8 @@ func (p2p *P2PService) Connect(listenAddr []string) error {
 	return err
 }
 
-func (p2p *P2PService) Subscribe(ctx context.Context, topic string, validators ...message.PubSubMessageValidator) error {
-	return p2p.pubsubService.Subscribe(ctx, topic, validators...)
+func (p2p *P2PService) Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error {
+	return p2p.pubsubService.Subscribe(ctx, topic, localIgnore, validators...)
 }
 
 func (p2p *P2PService) UnSubscribe(topic string) error {

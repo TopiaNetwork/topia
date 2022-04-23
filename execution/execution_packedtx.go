@@ -7,7 +7,7 @@ import (
 
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
-	tx "github.com/TopiaNetwork/topia/transaction"
+	txfactory "github.com/TopiaNetwork/topia/transaction"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 

@@ -50,7 +50,7 @@ func NewTransactionPoolMock(log tplog.Logger, nodeID string, cryptService tpcrt.
 	return txPool
 }
 
-func (txm *TransactionPoolMock) AddTx(tx *txbasic.Transaction) error {
+func (txm *TransactionPoolMock) AddTx(tx *txbasic.Transaction, local bool) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -70,23 +70,30 @@ func (txm *TransactionPoolMock) RemoveTxByKey(key string) error {
 	return nil
 }
 
-func (txm *TransactionPoolMock) Reset() error {
+func (txm *TransactionPoolMock) RemoveTxHashs(hashs []string) []error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) UpdateTx(tx *txbasic.Transaction) error {
+func (txm *TransactionPoolMock) Reset(oldHead, newHead *tpchaintypes.BlockHead) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) Pending() ([]txbasic.Transaction, error) {
+func (txm *TransactionPoolMock) UpdateTx(tx *txbasic.Transaction, txKey string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) Pending() ([]*txbasic.Transaction, error) {
 	txm.sync.Lock()
 	defer txm.sync.Unlock()
 
-	newTxs := make([]txbasic.Transaction, len(txm.pendingTxs))
+	newTxs := make([]*txbasic.Transaction, len(txm.pendingTxs))
 
-	copy(newTxs, txm.pendingTxs)
+	for i, tx := range txm.pendingTxs {
+		newTxs[i] = &tx
+	}
 
 	return newTxs, nil
 }
@@ -163,3 +170,4 @@ func (txm *TransactionPoolMock) SysShutDown() {
 	//TODO implement me
 	panic("implement me")
 }
+

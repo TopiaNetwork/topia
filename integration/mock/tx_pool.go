@@ -55,7 +55,7 @@ func (txm *TransactionPoolMock) AddTx(tx *txbasic.Transaction) error {
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) RemoveTxByKey(key txpool.TxKey) error {
+func (txm *TransactionPoolMock) RemoveTxByKey(key string) error {
 	txm.sync.Lock()
 	defer txm.sync.Unlock()
 
@@ -103,7 +103,7 @@ func (txm *TransactionPoolMock) processBlockAddedEvent(ctx context.Context, data
 			var tx txbasic.Transaction
 			marshaler.Unmarshal(txBytes, &tx)
 			txHash, _ := tx.HashHex()
-			txm.RemoveTxByKey(txpool.TxKey(txHash))
+			txm.RemoveTxByKey(txHash)
 		}
 
 		return nil
@@ -152,4 +152,14 @@ func (txm *TransactionPoolMock) Start(sysActor *actor.ActorSystem, network tpnet
 	txm.produceTxsTimer(ctx)
 	eventhub.GetEventHubManager().GetEventHub(txm.nodeID).Observe(ctx, eventhub.EventName_BlockAdded, txm.processBlockAddedEvent)
 	return nil
+}
+
+func (txm *TransactionPoolMock) PickTxs(txType txpool.PickTxType) []*txbasic.Transaction {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) SysShutDown() {
+	//TODO implement me
+	panic("implement me")
 }

@@ -140,7 +140,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 
 		for _, tx := range txPacked.TxList {
 			txHash, _ := tx.HashHex()
-			scheduler.txPool.RemoveTxByKey(txpool.TxKey(txHash))
+			scheduler.txPool.RemoveTxByKey(txHash)
 		}
 
 		return packedTxsRS, nil

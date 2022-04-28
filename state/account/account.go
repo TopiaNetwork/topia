@@ -90,7 +90,7 @@ func (as *accountState) GetBalance(addr tpcrtypes.Address, symbol currency.Token
 		return nil, err
 	}
 
-	if balVal, ok := acc.Balance[symbol]; ok {
+	if balVal, ok := acc.Balances[symbol]; ok {
 		return balVal, nil
 	}
 
@@ -132,10 +132,10 @@ func (as *accountState) UpdateBalance(addr tpcrtypes.Address, symbol currency.To
 		return err
 	}
 
-	if balVal, ok := acc.Balance[symbol]; ok {
+	if balVal, ok := acc.Balances[symbol]; ok {
 		balVal.Set(value)
 	} else {
-		acc.Balance[symbol] = value
+		acc.Balances[symbol] = value
 	}
 
 	accBytes, err := json.Marshal(acc)

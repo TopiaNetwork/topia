@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/base32"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -227,4 +228,21 @@ func (a Address) Payload() ([]byte, error) {
 
 func (a Address) Bytes() []byte {
 	return []byte(a)
+}
+
+func CreateContractAddress(fromAddr Address, nonce uint64) Address {
+	if fromAddr == "" || fromAddr == UndefAddress {
+		panic("Invalid address" + string(fromAddr))
+	}
+
+	fromPayload, _ := fromAddr.Payload()
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, nonce)
+
+	hasher := tpcmm.NewBlake2bHasher(0)
+	hasher.Writer().Write(fromPayload[:]) // does not error
+	hasher.Writer().Write(nonceBytes)
+	newAddr, _ := NewAddress(CryptType_Ed25519, hasher.Bytes())
+
+	return newAddr
 }

@@ -24,10 +24,10 @@ type StatePoolDB struct {
 
 func (st *StatePoolDB) GetAccount(addr tpcrtypes.Address) (*account.Account, error) {
 	acc := &account.Account{
-		Addr:    "",
-		Name:    "",
-		Nonce:   0,
-		Balance: nil,
+		Addr:     "",
+		Name:     "",
+		Nonce:    0,
+		Balances: nil,
 	}
 	return acc, nil
 }

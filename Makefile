@@ -13,7 +13,7 @@ endif
 
 LD_FLAGS = -X github.com/TopiaNetwork/topia/version.TPVersionDefault=$(VERSION)
 BUILD_FLAGS = -mod=readonly -ldflags "$(LD_FLAGS)"
-CGO_ENABLED ?= 0
+CGO_ENABLED ?= 1
 
 # handle badgerdb
 ifeq (badgerdb,$(findstring badgerdb,$(TOPIA_BUILD_OPTIONS)))

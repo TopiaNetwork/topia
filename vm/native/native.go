@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"reflect"
 	"sync"
 
@@ -126,7 +127,7 @@ func (nvm *NativeVM) DeployContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult, 
 	panic("All native contracts needn't be deployed")
 }
 
-func (nvm *NativeVM) doExecute(contractName string, methodName string, ncMethod *nativeContractMethod, paramIns []reflect.Value) (*tpvmcmm.VMResult, error) {
+func (nvm *NativeVM) doExecute(ctx context.Context, nodeID string, contractName string, methodName string, ncMethod *nativeContractMethod, paramIns []reflect.Value) (*tpvmcmm.VMResult, error) {
 	defer func() {
 		if rtn := recover(); rtn != nil {
 			nvm.log.Errorf("NativeVM doExecute panic: contract %s method %s, exception %s", contractName, methodName, rtn)
@@ -169,10 +170,14 @@ func (nvm *NativeVM) doExecute(contractName string, methodName string, ncMethod 
 			}, err
 		}
 
-		return &tpvmcmm.VMResult{
+		vmResult := &tpvmcmm.VMResult{
 			Code: tpvmcmm.ReturnCode_Ok,
 			Data: callRtn[0].Interface(),
-		}, nil
+		}
+
+		eventhub.GetEventHubManager().GetEventHub(nodeID).Trig(ctx, eventhub.EventName_ContractInvoked, vmResultType)
+
+		return vmResult, nil
 	}
 
 	err := fmt.Errorf("Execute unknown err for contract %s method %s", contractName, methodName)
@@ -242,5 +247,5 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 	paramIns = append(paramIns, reflect.ValueOf(exeCtx))
 	paramIns = append(paramIns, ctx.Args...)
 
-	return nvm.doExecute(ctx.ContractName, ctx.Method, ncMethod, paramIns)
+	return nvm.doExecute(exeCtx, ctx.NodeID, ctx.ContractName, ctx.Method, ncMethod, paramIns)
 }

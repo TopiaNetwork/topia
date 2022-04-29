@@ -10,6 +10,7 @@ import (
 type VMContext struct {
 	context.Context
 	state.CompositionState
+	NodeID       string
 	ContractName string
 	Method       string
 	Args         []reflect.Value

@@ -16,5 +16,9 @@ type gasEstimator struct {
 }
 
 func (ge *gasEstimator) Estimate(txUni *TransactionUniversalWithHead) (*big.Int, error) {
+	switch TransactionUniversalType(txUni.Head.Type) {
+	case TransactionUniversalType_Transfer:
+
+	}
 	return big.NewInt(0), nil
 }

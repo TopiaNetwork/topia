@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/topia/eventhub"
 	"reflect"
 	"sync"
 
 	"go.uber.org/atomic"
 
+	"github.com/TopiaNetwork/topia/eventhub"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
@@ -240,7 +240,7 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 		}
 	}
 
-	exeCtx := context.WithValue(ctx.Context, "COMPSTATE", ctx.CompositionState)
+	exeCtx := context.WithValue(ctx.Context, "VMServant", ctx.VMServant)
 
 	var paramIns []reflect.Value
 	paramIns = append(paramIns, ncMethod.receiver)

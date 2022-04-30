@@ -54,3 +54,33 @@ func TestMultiCompositionState(t *testing.T) {
 	compStateRN.Stop()
 	assert.Equal(t, uint64(3), latestBlock.Head.Height)
 }
+
+func TestMemCompositionState(t *testing.T) {
+	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
+
+	l := ledger.NewLedger("./TestCS", ledger.LedgerID("testledger"), testLog, backend.BackendType_Badger)
+
+	config := tpconfig.GetConfiguration()
+
+	compState := GetStateBuilder().CreateCompositionState(testLog, "", l, 1, "tester")
+
+	compState.SetLatestBlock(config.Genesis.Block)
+
+	compState.SetLatestBlockResult(config.Genesis.BlockResult)
+
+	compState.SetLatestEpoch(config.Genesis.Epon)
+
+	compState.Commit()
+
+	compState2 := GetStateBuilder().CreateCompositionState(testLog, "", l, 2, "tester")
+
+	compStateMem := CreateCompositionStateMem(testLog, compState2)
+
+	latestBlock, _ := compStateMem.GetLatestBlock()
+	assert.Equal(t, uint64(1), latestBlock.Head.Height)
+
+	config.Genesis.Block.Head.Height = 2
+	compStateMem.SetLatestBlock(config.Genesis.Block)
+	latestBlock, _ = compStateMem.GetLatestBlock()
+	assert.Equal(t, uint64(2), latestBlock.Head.Height)
+}

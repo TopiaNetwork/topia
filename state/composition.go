@@ -67,6 +67,8 @@ type CompositionStateReadonly interface {
 
 	GetLatestEpoch() (*common.EpochInfo, error)
 
+	CompSStateStore() tplgss.StateStore
+
 	StateRoot() ([]byte, error)
 
 	StateLatestVersion() (uint64, error)
@@ -105,6 +107,8 @@ type CompositionState interface {
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
 	staetround.EpochState
+
+	CompSStateStore() tplgss.StateStore
 
 	StateVersion() uint64
 
@@ -213,8 +217,47 @@ func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) Comp
 	}
 }
 
+func CreateCompositionStateMem(log tplog.Logger, compState CompositionStateReadonly) CompositionState {
+	stateStore, ledger, _ := ledger.CreateStateStoreMem(log)
+
+	inactiveState := statenode.NewNodeInactiveState(stateStore)
+	executorState := statenode.NewNodeExecutorState(stateStore)
+	proposerState := statenode.NewNodeProposerState(stateStore)
+	validatorState := statenode.NewNodeValidatorState(stateStore)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
+	compS := &compositionState{
+		log:                log,
+		stateVersion:       1,
+		ledger:             ledger,
+		StateStore:         stateStore,
+		AccountState:       stateaccount.NewAccountState(stateStore),
+		ChainState:         statechain.NewChainStore(stateStore, ledger),
+		NodeState:          nodeState,
+		NodeInactiveState:  inactiveState,
+		NodeExecutorState:  executorState,
+		NodeProposerState:  proposerState,
+		NodeValidatorState: validatorState,
+		EpochState:         staetround.NewRoundState(stateStore),
+	}
+
+	compS.state.Store(uint32(CompSState_Idle))
+
+	originStateStore := compState.CompSStateStore()
+	err := originStateStore.Clone(stateStore)
+	if err != nil {
+		log.Errorf("Can't clone orgin keys and values: %v", err)
+		return nil
+	}
+
+	return compS
+}
+
 func (cs *compositionState) PendingStateStore() int32 {
 	return cs.ledger.PendingStateStore()
+}
+
+func (cs *compositionState) CompSStateStore() tplgss.StateStore {
+	return cs.StateStore
 }
 
 func (cs *compositionState) StateRoot() ([]byte, error) {

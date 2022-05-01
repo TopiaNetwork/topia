@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"github.com/TopiaNetwork/topia/account"
 	"go.uber.org/atomic"
 	"math/big"
 	"sync"
@@ -31,6 +32,8 @@ type NodeNetWorkStateWapper interface {
 }
 
 type CompositionStateReadonly interface {
+	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
+
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)

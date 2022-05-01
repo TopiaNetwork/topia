@@ -36,7 +36,7 @@ func NewTransactionUniversalWithHead(txHead *txbasic.TransactionHead, txUni *Tra
 	}
 }
 
-func (txuni *TransactionUniversalWithHead) TxUniVerify(ctx context.Context, log tplog.Logger, txServant txbasic.TansactionServant) txbasic.VerifyResult {
+func (txuni *TransactionUniversalWithHead) TxUniVerify(ctx context.Context, log tplog.Logger, txServant txbasic.TransactionServant) txbasic.VerifyResult {
 	txUniServant := NewTansactionUniversalServant(txServant)
 
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)

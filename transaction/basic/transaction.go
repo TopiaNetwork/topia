@@ -142,7 +142,7 @@ func (m *Transaction) HashHex() (string, error) {
 	return fmt.Sprintf("%x", hex.EncodeToString(hashBytes)), nil
 }
 
-func (m *Transaction) BasicVerify(ctx context.Context, log tplog.Logger, txServant TansactionServant) VerifyResult {
+func (m *Transaction) BasicVerify(ctx context.Context, log tplog.Logger, txServant TransactionServant) VerifyResult {
 	return ApplyTransactionVerifiers(ctx, log, m, txServant,
 		TransactionChainIDVerifier(),
 		TransactionFromAddressVerifier(),

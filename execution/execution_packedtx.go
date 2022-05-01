@@ -24,7 +24,7 @@ func newExecutionPackedTxs(packedTxs *PackedTxs, compState state.CompositionStat
 	}
 }
 
-func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, txServant basic.TansactionServant) (*PackedTxsResult, error) {
+func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, txServant basic.TransactionServant) (*PackedTxsResult, error) {
 	if len(ept.packedTxs.TxList) == 0 {
 		return nil, errors.New("Empty packedTxs")
 	}

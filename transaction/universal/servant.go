@@ -3,15 +3,15 @@ package universal
 import txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 
 type TansactionUniversalServant interface {
-	txbasic.TansactionServant
+	txbasic.TransactionServant
 	GetGasEstimator() (GasEstimator, error)
 }
 
 type transactionUniversalServant struct {
-	txbasic.TansactionServant
+	txbasic.TransactionServant
 }
 
-func NewTansactionUniversalServant(txServant txbasic.TansactionServant) TansactionUniversalServant {
+func NewTansactionUniversalServant(txServant txbasic.TransactionServant) TansactionUniversalServant {
 	return &transactionUniversalServant{
 		txServant,
 	}

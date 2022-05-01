@@ -1,6 +1,7 @@
 package basic
 
 import (
+	"github.com/TopiaNetwork/topia/state"
 	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 
@@ -38,19 +39,21 @@ type TansactionServant interface {
 	UpdateNonce(addr tpcrtypes.Address, nonce uint64) error
 
 	UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error
+
+	SnapToMem(log tplog.Logger) TansactionServant
 }
 
-func NewTansactionServant(chainState statechain.ChainState, accountState stateaccount.AccountState) TansactionServant {
+func NewTansactionServant(compState state.CompositionState) TansactionServant {
 	return &tansactionServant{
-		chainState,
-		accountState,
+		ChainState:   compState,
+		AccountState: compState,
 	}
 }
 
-func NewTansactionServantSimulate(chainState statechain.ChainState, accountState stateaccount.AccountState) TansactionServant {
+func NewTansactionServantSimulate(compState state.CompositionState) TansactionServant {
 	ts := &tansactionServant{
-		chainState,
-		accountState,
+		ChainState:   compState,
+		AccountState: compState,
 	}
 
 	lruCache, _ := lru.New(50)
@@ -63,6 +66,7 @@ func NewTansactionServantSimulate(chainState statechain.ChainState, accountState
 type tansactionServant struct {
 	statechain.ChainState
 	stateaccount.AccountState
+	compStateReadOnly state.CompositionStateReadonly
 }
 
 type tansactionServantSimulate struct {
@@ -80,6 +84,15 @@ func (ts *tansactionServant) GetGasConfig() *configuration.GasConfiguration {
 
 func (ts *tansactionServant) GetChainConfig() *configuration.ChainConfiguration {
 	return configuration.GetConfiguration().ChainConfig
+}
+
+func (ts *tansactionServant) SnapToMem(log tplog.Logger) TansactionServant {
+	compStateMem := ts.compStateReadOnly.SnapToMem(log)
+	return NewTansactionServant(compStateMem)
+}
+
+func (ts *tansactionServantSimulate) SnapToMem(log tplog.Logger) TansactionServant {
+	return ts
 }
 
 func (tss *tansactionServantSimulate) AddAccount(acc *account.Account) error {

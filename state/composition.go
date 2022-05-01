@@ -77,6 +77,8 @@ type CompositionStateReadonly interface {
 
 	PendingStateStore() int32
 
+	SnapToMem(log tplog.Logger) CompositionState
+
 	Stop() error
 
 	Close() error
@@ -123,6 +125,8 @@ type CompositionState interface {
 	PendingStateStore() int32
 
 	UpdateCompSState(state CompSState)
+
+	SnapToMem(log tplog.Logger) CompositionState
 
 	Lock()
 
@@ -332,6 +336,10 @@ func (cs *compositionState) CompSState() CompSState {
 
 func (cs *compositionState) UpdateCompSState(state CompSState) {
 	cs.state.Swap(uint32(state))
+}
+
+func (cs *compositionState) SnapToMem(log tplog.Logger) CompositionState {
+	return CreateCompositionStateMem(log, cs)
 }
 
 func (cs *compositionState) Lock() {

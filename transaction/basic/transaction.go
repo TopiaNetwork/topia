@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-
 	"github.com/lazyledger/smt"
 
 	"github.com/TopiaNetwork/topia/codec"

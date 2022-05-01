@@ -8,10 +8,10 @@ import (
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
-type TransactionUniversalTransferVerifier func(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txUniServant TansactionUniversalServant) txbasic.VerifyResult
+type TransactionUniversalTransferVerifier func(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txUniServant TransactionUniversalServant) txbasic.VerifyResult
 
 func TransactionUniversalTransferTargetAddressVerifier() TransactionUniversalTransferVerifier {
-	return func(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txServant TansactionUniversalServant) txbasic.VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txServant TransactionUniversalServant) txbasic.VerifyResult {
 		targetAddr := txTr.TargetAddr
 
 		cryType, err := targetAddr.CryptType()
@@ -30,7 +30,7 @@ func TransactionUniversalTransferTargetAddressVerifier() TransactionUniversalTra
 }
 
 func TransactionUniversalTransferTargetItemsVerifier() TransactionUniversalTransferVerifier {
-	return func(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txServant TansactionUniversalServant) txbasic.VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txServant TransactionUniversalServant) txbasic.VerifyResult {
 		targetItemSize := uint64(len(txTr.Targets))
 		if targetItemSize > txServant.GetChainConfig().MaxTargetItem {
 			log.Errorf("Transfer target item size %d reaches max size", targetItemSize, txServant.GetChainConfig().MaxTargetItem)
@@ -41,7 +41,7 @@ func TransactionUniversalTransferTargetItemsVerifier() TransactionUniversalTrans
 	}
 }
 
-func ApplyTransactionUniversalTransferVerifiers(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txUniServant TansactionUniversalServant, verifiers ...TransactionUniversalTransferVerifier) txbasic.VerifyResult {
+func ApplyTransactionUniversalTransferVerifiers(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txUniServant TransactionUniversalServant, verifiers ...TransactionUniversalTransferVerifier) txbasic.VerifyResult {
 	vrResult := txbasic.VerifyResult_Accept
 	for _, verifier := range verifiers {
 		vR := verifier(ctx, log, txTr, txUniServant)

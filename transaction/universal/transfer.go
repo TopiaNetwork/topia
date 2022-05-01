@@ -73,7 +73,7 @@ func (txfer *TransactionUniversalTransfer) HashBytes() ([]byte, error) {
 }
 
 func (txfer *TransactionUniversalTransfer) Verify(ctx context.Context, log tplog.Logger, txServant txbasic.TransactionServant) txbasic.VerifyResult {
-	txUniServant := NewTansactionUniversalServant(txServant)
+	txUniServant := NewTransactionUniversalServant(txServant)
 	txUniData, _ := txfer.DataBytes()
 	txUni := TransactionUniversal{
 		Head: &txfer.TransactionUniversalHead,

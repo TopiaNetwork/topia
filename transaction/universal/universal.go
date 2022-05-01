@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -36,8 +35,17 @@ func NewTransactionUniversalWithHead(txHead *txbasic.TransactionHead, txUni *Tra
 	}
 }
 
+func (txuni *TransactionUniversalWithHead) DataLen() uint64 {
+	switch TransactionUniversalType(txuni.Head.Type) {
+	case TransactionUniversalType_Transfer:
+		return 0
+	default:
+		return 0
+	}
+}
+
 func (txuni *TransactionUniversalWithHead) TxUniVerify(ctx context.Context, log tplog.Logger, txServant txbasic.TransactionServant) txbasic.VerifyResult {
-	txUniServant := NewTansactionUniversalServant(txServant)
+	txUniServant := NewTransactionUniversalServant(txServant)
 
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 	txUniBytes, err := marshaler.Marshal(&txuni.TransactionUniversal)

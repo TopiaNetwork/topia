@@ -13,7 +13,6 @@ import (
 	"github.com/TopiaNetwork/topia/currency"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
-	"github.com/TopiaNetwork/topia/state"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
 )
@@ -54,29 +53,19 @@ type TransactionServant interface {
 	UpdateNonce(addr tpcrtypes.Address, nonce uint64) error
 
 	UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error
-
-	SnapToMem(log tplog.Logger) TransactionServant
 }
 
-func NewTransactionServant(compState state.CompositionState) TransactionServant {
+func NewTransactionServant(chainState statechain.ChainState, accountState stateaccount.AccountState) TransactionServant {
 	return &transactionServant{
-		ChainState:   compState,
-		AccountState: compState,
+		ChainState:   chainState,
+		AccountState: accountState,
 	}
 }
 
-func NewTansactionServantSimulate(ts TransactionServant) TransactionServant {
+func NewTansactionServantSimulate(tsBaseRead TransactionServantBaseRead) TransactionServant {
 	lruCache, _ := lru.New(50)
 	return &transactionServantSimulate{
-		TransactionServantBaseRead: ts,
-		cache:                      lruCache,
-	}
-}
-
-func NewTansactionServantSimulateByCompStateReadOnly(compStateReadOnly state.CompositionStateReadonly) TransactionServant {
-	lruCache, _ := lru.New(50)
-	return &transactionServantSimulate{
-		TransactionServantBaseRead: compStateReadOnly,
+		TransactionServantBaseRead: tsBaseRead,
 		cache:                      lruCache,
 	}
 }
@@ -84,7 +73,6 @@ func NewTansactionServantSimulateByCompStateReadOnly(compStateReadOnly state.Com
 type transactionServant struct {
 	statechain.ChainState
 	stateaccount.AccountState
-	compStateReadOnly state.CompositionStateReadonly
 }
 
 type transactionServantSimulate struct {
@@ -104,11 +92,6 @@ func (ts *transactionServant) GetChainConfig() *configuration.ChainConfiguration
 	return configuration.GetConfiguration().ChainConfig
 }
 
-func (ts *transactionServant) SnapToMem(log tplog.Logger) TransactionServant {
-	compStateMem := ts.compStateReadOnly.SnapToMem(log)
-	return NewTransactionServant(compStateMem)
-}
-
 func (ts *transactionServantSimulate) GetCryptService(log tplog.Logger, cryptType tpcrtypes.CryptType) (tpcrt.CryptService, error) {
 	return tpcrt.CreateCryptService(log, cryptType), nil
 }
@@ -121,10 +104,6 @@ func (ts *transactionServantSimulate) GetChainConfig() *configuration.ChainConfi
 	return configuration.GetConfiguration().ChainConfig
 }
 
-func (ts *transactionServantSimulate) SnapToMem(log tplog.Logger) TransactionServant {
-	return ts
-}
-
 func (tss *transactionServantSimulate) AddAccount(acc *account.Account) error {
 	return nil
 }
@@ -134,37 +113,5 @@ func (tss *transactionServantSimulate) UpdateNonce(addr tpcrtypes.Address, nonce
 }
 
 func (tss *transactionServantSimulate) UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error {
-	return nil
-}
-
-func CreatTransactionServantSimulate(log tplog.Logger, ts TransactionServant) TransactionServant {
-	switch CurrentTxServantPolicy {
-	case TxServantPolicy_WR:
-		txServant, ok := ts.(*transactionServant)
-		if !ok {
-			log.Panic("Can't create read&write tx servant because of ts is not transactionServant")
-			return nil
-		}
-		return txServant.SnapToMem(log)
-	case TxServantPolicy_RO:
-		return NewTansactionServantSimulate(ts)
-	default:
-		log.Panicf("Inavlid tx servant policy %d", CurrentTxServantPolicy)
-	}
-
-	return nil
-}
-
-func CreatTransactionServantSimulateByCompStateReadOnly(log tplog.Logger, compStateReadOnly state.CompositionStateReadonly) TransactionServant {
-	switch CurrentTxServantPolicy {
-	case TxServantPolicy_WR:
-		compState := compStateReadOnly.SnapToMem(log)
-		return NewTransactionServant(compState)
-	case TxServantPolicy_RO:
-		return NewTansactionServantSimulateByCompStateReadOnly(compStateReadOnly)
-	default:
-		log.Panicf("Inavlid tx servant policy %d", CurrentTxServantPolicy)
-	}
-
 	return nil
 }

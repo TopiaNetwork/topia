@@ -10,6 +10,7 @@ type VMContext struct {
 	VMServant
 	NodeID       string
 	ContractName string
+	Code         []byte
 	Method       string
 	Args         []reflect.Value
 }

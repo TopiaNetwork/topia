@@ -36,15 +36,10 @@ func NewTransactionUniversalWithHead(txHead *txbasic.TransactionHead, txUni *Tra
 }
 
 func (txuni *TransactionUniversalWithHead) DataLen() uint64 {
-	switch TransactionUniversalType(txuni.Head.Type) {
-	case TransactionUniversalType_Transfer:
-		return 0
-	default:
-		return 0
-	}
+	return uint64(len(txuni.Data.Specification))
 }
 
-func (txuni *TransactionUniversalWithHead) TxUniVerify(ctx context.Context, log tplog.Logger, txServant txbasic.TransactionServant) txbasic.VerifyResult {
+func (txuni *TransactionUniversalWithHead) TxUniVerify(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) txbasic.VerifyResult {
 	txUniServant := NewTransactionUniversalServant(txServant)
 
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
@@ -66,7 +61,7 @@ func (txuni *TransactionUniversalWithHead) TxUniVerify(ctx context.Context, log 
 		return txbasic.VerifyResult_Reject
 	case txbasic.VerifyResult_Ignore:
 	case txbasic.VerifyResult_Accept:
-		return ApplyTransactionUniversalVerifiers(ctx, log, txuni, txUniServant,
+		return ApplyTransactionUniversalVerifiers(ctx, log, nodeID, txuni, txUniServant,
 			TransactionUniversalPayerAddressVerifier(),
 			TransactionUniversalGasVerifier(),
 			TransactionUniversalNonceVerifier(),

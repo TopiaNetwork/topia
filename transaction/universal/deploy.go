@@ -3,10 +3,13 @@ package universal
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	tpvm "github.com/TopiaNetwork/topia/vm"
+	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
 )
 
 type TransactionUniversalDeploy struct {
@@ -60,7 +63,7 @@ func (txdp *TransactionUniversalDeploy) HashBytes() ([]byte, error) {
 	return tx.HashBytes()
 }
 
-func (txdp *TransactionUniversalDeploy) Verify(ctx context.Context, log tplog.Logger, txServant txbasic.TransactionServant) txbasic.VerifyResult {
+func (txdp *TransactionUniversalDeploy) Verify(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) txbasic.VerifyResult {
 	txUniServant := NewTransactionUniversalServant(txServant)
 	txUniData, _ := txdp.DataBytes()
 	txUni := TransactionUniversal{
@@ -75,7 +78,7 @@ func (txdp *TransactionUniversalDeploy) Verify(ctx context.Context, log tplog.Lo
 		TransactionUniversal: txUni,
 	}
 
-	vR := txUniWithHead.TxUniVerify(ctx, log, txServant)
+	vR := txUniWithHead.TxUniVerify(ctx, log, nodeID, txServant)
 	switch vR {
 	case txbasic.VerifyResult_Reject:
 		return txbasic.VerifyResult_Reject
@@ -92,14 +95,36 @@ func (txdp *TransactionUniversalDeploy) Verify(ctx context.Context, log tplog.Lo
 	return txbasic.VerifyResult_Accept
 }
 
-func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.Logger, txServant txbasic.TransactionServant) *txbasic.TransactionResult {
+func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) *txbasic.TransactionResult {
+	vmServant := tpvmcmm.NewVMServant(txServant, txServant.GetGasConfig().MaxGasEachBlock)
+	vmContext := &tpvmcmm.VMContext{
+		Context:   ctx,
+		VMServant: vmServant,
+		NodeID:    nodeID,
+		Code:      txdp.Code,
+	}
+
+	gasUsed := uint64(0)
+	errMsg := ""
+	status := TransactionResultUniversal_Err
+	vmResult, err := tpvm.GetVMFactory().GetVM(tpvmcmm.VMType_TVM).DeployContract(vmContext)
+	if err != nil {
+		errMsg = err.Error()
+	}
+	if vmResult.Code != tpvmcmm.ReturnCode_Ok {
+		errMsg = vmResult.ErrMsg
+	}
+
+	status = TransactionResultUniversal_OK
+	gasUsed = vmResult.GasUsed
+
 	txHashBytes, _ := txdp.HashBytes()
 	txUniRS := &TransactionResultUniversal{
 		Version:   txdp.TransactionHead.Version,
 		TxHash:    txHashBytes,
-		GasUsed:   0,
-		ErrString: []byte(""),
-		Status:    TransactionResultUniversal_OK,
+		GasUsed:   gasUsed,
+		ErrString: []byte(errMsg),
+		Status:    status,
 	}
 
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)

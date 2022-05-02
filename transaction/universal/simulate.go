@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"reflect"
 
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	tpvm "github.com/TopiaNetwork/topia/vm"
 	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
@@ -13,9 +13,9 @@ import (
 
 type TransactionUniversaSimulate struct {
 	nodeID       string
-	contractName string
+	contractAddr tpcrtypes.Address
 	method       string
-	args         []reflect.Value
+	args         string
 	txType       TransactionUniversalType
 	txServant    txbasic.TransactionServant
 }
@@ -26,7 +26,7 @@ func (sim *TransactionUniversaSimulate) Execute() (uint64, error) {
 		Context:      context.Background(),
 		VMServant:    vmServant,
 		NodeID:       sim.nodeID,
-		ContractName: sim.contractName,
+		ContractAddr: sim.contractAddr,
 		Method:       sim.method,
 		Args:         sim.args,
 	}

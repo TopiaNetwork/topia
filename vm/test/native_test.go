@@ -35,7 +35,7 @@ func TestExecuteContract(t *testing.T) {
 	vmContext := &tpvmcmm.VMContext{
 		Context:      context.Background(),
 		VMServant:    vmServant,
-		ContractName: "ContractTest",
+		ContractAddr: "ContractTest",
 		Method:       "TestFuncWithStruct",
 		Args:         []reflect.Value{reflect.ValueOf(sParam)},
 	}

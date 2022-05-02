@@ -11,13 +11,15 @@ import (
 )
 
 type executionPackedTxs struct {
+	nodeID      string
 	compState   state.CompositionState
 	packedTxs   *PackedTxs
 	packedTxsRS *PackedTxsResult
 }
 
-func newExecutionPackedTxs(packedTxs *PackedTxs, compState state.CompositionState) *executionPackedTxs {
+func newExecutionPackedTxs(nodeID string, packedTxs *PackedTxs, compState state.CompositionState) *executionPackedTxs {
 	return &executionPackedTxs{
+		nodeID:    nodeID,
 		compState: compState,
 		packedTxs: packedTxs,
 	}
@@ -33,7 +35,7 @@ func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, tx
 	}
 
 	for _, txItem := range ept.packedTxs.TxList {
-		txRS := txfactory.CreatTransactionAction(txItem).Execute(ctx, log, txServant)
+		txRS := txfactory.CreatTransactionAction(txItem).Execute(ctx, log, ept.nodeID, txServant)
 
 		if txRS == nil {
 			txHexHash, _ := txItem.HashHex()

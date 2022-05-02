@@ -8,11 +8,11 @@ import (
 )
 
 type Verifiable interface {
-	Verify(ctx context.Context, log tplog.Logger, txServant txbasic.TransactionServant) txbasic.VerifyResult
+	Verify(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) txbasic.VerifyResult
 }
 
 type Executable interface {
-	Execute(ctx context.Context, log tplog.Logger, txServant txbasic.TransactionServant) *txbasic.TransactionResult
+	Execute(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) *txbasic.TransactionResult
 }
 
 type TransactionAction interface {

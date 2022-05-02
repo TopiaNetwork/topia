@@ -129,7 +129,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 		}
 	}
 
-	exePackedTxs := newExecutionPackedTxs(txPacked, compState)
+	exePackedTxs := newExecutionPackedTxs(scheduler.nodeID, txPacked, compState)
 
 	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txservant.NewTransactionServant(compState, compState))
 	if err == nil {

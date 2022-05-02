@@ -20,5 +20,5 @@ func NewTransactionUniversalServant(txServant txbasic.TransactionServant) Transa
 }
 
 func (ts *transactionUniversalServant) GetGasEstimator() (GasEstimator, error) {
-	return NewGasEstimator(ts.TransactionServant), nil
+	return NewGasEstimator(), nil
 }

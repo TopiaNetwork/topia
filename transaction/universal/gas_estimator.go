@@ -1,9 +1,10 @@
 package universal
 
 import (
+	"math/big"
+
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	"math/big"
 )
 
 type GasEstimator interface {
@@ -27,6 +28,7 @@ func (ge *gasEstimator) computeBasicGas(txUni *TransactionUniversalWithHead) uin
 func (ge *gasEstimator) Estimate(txUni *TransactionUniversalWithHead) (*big.Int, error) {
 	switch TransactionUniversalType(txUni.Head.Type) {
 	case TransactionUniversalType_Transfer:
+	case TransactionUniversalType_ContractDeploy:
 		gasUsed := ge.computeBasicGas(txUni)
 		gasVal := tpcmm.SafeMul(gasUsed, txUni.Head.GasPrice)
 		return gasVal, nil

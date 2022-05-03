@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"github.com/TopiaNetwork/topia/account"
 	"go.uber.org/atomic"
 	"math/big"
 	"sync"
@@ -31,6 +32,8 @@ type NodeNetWorkStateWapper interface {
 }
 
 type CompositionStateReadonly interface {
+	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
+
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
@@ -67,6 +70,8 @@ type CompositionStateReadonly interface {
 
 	GetLatestEpoch() (*common.EpochInfo, error)
 
+	CompSStateStore() tplgss.StateStore
+
 	StateRoot() ([]byte, error)
 
 	StateLatestVersion() (uint64, error)
@@ -74,6 +79,8 @@ type CompositionStateReadonly interface {
 	StateVersions() ([]uint64, error)
 
 	PendingStateStore() int32
+
+	SnapToMem(log tplog.Logger) CompositionState
 
 	Stop() error
 
@@ -106,6 +113,8 @@ type CompositionState interface {
 	statenode.NodeValidatorState
 	staetround.EpochState
 
+	CompSStateStore() tplgss.StateStore
+
 	StateVersion() uint64
 
 	CompSState() CompSState
@@ -119,6 +128,8 @@ type CompositionState interface {
 	PendingStateStore() int32
 
 	UpdateCompSState(state CompSState)
+
+	SnapToMem(log tplog.Logger) CompositionState
 
 	Lock()
 
@@ -213,8 +224,47 @@ func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) Comp
 	}
 }
 
+func CreateCompositionStateMem(log tplog.Logger, compState CompositionStateReadonly) CompositionState {
+	stateStore, ledger, _ := ledger.CreateStateStoreMem(log)
+
+	inactiveState := statenode.NewNodeInactiveState(stateStore)
+	executorState := statenode.NewNodeExecutorState(stateStore)
+	proposerState := statenode.NewNodeProposerState(stateStore)
+	validatorState := statenode.NewNodeValidatorState(stateStore)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
+	compS := &compositionState{
+		log:                log,
+		stateVersion:       1,
+		ledger:             ledger,
+		StateStore:         stateStore,
+		AccountState:       stateaccount.NewAccountState(stateStore),
+		ChainState:         statechain.NewChainStore(stateStore, ledger),
+		NodeState:          nodeState,
+		NodeInactiveState:  inactiveState,
+		NodeExecutorState:  executorState,
+		NodeProposerState:  proposerState,
+		NodeValidatorState: validatorState,
+		EpochState:         staetround.NewRoundState(stateStore),
+	}
+
+	compS.state.Store(uint32(CompSState_Idle))
+
+	originStateStore := compState.CompSStateStore()
+	err := originStateStore.Clone(stateStore)
+	if err != nil {
+		log.Errorf("Can't clone orgin keys and values: %v", err)
+		return nil
+	}
+
+	return compS
+}
+
 func (cs *compositionState) PendingStateStore() int32 {
 	return cs.ledger.PendingStateStore()
+}
+
+func (cs *compositionState) CompSStateStore() tplgss.StateStore {
+	return cs.StateStore
 }
 
 func (cs *compositionState) StateRoot() ([]byte, error) {
@@ -289,6 +339,10 @@ func (cs *compositionState) CompSState() CompSState {
 
 func (cs *compositionState) UpdateCompSState(state CompSState) {
 	cs.state.Swap(uint32(state))
+}
+
+func (cs *compositionState) SnapToMem(log tplog.Logger) CompositionState {
+	return CreateCompositionStateMem(log, cs)
 }
 
 func (cs *compositionState) Lock() {

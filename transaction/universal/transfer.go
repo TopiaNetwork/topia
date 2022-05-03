@@ -3,6 +3,8 @@ package universal
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/currency"
 	"math/big"
 
@@ -72,8 +74,8 @@ func (txfer *TransactionUniversalTransfer) HashBytes() ([]byte, error) {
 	return tx.HashBytes()
 }
 
-func (txfer *TransactionUniversalTransfer) Verify(ctx context.Context, log tplog.Logger, txServant txbasic.TansactionServant) txbasic.VerifyResult {
-	txUniServant := NewTansactionUniversalServant(txServant)
+func (txfer *TransactionUniversalTransfer) Verify(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) txbasic.VerifyResult {
+	txUniServant := NewTransactionUniversalServant(txServant)
 	txUniData, _ := txfer.DataBytes()
 	txUni := TransactionUniversal{
 		Head: &txfer.TransactionUniversalHead,
@@ -87,7 +89,7 @@ func (txfer *TransactionUniversalTransfer) Verify(ctx context.Context, log tplog
 		TransactionUniversal: txUni,
 	}
 
-	vR := txUniWithHead.TxUniVerify(ctx, log, txServant)
+	vR := txUniWithHead.TxUniVerify(ctx, log, nodeID, txServant)
 	switch vR {
 	case txbasic.VerifyResult_Reject:
 		return txbasic.VerifyResult_Reject
@@ -104,14 +106,84 @@ func (txfer *TransactionUniversalTransfer) Verify(ctx context.Context, log tplog
 	return txbasic.VerifyResult_Accept
 }
 
-func (txfer *TransactionUniversalTransfer) Execute(ctx context.Context, log tplog.Logger, txServant txbasic.TansactionServant) *txbasic.TransactionResult {
+func (txfer *TransactionUniversalTransfer) currencyTransfer(txServant txbasic.TransactionServant) (gasUsed uint64, errMsg string, status TransactionResultUniversal_ResultStatus) {
+	dataBytes, _ := txfer.DataBytes()
+	txUniWithHead := &TransactionUniversalWithHead{
+		TransactionHead: txfer.TransactionHead,
+		TransactionUniversal: TransactionUniversal{
+			Head: &txfer.TransactionUniversalHead,
+			Data: &TransactionUniversalData{
+				Specification: dataBytes,
+			},
+		},
+	}
+	gasUsed = computeBasicGas(txServant.GetGasConfig(), txUniWithHead)
+	gasVal := tpcmm.SafeMul(gasUsed, txfer.GasPrice)
+
+	fromAcc, err := txServant.GetAccount(tpcrtypes.NewFromBytes(txfer.FromAddr))
+	if err != nil {
+		errMsg = err.Error()
+		status = TransactionResultUniversal_Err
+		return
+	}
+	targetAcc, err := txServant.GetAccount(txfer.TargetAddr)
+	if err != nil {
+		errMsg = err.Error()
+		status = TransactionResultUniversal_Err
+		return
+	}
+	feePayerAcc, err := txServant.GetAccount(tpcrtypes.NewFromBytes(txfer.FeePayer))
+	if err != nil {
+		errMsg = err.Error()
+		status = TransactionResultUniversal_Err
+		return
+	}
+
+	feePayerBal := feePayerAcc.Balances[currency.TokenSymbol_Native]
+	if feePayerBal.Cmp(gasVal) < 0 {
+		errMsg = fmt.Sprintf("Insufficient currency for gas fee: fee payer %s, remaining %s, required %s", txfer.FeePayer, feePayerBal.String(), gasVal.String())
+		status = TransactionResultUniversal_Err
+		return
+	}
+
+	for _, targetItem := range txfer.Targets {
+		if fromCurrency, ok := fromAcc.Balances[targetItem.Symbol]; !ok {
+			errMsg = fmt.Sprintf("Insufficient currency to transfer: from addr %s, currency %s remaining 0, required %s", txfer.FromAddr, targetItem.Symbol, targetItem.Value.String())
+			status = TransactionResultUniversal_Err
+			return
+		} else if fromCurrency.Cmp(targetItem.Value) < 0 {
+			errMsg = fmt.Sprintf("Insufficient currency to transfer: from addr %s, currency %s remaining %s, required %s", txfer.FromAddr, targetItem.Symbol, fromCurrency.String(), targetItem.Value.String())
+			status = TransactionResultUniversal_Err
+			return
+		}
+	}
+
+	for _, targetItem := range txfer.Targets {
+		targetAccBal, ok := targetAcc.Balances[targetItem.Symbol]
+		if !ok {
+			targetAccBal = big.NewInt(0)
+		}
+		targetAccBal.Add(targetAccBal, targetItem.Value)
+		fromAcc.Balances[targetItem.Symbol].Sub(fromAcc.Balances[targetItem.Symbol], targetItem.Value)
+	}
+
+	feePayerBal.Sub(feePayerBal, gasVal)
+
+	status = TransactionResultUniversal_OK
+
+	return
+}
+
+func (txfer *TransactionUniversalTransfer) Execute(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) *txbasic.TransactionResult {
+	gasUsed, errMsg, status := txfer.currencyTransfer(txServant)
+
 	txHashBytes, _ := txfer.HashBytes()
 	txUniRS := &TransactionResultUniversal{
 		Version:   txfer.TransactionHead.Version,
 		TxHash:    txHashBytes,
-		GasUsed:   0,
-		ErrString: []byte(""),
-		Status:    TransactionResultUniversal_OK,
+		GasUsed:   gasUsed,
+		ErrString: []byte(errMsg),
+		Status:    status,
 	}
 
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)

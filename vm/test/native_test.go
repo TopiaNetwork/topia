@@ -1,8 +1,9 @@
-package vm
+package test
 
 import (
 	"context"
-	"reflect"
+
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,8 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/state"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	tpvm "github.com/TopiaNetwork/topia/vm"
 	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
 )
 
@@ -24,17 +27,21 @@ func TestExecuteContract(t *testing.T) {
 
 	sParam := "testNode"
 
+	txServant := txbasic.NewTransactionServant(compState, compState)
+
+	vmServant := tpvmcmm.NewVMServant(txServant, math.MaxUint64)
+
 	vmContext := &tpvmcmm.VMContext{
-		Context:          context.Background(),
-		CompositionState: compState,
-		ContractName:     "ContractTest",
-		Method:           "TestFuncWithStruct",
-		Args:             []reflect.Value{reflect.ValueOf(sParam)},
+		Context:      context.Background(),
+		VMServant:    vmServant,
+		ContractAddr: "ContractTest",
+		Method:       "TestFuncWithStruct",
+		Args:         sParam,
 	}
 
-	GetVMFactory().SetLogger(tplogcmm.InfoLevel, log)
+	tpvm.GetVMFactory().SetLogger(tplogcmm.InfoLevel, log)
 
-	vmResult, err := GetVMFactory().GetVM(tpvmcmm.VMType_NATIVE).ExecuteContract(vmContext)
+	vmResult, err := tpvm.GetVMFactory().GetVM(tpvmcmm.VMType_NATIVE).ExecuteContract(vmContext)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, vmResult)
 	assert.Equal(t, tpvmcmm.ReturnCode_Ok, vmResult.Code)

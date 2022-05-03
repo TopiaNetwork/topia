@@ -11,10 +11,10 @@ import (
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
-type TransactionUniversalVerifier func(ctx context.Context, log tplog.Logger, txUni *TransactionUniversalWithHead, txUniServant TansactionUniversalServant) txbasic.VerifyResult
+type TransactionUniversalVerifier func(ctx context.Context, log tplog.Logger, nodeID string, txUni *TransactionUniversalWithHead, txUniServant TransactionUniversalServant) txbasic.VerifyResult
 
 func TransactionUniversalPayerAddressVerifier() TransactionUniversalVerifier {
-	return func(ctx context.Context, log tplog.Logger, txUni *TransactionUniversalWithHead, txUniServant TansactionUniversalServant) txbasic.VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, nodeID string, txUni *TransactionUniversalWithHead, txUniServant TransactionUniversalServant) txbasic.VerifyResult {
 		payerAddr := tpcrtypes.NewFromBytes(txUni.Head.FeePayer)
 
 		fromAddrType, err := payerAddr.CryptType()
@@ -33,7 +33,7 @@ func TransactionUniversalPayerAddressVerifier() TransactionUniversalVerifier {
 }
 
 func TransactionUniversalGasVerifier() TransactionUniversalVerifier {
-	return func(ctx context.Context, log tplog.Logger, txUni *TransactionUniversalWithHead, txUniServant TansactionUniversalServant) txbasic.VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, nodeID string, txUni *TransactionUniversalWithHead, txUniServant TransactionUniversalServant) txbasic.VerifyResult {
 		if txUni.Head.GasPrice < txUniServant.GetGasConfig().MinGasPrice {
 			log.Errorf("GasPrice %s less than the min gas price %d", txUni.Head.GasPrice, txUniServant.GetGasConfig().MinGasPrice)
 			return txbasic.VerifyResult_Reject
@@ -49,7 +49,7 @@ func TransactionUniversalGasVerifier() TransactionUniversalVerifier {
 			log.Errorf("Can't get gas estimator: %v", err)
 			return txbasic.VerifyResult_Reject
 		}
-		estiGas, err := gasEstimator.Estimate(txUni)
+		estiGas, err := gasEstimator.Estimate(ctx, log, nodeID, txUniServant.(txbasic.TransactionServant), txUni)
 		if err != nil {
 			log.Errorf("Gas estimates error: %v", err)
 			return txbasic.VerifyResult_Reject
@@ -69,7 +69,7 @@ func TransactionUniversalGasVerifier() TransactionUniversalVerifier {
 }
 
 func TransactionUniversalNonceVerifier() TransactionUniversalVerifier {
-	return func(ctx context.Context, log tplog.Logger, txUni *TransactionUniversalWithHead, txUniServant TansactionUniversalServant) txbasic.VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, nodeID string, txUni *TransactionUniversalWithHead, txUniServant TransactionUniversalServant) txbasic.VerifyResult {
 		latestNonce, err := txUniServant.GetNonce(tpcrtypes.NewFromBytes(txUni.FromAddr))
 		if err != nil {
 			log.Errorf("Can't get from address %s nonce: %v", tpcrtypes.NewFromBytes(txUni.FromAddr), err)
@@ -85,7 +85,7 @@ func TransactionUniversalNonceVerifier() TransactionUniversalVerifier {
 }
 
 func TransactionUniversalPayerSignatureVerifier() TransactionUniversalVerifier {
-	return func(ctx context.Context, log tplog.Logger, txUni *TransactionUniversalWithHead, txUniServant TansactionUniversalServant) txbasic.VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, nodeID string, txUni *TransactionUniversalWithHead, txUniServant TransactionUniversalServant) txbasic.VerifyResult {
 		cryType, err := tpcrtypes.NewFromBytes(txUni.Head.FeePayer).CryptType()
 		if err != nil {
 			log.Errorf("Can't get from address %s crypt type: %v", tpcrtypes.NewFromBytes(txUni.Head.FeePayer), err)
@@ -120,10 +120,10 @@ func TransactionUniversalPayerSignatureVerifier() TransactionUniversalVerifier {
 	}
 }
 
-func ApplyTransactionUniversalVerifiers(ctx context.Context, log tplog.Logger, txUni *TransactionUniversalWithHead, txUniServant TansactionUniversalServant, verifiers ...TransactionUniversalVerifier) txbasic.VerifyResult {
+func ApplyTransactionUniversalVerifiers(ctx context.Context, log tplog.Logger, nodeID string, txUni *TransactionUniversalWithHead, txUniServant TransactionUniversalServant, verifiers ...TransactionUniversalVerifier) txbasic.VerifyResult {
 	vrResult := txbasic.VerifyResult_Accept
 	for _, verifier := range verifiers {
-		vR := verifier(ctx, log, txUni, txUniServant)
+		vR := verifier(ctx, log, nodeID, txUni, txUniServant)
 		switch vR {
 		case txbasic.VerifyResult_Reject:
 			return txbasic.VerifyResult_Reject

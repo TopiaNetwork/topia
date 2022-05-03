@@ -83,3 +83,16 @@ func (l *ledger) State() tpcmm.LedgerState {
 func (l *ledger) UpdateState(state tpcmm.LedgerState) {
 	l.state.Swap(state)
 }
+
+func CreateStateStoreMem(log tplog.Logger) (tplgss.StateStore, Ledger, error) {
+	backendStateDB := backend.NewBackend(backend.BackendType_Memdb, log, "", "")
+	l := &ledger{
+		log:            log,
+		backendStateDB: backendStateDB,
+	}
+
+	l.state.Store(tpcmm.LedgerState_Uninitialized)
+
+	bsLog := tplog.CreateModuleLogger(tplogcmm.InfoLevel, "StateStoreMem", l.log)
+	return tplgss.NewStateStore(bsLog, l.backendStateDB, tplgss.Flag_ReadOnly|tplgss.Flag_WriteOnly), l, nil
+}

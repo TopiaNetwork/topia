@@ -43,7 +43,7 @@ func (vmctx *VMContext) ParseArgs(paramTypes []reflect.Type) ([]reflect.Value, e
 	for i, paramType := range paramTypes {
 		argValue := reflect.New(paramType)
 		paramTypeKind := paramType.Kind()
-		if paramTypeKind != reflect.Slice && paramTypeKind == reflect.Map && paramType.Kind() == reflect.Ptr {
+		if paramTypeKind != reflect.Slice && paramTypeKind != reflect.Map && paramType.Kind() != reflect.Ptr {
 			argValue = reflect.New(paramType)
 			if paramTypeKind == reflect.Int || paramTypeKind == reflect.Int8 ||
 				paramTypeKind == reflect.Int16 || paramTypeKind == reflect.Int32 || paramTypeKind == reflect.Int64 {
@@ -63,6 +63,10 @@ func (vmctx *VMContext) ParseArgs(paramTypes []reflect.Type) ([]reflect.Value, e
 				argValue.SetUint(pVal)
 			}
 
+			if paramTypeKind == reflect.String {
+				argValue.Elem().SetString(args[i])
+			}
+
 			if paramTypeKind == reflect.Bool {
 				pVal, err := strconv.ParseBool(args[i])
 				if err != nil {
@@ -70,6 +74,8 @@ func (vmctx *VMContext) ParseArgs(paramTypes []reflect.Type) ([]reflect.Value, e
 				}
 				argValue.SetBool(pVal)
 			}
+
+			argValues = append(argValues, argValue.Elem())
 		} else {
 			if paramTypeKind == reflect.Ptr {
 				argValue = reflect.New(paramType.Elem())
@@ -83,9 +89,13 @@ func (vmctx *VMContext) ParseArgs(paramTypes []reflect.Type) ([]reflect.Value, e
 			if err != nil {
 				return nil, err
 			}
-		}
 
-		argValues = append(argValues, argValue)
+			if paramTypeKind == reflect.Ptr {
+				argValues = append(argValues, argValue)
+			} else {
+				argValues = append(argValues, argValue.Elem())
+			}
+		}
 	}
 
 	return argValues, nil

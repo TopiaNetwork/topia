@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"math"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,7 +36,7 @@ func TestExecuteContract(t *testing.T) {
 		VMServant:    vmServant,
 		ContractAddr: "ContractTest",
 		Method:       "TestFuncWithStruct",
-		Args:         []reflect.Value{reflect.ValueOf(sParam)},
+		Args:         sParam,
 	}
 
 	tpvm.GetVMFactory().SetLogger(tplogcmm.InfoLevel, log)

@@ -3,9 +3,9 @@ package contract
 import (
 	"context"
 	"errors"
+	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
 
 	tpcmm "github.com/TopiaNetwork/topia/common"
-	"github.com/TopiaNetwork/topia/state"
 )
 
 type ContractTest struct {
@@ -21,9 +21,9 @@ func (ct *ContractTest) TestFuncSimple(ctx context.Context, i int) (int, error) 
 }
 
 func (ct *ContractTest) TestFuncWithStruct(ctx context.Context, NodeID string) (*tpcmm.NodeInfo, error) {
-	compState := ctx.Value("COMPSTATE").(state.CompositionState)
-	if compState == nil {
-		return nil, errors.New("Can't get CompositionState from ctx")
+	vmServant := ctx.Value("VMServant").(tpvmcmm.VMServant)
+	if vmServant == nil {
+		return nil, errors.New("Can't get VMServant from ctx")
 	}
 
 	return &tpcmm.NodeInfo{

@@ -139,10 +139,10 @@ func (store *StateStoreComposition) GetAllState() ([][]byte, [][]byte, [][]byte,
 	var proofs [][]byte
 
 	dataIt, err := store.dataS.Iterator(nil, nil)
-	defer dataIt.Close()
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	defer dataIt.Close()
 
 	for dataIt.Next() {
 		keys = append(keys, dataIt.Key())

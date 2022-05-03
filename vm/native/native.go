@@ -216,7 +216,10 @@ func (nvm *NativeVM) doExecute(ctx context.Context, nodeID string, contractAddr 
 			Data: callRtn[0].Interface(),
 		}
 
-		eventhub.GetEventHubManager().GetEventHub(nodeID).Trig(ctx, eventhub.EventName_ContractInvoked, vmResultType)
+		nodeEVHub := eventhub.GetEventHubManager().GetEventHub(nodeID)
+		if nodeEVHub != nil {
+			nodeEVHub.Trig(ctx, eventhub.EventName_ContractInvoked, vmResultType)
+		}
 
 		return vmResult, nil
 	}
@@ -263,17 +266,16 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 		}, err
 	}
 
-	if len(ctx.Args) != len(ncMethod.paramTypes)-1 {
-		err := fmt.Errorf("Invalid parameters for contract %s method %s: expect len %d, actual %d", ctx.ContractAddr, ctx.Method, len(ncMethod.paramTypes)-1, len(ctx.Args))
+	paramValues, err := ctx.ParseArgs(ncMethod.paramTypes[1:])
+	if err != nil {
+		err = fmt.Errorf("Invalid parameters for contract %s method %s: %v", ctx.ContractAddr, ctx.Method, err)
 		return &tpvmcmm.VMResult{
 			Code:   tpvmcmm.ReturnCode_InvalidParam,
 			ErrMsg: err.Error(),
 		}, err
 	}
-
-	paramValues, err := ctx.ParseArgs(ncMethod.paramTypes[2:])
-	if err != nil {
-		err = fmt.Errorf("Invalid parameters for contract %s method %s: %v", ctx.ContractAddr, ctx.Method, err)
+	if len(paramValues) != len(ncMethod.paramTypes)-1 {
+		err := fmt.Errorf("Invalid parameters for contract %s method %s: expect len %d, actual %d", ctx.ContractAddr, ctx.Method, len(ncMethod.paramTypes)-1, len(paramValues))
 		return &tpvmcmm.VMResult{
 			Code:   tpvmcmm.ReturnCode_InvalidParam,
 			ErrMsg: err.Error(),

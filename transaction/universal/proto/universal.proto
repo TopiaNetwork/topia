@@ -38,4 +38,5 @@ message TransactionResultUniversal {
     Err = 1;
   }
   ResultStatus Status = 5 [(gogoproto.jsontag) = "status"];
+  bytes Data          = 6 [(gogoproto.jsontag) = "data"];
 }

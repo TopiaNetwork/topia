@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
+
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/currency"
-	"math/big"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -159,12 +160,8 @@ func (txfer *TransactionUniversalTransfer) currencyTransfer(txServant txbasic.Tr
 	}
 
 	for _, targetItem := range txfer.Targets {
-		targetAccBal, ok := targetAcc.Balances[targetItem.Symbol]
-		if !ok {
-			targetAccBal = big.NewInt(0)
-		}
-		targetAccBal.Add(targetAccBal, targetItem.Value)
-		fromAcc.Balances[targetItem.Symbol].Sub(fromAcc.Balances[targetItem.Symbol], targetItem.Value)
+		targetAcc.BalanceIncrease(targetItem.Symbol, targetItem.Value)
+		fromAcc.BalanceDecrease(targetItem.Symbol, targetItem.Value)
 	}
 
 	feePayerBal.Sub(feePayerBal, gasVal)

@@ -282,7 +282,7 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 		}, err
 	}
 
-	exeCtx := context.WithValue(ctx.Context, "VMServant", ctx.VMServant)
+	exeCtx := context.WithValue(ctx.Context, tpvmcmm.VMCtxKey_VMServant, ctx.VMServant)
 
 	var paramIns []reflect.Value
 	paramIns = append(paramIns, ncMethod.receiver)

@@ -29,6 +29,13 @@ const (
 	VMType_TVM
 )
 
+type VMResult struct {
+	Code    ReturnCode
+	ErrMsg  string
+	GasUsed uint64
+	Data    interface{}
+}
+
 func (vt VMType) String() string {
 	switch vt {
 	case VMType_NATIVE:

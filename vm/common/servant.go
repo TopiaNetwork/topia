@@ -4,7 +4,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/TopiaNetwork/topia/account"
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/configuration"
@@ -32,13 +32,17 @@ type BaseServant interface {
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
-	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
+	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 
-	AddAccount(acc *account.Account) error
+	AddAccount(acc *tpacc.Account) error
+
+	UpdateAccount(account *tpacc.Account) error
 
 	UpdateNonce(addr tpcrtypes.Address, nonce uint64) error
 
 	UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error
+
+	UpdateName(addr tpcrtypes.Address, name tpacc.AccountName) error
 }
 
 type VMServant interface {

@@ -42,7 +42,10 @@ func TestValueFetch(t *testing.T) {
 	var vmS tpvmcmm.VMServant
 	fmt.Printf("type %s", reflect.TypeOf(vmServant))
 	var fromAddr *tpcrtypes.Address
-	err := vmCtx.GetCtxValues([]tpvmcmm.VMCtxKey{tpvmcmm.VMCtxKey_VMServant, tpvmcmm.VMCtxKey_FromAddr}, []uintptr{uintptr(unsafe.Pointer(&vmS)), uintptr(unsafe.Pointer(&fromAddr))})
+	err := vmCtx.GetCtxValues([]tpvmcmm.VMCtxKey{tpvmcmm.VMCtxKey_VMServant, tpvmcmm.VMCtxKey_FromAddr}, []unsafe.Pointer{unsafe.Pointer(&vmS), unsafe.Pointer(&fromAddr)})
 
 	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, vmS)
+	assert.NotEqual(t, nil, fromAddr)
+	assert.Equal(t, "testaddr", string(*fromAddr))
 }

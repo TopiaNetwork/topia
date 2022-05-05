@@ -3,14 +3,21 @@ package common
 type ReturnCode int
 
 const (
-	ReturnCode_Ok ReturnCode = iota
-	ReturnCode_NotEnable
-	ReturnCode_InvalidVMCtx
-	ReturnCode_ContractNotFound
-	ReturnCode_MethodNotFound
-	ReturnCode_InvalidParam
-	ReturnCode_InvalidReturn
-	ReturnCode_MethodErr
+	ReturnCode_Ok                 ReturnCode = iota
+	ReturnCode_NotEnable                     //VM Disable
+	ReturnCode_InvalidVMCtx                  //Invalid vm context
+	ReturnCode_ContractNotFound              //Contract not found
+	ReturnCode_MethodNotFound                //Method not found
+	ReturnCode_InvalidParam                  //Invalid input params
+	ReturnCode_InvalidReturn                 //Invalid return values
+	ReturnCode_MethodSignatureErr            //Method signature error
+	ReturnCode_ExecuteErr                    //VM execute error
+	ReturnCode_InsufficientGas               //Insufficient Gas
+	ReturnCode_CallStackOverFlow             //Call stack overflow
+	ReturnCode_StorageErr                    //Data storage error
+	ReturnCode_LoadErr                       //Data load error
+	ReturnCode_InvalidAccount                //Invalid account info
+	ReturnCode_PermissionErr                 //Permission error
 	ReturnCode_UnknownErr
 )
 

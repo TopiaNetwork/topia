@@ -4,16 +4,27 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/net/context"
 	"reflect"
 	"strconv"
 	"strings"
+	"unsafe"
 
+	"golang.org/x/net/context"
+
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 )
 
 const (
 	ContractMethodArgs_Separation = "@"
+)
+
+type VMCtxKey int
+
+const (
+	VMCtxKey_Unknown VMCtxKey = iota
+	VMCtxKey_VMServant
+	VMCtxKey_FromAddr
 )
 
 type VMContext struct {
@@ -99,4 +110,52 @@ func (vmctx *VMContext) ParseArgs(paramTypes []reflect.Type) ([]reflect.Value, e
 	}
 
 	return argValues, nil
+}
+
+func (vmctx *VMContext) GetCtxValues(ctxKeys []VMCtxKey, ctxValues []unsafe.Pointer) error {
+	for i, ctxKey := range ctxKeys {
+		switch ctxKeyVal := vmctx.Value(ctxKey).(type) {
+		case VMServant:
+			*(*VMServant)(ctxValues[i]) = ctxKeyVal
+		case *tpcrtypes.Address:
+			*(**tpcrtypes.Address)(ctxValues[i]) = ctxKeyVal
+		default:
+			return fmt.Errorf("Invalid value type: key %s, value type %s", ctxKey.String(), reflect.TypeOf(ctxKeyVal).String())
+		}
+	}
+
+	return nil
+}
+
+func (vmctx *VMContext) GetFromAccount() (*tpacc.Account, error) {
+	var vmServant VMServant
+	var fromAddr tpcrtypes.Address
+	err := vmctx.GetCtxValues([]VMCtxKey{VMCtxKey_VMServant, VMCtxKey_FromAddr}, []unsafe.Pointer{unsafe.Pointer(&vmServant), unsafe.Pointer(&fromAddr)})
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+func (vkey VMCtxKey) String() string {
+	switch vkey {
+	case VMCtxKey_VMServant:
+		return "VMServant"
+	case VMCtxKey_FromAddr:
+		return "FromAddr"
+	default:
+		return "unknown"
+	}
+}
+
+func (vkey VMCtxKey) Value(vkeyStr string) VMCtxKey {
+	switch vkeyStr {
+	case "VMServant":
+		return VMCtxKey_VMServant
+	case "FromAddr":
+		return VMCtxKey_FromAddr
+	default:
+		return VMCtxKey_Unknown
+	}
 }

@@ -193,7 +193,7 @@ func (nvm *NativeVM) doExecute(ctx context.Context, nodeID string, contractAddr 
 		err := callRtn[0].Interface().(error)
 		if err != nil {
 			return &tpvmcmm.VMResult{
-				Code:   tpvmcmm.ReturnCode_MethodErr,
+				Code:   tpvmcmm.ReturnCode_MethodSignatureErr,
 				ErrMsg: err.Error(),
 			}, err
 		}
@@ -206,7 +206,7 @@ func (nvm *NativeVM) doExecute(ctx context.Context, nodeID string, contractAddr 
 	if ncMethod.resultErrorOutIndex == 1 {
 		if err, ok := callRtn[1].Interface().(error); ok && err != nil {
 			return &tpvmcmm.VMResult{
-				Code:   tpvmcmm.ReturnCode_MethodErr,
+				Code:   tpvmcmm.ReturnCode_MethodSignatureErr,
 				ErrMsg: err.Error(),
 			}, err
 		}

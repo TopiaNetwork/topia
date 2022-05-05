@@ -112,11 +112,13 @@ func (vmctx *VMContext) ParseArgs(paramTypes []reflect.Type) ([]reflect.Value, e
 	return argValues, nil
 }
 
-func (vmctx *VMContext) GetCtxValues(ctxKeys []VMCtxKey, ctxValues []uintptr) error {
+func (vmctx *VMContext) GetCtxValues(ctxKeys []VMCtxKey, ctxValues []unsafe.Pointer) error {
 	for i, ctxKey := range ctxKeys {
 		switch ctxKeyVal := vmctx.Value(ctxKey).(type) {
-		case VMServant, *tpcrtypes.Address:
-			ctxValues[i] = uintptr(unsafe.Pointer(&ctxKeyVal))
+		case VMServant:
+			*(*VMServant)(ctxValues[i]) = ctxKeyVal
+		case *tpcrtypes.Address:
+			*(**tpcrtypes.Address)(ctxValues[i]) = ctxKeyVal
 		default:
 			return fmt.Errorf("Invalid value type: key %s, value type %s", ctxKey.String(), reflect.TypeOf(ctxKeyVal).String())
 		}
@@ -128,7 +130,7 @@ func (vmctx *VMContext) GetCtxValues(ctxKeys []VMCtxKey, ctxValues []uintptr) er
 func (vmctx *VMContext) GetFromAccount() (*tpacc.Account, error) {
 	var vmServant VMServant
 	var fromAddr tpcrtypes.Address
-	err := vmctx.GetCtxValues([]VMCtxKey{VMCtxKey_VMServant, VMCtxKey_FromAddr}, []uintptr{uintptr(unsafe.Pointer(&vmServant)), uintptr(unsafe.Pointer(&fromAddr))})
+	err := vmctx.GetCtxValues([]VMCtxKey{VMCtxKey_VMServant, VMCtxKey_FromAddr}, []unsafe.Pointer{unsafe.Pointer(&vmServant), unsafe.Pointer(&fromAddr)})
 	if err != nil {
 		return nil, err
 	}

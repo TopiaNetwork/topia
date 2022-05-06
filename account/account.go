@@ -26,9 +26,7 @@ type Account struct {
 }
 
 func NewDefaultAccount(addr tpcrtypes.Address) *Account {
-	accToken := &AccountToken{
-		Permission: NewPermissionRoot(),
-	}
+	accToken := NewAccountToken(NewPermissionRoot())
 	return &Account{
 		Addr:     addr,
 		Token:    accToken,
@@ -42,10 +40,7 @@ func NewContractControlAccount(addr tpcrtypes.Address, name AccountName, gasLimi
 		panic("Invalid account name" + string(name))
 	}
 
-	accToken := &AccountToken{
-		Permission: NewPermissionContractMethod(gasLimit),
-	}
-
+	accToken := NewAccountToken(NewPermissionContractMethod(gasLimit))
 	return &Account{
 		Addr:     addr,
 		Name:     name,

@@ -20,6 +20,10 @@ type Permission interface {
 	HasMethodPerm(contractAddr tpcrtypes.Address, method string) bool
 
 	SamePerm(other Permission) bool
+
+	MarshalJSON() ([]byte, error)
+
+	UnmarshalJSON(data []byte) error
 }
 
 func (model PermissionModel) String() string {

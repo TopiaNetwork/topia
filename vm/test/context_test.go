@@ -19,7 +19,7 @@ import (
 	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
 )
 
-func TestValueFetch(t *testing.T) {
+func TestContextContract(t *testing.T) {
 	ctx := context.Background()
 
 	log, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
@@ -35,14 +35,14 @@ func TestValueFetch(t *testing.T) {
 	ctx = context.WithValue(ctx, tpvmcmm.VMCtxKey_VMServant, vmServant)
 	ctx = context.WithValue(ctx, tpvmcmm.VMCtxKey_FromAddr, &addr)
 
-	vmCtx := &tpvmcmm.VMContext{
+	cCtx := &tpvmcmm.ContractContext{
 		Context: ctx,
 	}
 
 	var vmS tpvmcmm.VMServant
 	fmt.Printf("type %s", reflect.TypeOf(vmServant))
 	var fromAddr *tpcrtypes.Address
-	err := vmCtx.GetCtxValues([]tpvmcmm.VMCtxKey{tpvmcmm.VMCtxKey_VMServant, tpvmcmm.VMCtxKey_FromAddr}, []unsafe.Pointer{unsafe.Pointer(&vmS), unsafe.Pointer(&fromAddr)})
+	err := cCtx.GetCtxValues([]tpvmcmm.VMCtxKey{tpvmcmm.VMCtxKey_VMServant, tpvmcmm.VMCtxKey_FromAddr}, []unsafe.Pointer{unsafe.Pointer(&vmS), unsafe.Pointer(&fromAddr)})
 
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, vmS)

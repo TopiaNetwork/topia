@@ -5,7 +5,7 @@ import (
 
 	"github.com/hashicorp/golang-lru"
 
-	"github.com/TopiaNetwork/topia/account"
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/configuration"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
@@ -36,7 +36,7 @@ type TransactionServantBaseRead interface {
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
-	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
+	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 }
 
 type TransactionServant interface {
@@ -48,11 +48,15 @@ type TransactionServant interface {
 
 	GetChainConfig() *configuration.ChainConfiguration
 
-	AddAccount(acc *account.Account) error
+	AddAccount(acc *tpacc.Account) error
+
+	UpdateAccount(account *tpacc.Account) error
 
 	UpdateNonce(addr tpcrtypes.Address, nonce uint64) error
 
 	UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error
+
+	UpdateName(addr tpcrtypes.Address, name tpacc.AccountName) error
 }
 
 func NewTransactionServant(chainState statechain.ChainState, accountState stateaccount.AccountState) TransactionServant {
@@ -104,7 +108,11 @@ func (ts *transactionServantSimulate) GetChainConfig() *configuration.ChainConfi
 	return configuration.GetConfiguration().ChainConfig
 }
 
-func (tss *transactionServantSimulate) AddAccount(acc *account.Account) error {
+func (tss *transactionServantSimulate) AddAccount(acc *tpacc.Account) error {
+	return nil
+}
+
+func (tss *transactionServantSimulate) UpdateAccount(account *tpacc.Account) error {
 	return nil
 }
 
@@ -113,5 +121,9 @@ func (tss *transactionServantSimulate) UpdateNonce(addr tpcrtypes.Address, nonce
 }
 
 func (tss *transactionServantSimulate) UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error {
+	return nil
+}
+
+func (tss *transactionServantSimulate) UpdateName(addr tpcrtypes.Address, name tpacc.AccountName) error {
 	return nil
 }

@@ -248,6 +248,26 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 		}, err
 	}
 
+	fromAcc, err := tpvmcmm.NewContractContext(ctx.Context).GetFromAccount()
+	if err != nil {
+		err := fmt.Errorf("Invalid vm ctx: contract %s method %s, err %v", ctx.ContractAddr, ctx.Method, err)
+		return &tpvmcmm.VMResult{
+			Code:   tpvmcmm.ReturnCode_InvalidVMCtx,
+			ErrMsg: err.Error(),
+		}, err
+	}
+	permOK := false
+	if fromAcc.Token != nil && fromAcc.Token.Permission != nil {
+		permOK = fromAcc.Token.Permission.HasMethodPerm(ctx.ContractAddr, ctx.Method)
+	}
+	if !permOK {
+		err = fmt.Errorf("contract %s method %s inaccessible by addr %s", ctx.ContractAddr, ctx.Method, fromAcc.Addr)
+		return &tpvmcmm.VMResult{
+			Code:   tpvmcmm.ReturnCode_PermissionErr,
+			ErrMsg: err.Error(),
+		}, err
+	}
+
 	contractMap, ok := nvm.contractMethotds[ctx.ContractAddr]
 	if !ok {
 		err := fmt.Errorf("Can't find contract %s", ctx.ContractAddr)

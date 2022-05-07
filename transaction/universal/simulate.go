@@ -8,7 +8,8 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	tpvm "github.com/TopiaNetwork/topia/vm"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
+	tpvmmservice "github.com/TopiaNetwork/topia/vm/service"
+	tpvmcmm "github.com/TopiaNetwork/topia/vm/type"
 )
 
 type TransactionUniversaSimulate struct {
@@ -21,8 +22,8 @@ type TransactionUniversaSimulate struct {
 }
 
 func (sim *TransactionUniversaSimulate) Execute() (uint64, error) {
-	vmServant := tpvmcmm.NewVMServant(sim.txServant, math.MaxUint64)
-	vmContext := &tpvmcmm.VMContext{
+	vmServant := tpvmmservice.NewVMServant(sim.txServant, math.MaxUint64)
+	vmContext := &tpvmmservice.VMContext{
 		Context:      context.Background(),
 		VMServant:    vmServant,
 		NodeID:       sim.nodeID,

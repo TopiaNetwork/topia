@@ -3,12 +3,12 @@ package test
 import (
 	"context"
 	"fmt"
-	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	"github.com/stretchr/testify/assert"
 	"math"
 	"reflect"
 	"testing"
 	"unsafe"
+
+	"github.com/stretchr/testify/assert"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -16,7 +16,8 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/state"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	tpvmmservice "github.com/TopiaNetwork/topia/vm/service"
 )
 
 func TestContextContract(t *testing.T) {
@@ -29,20 +30,20 @@ func TestContextContract(t *testing.T) {
 
 	txServant := txbasic.NewTransactionServant(compState, compState)
 
-	vmServant := tpvmcmm.NewVMServant(txServant, math.MaxUint64)
+	vmServant := tpvmmservice.NewVMServant(txServant, math.MaxUint64)
 
 	addr := tpcrtypes.Address("testaddr")
-	ctx = context.WithValue(ctx, tpvmcmm.VMCtxKey_VMServant, vmServant)
-	ctx = context.WithValue(ctx, tpvmcmm.VMCtxKey_FromAddr, &addr)
+	ctx = context.WithValue(ctx, tpvmmservice.VMCtxKey_VMServant, vmServant)
+	ctx = context.WithValue(ctx, tpvmmservice.VMCtxKey_FromAddr, &addr)
 
-	cCtx := &tpvmcmm.ContractContext{
+	cCtx := &tpvmmservice.ContractContext{
 		Context: ctx,
 	}
 
-	var vmS tpvmcmm.VMServant
+	var vmS tpvmmservice.VMServant
 	fmt.Printf("type %s", reflect.TypeOf(vmServant))
 	var fromAddr *tpcrtypes.Address
-	err := cCtx.GetCtxValues([]tpvmcmm.VMCtxKey{tpvmcmm.VMCtxKey_VMServant, tpvmcmm.VMCtxKey_FromAddr}, []unsafe.Pointer{unsafe.Pointer(&vmS), unsafe.Pointer(&fromAddr)})
+	err := cCtx.GetCtxValues([]tpvmmservice.VMCtxKey{tpvmmservice.VMCtxKey_VMServant, tpvmmservice.VMCtxKey_FromAddr}, []unsafe.Pointer{unsafe.Pointer(&vmS), unsafe.Pointer(&fromAddr)})
 
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, vmS)

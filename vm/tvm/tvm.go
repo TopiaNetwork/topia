@@ -3,7 +3,8 @@ package tvm
 import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	"github.com/TopiaNetwork/topia/vm/common"
+	tpvmmservice "github.com/TopiaNetwork/topia/vm/service"
+	tpvmtype "github.com/TopiaNetwork/topia/vm/type"
 )
 
 func NewTopiaVM() *TopiaVM {
@@ -23,7 +24,7 @@ func (tvm *TopiaVM) Version() int {
 	panic("implement me")
 }
 
-func (tvm *TopiaVM) Type() common.VMType {
+func (tvm *TopiaVM) Type() tpvmtype.VMType {
 	//TODO implement me
 	panic("implement me")
 }
@@ -42,12 +43,12 @@ func (tvm *TopiaVM) SetLogger(level tplogcmm.LogLevel, log tplog.Logger) {
 
 }
 
-func (tvm *TopiaVM) DeployContract(ctx *common.VMContext) (*common.VMResult, error) {
+func (tvm *TopiaVM) DeployContract(ctx *tpvmmservice.VMContext) (*tpvmtype.VMResult, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (tvm *TopiaVM) ExecuteContract(ctx *common.VMContext) (*common.VMResult, error) {
+func (tvm *TopiaVM) ExecuteContract(ctx *tpvmmservice.VMContext) (*tpvmtype.VMResult, error) {
 	//TODO implement me
 	panic("implement me")
 }

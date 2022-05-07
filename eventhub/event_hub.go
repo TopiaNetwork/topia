@@ -7,7 +7,7 @@ import (
 	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
+	tpvmcmm "github.com/TopiaNetwork/topia/vm/type"
 	"reflect"
 	"sync"
 

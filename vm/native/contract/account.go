@@ -6,14 +6,14 @@ import (
 
 	tpacc "github.com/TopiaNetwork/topia/account"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
+	tpvmmservice "github.com/TopiaNetwork/topia/vm/service"
 )
 
 type ContractAccount struct {
 }
 
 func (a *ContractAccount) BindName(ctx context.Context, parentAddr tpcrtypes.Address, addr tpcrtypes.Address, accountName tpacc.AccountName) error {
-	cCtx := tpvmcmm.NewContractContext(ctx)
+	cCtx := tpvmmservice.NewContractContext(ctx)
 
 	vmServant, err := cCtx.GetServant()
 	if err != nil {
@@ -37,7 +37,7 @@ func (a *ContractAccount) BindName(ctx context.Context, parentAddr tpcrtypes.Add
 }
 
 func (a *ContractAccount) grantAccessOperation(ctx context.Context, parentAddr tpcrtypes.Address, addr tpcrtypes.Address, operaGas uint64, operation func(acc *tpacc.Account) (uint64, error)) error {
-	cCtx := tpvmcmm.NewContractContext(ctx)
+	cCtx := tpvmmservice.NewContractContext(ctx)
 
 	vmServant, err := cCtx.GetServant()
 	if err != nil {

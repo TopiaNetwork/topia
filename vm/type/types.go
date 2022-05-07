@@ -1,4 +1,4 @@
-package common
+package _type
 
 type ReturnCode int
 

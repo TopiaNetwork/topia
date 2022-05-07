@@ -6,6 +6,6 @@ type nativeContractMethod struct {
 	receiver            reflect.Value
 	method              reflect.Value
 	paramTypes          []reflect.Type
-	resultDataOutIndex  int
+	resultDataOutSIndex int
 	resultErrorOutIndex int
 }

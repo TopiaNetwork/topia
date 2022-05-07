@@ -5,9 +5,9 @@ import (
 
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
 	"github.com/TopiaNetwork/topia/vm/native"
 	"github.com/TopiaNetwork/topia/vm/tvm"
+	tpvmcmm "github.com/TopiaNetwork/topia/vm/type"
 )
 
 var once sync.Once

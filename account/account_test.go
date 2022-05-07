@@ -2,6 +2,7 @@ package account
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -31,4 +32,18 @@ func TestJsonMarshal(t *testing.T) {
 	assert.Equal(t, tpcrtypes.Address("testaddr"), accT.Addr)
 	assert.Equal(t, AccountName("myadr"), accT.Name)
 	assert.Equal(t, false, accT.Token.Permission.IsRoot())
+}
+
+func TestJsonType(t *testing.T) {
+	a := 5
+	b := tpcrtypes.Address("testB")
+
+	testMap := map[string]interface{}{reflect.TypeOf(a).String(): a, reflect.TypeOf(b).String(): b}
+
+	testBytes, err := json.Marshal(&testMap)
+	assert.Equal(t, nil, err)
+
+	var c map[string]interface{}
+	err = json.Unmarshal(testBytes, &c)
+	assert.Equal(t, nil, err)
 }

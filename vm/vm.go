@@ -3,7 +3,8 @@ package vm
 import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
+	tpvmmservice "github.com/TopiaNetwork/topia/vm/service"
+	tpvmcmm "github.com/TopiaNetwork/topia/vm/type"
 )
 
 type VirtualMachine interface {
@@ -17,7 +18,7 @@ type VirtualMachine interface {
 
 	SetLogger(level tplogcmm.LogLevel, log tplog.Logger)
 
-	DeployContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult, error)
+	DeployContract(ctx *tpvmmservice.VMContext) (*tpvmcmm.VMResult, error)
 
-	ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult, error)
+	ExecuteContract(ctx *tpvmmservice.VMContext) (*tpvmcmm.VMResult, error)
 }

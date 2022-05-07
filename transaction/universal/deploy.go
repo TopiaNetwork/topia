@@ -9,7 +9,8 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	tpvm "github.com/TopiaNetwork/topia/vm"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
+	tpvmmservice "github.com/TopiaNetwork/topia/vm/service"
+	tpvmtype "github.com/TopiaNetwork/topia/vm/type"
 )
 
 type TransactionUniversalDeploy struct {
@@ -96,8 +97,8 @@ func (txdp *TransactionUniversalDeploy) Verify(ctx context.Context, log tplog.Lo
 }
 
 func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) *txbasic.TransactionResult {
-	vmServant := tpvmcmm.NewVMServant(txServant, txServant.GetGasConfig().MaxGasEachBlock)
-	vmContext := &tpvmcmm.VMContext{
+	vmServant := tpvmmservice.NewVMServant(txServant, txServant.GetGasConfig().MaxGasEachBlock)
+	vmContext := &tpvmmservice.VMContext{
 		Context:   ctx,
 		VMServant: vmServant,
 		NodeID:    nodeID,
@@ -107,12 +108,12 @@ func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.L
 	gasUsed := uint64(0)
 	errMsg := ""
 	status := TransactionResultUniversal_Err
-	vmResult, err := tpvm.GetVMFactory().GetVM(tpvmcmm.VMType_TVM).DeployContract(vmContext)
+	vmResult, err := tpvm.GetVMFactory().GetVM(tpvmtype.VMType_TVM).DeployContract(vmContext)
 	if err != nil {
 		errMsg = err.Error()
 	}
-	if vmResult.Code != tpvmcmm.ReturnCode_Ok {
-		errMsg = vmResult.ErrMsg
+	if vmResult.Code != tpvmtype.ReturnCode_Ok {
+		errMsg = vmResult.Code.String() + ": " + vmResult.ErrMsg
 	}
 
 	status = TransactionResultUniversal_OK
@@ -125,6 +126,7 @@ func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.L
 		GasUsed:   gasUsed,
 		ErrString: []byte(errMsg),
 		Status:    status,
+		Data:      vmResult.Data,
 	}
 
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)

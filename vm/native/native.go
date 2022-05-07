@@ -2,6 +2,7 @@ package native
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -13,14 +14,15 @@ import (
 	"github.com/TopiaNetwork/topia/eventhub"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
 	tpnvmcontract "github.com/TopiaNetwork/topia/vm/native/contract"
+	tpvmmservice "github.com/TopiaNetwork/topia/vm/service"
+	tpvmtype "github.com/TopiaNetwork/topia/vm/type"
 )
 
 var (
 	errorType    = reflect.TypeOf(new(error)).Elem()
 	contextType  = reflect.TypeOf(new(context.Context)).Elem()
-	vmResultType = reflect.TypeOf(new(tpvmcmm.VMResult)).Elem()
+	vmResultType = reflect.TypeOf(new(tpvmtype.VMResult)).Elem()
 )
 
 const (
@@ -90,13 +92,14 @@ func (nvm *NativeVM) registerContract(addr tpcrtypes.Address, contract interface
 			panic("Please make sure that the first in parameter is context type")
 		}
 
-		if funcType.NumOut() > 2 || funcType.NumOut() < 1 {
-			panic("Please make sure there are at most two parameters and the last is error type")
+		if funcType.NumOut() < 1 {
+			panic("Please make sure there are at least one parameter and the last is error type")
 		}
 
 		nContractMethod := &nativeContractMethod{
-			receiver: contractVal,
-			method:   method.Func,
+			receiver:            contractVal,
+			method:              method.Func,
+			resultDataOutSIndex: -1,
 		}
 
 		if funcType.NumOut() == 1 {
@@ -108,10 +111,10 @@ func (nvm *NativeVM) registerContract(addr tpcrtypes.Address, contract interface
 			}
 		}
 
-		if funcType.NumOut() == 2 {
-			if funcType.Out(1) == errorType {
-				nContractMethod.resultDataOutIndex = 0
-				nContractMethod.resultErrorOutIndex = 1
+		if funcType.NumOut() >= 2 {
+			if funcType.Out(funcType.NumOut()-1) == errorType {
+				nContractMethod.resultDataOutSIndex = 0
+				nContractMethod.resultErrorOutIndex = funcType.NumOut() - 1
 			} else {
 				panicStr := fmt.Sprintf("Contract %s method %s return parameters'last parameter should be error type", addr, method.Name)
 				panic(panicStr)
@@ -148,8 +151,8 @@ func (nvm *NativeVM) Version() int {
 	return NativeVMVersion_V1
 }
 
-func (nvm *NativeVM) Type() tpvmcmm.VMType {
-	return tpvmcmm.VMType_NATIVE
+func (nvm *NativeVM) Type() tpvmtype.VMType {
+	return tpvmtype.VMType_NATIVE
 }
 
 func (nvm *NativeVM) Enable() bool {
@@ -164,56 +167,56 @@ func (nvm *NativeVM) SetLogger(level tplogcmm.LogLevel, log tplog.Logger) {
 	nvm.log = tplog.CreateModuleLogger(level, MOD_NAME, log)
 }
 
-func (nvm *NativeVM) DeployContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult, error) {
+func (nvm *NativeVM) DeployContract(ctx *tpvmmservice.VMContext) (*tpvmtype.VMResult, error) {
 	panic("All native contracts needn't be deployed")
 }
 
-func (nvm *NativeVM) doExecute(ctx context.Context, nodeID string, contractAddr tpcrtypes.Address, methodName string, ncMethod *nativeContractMethod, paramIns []reflect.Value) (*tpvmcmm.VMResult, error) {
+func (nvm *NativeVM) doExecute(ctx context.Context, nodeID string, contractAddr tpcrtypes.Address, methodName string, ncMethod *nativeContractMethod, paramIns []reflect.Value) (*tpvmtype.VMResult, error) {
 	defer func() {
 		if rtn := recover(); rtn != nil {
 			nvm.log.Errorf("NativeVM doExecute panic: contract %s method %s, exception %s", contractAddr, methodName, rtn)
 		}
 	}()
 
-	callRtn := ncMethod.method.Call(paramIns)
-	if len(callRtn) != 2 && ncMethod.resultErrorOutIndex == 1 || (len(callRtn) != 1 && ncMethod.resultErrorOutIndex == 0) {
-		expectedLen := 1
-		if ncMethod.resultErrorOutIndex == 1 {
-			expectedLen = 2
-		}
+	callRtns := ncMethod.method.Call(paramIns)
+	if len(callRtns) != ncMethod.resultErrorOutIndex+1 {
+		err := fmt.Errorf("Invalid return result for contract %s method %s: expect len %d, actual %d", contractAddr, methodName, ncMethod.resultErrorOutIndex+1, len(callRtns))
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_InvalidReturn,
+			ErrMsg: err.Error(),
+		}, err
+	}
 
-		err := fmt.Errorf("Invalid return result for contract %s method %s: expect len %d, actual %d", contractAddr, methodName, expectedLen, len(callRtn))
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_InvalidReturn,
+	if err, ok := callRtns[len(callRtns)-1].Interface().(error); ok && err != nil {
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_ExecuteErr,
 			ErrMsg: err.Error(),
 		}, err
 	}
 
 	if ncMethod.resultErrorOutIndex == 0 {
-		err := callRtn[0].Interface().(error)
-		if err != nil {
-			return &tpvmcmm.VMResult{
-				Code:   tpvmcmm.ReturnCode_MethodSignatureErr,
-				ErrMsg: err.Error(),
-			}, err
-		}
-
-		return &tpvmcmm.VMResult{
-			Code: tpvmcmm.ReturnCode_Ok,
+		return &tpvmtype.VMResult{
+			Code: tpvmtype.ReturnCode_Ok,
 		}, nil
 	}
 
-	if ncMethod.resultErrorOutIndex == 1 {
-		if err, ok := callRtn[1].Interface().(error); ok && err != nil {
-			return &tpvmcmm.VMResult{
-				Code:   tpvmcmm.ReturnCode_MethodSignatureErr,
+	if ncMethod.resultErrorOutIndex >= 1 {
+		rtnValMap := make(map[string][]byte)
+		for i, callRtn := range callRtns[:(len(callRtns) - 1)] {
+			callRtnBytes, _ := json.Marshal(callRtn.Interface())
+			rtnValMap[callRtn.Type().String()+fmt.Sprintf("_%d", i+1)] = callRtnBytes
+		}
+		rtnBytes, err := json.Marshal(&rtnValMap)
+		if err != nil {
+			return &tpvmtype.VMResult{
+				Code:   tpvmtype.ReturnCode_InvalidReturn,
 				ErrMsg: err.Error(),
 			}, err
 		}
 
-		vmResult := &tpvmcmm.VMResult{
-			Code: tpvmcmm.ReturnCode_Ok,
-			Data: callRtn[0].Interface(),
+		vmResult := &tpvmtype.VMResult{
+			Code: tpvmtype.ReturnCode_Ok,
+			Data: rtnBytes,
 		}
 
 		nodeEVHub := eventhub.GetEventHubManager().GetEventHub(nodeID)
@@ -225,34 +228,36 @@ func (nvm *NativeVM) doExecute(ctx context.Context, nodeID string, contractAddr 
 	}
 
 	err := fmt.Errorf("Execute unknown err for contract %s method %s", contractAddr, methodName)
-	return &tpvmcmm.VMResult{
-		Code:   tpvmcmm.ReturnCode_UnknownErr,
+	return &tpvmtype.VMResult{
+		Code:   tpvmtype.ReturnCode_UnknownErr,
 		ErrMsg: err.Error(),
 	}, err
 }
 
-func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult, error) {
+func (nvm *NativeVM) ExecuteContract(ctx *tpvmmservice.VMContext) (*tpvmtype.VMResult, error) {
 	if !nvm.Enable() {
 		err := errors.New("Native vm not enable ")
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_NotEnable,
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_NotEnable,
 			ErrMsg: err.Error(),
 		}, err
 	}
 
 	if ctx.ContractAddr == "" || ctx.Method == "" {
 		err := fmt.Errorf("Invalid vm ctx: contract %s method %s", ctx.ContractAddr, ctx.Method)
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_InvalidVMCtx,
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_InvalidVMCtx,
 			ErrMsg: err.Error(),
 		}, err
 	}
 
-	fromAcc, err := tpvmcmm.NewContractContext(ctx.Context).GetFromAccount()
+	exeCtx := context.WithValue(ctx.Context, tpvmmservice.VMCtxKey_VMServant, ctx.VMServant)
+
+	fromAcc, err := tpvmmservice.NewContractContext(exeCtx).GetFromAccount()
 	if err != nil {
 		err := fmt.Errorf("Invalid vm ctx: contract %s method %s, err %v", ctx.ContractAddr, ctx.Method, err)
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_InvalidVMCtx,
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_InvalidVMCtx,
 			ErrMsg: err.Error(),
 		}, err
 	}
@@ -262,8 +267,8 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 	}
 	if !permOK {
 		err = fmt.Errorf("contract %s method %s inaccessible by addr %s", ctx.ContractAddr, ctx.Method, fromAcc.Addr)
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_PermissionErr,
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_PermissionErr,
 			ErrMsg: err.Error(),
 		}, err
 	}
@@ -271,8 +276,8 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 	contractMap, ok := nvm.contractMethotds[ctx.ContractAddr]
 	if !ok {
 		err := fmt.Errorf("Can't find contract %s", ctx.ContractAddr)
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_ContractNotFound,
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_ContractNotFound,
 			ErrMsg: err.Error(),
 		}, err
 	}
@@ -280,8 +285,8 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 	ncMethod, ok := contractMap[ctx.Method]
 	if !ok {
 		err := fmt.Errorf("Can't find contract %s method %s", ctx.ContractAddr, ctx.Method)
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_MethodNotFound,
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_MethodNotFound,
 			ErrMsg: err.Error(),
 		}, err
 	}
@@ -289,20 +294,18 @@ func (nvm *NativeVM) ExecuteContract(ctx *tpvmcmm.VMContext) (*tpvmcmm.VMResult,
 	paramValues, err := ctx.ParseArgs(ncMethod.paramTypes[1:])
 	if err != nil {
 		err = fmt.Errorf("Invalid parameters for contract %s method %s: %v", ctx.ContractAddr, ctx.Method, err)
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_InvalidParam,
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_MethodSignatureErr,
 			ErrMsg: err.Error(),
 		}, err
 	}
 	if len(paramValues) != len(ncMethod.paramTypes)-1 {
 		err := fmt.Errorf("Invalid parameters for contract %s method %s: expect len %d, actual %d", ctx.ContractAddr, ctx.Method, len(ncMethod.paramTypes)-1, len(paramValues))
-		return &tpvmcmm.VMResult{
-			Code:   tpvmcmm.ReturnCode_InvalidParam,
+		return &tpvmtype.VMResult{
+			Code:   tpvmtype.ReturnCode_InvalidParam,
 			ErrMsg: err.Error(),
 		}, err
 	}
-
-	exeCtx := context.WithValue(ctx.Context, tpvmcmm.VMCtxKey_VMServant, ctx.VMServant)
 
 	var paramIns []reflect.Value
 	paramIns = append(paramIns, ncMethod.receiver)

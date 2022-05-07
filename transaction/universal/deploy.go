@@ -112,7 +112,7 @@ func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.L
 		errMsg = err.Error()
 	}
 	if vmResult.Code != tpvmcmm.ReturnCode_Ok {
-		errMsg = vmResult.ErrMsg
+		errMsg = vmResult.Code.String() + ": " + vmResult.ErrMsg
 	}
 
 	status = TransactionResultUniversal_OK
@@ -125,6 +125,7 @@ func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.L
 		GasUsed:   gasUsed,
 		ErrString: []byte(errMsg),
 		Status:    status,
+		Data:      vmResult.Data,
 	}
 
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)

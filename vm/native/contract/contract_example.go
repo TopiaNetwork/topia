@@ -2,9 +2,6 @@ package contract
 
 import (
 	"context"
-	"errors"
-	tpvmcmm "github.com/TopiaNetwork/topia/vm/common"
-
 	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
@@ -20,16 +17,11 @@ func (ct *ContractTest) TestFuncSimple(ctx context.Context, i int) (int, error) 
 	return i, nil
 }
 
-func (ct *ContractTest) TestFuncWithStruct(ctx context.Context, NodeID string) (*tpcmm.NodeInfo, error) {
-	vmServant := ctx.Value("VMServant").(tpvmcmm.VMServant)
-	if vmServant == nil {
-		return nil, errors.New("Can't get VMServant from ctx")
-	}
-
+func (ct *ContractTest) TestFuncWithStruct(ctx context.Context, NodeID string) (*tpcmm.NodeInfo, int, string, error) {
 	return &tpcmm.NodeInfo{
 		NodeID: NodeID,
 		Weight: 1000,
 		Role:   tpcmm.NodeRole_Executor,
 		State:  tpcmm.NodeState_Active,
-	}, nil
+	}, 100, "ContractTest", nil
 }

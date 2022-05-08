@@ -6,6 +6,7 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
+	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -323,6 +324,8 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 			latestEpochInfo = config.Genesis.Epon
 			latestBlock = config.Genesis.Block
+
+			compState.AddAccount(tpacc.NativeContractAccount_Account)
 
 			l.UpdateState(tpcmm.LedgerState_Genesis)
 		} /*else {

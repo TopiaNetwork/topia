@@ -74,6 +74,7 @@ func NewNativeVM() *NativeVM {
 }
 
 func (nvm *NativeVM) init() {
+	nvm.registerContract(tpcrtypes.NativeContractAddr_Account, tpnvmcontract.NewContractAccount())
 	nvm.registerContract("ContractTest", tpnvmcontract.NewContractTest())
 }
 

@@ -12,6 +12,10 @@ import (
 type ContractAccount struct {
 }
 
+func NewContractAccount() *ContractAccount {
+	return &ContractAccount{}
+}
+
 func (a *ContractAccount) BindName(ctx context.Context, parentAddr tpcrtypes.Address, addr tpcrtypes.Address, accountName tpacc.AccountName) error {
 	cCtx := tpvmmservice.NewContractContext(ctx)
 

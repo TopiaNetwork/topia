@@ -25,7 +25,7 @@ func TestSecp256Addr(t *testing.T) {
 
 	t.Log(addr)
 
-	contractAddr := tpcrtypes.CreateContractAddress(addr, 10)
+	contractAddr := tpcrtypes.CreateUserContractAddress(addr, 10)
 
 	t.Log(contractAddr)
 
@@ -40,4 +40,19 @@ func TestSecp256Addr(t *testing.T) {
 	payload, err := addr.Payload()
 	assert.Equal(t, nil, err)
 	assert.Equal(t, tpcrtypes.AddressLen_Secp256, len(payload))
+}
+
+func TestNativeContractAddr(t *testing.T) {
+	addr := tpcrtypes.CreateNativeContractAddress(1)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(2)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(3)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(4)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(5)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(100)
+	t.Log(addr)
 }

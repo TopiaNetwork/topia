@@ -2,7 +2,6 @@ package crypt
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +23,11 @@ func TestSecp256Addr(t *testing.T) {
 	addr, err := cytService.CreateAddress(pubKey)
 	assert.Equal(t, nil, err)
 
-	fmt.Println(addr)
+	t.Log(addr)
+
+	contractAddr := tpcrtypes.CreateContractAddress(addr, 10)
+
+	t.Log(contractAddr)
 
 	netType, err := addr.NetworkType()
 	assert.Equal(t, nil, err)

@@ -239,10 +239,14 @@ func CreateContractAddress(fromAddr Address, nonce uint64) Address {
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, nonce)
 
-	hasher := tpcmm.NewBlake2bHasher(0)
+	hasher := tpcmm.NewBlake2bHasher(AddressLen_ED25519)
 	hasher.Writer().Write(fromPayload[:]) // does not error
 	hasher.Writer().Write(nonceBytes)
-	newAddr, _ := NewAddress(CryptType_Ed25519, hasher.Bytes())
+	newAddr, err := NewAddress(CryptType_Ed25519, hasher.Bytes())
+
+	if err != nil {
+		newAddr = UndefAddress
+	}
 
 	return newAddr
 }

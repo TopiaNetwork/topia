@@ -25,6 +25,11 @@ func TransactionUniversalTransferTargetAddressVerifier() TransactionUniversalTra
 			return txbasic.VerifyResult_Reject
 		}
 
+		if !targetAddr.IsPayable() {
+			log.Errorf("Target address not payable: %v", txTr.TargetAddr)
+			return txbasic.VerifyResult_Reject
+		}
+
 		return txbasic.VerifyResult_Accept
 	}
 }

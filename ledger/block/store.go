@@ -22,6 +22,8 @@ type BlockStore interface {
 
 	GetTransactionByID(txID basic.TxID) (*basic.Transaction, error)
 
+	GetTransactionResultByID(txID basic.TxID) (*basic.TransactionResult, error)
+
 	GetBlockByHash(blockHash []byte) (*types.Block, error)
 
 	GetBlockByTxID(txID string) (*types.Block, error)
@@ -65,6 +67,11 @@ func (store *blockStore) TxIDExists(txID basic.TxID) (bool, error) {
 }
 
 func (store *blockStore) GetTransactionByID(txID basic.TxID) (*basic.Transaction, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (store *blockStore) GetTransactionResultByID(txID basic.TxID) (*basic.TransactionResult, error) {
 	//TODO implement me
 	panic("implement me")
 }

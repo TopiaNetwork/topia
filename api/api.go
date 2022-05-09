@@ -2,9 +2,9 @@ package api
 
 import (
 	"github.com/TopiaNetwork/topia/api/rpc"
-	"github.com/TopiaNetwork/topia/api/service"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	service2 "github.com/TopiaNetwork/topia/service"
 )
 
 type TPApi struct {
@@ -26,10 +26,10 @@ func NewTPApi(level tplogcmm.LogLevel, log tplog.Logger) *TPApi {
 
 func (api *TPApi) init() {
 
-	bcService := &service.BlockChain{}
-	netService := &service.Network{}
-	nodeService := &service.Node{}
-	txService := &service.Transaction{}
+	bcService := &service2.BlockChain{}
+	netService := &service2.Network{}
+	nodeService := &service2.Node{}
+	txService := &service2.Transaction{}
 
 	api.rpcServer = rpc.NewRPCServer(api.level, api.log)
 

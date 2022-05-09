@@ -26,12 +26,29 @@ type ExecutionForwarder interface {
 }
 
 type executionForwarder struct {
-	log       tplog.Logger
 	nodeID    string
+	log       tplog.Logger
 	marshaler codec.Marshaler
 	network   tpnet.Network
 	ledger    ledger.Ledger
 	txPool    txpool.TransactionPool
+}
+
+func NewExecutionForwarder(nodeID string,
+	log tplog.Logger,
+	marshaler codec.Marshaler,
+	network tpnet.Network,
+	ledger ledger.Ledger,
+	txPool txpool.TransactionPool) ExecutionForwarder {
+	return &executionForwarder{
+		nodeID:    nodeID,
+		log:       log,
+		marshaler: marshaler,
+		network:   network,
+		ledger:    ledger,
+		txPool:    txPool,
+	}
+
 }
 
 func (forwarder executionForwarder) sendTx(ctx context.Context, tx *txbasic.Transaction) error {

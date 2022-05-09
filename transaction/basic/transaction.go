@@ -132,13 +132,13 @@ func (m *Transaction) HashBytes() ([]byte, error) {
 	return hasher.Compute(string(txBytes)), nil
 }
 
-func (m *Transaction) Hash() (string, error) {
+func (m *Transaction) TxID() (TxID, error) {
 	hashBytes, err := m.HashBytes()
 	if err != nil {
 		return "", err
 	}
 
-	return hex.EncodeToString(hashBytes), nil
+	return TxID(hex.EncodeToString(hashBytes)), nil
 }
 
 func (m *Transaction) HashHex() (string, error) {

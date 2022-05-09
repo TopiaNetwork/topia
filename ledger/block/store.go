@@ -1,32 +1,32 @@
 package block
 
 import (
-	"github.com/TopiaNetwork/topia/chain/types"
-	tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
 	"path/filepath"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger/backend"
+	tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type BlockStore interface {
-	CommitBlock(block *types.Block) error
-
-	GetBlockByNumber(blockNum types.BlockNum) (*types.Block, error)
-
-	GetBlocksIterator(startBlockNum types.BlockNum) (tplgtypes.ResultsIterator, error)
-
 	TxIDExists(txID basic.TxID) (bool, error)
 
 	GetTransactionByID(txID basic.TxID) (*basic.Transaction, error)
 
 	GetTransactionResultByID(txID basic.TxID) (*basic.TransactionResult, error)
 
-	GetBlockByHash(blockHash []byte) (*types.Block, error)
+	GetBlockByHash(blockHash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
 
-	GetBlockByTxID(txID string) (*types.Block, error)
+	GetBlockByTxID(txID basic.TxID) (*tpchaintypes.Block, error)
+
+	GetBlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error)
+
+	GetBlocksIterator(startBlockNum tpchaintypes.BlockNum) (tplgtypes.ResultsIterator, error)
+
+	CommitBlock(block *tpchaintypes.Block) error
 }
 
 type blockStore struct {
@@ -46,17 +46,17 @@ func NewBlockStore(log tplog.Logger, rootPath string, backendType backend.Backen
 	}
 }
 
-func (store *blockStore) CommitBlock(block *types.Block) error {
+func (store *blockStore) CommitBlock(block *tpchaintypes.Block) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (store *blockStore) GetBlockByNumber(blockNum types.BlockNum) (*types.Block, error) {
+func (store *blockStore) GetBlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (store *blockStore) GetBlocksIterator(startBlockNum types.BlockNum) (tplgtypes.ResultsIterator, error) {
+func (store *blockStore) GetBlocksIterator(startBlockNum tpchaintypes.BlockNum) (tplgtypes.ResultsIterator, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -76,12 +76,12 @@ func (store *blockStore) GetTransactionResultByID(txID basic.TxID) (*basic.Trans
 	panic("implement me")
 }
 
-func (store *blockStore) GetBlockByHash(blockHash []byte) (*types.Block, error) {
+func (store *blockStore) GetBlockByHash(blockHash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (store *blockStore) GetBlockByTxID(txID string) (*types.Block, error) {
+func (store *blockStore) GetBlockByTxID(txID basic.TxID) (*tpchaintypes.Block, error) {
 	//TODO implement me
 	panic("implement me")
 }

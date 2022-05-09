@@ -69,7 +69,7 @@ func (forwarder executionForwarder) ForwardTxSync(ctx context.Context, tx *txbas
 		return nil, err
 	}
 
-	txHash, _ := tx.Hash()
+	txID, _ := tx.TxID()
 	txHashBytes, _ := tx.HashBytes()
 	blockStore := forwarder.ledger.GetBlockStore()
 	count := 0
@@ -81,7 +81,7 @@ func (forwarder executionForwarder) ForwardTxSync(ctx context.Context, tx *txbas
 		count++
 		select {
 		case <-timer.C:
-			txResult, err := blockStore.GetTransactionResultByID(txbasic.TxID(txHash))
+			txResult, err := blockStore.GetTransactionResultByID(txID)
 			if err != nil {
 				jitter := 100*time.Millisecond + time.Duration(rand.Int63n(int64(time.Second))) // nolint: gosec
 				backoff := 100 * time.Duration(count) * time.Millisecond
@@ -93,7 +93,7 @@ func (forwarder executionForwarder) ForwardTxSync(ctx context.Context, tx *txbas
 		case <-ctx.Done():
 			switch txbasic.TransactionCategory(tx.Head.Category) {
 			case txbasic.TransactionCategory_Topia_Universal:
-				err = fmt.Errorf("Send sucessfully, but wait for result time out: tx %s waiting time %s", txHash, time.Since(startAt).String())
+				err = fmt.Errorf("Send sucessfully, but wait for result time out: tx %s waiting time %s", txID, time.Since(startAt).String())
 				txHead := tx.GetHead()
 
 				txUniRS := &txuni.TransactionResultUniversal{

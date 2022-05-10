@@ -10,6 +10,7 @@ import (
 	tpvm "github.com/TopiaNetwork/topia/vm"
 	tpvmmservice "github.com/TopiaNetwork/topia/vm/service"
 	tpvmtype "github.com/TopiaNetwork/topia/vm/type"
+	"math/big"
 )
 
 type TransactionUniversalInvoke struct {
@@ -30,24 +31,24 @@ func NewTransactionUniversalInvoke(txHead *txbasic.TransactionHead, txUniHead *T
 	}
 }
 
-func (txIV *TransactionUniversalInvoke) DataBytes() ([]byte, error) {
+func (txiv *TransactionUniversalInvoke) DataBytes() ([]byte, error) {
 	return json.Marshal(&struct {
 		ContractAddr tpcrtypes.Address
 		Method       string
 		Args         string
 	}{
-		txIV.ContractAddr,
-		txIV.Method,
-		txIV.Args,
+		txiv.ContractAddr,
+		txiv.Method,
+		txiv.Args,
 	})
 }
 
-func (txIV *TransactionUniversalInvoke) HashBytes() ([]byte, error) {
+func (txiv *TransactionUniversalInvoke) HashBytes() ([]byte, error) {
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 
-	txDPData, _ := txIV.DataBytes()
+	txDPData, _ := txiv.DataBytes()
 	txUni := TransactionUniversal{
-		Head: &txIV.TransactionUniversalHead,
+		Head: &txiv.TransactionUniversalHead,
 		Data: &TransactionUniversalData{
 			Specification: txDPData,
 		},
@@ -58,7 +59,7 @@ func (txIV *TransactionUniversalInvoke) HashBytes() ([]byte, error) {
 	}
 
 	tx := &txbasic.Transaction{
-		Head: &txIV.TransactionHead,
+		Head: &txiv.TransactionHead,
 		Data: &txbasic.TransactionData{
 			Specification: txUniBytes,
 		},
@@ -67,20 +68,11 @@ func (txIV *TransactionUniversalInvoke) HashBytes() ([]byte, error) {
 	return tx.HashBytes()
 }
 
-func (txIV *TransactionUniversalInvoke) Verify(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) txbasic.VerifyResult {
+func (txiv *TransactionUniversalInvoke) Verify(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) txbasic.VerifyResult {
 	txUniServant := NewTransactionUniversalServant(txServant)
-	txUniData, _ := txIV.DataBytes()
-	txUni := TransactionUniversal{
-		Head: &txIV.TransactionUniversalHead,
-		Data: &TransactionUniversalData{
-			Specification: txUniData,
-		},
-	}
 
-	txUniWithHead := &TransactionUniversalWithHead{
-		TransactionHead:      txIV.TransactionHead,
-		TransactionUniversal: txUni,
-	}
+	txUniData, _ := txiv.DataBytes()
+	txUniWithHead := ContructTransactionUniversalWithHead(&txiv.TransactionHead, &txiv.TransactionUniversalHead, txUniData)
 
 	vR := txUniWithHead.TxUniVerify(ctx, log, nodeID, txServant)
 	switch vR {
@@ -88,7 +80,7 @@ func (txIV *TransactionUniversalInvoke) Verify(ctx context.Context, log tplog.Lo
 		return txbasic.VerifyResult_Reject
 	case txbasic.VerifyResult_Ignore:
 	case txbasic.VerifyResult_Accept:
-		return ApplyTransactionUniversalInvokeVerifiers(ctx, log, txIV, txUniServant,
+		return ApplyTransactionUniversalInvokeVerifiers(ctx, log, txiv, txUniServant,
 			TransactionUniversalInvokeContractAddressVerifier(),
 			TransactionUniversalInvokeMethodVerifier(),
 			TransactionUniversalInvokeArgsVerifier(),
@@ -100,15 +92,22 @@ func (txIV *TransactionUniversalInvoke) Verify(ctx context.Context, log tplog.Lo
 	return txbasic.VerifyResult_Accept
 }
 
-func (txIV *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) *txbasic.TransactionResult {
+func (txiv *TransactionUniversalInvoke) Estimate(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) (*big.Int, error) {
+	txUniData, _ := txiv.DataBytes()
+	txUniWithHead := ContructTransactionUniversalWithHead(&txiv.TransactionHead, &txiv.TransactionUniversalHead, txUniData)
+
+	return txUniWithHead.Estimate(ctx, log, nodeID, txServant)
+}
+
+func (txiv *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) *txbasic.TransactionResult {
 	vmServant := tpvmmservice.NewVMServant(txServant, txServant.GetGasConfig().MaxGasEachBlock)
 	vmContext := &tpvmmservice.VMContext{
 		Context:      ctx,
 		VMServant:    vmServant,
 		NodeID:       nodeID,
-		ContractAddr: txIV.ContractAddr,
-		Method:       txIV.Method,
-		Args:         txIV.Args,
+		ContractAddr: txiv.ContractAddr,
+		Method:       txiv.Method,
+		Args:         txiv.Args,
 	}
 
 	gasUsed := uint64(0)
@@ -125,9 +124,9 @@ func (txIV *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.L
 	status = TransactionResultUniversal_OK
 	gasUsed = vmResult.GasUsed
 
-	txHashBytes, _ := txIV.HashBytes()
+	txHashBytes, _ := txiv.HashBytes()
 	txUniRS := &TransactionResultUniversal{
-		Version:   txIV.TransactionHead.Version,
+		Version:   txiv.TransactionHead.Version,
 		TxHash:    txHashBytes,
 		GasUsed:   gasUsed,
 		ErrString: []byte(errMsg),
@@ -143,9 +142,9 @@ func (txIV *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.L
 
 	return &txbasic.TransactionResult{
 		Head: &txbasic.TransactionResultHead{
-			Category: txIV.TransactionHead.Category,
-			Version:  txIV.TransactionHead.Version,
-			ChainID:  txIV.TransactionHead.ChainID,
+			Category: txiv.TransactionHead.Category,
+			Version:  txiv.TransactionHead.Version,
+			ChainID:  txiv.TransactionHead.ChainID,
 		},
 		Data: &txbasic.TransactionResultData{
 			Specification: txUniRSBytes,

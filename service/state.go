@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/TopiaNetwork/topia/account"
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -22,11 +22,13 @@ type StateQueryService interface {
 
 	NetworkType() tpnet.NetworkType
 
-	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
+	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
+
+	GetAllAccounts() ([]*tpacc.Account, error)
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
@@ -43,6 +45,16 @@ type StateQueryService interface {
 	GetActiveProposerIDs() ([]string, error)
 
 	GetActiveValidatorIDs() ([]string, error)
+
+	GetInactiveNodeIDs() ([]string, error)
+
+	GetAllActiveExecutors() ([]*common.NodeInfo, error)
+
+	GetAllActiveProposers() ([]*common.NodeInfo, error)
+
+	GetAllActiveValidators() ([]*common.NodeInfo, error)
+
+	GetAllInactiveNodes() ([]*common.NodeInfo, error)
 
 	GetNodeWeight(nodeID string) (uint64, error)
 
@@ -112,7 +124,7 @@ type stateQueryProxyObject struct {
 
 		NetworkType func() tpnet.NetworkType
 
-		GetAccount func(addr tpcrtypes.Address) (*account.Account, error)
+		GetAccount func(addr tpcrtypes.Address) (*tpacc.Account, error)
 
 		GetNonce func(addr tpcrtypes.Address) (uint64, error)
 
@@ -162,7 +174,7 @@ func (proxy *stateQueryProxyObject) NetworkType() tpnet.NetworkType {
 	return proxy.ProxyObject.NetworkType()
 }
 
-func (proxy *stateQueryProxyObject) GetAccount(addr tpcrtypes.Address) (*account.Account, error) {
+func (proxy *stateQueryProxyObject) GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error) {
 	return proxy.ProxyObject.GetAccount(addr)
 }
 

@@ -2,14 +2,37 @@ package eventhub
 
 import txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 
-type TxPoolEvent_Type byte
+type TxPoolEVType byte
 
 const (
-	TxPoolEvent_Type_Received TxPoolEvent_Type = iota + 1
-	TxPoolEvent_Type_Removed
+	TxPoolEVType_Unknown TxPoolEVType = iota
+	TxPoolEVType_Received
+	TxPoolEVTypee_Removed
 )
 
 type TxPoolEvent struct {
-	kind TxPoolEvent_Type
-	tx   *txbasic.Transaction
+	evType TxPoolEVType
+	tx     *txbasic.Transaction
+}
+
+func (te TxPoolEVType) String() string {
+	switch te {
+	case TxPoolEVType_Received:
+		return "TxPoolEVType_Received"
+	case TxPoolEVTypee_Removed:
+		return "TxPoolEVType_Removed"
+	default:
+		return "TxPoolEVType_Unknown"
+	}
+}
+
+func (te TxPoolEVType) Value(evName string) TxPoolEVType {
+	switch evName {
+	case "TxPoolEVType_Received":
+		return TxPoolEVType_Received
+	case "TxPoolEVType_Removed":
+		return TxPoolEVTypee_Removed
+	default:
+		return TxPoolEVType_Unknown
+	}
 }

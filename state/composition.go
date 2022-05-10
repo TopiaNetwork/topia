@@ -2,17 +2,17 @@ package state
 
 import (
 	"crypto/sha256"
-	"github.com/TopiaNetwork/topia/account"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/currency"
-	"go.uber.org/atomic"
 	"math/big"
 	"sync"
 
 	"github.com/lazyledger/smt"
+	"go.uber.org/atomic"
 
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/common"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/currency"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -36,11 +36,13 @@ type CompositionStateReadonly interface {
 
 	NetworkType() tpnet.NetworkType
 
-	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
+	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
+
+	GetAllAccounts() ([]*tpacc.Account, error)
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
@@ -57,6 +59,16 @@ type CompositionStateReadonly interface {
 	GetActiveProposerIDs() ([]string, error)
 
 	GetActiveValidatorIDs() ([]string, error)
+
+	GetInactiveNodeIDs() ([]string, error)
+
+	GetAllActiveExecutors() ([]*common.NodeInfo, error)
+
+	GetAllActiveProposers() ([]*common.NodeInfo, error)
+
+	GetAllActiveValidators() ([]*common.NodeInfo, error)
+
+	GetAllInactiveNodes() ([]*common.NodeInfo, error)
 
 	GetNodeWeight(nodeID string) (uint64, error)
 

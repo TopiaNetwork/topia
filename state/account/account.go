@@ -26,6 +26,8 @@ type AccountState interface {
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
+	GetAllAccounts() ([]*tpacc.Account, error)
+
 	AddAccount(acc *tpacc.Account) error
 
 	UpdateAccount(account *tpacc.Account) error
@@ -101,6 +103,29 @@ func (as *accountState) GetBalance(addr tpcrtypes.Address, symbol currency.Token
 	return nil, fmt.Errorf("No responding symbol %s from addr %s", symbol, addr)
 }
 
+func (as *accountState) GetAllAccounts() ([]*tpacc.Account, error) {
+	keys, vals, _, err := as.GetAllState(StateStore_Name)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) != len(vals) {
+		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
+	}
+
+	var accs []*tpacc.Account
+	for _, val := range vals {
+		var acc tpacc.Account
+		err = json.Unmarshal(val, &acc)
+		if err != nil {
+			return nil, err
+		}
+		accs = append(accs, &acc)
+	}
+
+	return accs, nil
+}
+
 func (as *accountState) AddAccount(acc *tpacc.Account) error {
 	if as.IsAccountExist(acc.Addr) {
 		return fmt.Errorf("Have existed account from %s", acc.Addr)
@@ -159,4 +184,3 @@ func (as *accountState) UpdateName(addr tpcrtypes.Address, name tpacc.AccountNam
 
 	return as.UpdateAccount(acc)
 }
-

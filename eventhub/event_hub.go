@@ -91,7 +91,7 @@ func NewEventHub(level tplogcmm.LogLevel, log tplog.Logger) EventHub {
 
 	evManager := newEventManager()
 
-	evManager.registerEvent(EventName_TxReceived, reflect.TypeOf(&txbasic.Transaction{}).String())
+	evManager.registerEvent(EventName_TxPoolChanged, reflect.TypeOf(&TxPoolEvent{}).String())
 	evManager.registerEvent(EventName_TxPrepared, reflect.TypeOf(&txbasic.Transaction{}).String())
 	evManager.registerEvent(EventName_TxRollbacked, reflect.TypeOf(&txbasic.Transaction{}).String())
 	evManager.registerEvent(EventName_TxCommited, reflect.TypeOf(&txbasic.Transaction{}).String())

@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	EventName_TxReceived      = "TxReceived"
+	EventName_TxPoolChanged   = "TxPoolChanged"
 	EventName_TxPrepared      = "TxPrepared"
 	EventName_TxRollbacked    = "TxRollbacked"
 	EventName_TxCommited      = "TxCommited"

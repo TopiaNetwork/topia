@@ -7,7 +7,7 @@ import (
 
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger/backend"
-	"github.com/TopiaNetwork/topia/ledger/block"
+	tplgblock "github.com/TopiaNetwork/topia/ledger/block"
 	"github.com/TopiaNetwork/topia/ledger/history"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -25,7 +25,7 @@ type Ledger interface {
 
 	PendingStateStore() int32
 
-	GetBlockStore() block.BlockStore
+	GetBlockStore() tplgblock.BlockStore
 
 	State() tpcmm.LedgerState
 }
@@ -35,7 +35,7 @@ type ledger struct {
 	log            tplog.Logger
 	state          atomic.Value
 	backendStateDB backend.Backend
-	blockStore     block.BlockStore
+	blockStore     tplgblock.BlockStore
 	historyStore   *history.HistoryStore
 }
 
@@ -49,7 +49,7 @@ func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backe
 		id:             id,
 		log:            log,
 		backendStateDB: backendStateDB,
-		blockStore:     block.NewBlockStore(log, rootPath, backendType),
+		blockStore:     tplgblock.NewBlockStore(log, rootPath, backendType),
 		historyStore:   history.NewHistoryStore(log, rootPath, backendType),
 	}
 
@@ -72,7 +72,7 @@ func (l *ledger) PendingStateStore() int32 {
 	return l.backendStateDB.PendingTxCount()
 }
 
-func (l *ledger) GetBlockStore() block.BlockStore {
+func (l *ledger) GetBlockStore() tplgblock.BlockStore {
 	return l.blockStore
 }
 

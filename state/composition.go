@@ -3,6 +3,8 @@ package state
 import (
 	"crypto/sha256"
 	"github.com/TopiaNetwork/topia/account"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/currency"
 	"go.uber.org/atomic"
 	"math/big"
 	"sync"
@@ -11,8 +13,6 @@ import (
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/common"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/currency"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -32,15 +32,15 @@ type NodeNetWorkStateWapper interface {
 }
 
 type CompositionStateReadonly interface {
+	ChainID() tpchaintypes.ChainID
+
+	NetworkType() tpnet.NetworkType
+
 	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
-
-	ChainID() tpchaintypes.ChainID
-
-	NetworkType() tpnet.NetworkType
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 

@@ -4,7 +4,6 @@ import (
 	"runtime/debug"
 	"time"
 
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
@@ -109,18 +108,27 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 		select {
 		// Handle inactive account transaction eviction
 		case <-evict.C:
-			f0 := func(address tpcrtypes.Address) bool { return pool.locals.contains(address) }
-			f1 := func(string2 string) time.Duration {
-				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
+			f1 := func(string2 basic.TxID) time.Duration {
+				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2).time)
 			}
 			time2 := pool.config.LifetimeForTx
-			f2 := func(string2 string) {
+			f2 := func(string2 basic.TxID) {
 				pool.RemoveTxByKey(string2)
 			}
+			f3 := func(string2 basic.TxID) uint64 {
+				curheight := pool.query.CurrentHeight()
+				txheight := pool.ActivationIntervals.activ[string2].height
+				if curheight > txheight {
+					return curheight - txheight
+				}
+				return 0
+			}
+			diffHeight := pool.config.LifeHeight
 			for category, _ := range pool.queues.getAll() {
-				pool.queues.removeTxForLifeTime(category, f0, f1, time2, f2)
+				pool.queues.removeTxForLifeTime(category, f1, time2, f2, f3, diffHeight)
 
 			}
+
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRemoveTxForUptoLifeTime stopped")
 			return
@@ -172,15 +180,24 @@ func (pool *transactionPool) loopRegularRepublic() {
 	for {
 		select {
 		case <-republic.C:
-			f1 := func(string2 string) time.Duration {
-				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
+			f1 := func(string2 basic.TxID) time.Duration {
+				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2).time)
 			}
 			time2 := pool.config.DurationForTxRePublic
 			f2 := func(tx *basic.Transaction) {
-				pool.BroadCastTx(tx)
+				pool.query.PublishTx(pool.ctx, tx)
 			}
+			f3 := func(string2 basic.TxID) uint64 {
+				curHeight := pool.query.CurrentHeight()
+				txHeight := pool.ActivationIntervals.getTxActivByKey(string2).height
+				if curHeight > txHeight {
+					return curHeight - txHeight
+				}
+				return 0
+			}
+			diffHeight := pool.config.DiffHeightForTxRePublic
 			for category, _ := range pool.queues.getAll() {
-				pool.queues.republicTx(category, f1, time2, f2)
+				pool.queues.republicTx(category, f1, time2, f2, f3, diffHeight)
 			}
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRegularRepublic stopped")

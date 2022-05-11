@@ -40,6 +40,8 @@ func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
 	if err := handler.txPool.AddTx(tx, false); err != nil {
 		return err
 	}
+	txId, _ := tx.TxID()
+	handler.txPool.txState.Add(txId, StateTxAdded)
 	return nil
 }
 

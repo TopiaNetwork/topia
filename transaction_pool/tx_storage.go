@@ -2,10 +2,8 @@ package transactionpool
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"time"
-
 	"github.com/TopiaNetwork/topia/transaction/basic"
+	"io/ioutil"
 )
 
 func (pool *transactionPool) SaveLocalTxs(category basic.TransactionCategory) error {
@@ -45,9 +43,9 @@ func (pool *transactionPool) LoadLocalTxs(category basic.TransactionCategory) er
 }
 
 type remoteTxs struct {
-	Txs                 map[string]*basic.Transaction
-	ActivationIntervals map[string]time.Time
-	TxHashCategorys     map[string]basic.TransactionCategory
+	Txs                 map[basic.TxID]*basic.Transaction
+	ActivationIntervals map[basic.TxID]*timeAndHeight
+	TxHashCategorys     map[basic.TxID]basic.TransactionCategory
 }
 
 func (pool *transactionPool) SaveRemoteTxs(category basic.TransactionCategory) error {

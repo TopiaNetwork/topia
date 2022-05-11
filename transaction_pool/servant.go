@@ -1,42 +1,79 @@
 package transactionpool
 
 import (
-	"math/big"
-
-	"github.com/TopiaNetwork/topia/account"
+	"context"
 	"github.com/TopiaNetwork/topia/chain/types"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/network/p2p"
+	"github.com/TopiaNetwork/topia/codec"
+	crypttypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/network/protocol"
+	"github.com/TopiaNetwork/topia/state/account"
+	"github.com/TopiaNetwork/topia/state/chain"
+	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type BlockAddedEvent struct{ Block *types.Block }
 
 type TransactionPoolServant interface {
-	CurrentBlock() *types.Block
-	GetBlock(hash types.BlockHash, num uint64) *types.Block
-	StateAt(root types.BlockHash) (*StatePoolDB, error)
-	SubChainHeadEvent(ch chan<- BlockAddedEvent) p2p.P2PPubSubService
+	StateQueryService
+	BlockService
+	network.Network
+}
+type StateQueryService interface {
+	GetNonce(address crypttypes.Address) (uint64, error)
+	CurrentHeight() uint64
 	GetMaxGasLimit() uint64
 }
-
-type StatePoolDB struct {
+type BlockService interface {
+	CurrentBlock() *types.Block
+	GetBlockByHash(hash types.BlockHash) *types.Block
+	PublishTx(ctx context.Context, tx *basic.Transaction) error
 }
 
-func (st *StatePoolDB) GetAccount(addr tpcrtypes.Address) (*account.Account, error) {
-	acc := &account.Account{
-		Addr:     "",
-		Name:     "",
-		Nonce:    0,
-		Balances: nil,
+type transactionPoolServant struct {
+	accState     account.AccountState
+	chainState   chain.ChainState
+	currentBlock *types.Block
+	Network      network.Network
+	marshaler    codec.Marshaler
+}
+
+func (servant *transactionPoolServant) GetNonce(address crypttypes.Address) (uint64, error) {
+	return servant.accState.GetNonce(address)
+}
+func (servant *transactionPoolServant) CurrentHeight() uint64 {
+	return servant.currentBlock.Head.Height
+}
+func (servant *transactionPoolServant) GetMaxGasLimit() uint64 {
+	return 987654321
+}
+func (servant *transactionPoolServant) CurrentBlock() *types.Block {
+	return servant.currentBlock
+}
+func (servant *transactionPoolServant) GetBlockByHash(hash types.BlockHash) *types.Block {
+	block, _ := servant.chainState.GetLatestBlock()
+	return block
+}
+
+func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *basic.Transaction) error {
+	if tx == nil {
+		return nil
 	}
-	return acc, nil
-}
-func (st *StatePoolDB) GetBalance(addr tpcrtypes.Address) *big.Int {
-	balance := big.NewInt(100000000)
-	return balance
-}
+	msg := &TxMessage{}
+	data, err := servant.marshaler.Marshal(tx)
+	if err != nil {
+		return err
+	}
+	msg.Data = data
+	sendData, err := msg.Marshal()
+	if err != nil {
+		return err
+	}
+	var toModuleName []string
+	toModuleName = append(toModuleName, MOD_NAME)
+	//comment for unit Test
 
-func (st *StatePoolDB) GetNonce(addr tpcrtypes.Address) uint64 {
-	nonce := uint64(123456)
-	return nonce
+	servant.Network.Publish(ctx, toModuleName, protocol.SyncProtocolID_Msg, sendData)
+
+	return nil
 }

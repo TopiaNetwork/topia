@@ -12,6 +12,7 @@ type Configuration struct {
 	fsPath      string
 	ChainConfig *ChainConfiguration
 	NodeConfig  *NodeConfiguration
+	NetConfig   *NetworkConfiguration
 	CSConfig    *ConsensusConfiguration
 	GasConfig   *GasConfiguration
 	Genesis     *GenesisData
@@ -28,6 +29,7 @@ func GetConfiguration() *Configuration {
 		config = &Configuration{
 			ChainConfig: DefChainConfiguration(),
 			NodeConfig:  DefNodeConfiguration(),
+			NetConfig:   DefNetworkConfiguration(),
 			CSConfig:    DefConsensusConfiguration(),
 			GasConfig:   DefGasConfiguration(),
 			Genesis:     genData,

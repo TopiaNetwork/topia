@@ -6,20 +6,11 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/configuration"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/p2p"
-)
-
-var CurrentNetworkType = NetworkType_Testnet
-
-type NetworkType byte
-
-const (
-	NetworkType_Unknown NetworkType = iota
-	NetworkType_Mainnet
-	NetworkType_Testnet
 )
 
 type Network interface {
@@ -52,9 +43,9 @@ type network struct {
 	p2p *p2p.P2PService
 }
 
-func NewNetwork(ctx context.Context, log tplog.Logger, sysActor *actor.ActorSystem, endPoint string, seed string, netActiveNode tpnetcmn.NetworkActiveNode) Network {
+func NewNetwork(ctx context.Context, log tplog.Logger, config *configuration.NetworkConfiguration, sysActor *actor.ActorSystem, endPoint string, seed string, netActiveNode tpnetcmn.NetworkActiveNode) Network {
 	return &network{
-		p2p: p2p.NewP2PService(ctx, log, sysActor, endPoint, seed, netActiveNode),
+		p2p: p2p.NewP2PService(ctx, log, config, sysActor, endPoint, seed, netActiveNode),
 	}
 }
 
@@ -104,26 +95,4 @@ func (net *network) Start() {
 
 func (net *network) Stop() {
 	net.p2p.Close()
-}
-
-func (n NetworkType) String() string {
-	switch n {
-	case NetworkType_Mainnet:
-		return "Mainnet"
-	case NetworkType_Testnet:
-		return "Testnet"
-	default:
-		return "Unknown"
-	}
-}
-
-func (n NetworkType) Value(netType byte) NetworkType {
-	switch netType {
-	case 'm':
-		return NetworkType_Mainnet
-	case 't':
-		return NetworkType_Testnet
-	default:
-		return NetworkType_Unknown
-	}
 }

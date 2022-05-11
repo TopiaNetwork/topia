@@ -10,6 +10,7 @@ import (
 )
 
 type GenesisData struct {
+	NetType     tpcmm.NetworkType
 	Epon        *tpcmm.EpochInfo
 	Block       *tpchaintypes.Block
 	BlockResult *tpchaintypes.BlockResult

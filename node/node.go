@@ -66,7 +66,7 @@ func NewNode(endPoint string, seed string) *Node {
 	compStateRN := state.CreateCompositionStateReadonly(mainLog, ledger)
 	defer compStateRN.Stop()
 
-	network := tpnet.NewNetwork(ctx, mainLog, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
+	network := tpnet.NewNetwork(ctx, mainLog, config.NetConfig, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
 	nodeID := network.ID()
 
 	txPoolConf := txpool.DefaultTransactionPoolConfig

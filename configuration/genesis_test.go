@@ -1,12 +1,13 @@
 package configuration
 
 import (
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/common"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
 func TestGenerateGenesisData(t *testing.T) {
@@ -26,7 +27,8 @@ func TestGenerateGenesisData(t *testing.T) {
 	blockHashBytes, _ := block.HashBytes()
 
 	gData := &GenesisData{
-		Epon: &common.EpochInfo{
+		NetType: tpcmm.CurrentNetworkType,
+		Epon: &tpcmm.EpochInfo{
 			Epoch:          0,
 			StartTimeStamp: timeStamp,
 			StartHeight:    1,

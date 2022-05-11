@@ -16,7 +16,6 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
 	staetround "github.com/TopiaNetwork/topia/state/epoch"
@@ -34,7 +33,7 @@ type NodeNetWorkStateWapper interface {
 type CompositionStateReadonly interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() tpnet.NetworkType
+	NetworkType() common.NetworkType
 
 	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 

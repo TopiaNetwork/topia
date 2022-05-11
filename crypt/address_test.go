@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 func TestSecp256Addr(t *testing.T) {
@@ -31,7 +31,7 @@ func TestSecp256Addr(t *testing.T) {
 
 	netType, err := addr.NetworkType()
 	assert.Equal(t, nil, err)
-	assert.Equal(t, tpnet.CurrentNetworkType, netType)
+	assert.Equal(t, tpcmm.CurrentNetworkType, netType)
 
 	cType, err := addr.CryptType()
 	assert.Equal(t, nil, err)

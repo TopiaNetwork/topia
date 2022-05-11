@@ -11,7 +11,6 @@ import (
 	"github.com/TopiaNetwork/topia/currency"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/state"
 )
 
@@ -20,7 +19,7 @@ var _proxyField = "ProxyObject"
 type StateQueryService interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() tpnet.NetworkType
+	NetworkType() common.NetworkType
 
 	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 
@@ -122,7 +121,7 @@ type stateQueryProxyObject struct {
 	ProxyObject struct {
 		ChainID func() tpchaintypes.ChainID
 
-		NetworkType func() tpnet.NetworkType
+		NetworkType func() common.NetworkType
 
 		GetAccount func(addr tpcrtypes.Address) (*tpacc.Account, error)
 
@@ -170,7 +169,7 @@ func (proxy *stateQueryProxyObject) ChainID() tpchaintypes.ChainID {
 	return proxy.ProxyObject.ChainID()
 }
 
-func (proxy *stateQueryProxyObject) NetworkType() tpnet.NetworkType {
+func (proxy *stateQueryProxyObject) NetworkType() common.NetworkType {
 	return proxy.ProxyObject.NetworkType()
 }
 

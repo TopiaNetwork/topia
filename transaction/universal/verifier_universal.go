@@ -3,11 +3,11 @@ package universal
 import (
 	"context"
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/currency"
 
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/currency"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
@@ -23,7 +23,7 @@ func TransactionUniversalPayerAddressVerifier() TransactionUniversalVerifier {
 			return txbasic.VerifyResult_Reject
 		}
 
-		if isValid, _ := payerAddr.IsValid(tpnet.CurrentNetworkType, fromAddrType); !isValid {
+		if isValid, _ := payerAddr.IsValid(tpcmm.CurrentNetworkType, fromAddrType); !isValid {
 			log.Errorf("Invalid payer address: %v", txUni.Head.FeePayer)
 			return txbasic.VerifyResult_Reject
 		}

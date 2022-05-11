@@ -3,8 +3,8 @@ package universal
 import (
 	"context"
 
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
@@ -20,7 +20,7 @@ func TransactionUniversalTransferTargetAddressVerifier() TransactionUniversalTra
 			return txbasic.VerifyResult_Reject
 		}
 
-		if isValid, _ := targetAddr.IsValid(tpnet.CurrentNetworkType, cryType); !isValid {
+		if isValid, _ := targetAddr.IsValid(tpcmm.CurrentNetworkType, cryType); !isValid {
 			log.Errorf("Invalid target address: %v", txTr.TargetAddr)
 			return txbasic.VerifyResult_Reject
 		}

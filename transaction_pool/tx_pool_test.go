@@ -349,7 +349,7 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
 
-	//pool.network.Subscribe(ctx, protocol.SyncProtocolID_Msg, message.TopicValidator())
+	//pool.network.Subscribe(ctx, protocol.pool.network.Subscribe, message.TopicValidator())
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()

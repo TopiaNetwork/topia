@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 type VerifyResult byte
@@ -49,7 +50,7 @@ func TransactionFromAddressVerifier() TransactionVerifier {
 				return VerifyResult_Reject
 			}
 
-			if isValid, _ := fromAddr.IsValid(tpnet.CurrentNetworkType, cryType); !isValid {
+			if isValid, _ := fromAddr.IsValid(tpcmm.CurrentNetworkType, cryType); !isValid {
 				log.Errorf("Invalid from address: %v", tx.FromAddr)
 				return VerifyResult_Reject
 			}

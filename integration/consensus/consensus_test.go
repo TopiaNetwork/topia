@@ -287,7 +287,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		l := createLedger(testMainLog, "./TestConsensus", backend.BackendType_Badger, i, nodeType)
 
-		network := tpnet.NewNetwork(context.Background(), testMainLog, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
+		network := tpnet.NewNetwork(context.Background(), testMainLog, config.NetConfig, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
 
 		txPool := mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)
 

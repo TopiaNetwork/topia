@@ -1,6 +1,7 @@
 package basic
 
 import (
+	"github.com/TopiaNetwork/topia/common"
 	"math/big"
 
 	"github.com/hashicorp/golang-lru"
@@ -12,7 +13,6 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
 )
@@ -30,7 +30,7 @@ var CurrentTxServantPolicy = TxServantPolicy_WR
 type TransactionServantBaseRead interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() tpnet.NetworkType
+	NetworkType() common.NetworkType
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 

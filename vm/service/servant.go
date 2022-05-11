@@ -12,7 +12,6 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 var (
@@ -22,7 +21,7 @@ var (
 type BaseServant interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() tpnet.NetworkType
+	NetworkType() tpcmm.NetworkType
 
 	GetCryptService(log tplog.Logger, cryptType tpcrtypes.CryptType) (tpcrt.CryptService, error)
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/TopiaNetwork/topia/configuration"
 	"net"
 	"strings"
 	"sync"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-connmgr"
 	p2pCrypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -25,6 +25,7 @@ import (
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/configuration"
 	tplog "github.com/TopiaNetwork/topia/log"
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
@@ -109,6 +110,7 @@ func NewP2PService(ctx context.Context, log tplog.Logger, config *configuration.
 		libp2p.DefaultTransports,
 		libp2p.DisableRelay(),
 		libp2p.NATPortMap(),
+		p2p.connectionManagerOption(),
 	}
 
 	h, err := libp2p.New(opts...)
@@ -159,6 +161,34 @@ func (p2p *P2PService) createP2PPrivKey(seed string) (*p2pCrypto.Secp256k1Privat
 	prvKey, _ := ecdsa.GenerateKey(btcec.S256(), randReader)
 
 	return (*p2pCrypto.Secp256k1PrivateKey)(prvKey), nil
+}
+
+func (p2p *P2PService) connectionManagerOption() libp2p.Option {
+	connMng, err := connmgr.NewConnManager(p2p.config.Connection.LowWater, p2p.config.Connection.HighWater, connmgr.WithGracePeriod(p2p.config.Connection.DurationPrune))
+	if err != nil {
+		return nil
+	}
+
+	for _, protPeer := range p2p.config.Connection.ProtectedPeers {
+		peerID, err := peer.IDFromString(protPeer)
+		if err != nil {
+			panic(fmt.Sprintf("failed to parse peer ID in protected peers array: %w", err))
+			return nil
+		}
+
+		connMng.Protect(peerID, "config-prot")
+	}
+
+	for _, bootPeer := range p2p.config.Connection.BootstrapPeers {
+		peerID, err := peer.IDFromString(bootPeer)
+		if err != nil {
+			panic(fmt.Sprintf("failed to parse peer ID in boot peers array: %w", err))
+			return nil
+		}
+		connMng.Protect(peerID, "bootstrap")
+	}
+
+	return libp2p.ConnectionManager(connMng)
 }
 
 func (p2p *P2PService) defaultDHTOptions() []dht.Option {

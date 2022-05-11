@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	tpcmm "github.com/TopiaNetwork/topia/common"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 const (
@@ -41,15 +40,15 @@ func validateChecksum(data, expect []byte) bool {
 	return bytes.Equal(digest, expect)
 }
 
-func encode(network tpnet.NetworkType, cryptType CryptType, payload []byte) (Address, error) {
+func encode(network tpcmm.NetworkType, cryptType CryptType, payload []byte) (Address, error) {
 	if len(payload) == 0 {
 		return UndefAddress, errors.New("Invalid payload: len 0")
 	}
 	var ntwPrefix string
 	switch network {
-	case tpnet.NetworkType_Mainnet:
+	case tpcmm.NetworkType_Mainnet:
 		ntwPrefix = MainnetPrefix
-	case tpnet.NetworkType_Testnet:
+	case tpcmm.NetworkType_Testnet:
 		ntwPrefix = TestnetPrefix
 	default:
 		return UndefAddress, fmt.Errorf("Unknown network type %d", network)
@@ -67,16 +66,16 @@ func encode(network tpnet.NetworkType, cryptType CryptType, payload []byte) (Add
 	return Address(strAddr), nil
 }
 
-func decode(a string) (tpnet.NetworkType, CryptType, []byte, error) {
+func decode(a string) (tpcmm.NetworkType, CryptType, []byte, error) {
 	if len(a) == 0 {
-		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, nil
+		return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, nil
 	}
 	if a == string(UndefAddress) {
-		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, nil
+		return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, nil
 	}
 
 	if string(a[0]) != MainnetPrefix && string(a[0]) != TestnetPrefix {
-		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown network type %d", a[0])
+		return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown network type %d", a[0])
 	}
 
 	var cryptType CryptType
@@ -88,18 +87,18 @@ func decode(a string) (tpnet.NetworkType, CryptType, []byte, error) {
 	case '3':
 		cryptType = CryptType_Ed25519
 	default:
-		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown crypt type %d", cryptType)
+		return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Unknown crypt type %d", cryptType)
 	}
 
 	raw := a[2:]
 
 	payloadcksm, err := addressEncoding.WithPadding(-1).DecodeString(raw)
 	if err != nil {
-		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, err
+		return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, err
 	}
 
 	if len(payloadcksm)-checksumHashLength < 0 {
-		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid checksum %d", len(payloadcksm))
+		return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid checksum %d", len(payloadcksm))
 	}
 
 	payload := payloadcksm[:len(payloadcksm)-checksumHashLength]
@@ -107,27 +106,27 @@ func decode(a string) (tpnet.NetworkType, CryptType, []byte, error) {
 
 	if cryptType == CryptType_Secp256 {
 		if len(payload) != AddressLen_Secp256 {
-			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected %d", len(payload), AddressLen_Secp256)
+			return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected %d", len(payload), AddressLen_Secp256)
 		}
 	} else if cryptType == CryptType_BLS12381 {
 		if len(payload) != AddressLen_BLS12381 {
-			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected %d", len(payload), AddressLen_BLS12381)
+			return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected %d", len(payload), AddressLen_BLS12381)
 		}
 	} else if cryptType == CryptType_Ed25519 {
 		if len(payload) != AddressLen_ED25519 {
-			return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected=%d", len(payload), AddressLen_ED25519)
+			return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid payload %d, expected=%d", len(payload), AddressLen_ED25519)
 		}
 	}
 
 	if !validateChecksum(append([]byte{byte(cryptType)}, payload...), cksm) {
-		return tpnet.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid checksum")
+		return tpcmm.NetworkType_Unknown, CryptType_Unknown, nil, fmt.Errorf("Invalid checksum")
 	}
 
-	return tpnet.NetworkType(0).Value(a[0]), cryptType, payload, nil
+	return tpcmm.NetworkType(0).Value(a[0]), cryptType, payload, nil
 }
 
 func NewAddress(cryptType CryptType, payload []byte) (Address, error) {
-	return encode(tpnet.CurrentNetworkType, cryptType, payload)
+	return encode(tpcmm.CurrentNetworkType, cryptType, payload)
 }
 
 func NewFromString(addr string) Address {
@@ -138,14 +137,14 @@ func NewFromBytes(addr []byte) Address {
 	return Address(addr)
 }
 
-func (a Address) NetworkType() (tpnet.NetworkType, error) {
+func (a Address) NetworkType() (tpcmm.NetworkType, error) {
 	if len(a) == 0 {
-		return tpnet.NetworkType_Unknown, errors.New("Invalid address: len 0")
+		return tpcmm.NetworkType_Unknown, errors.New("Invalid address: len 0")
 	}
 
 	netType, _, _, err := decode(string(a))
 	if err != nil {
-		netType = tpnet.NetworkType_Unknown
+		netType = tpcmm.NetworkType_Unknown
 	}
 
 	return netType, err
@@ -172,7 +171,7 @@ func (a Address) HexString() (string, error) {
 	return string(a), nil
 }
 
-func (a Address) IsValid(netType tpnet.NetworkType, cryptType CryptType) (bool, error) {
+func (a Address) IsValid(netType tpcmm.NetworkType, cryptType CryptType) (bool, error) {
 	nType, cType, _, err := decode(string(a))
 	if err != nil {
 		return false, err

@@ -38,3 +38,35 @@ type EpochInfo struct {
 	StartTimeStamp uint64
 	StartHeight    uint64
 }
+
+var CurrentNetworkType = NetworkType_Testnet
+
+type NetworkType byte
+
+const (
+	NetworkType_Unknown NetworkType = iota
+	NetworkType_Mainnet
+	NetworkType_Testnet
+)
+
+func (n NetworkType) String() string {
+	switch n {
+	case NetworkType_Mainnet:
+		return "Mainnet"
+	case NetworkType_Testnet:
+		return "Testnet"
+	default:
+		return "Unknown"
+	}
+}
+
+func (n NetworkType) Value(netType byte) NetworkType {
+	switch netType {
+	case 'm':
+		return NetworkType_Mainnet
+	case 't':
+		return NetworkType_Testnet
+	default:
+		return NetworkType_Unknown
+	}
+}

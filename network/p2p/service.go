@@ -66,31 +66,33 @@ func init() {
 
 type P2PService struct {
 	sync.Mutex
-	ctx           context.Context
-	log           tplog.Logger
-	config        *configuration.NetworkConfiguration
-	host          host.Host
-	pubsub        *pubsub.PubSub
-	sysActor      *actor.ActorSystem
-	modPIDS       map[string]*actor.PID      //module name -> actor PID
-	modMarshals   map[string]codec.Marshaler //module name -> Marshaler
-	netActiveNode tpnetcmn.NetworkActiveNode
-	dhtServices   map[DHTServiceType]*P2PDHTService
-	streamService *P2PStreamService
-	pubsubService *P2PPubSubService
+	ctx            context.Context
+	log            tplog.Logger
+	config         *configuration.NetworkConfiguration
+	host           host.Host
+	pubsub         *pubsub.PubSub
+	sysActor       *actor.ActorSystem
+	modPIDS        map[string]*actor.PID      //module name -> actor PID
+	modMarshals    map[string]codec.Marshaler //module name -> Marshaler
+	netActiveNode  tpnetcmn.NetworkActiveNode
+	dhtServices    map[DHTServiceType]*P2PDHTService
+	streamService  *P2PStreamService
+	pubsubService  *P2PPubSubService
+	peerScoreCache *PeerScoreCache
 }
 
 func NewP2PService(ctx context.Context, log tplog.Logger, config *configuration.NetworkConfiguration, sysActor *actor.ActorSystem, endPoint string, seed string, netActiveNode tpnetcmn.NetworkActiveNode) *P2PService {
 	p2pLog := tplog.CreateModuleLogger(logcomm.InfoLevel, "P2PService", log)
 
 	p2p := &P2PService{
-		ctx:           ctx,
-		log:           p2pLog,
-		config:        config,
-		sysActor:      sysActor,
-		modPIDS:       make(map[string]*actor.PID),
-		modMarshals:   make(map[string]codec.Marshaler),
-		netActiveNode: netActiveNode,
+		ctx:            ctx,
+		log:            p2pLog,
+		config:         config,
+		sysActor:       sysActor,
+		modPIDS:        make(map[string]*actor.PID),
+		modMarshals:    make(map[string]codec.Marshaler),
+		netActiveNode:  netActiveNode,
+		peerScoreCache: NewPeerScoreCache(),
 	}
 
 	p2pPrivKey, err := p2p.createP2PPrivKey(seed)
@@ -299,6 +301,7 @@ func (p2p *P2PService) defaultPubSubOptions() []pubsub.Option {
 				OpportunisticGraftThreshold: OpportunisticGraftScoreThreshold,
 			},
 		),
+		pubsub.WithPeerScoreInspect(p2p.peerScoreCache.Update, 10*time.Second),
 	}
 
 	// enable Peer eXchange on bootstrappers

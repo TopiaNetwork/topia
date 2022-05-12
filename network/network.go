@@ -34,6 +34,22 @@ type Network interface {
 
 	UnRegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler)
 
+	ConnectedPeers() []*tpnetcmn.RemotePeer
+
+	Connectedness(nodeID string) (tpnetcmn.Connectedness, error)
+
+	PubSubScores() []tpnetcmn.PubsubScore
+
+	NatState() (*tpnetcmn.NatInfo, error)
+
+	PeerDetailInfo(nodeID string) (*tpnetcmn.PeerDetail, error)
+
+	FindPeer(ctx context.Context, nodeID string) (string, error)
+
+	ConnectToNode(ctx context.Context, nodeNetAddr string) error
+
+	DisConnectWithNode(nodeID string) error
+
 	Start()
 
 	Stop()
@@ -87,6 +103,38 @@ func (net *network) RegisterModule(moduleName string, pid *actor.PID, marshaler 
 
 func (net *network) UnRegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler) {
 	net.p2p.UnRegisterModule(moduleName, pid, marshaler)
+}
+
+func (net *network) ConnectedPeers() []*tpnetcmn.RemotePeer {
+	return net.p2p.ConnectedPeers()
+}
+
+func (net *network) Connectedness(nodeID string) (tpnetcmn.Connectedness, error) {
+	return net.p2p.Connectedness(nodeID)
+}
+
+func (net *network) PubSubScores() []tpnetcmn.PubsubScore {
+	return net.p2p.PubSubScores()
+}
+
+func (net *network) NatState() (*tpnetcmn.NatInfo, error) {
+	return net.p2p.NatState()
+}
+
+func (net *network) PeerDetailInfo(nodeID string) (*tpnetcmn.PeerDetail, error) {
+	return net.p2p.PeerDetailInfo(nodeID)
+}
+
+func (net *network) FindPeer(ctx context.Context, nodeID string) (string, error) {
+	return net.p2p.FindPeer(ctx, nodeID)
+}
+
+func (net *network) ConnectToNode(ctx context.Context, nodeNetAddr string) error {
+	return net.p2p.ConnectToNode(ctx, nodeNetAddr)
+}
+
+func (net *network) DisConnectWithNode(nodeID string) error {
+	return net.p2p.DisConnectWithNode(nodeID)
 }
 
 func (net *network) Start() {

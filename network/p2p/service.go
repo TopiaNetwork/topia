@@ -4,7 +4,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	swarm "github.com/libp2p/go-libp2p-swarm"
+	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -172,7 +175,7 @@ func (p2p *P2PService) connectionManagerOption() libp2p.Option {
 	for _, protPeer := range p2p.config.Connection.ProtectedPeers {
 		peerID, err := peer.IDFromString(protPeer)
 		if err != nil {
-			panic(fmt.Sprintf("failed to parse peer ID in protected peers array: %w", err))
+			panic(fmt.Sprintf("failed to parse peer ID in protected peers array: %v", err))
 			return nil
 		}
 
@@ -182,7 +185,7 @@ func (p2p *P2PService) connectionManagerOption() libp2p.Option {
 	for _, bootPeer := range p2p.config.Connection.BootstrapPeers {
 		peerID, err := peer.IDFromString(bootPeer)
 		if err != nil {
-			panic(fmt.Sprintf("failed to parse peer ID in boot peers array: %w", err))
+			panic(fmt.Sprintf("failed to parse peer ID in boot peers array: %v", err))
 			return nil
 		}
 		connMng.Protect(peerID, "bootstrap")
@@ -250,7 +253,7 @@ func (p2p *P2PService) defaultPubSubOptions() []pubsub.Option {
 	for _, cidr := range p2p.config.PubSub.IPColocationWhitelist {
 		_, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
-			panic(fmt.Sprintf("error parsing IPColocation subnet %s: %w", cidr, err))
+			panic(fmt.Sprintf("error parsing IPColocation subnet %s: %v", cidr, err))
 		}
 		ipcoloWhitelist = append(ipcoloWhitelist, ipnet)
 	}
@@ -946,4 +949,169 @@ func (p2p *P2PService) Close() {
 	}
 
 	p2p.host.Close()
+}
+
+func (p2p *P2PService) ConnectedPeers() []*tpnetcmn.RemotePeer {
+	conns := p2p.host.Network().Conns()
+
+	var remotePeers []*tpnetcmn.RemotePeer
+	for _, conn := range conns {
+		remotePeer := &tpnetcmn.RemotePeer{
+			ID:   conn.RemotePeer().String(),
+			Addr: conn.RemoteMultiaddr().String(),
+		}
+
+		remotePeers = append(remotePeers, remotePeer)
+	}
+
+	return remotePeers
+}
+
+func (p2p *P2PService) Connectedness(nodeID string) (tpnetcmn.Connectedness, error) {
+	peerID, err := peer.IDFromString(nodeID)
+	if err != nil {
+		return tpnetcmn.NotConnected, err
+	}
+
+	return tpnetcmn.Connectedness(p2p.host.Network().Connectedness(peerID)), nil
+}
+
+func (p2p *P2PService) PubSubScores() []tpnetcmn.PubsubScore {
+	var psScores []tpnetcmn.PubsubScore
+
+	for peerID, psSnapShot := range p2p.peerScoreCache.Fetch() {
+		psScore := tpnetcmn.PubsubScore{
+			ID:    peerID.String(),
+			Score: psSnapShot,
+		}
+
+		psScores = append(psScores, psScore)
+	}
+
+	return psScores
+}
+
+func (p2p *P2PService) NatState() (*tpnetcmn.NatInfo, error) {
+	autonat := p2p.host.(*basichost.BasicHost).GetAutoNat()
+
+	if autonat == nil {
+		return &tpnetcmn.NatInfo{
+			Reachability: tpnetcmn.ReachabilityUnknown,
+		}, nil
+	}
+
+	var maddr string
+	if autonat.Status() == network.ReachabilityPublic {
+		pa, err := autonat.PublicAddr()
+		if err != nil {
+			return nil, err
+		}
+		maddr = pa.String()
+	}
+
+	return &tpnetcmn.NatInfo{
+		Reachability: tpnetcmn.Reachability(autonat.Status()),
+		PublicAddr:   maddr,
+	}, nil
+}
+
+func (p2p *P2PService) PeerDetailInfo(nodeID string) (*tpnetcmn.PeerDetail, error) {
+	var peerDetail tpnetcmn.PeerDetail
+	peerID, err := peer.IDFromString(nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	agent, err := p2p.host.Peerstore().Get(peerID, "AgentVersion")
+	if err == nil {
+		peerDetail.AgentVersion = agent.(string)
+	} else {
+		return nil, err
+	}
+
+	for _, a := range p2p.host.Peerstore().Addrs(peerID) {
+		peerDetail.ConnectedAddrs = append(peerDetail.ConnectedAddrs, a.String())
+	}
+	sort.Strings(peerDetail.ConnectedAddrs)
+
+	protocols, err := p2p.host.Peerstore().GetProtocols(peerID)
+	if err == nil {
+		sort.Strings(protocols)
+		peerDetail.SupportedProtocols = protocols
+	} else {
+		return nil, err
+	}
+
+	if cm := p2p.host.ConnManager().GetTagInfo(peerID); cm != nil {
+		peerDetail.ConnInfos = &tpnetcmn.ConnInfos{
+			FirstSeen: cm.FirstSeen,
+			Value:     cm.Value,
+			Tags:      cm.Tags,
+			Conns:     cm.Conns,
+		}
+	}
+
+	return &peerDetail, nil
+}
+
+func (p2p *P2PService) FindPeer(ctx context.Context, nodeID string) (string, error) {
+	peerID, err := peer.IDFromString(nodeID)
+	if err != nil {
+		return "", err
+	}
+
+	executorIDs, _ := p2p.netActiveNode.GetActiveExecutorIDs()
+	if tpcmm.IsContainString(nodeID, executorIDs) {
+		maAddr, err := p2p.dhtServices[DHTServiceType_Execute].dht.FindPeer(ctx, peerID)
+		if err != nil {
+			return "", err
+		}
+		return maAddr.String(), nil
+	}
+
+	proposerIDs, _ := p2p.netActiveNode.GetActiveProposerIDs()
+	if tpcmm.IsContainString(nodeID, proposerIDs) {
+		maAddr, err := p2p.dhtServices[DHTServiceType_Propose].dht.FindPeer(ctx, peerID)
+		if err != nil {
+			return "", err
+		}
+		return maAddr.String(), nil
+	}
+
+	validatorIDs, _ := p2p.netActiveNode.GetActiveValidatorIDs()
+	if tpcmm.IsContainString(nodeID, validatorIDs) {
+		maAddr, err := p2p.dhtServices[DHTServiceType_Validate].dht.FindPeer(ctx, peerID)
+		if err != nil {
+			return "", err
+		}
+		return maAddr.String(), nil
+	}
+
+	maAddr, err := p2p.dhtServices[DHTServiceType_General].dht.FindPeer(ctx, peerID)
+	if err != nil {
+		return "", err
+	}
+	return maAddr.String(), nil
+}
+
+func (p2p *P2PService) ConnectToNode(ctx context.Context, nodeNetAddr string) error {
+	peerAddr, err := peer.AddrInfoFromString(nodeNetAddr)
+	if err != nil {
+		return err
+	}
+
+	if swrm, ok := p2p.host.Network().(*swarm.Swarm); ok {
+		swrm.Backoff().Clear(peerAddr.ID)
+	}
+
+	return p2p.host.Connect(ctx, *peerAddr)
+}
+
+func (p2p *P2PService) DisConnectWithNode(nodeID string) error {
+	peerID, err := peer.IDFromString(nodeID)
+	if err != nil {
+		return err
+	}
+
+	return p2p.host.Network().ClosePeer(peerID)
 }

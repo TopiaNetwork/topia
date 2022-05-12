@@ -72,6 +72,7 @@ func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolRes
 		pool.truncatePendingByCategory(category)
 		pool.truncateQueueByCategory(category)
 	}
+	pool.txState.Purge()
 	pool.changesSinceReorg = 0 // Reset change counter
 }
 

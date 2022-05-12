@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/TopiaNetwork/topia/transaction/basic"
 	"io/ioutil"
+	"time"
 )
 
 func (pool *transactionPool) SaveLocalTxs(category basic.TransactionCategory) error {
@@ -44,7 +45,8 @@ func (pool *transactionPool) LoadLocalTxs(category basic.TransactionCategory) er
 
 type remoteTxs struct {
 	Txs                 map[basic.TxID]*basic.Transaction
-	ActivationIntervals map[basic.TxID]*timeAndHeight
+	ActivationIntervals map[basic.TxID]time.Time
+	HeightIntervals     map[basic.TxID]uint64
 	TxHashCategorys     map[basic.TxID]basic.TransactionCategory
 }
 
@@ -53,6 +55,7 @@ func (pool *transactionPool) SaveRemoteTxs(category basic.TransactionCategory) e
 	var remotetxs = &remoteTxs{
 		Txs:                 pool.allTxsForLook.getRemoteMapTxsLookupByCategory(category),
 		ActivationIntervals: pool.ActivationIntervals.getAll(),
+		HeightIntervals:     pool.HeightIntervals.getAll(),
 		TxHashCategorys:     pool.TxHashCategory.getAll(),
 	}
 	remotes, err := json.Marshal(remotetxs)
@@ -89,6 +92,9 @@ func (pool *transactionPool) LoadRemoteTxs(category basic.TransactionCategory) e
 	}
 	for txId, ActivationInterval := range remotetxs.ActivationIntervals {
 		pool.ActivationIntervals.setTxActiv(txId, ActivationInterval)
+	}
+	for txId, height := range remotetxs.HeightIntervals {
+		pool.HeightIntervals.setTxHeight(txId, height)
 	}
 	for txId, TxHashCategory := range remotetxs.TxHashCategorys {
 		pool.TxHashCategory.setHashCat(txId, TxHashCategory)

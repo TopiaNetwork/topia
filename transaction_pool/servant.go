@@ -10,6 +10,7 @@ import (
 	"github.com/TopiaNetwork/topia/state/account"
 	"github.com/TopiaNetwork/topia/state/chain"
 	"github.com/TopiaNetwork/topia/transaction/basic"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 type BlockAddedEvent struct{ Block *types.Block }
@@ -23,6 +24,7 @@ type StateQueryService interface {
 	GetNonce(address crypttypes.Address) (uint64, error)
 	CurrentHeight() uint64
 	GetMaxGasLimit() uint64
+	LocalPeerID() peer.ID
 }
 type BlockService interface {
 	CurrentBlock() *types.Block
@@ -47,6 +49,10 @@ func (servant *transactionPoolServant) CurrentHeight() uint64 {
 func (servant *transactionPoolServant) GetMaxGasLimit() uint64 {
 	return 987654321
 }
+func (servant *transactionPoolServant) LocalPeerID() peer.ID {
+	return peer.ID("TEST")
+}
+
 func (servant *transactionPoolServant) CurrentBlock() *types.Block {
 	return servant.currentBlock
 }

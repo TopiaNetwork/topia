@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/state/account"
 	"sync"
 	"time"
@@ -94,6 +95,7 @@ type transactionPool struct {
 	allTxsForLook       *allTxsLookupMap
 	sortedLists         *txSortedList
 	ActivationIntervals *activationInterval // ActivationInterval from each tx
+	HeightIntervals     *HeightInterval     // ActivationInterval from each tx
 	TxHashCategory      *txHashCategory
 	txState             *golanglru.Cache
 	curMaxGasLimit      uint64
@@ -130,7 +132,11 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 	}
 	pool.txState, _ = golanglru.New(pool.config.TxStateCap)
 	//subscribe
-	//pool.query.Subscribe(ctx, protocol.PubSubProtocolID_Msgs, true, message.TopicValidator())
+
+	pool.query.Subscribe(ctx, protocol.SyncProtocolID_Msg,
+		true,
+		message.TxPoolMessageValidate)
+
 	pool.curMaxGasLimit = pool.query.GetMaxGasLimit()
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
@@ -434,6 +440,7 @@ func (pool *transactionPool) RemoveTxByKey(key basic.TxID) error {
 	// Transaction is in the future queue
 	f2 := func(string2 basic.TxID) {
 		pool.ActivationIntervals.removeTxActiv(string2)
+		pool.HeightIntervals.removeTxHeight(string2)
 		pool.TxHashCategory.removeHashCat(string2)
 	}
 	pool.queues.getTxListRemoveFutureByAddrOfCategory(tx, f2, key, category, addr)
@@ -474,18 +481,14 @@ func (pool *transactionPool) queueAddTx(key basic.TxID, tx *basic.Transaction, l
 	}
 	f4 := func(category basic.TransactionCategory, tx *basic.Transaction, local bool) {
 		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, local, pool.config.TxSegmentSize)
-		timeandheight := &timeAndHeight{
-			time:   time.Now(),
-			height: pool.query.CurrentHeight(),
-		}
-		pool.ActivationIntervals.setTxActiv(key, timeandheight)
+
+		pool.ActivationIntervals.setTxActiv(key, time.Now())
+		pool.HeightIntervals.setTxHeight(key, pool.query.CurrentHeight())
 	}
 	f5 := func(key basic.TxID, category basic.TransactionCategory, local bool) {
-		timeandheight := &timeAndHeight{
-			time:   time.Now(),
-			height: pool.query.CurrentHeight(),
-		}
-		pool.ActivationIntervals.setTxActiv(key, timeandheight)
+
+		pool.ActivationIntervals.setTxActiv(key, time.Now())
+		pool.HeightIntervals.setTxHeight(key, pool.query.CurrentHeight())
 		pool.TxHashCategory.setHashCat(key, category)
 		if local {
 			pool.query.PublishTx(pool.ctx, tx)
@@ -608,11 +611,8 @@ func (pool *transactionPool) add(tx *basic.Transaction, local bool) (replaced bo
 		pool.sortedLists.putTxToPricedlistByCategory(category, tx, isLocal)
 	}
 	f5 := func(txId basic.TxID) {
-		timeandheight := &timeAndHeight{
-			time:   time.Now(),
-			height: pool.query.CurrentHeight(),
-		}
-		pool.ActivationIntervals.setTxActiv(txId, timeandheight)
+		pool.ActivationIntervals.setTxActiv(txId, time.Now())
+		pool.HeightIntervals.setTxHeight(txId, pool.query.CurrentHeight())
 		pool.log.Tracef("Pooled new executable transaction ", "hash:", txId, "from:", from)
 	}
 	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f2, f3, f4, f5); !ok {
@@ -657,16 +657,15 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId basic.TxID, tx 
 		pool.sortedLists.removedPricedlistByCategory(category, 1)
 	}
 	// Successful replace tx, bump the ActivationInterval
-	timeandheight := &timeAndHeight{
-		time:   time.Now(),
-		height: pool.query.CurrentHeight(),
-	}
-	pool.ActivationIntervals.setTxActiv(txId, timeandheight)
+
+	pool.ActivationIntervals.setTxActiv(txId, time.Now())
+	pool.HeightIntervals.setTxHeight(txId, pool.query.CurrentHeight())
 	pool.txState.Add(txId, StateTxTurntoPending)
 	return true
 }
 
 func (pool *transactionPool) Stop() {
+
 	// Unsubscribe subscriptions registered from blockchain
 	pool.query.UnSubscribe(protocol.SyncProtocolID_Msg)
 	eventhub.GetEventHubManager().GetEventHub(pool.nodeId).UnObserve(pool.ctx, ObsID, eventhub.EventName_BlockAdded)
@@ -714,11 +713,9 @@ func (pool *transactionPool) replaceExecutables(category basic.TransactionCatego
 			pool.sortedLists.removedPricedlistByCategory(category, 1)
 		}
 		ft5 := func(txId basic.TxID) {
-			timeandheight := &timeAndHeight{
-				time:   time.Now(),
-				height: pool.query.CurrentHeight(),
-			}
-			pool.ActivationIntervals.setTxActiv(txId, timeandheight)
+
+			pool.ActivationIntervals.setTxActiv(txId, time.Now())
+			pool.HeightIntervals.setTxHeight(txId, pool.query.CurrentHeight())
 		}
 		replacedCnt := pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft3, ft4, ft5, replaced, category, addr)
 

@@ -943,7 +943,7 @@ func (queuemap *queuesMap) getStatsOfCategory(category basic.TransactionCategory
 }
 
 func (queuemap *queuesMap) removeTxsForTruncateQueue(category basic.TransactionCategory,
-	f2 func(string2 basic.TxID) *timeAndHeight,
+	f2 func(string2 basic.TxID) time.Time,
 	f3 func(transactionCategory basic.TransactionCategory, txHash basic.TxID) *basic.Transaction,
 	f4 func(category basic.TransactionCategory, txId basic.TxID, tx *basic.Transaction),
 	f5 func(f51 func(txId basic.TxID, tx *basic.Transaction), tx *basic.Transaction, category basic.TransactionCategory, addr tpcrtypes.Address),
@@ -965,7 +965,7 @@ func (queuemap *queuesMap) removeTxsForTruncateQueue(category basic.TransactionC
 		list := queuemap.queue[category].mapAddrTxCoreList[addr].Flatten()
 		for _, tx := range list {
 			txId, _ := tx.TxID()
-			time := f2(txId).time
+			time := f2(txId)
 			txs = append(txs, txByActivationInterval{txId, time})
 		}
 
@@ -1027,7 +1027,7 @@ func (queuemap *queuesMap) removeTxForLifeTime(category basic.TransactionCategor
 		list := txlist.txs.Flatten()
 		for _, tx := range list {
 			txId, _ := tx.TxID()
-			if f1(txId) > duration2 || f3(txId) > dltHeight {
+			if f1(txId) > duration2 && f3(txId) > dltHeight {
 				f2(txId)
 			}
 		}
@@ -1048,7 +1048,7 @@ func (queuemap *queuesMap) republicTx(category basic.TransactionCategory,
 		list := txlist.txs.Flatten()
 		for _, tx := range list {
 			txId, _ := tx.TxID()
-			if f1(txId) > time2 || f3(txId) > diffHegiht {
+			if f1(txId) > time2 && f3(txId) > diffHegiht {
 				f2(tx)
 			}
 		}
@@ -1311,50 +1311,71 @@ func (alltxsmap *allTxsLookupMap) removeAllTxsLookupByCategory(category basic.Tr
 	delete(alltxsmap.all, category)
 }
 
-type timeAndHeight struct {
-	time   time.Time
-	height uint64
-}
-
-func newTimeAndHeight() *timeAndHeight {
-	timeandheight := &timeAndHeight{
-		time:   time.Time{},
-		height: 0,
-	}
-	return timeandheight
-}
-
 type activationInterval struct {
 	Mu    sync.RWMutex
-	activ map[basic.TxID]*timeAndHeight
+	activ map[basic.TxID]time.Time
 }
 
 func newActivationInterval() *activationInterval {
 	activ := &activationInterval{
-		activ: make(map[basic.TxID]*timeAndHeight),
+		activ: make(map[basic.TxID]time.Time),
 	}
 	return activ
 }
-func (activ *activationInterval) getAll() map[basic.TxID]*timeAndHeight {
+func (activ *activationInterval) getAll() map[basic.TxID]time.Time {
 	activ.Mu.Lock()
 	defer activ.Mu.Unlock()
 	return activ.activ
 }
-func (activ *activationInterval) getTxActivByKey(key basic.TxID) *timeAndHeight {
+func (activ *activationInterval) getTxActivByKey(key basic.TxID) time.Time {
 	activ.Mu.Lock()
 	defer activ.Mu.Unlock()
 	return activ.activ[key]
 }
-func (activ *activationInterval) setTxActiv(key basic.TxID, timeandheight *timeAndHeight) {
+func (activ *activationInterval) setTxActiv(key basic.TxID, time time.Time) {
 	activ.Mu.Lock()
 	defer activ.Mu.Unlock()
-	activ.activ[key] = timeandheight
+	activ.activ[key] = time
 	return
 }
 func (activ *activationInterval) removeTxActiv(key basic.TxID) {
 	activ.Mu.Lock()
 	defer activ.Mu.Unlock()
 	delete(activ.activ, key)
+	return
+}
+
+type HeightInterval struct {
+	Mu sync.RWMutex
+	HI map[basic.TxID]uint64
+}
+
+func newHeightInterval() *HeightInterval {
+	hi := &HeightInterval{
+		HI: make(map[basic.TxID]uint64),
+	}
+	return hi
+}
+func (hi *HeightInterval) getAll() map[basic.TxID]uint64 {
+	hi.Mu.Lock()
+	defer hi.Mu.Unlock()
+	return hi.HI
+}
+func (hi *HeightInterval) getTxHeightByKey(key basic.TxID) uint64 {
+	hi.Mu.Lock()
+	defer hi.Mu.Unlock()
+	return hi.HI[key]
+}
+func (hi *HeightInterval) setTxHeight(key basic.TxID, height uint64) {
+	hi.Mu.Lock()
+	defer hi.Mu.Unlock()
+	hi.HI[key] = height
+	return
+}
+func (hi *HeightInterval) removeTxHeight(key basic.TxID) {
+	hi.Mu.Lock()
+	defer hi.Mu.Unlock()
+	delete(hi.HI, key)
 	return
 }
 

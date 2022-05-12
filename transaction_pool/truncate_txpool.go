@@ -53,7 +53,7 @@ func (pool *transactionPool) truncateQueueByCategory(category basic.TransactionC
 		return
 	}
 	// Sort all accounts with queued transactions by heartbeat
-	f2 := func(string2 basic.TxID) *timeAndHeight {
+	f2 := func(string2 basic.TxID) time.Time {
 		return pool.ActivationIntervals.getTxActivByKey(string2)
 	}
 	f3 := func(category basic.TransactionCategory, key basic.TxID) *basic.Transaction {
@@ -83,11 +83,8 @@ func (pool *transactionPool) truncateQueueByCategory(category basic.TransactionC
 		pool.log.Errorf("Missing transaction in lookup set, please report the issue", "TxID", key)
 	}
 	f514 := func(txId basic.TxID, category basic.TransactionCategory) {
-		timeandheight := &timeAndHeight{
-			time:   time.Now(),
-			height: pool.query.CurrentHeight(),
-		}
-		pool.ActivationIntervals.setTxActiv(txId, timeandheight)
+
+		pool.ActivationIntervals.setTxActiv(txId, time.Now())
 		pool.TxHashCategory.setHashCat(txId, category)
 	}
 	f6 := func(txId basic.TxID) {

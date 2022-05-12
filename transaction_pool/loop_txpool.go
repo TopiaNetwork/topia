@@ -109,7 +109,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 		// Handle inactive account transaction eviction
 		case <-evict.C:
 			f1 := func(string2 basic.TxID) time.Duration {
-				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2).time)
+				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.LifetimeForTx
 			f2 := func(string2 basic.TxID) {
@@ -117,7 +117,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 			}
 			f3 := func(string2 basic.TxID) uint64 {
 				curheight := pool.query.CurrentHeight()
-				txheight := pool.ActivationIntervals.activ[string2].height
+				txheight := pool.HeightIntervals.HI[string2]
 				if curheight > txheight {
 					return curheight - txheight
 				}
@@ -181,7 +181,7 @@ func (pool *transactionPool) loopRegularRepublic() {
 		select {
 		case <-republic.C:
 			f1 := func(string2 basic.TxID) time.Duration {
-				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2).time)
+				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.DurationForTxRePublic
 			f2 := func(tx *basic.Transaction) {
@@ -189,7 +189,7 @@ func (pool *transactionPool) loopRegularRepublic() {
 			}
 			f3 := func(string2 basic.TxID) uint64 {
 				curHeight := pool.query.CurrentHeight()
-				txHeight := pool.ActivationIntervals.getTxActivByKey(string2).height
+				txHeight := pool.HeightIntervals.getTxHeightByKey(string2)
 				if curHeight > txHeight {
 					return curHeight - txHeight
 				}

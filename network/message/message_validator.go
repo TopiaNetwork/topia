@@ -2,8 +2,11 @@ package message
 
 import (
 	"context"
+	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/TopiaNetwork/topia/transaction/basic"
+	transactionpool "github.com/TopiaNetwork/topia/transaction_pool"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -53,4 +56,22 @@ func TopicValidator(localPeer peer.ID, log tplog.Logger, validators ...PubSubMes
 
 		return result
 	}
+}
+
+func TxPoolMessageValidate(ctx context.Context, isLocal bool, data []byte) ValidationResult {
+	msg := &transactionpool.TxMessage{}
+	msg.Unmarshal(data)
+	var tx basic.Transaction
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+	err := marshaler.Unmarshal(msg.Data, &tx)
+	if err != nil {
+		return ValidationIgnore
+	}
+	if isLocal {
+		return ValidationAccept
+	}
+	if types.ChainID(tx.Head.ChainID) != "" {
+		return ValidationReject
+	}
+	return ValidationAccept
 }

@@ -58,7 +58,7 @@ func TopicValidator(localPeer peer.ID, log tplog.Logger, validators ...PubSubMes
 	}
 }
 
-func TxPoolMessageValidate(ctx context.Context, isLocal bool, data []byte) ValidationResult {
+func TxPoolMessageValidator(ctx context.Context, isLocal bool, data []byte) ValidationResult {
 	msg := &transactionpool.TxMessage{}
 	msg.Unmarshal(data)
 	var tx basic.Transaction

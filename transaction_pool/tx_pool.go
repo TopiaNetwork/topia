@@ -120,6 +120,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 		ctx:                 ctx,
 		allTxsForLook:       newAllTxsLookupMap(),
 		ActivationIntervals: newActivationInterval(),
+		HeightIntervals:     newHeightInterval(),
 		TxHashCategory:      newTxHashCategory(),
 		chanBlockAdded:      make(chan BlockAddedEvent, ChanBlockAddedSize),
 		chanReqReset:        make(chan *txPoolResetHeads),
@@ -135,7 +136,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 
 	pool.query.Subscribe(ctx, protocol.SyncProtocolID_Msg,
 		true,
-		message.TxPoolMessageValidate)
+		message.TxPoolMessageValidator)
 
 	pool.curMaxGasLimit = pool.query.GetMaxGasLimit()
 	pool.pendings = newPendingsMap()

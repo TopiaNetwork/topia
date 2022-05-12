@@ -26,6 +26,10 @@ func (s *service) StateQueryService() StateQueryService {
 	return &sqProxyObj
 }
 
+func (s *service) NetworkService() NetworkService {
+	return NewNetworkService(s.network)
+}
+
 func (s *service) BlockService() BlockService {
 	return &blockService{s.ledger.GetBlockStore()}
 }

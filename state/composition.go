@@ -119,6 +119,7 @@ type CompositionState interface {
 	stateaccount.AccountState
 	statechain.ChainState
 	statenode.NodeState
+	statenode.NodeInactiveState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState

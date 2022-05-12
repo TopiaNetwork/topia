@@ -2,19 +2,43 @@ package service
 
 import (
 	"context"
+	tpcmm "github.com/TopiaNetwork/topia/common"
+	tpnet "github.com/TopiaNetwork/topia/network"
+	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 )
 
-type NetworkParameters struct {
-	ChainID string
+type NetworkService interface {
+	ID() string
+
+	NetworkType() tpcmm.NetworkType
+
+	ListenAddr() []string
+
+	ConnectedPeers() []*tpnetcmn.RemotePeer
+
+	Connectedness(nodeID string) (tpnetcmn.Connectedness, error)
+
+	PubSubScores() []tpnetcmn.PubsubScore
+
+	NatState() (*tpnetcmn.NatInfo, error)
+
+	PeerDetailInfo(nodeID string) (*tpnetcmn.PeerDetail, error)
+
+	FindPeer(ctx context.Context, nodeID string) (string, error)
+
+	ConnectToNode(ctx context.Context, nodeNetAddr string) error
+
+	DisConnectWithNode(nodeID string) error
 }
 
-type Network struct {
+type networkService struct {
+	tpnet.Network
 }
 
-func (net *Network) Ping(ctx context.Context) error {
-	panic("implement me")
+func NewNetworkService(network tpnet.Network) NetworkService {
+	return &networkService{network}
 }
 
-func (net *Network) NetworkParam(ctx context.Context) (*NetworkParameters, error) {
-	panic("implement me")
+func (ns *networkService) NetworkType() tpcmm.NetworkType {
+	return tpcmm.CurrentNetworkType
 }

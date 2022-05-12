@@ -44,4 +44,6 @@ func TestGenerateGenesisData(t *testing.T) {
 
 	err := gData.Save("./genesis.json")
 	assert.Equal(t, nil, err)
+	gData.Load()
+	assert.Equal(t, nil, err)
 }

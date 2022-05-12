@@ -21,7 +21,7 @@ type Configuration struct {
 func GetConfiguration() *Configuration {
 	once.Do(func() {
 		genData := new(GenesisData)
-		err := genData.Load("genesis.json")
+		err := genData.Load()
 		if err != nil {
 			curDir, _ := os.Getwd()
 			panic("Load genesis data err: " + err.Error() + ";Current Dir: " + curDir)

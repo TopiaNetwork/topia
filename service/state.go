@@ -129,6 +129,8 @@ type stateQueryProxyObject struct {
 
 		GetBalance func(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
+		GetAllAccounts func() ([]*tpacc.Account, error)
+
 		GetLatestBlock func() (*tpchaintypes.Block, error)
 
 		GetLatestBlockResult func() (*tpchaintypes.BlockResult, error)
@@ -144,6 +146,16 @@ type stateQueryProxyObject struct {
 		GetActiveProposerIDs func() ([]string, error)
 
 		GetActiveValidatorIDs func() ([]string, error)
+
+		GetInactiveNodeIDs func() ([]string, error)
+
+		GetAllActiveExecutors func() ([]*common.NodeInfo, error)
+
+		GetAllActiveProposers func() ([]*common.NodeInfo, error)
+
+		GetAllActiveValidators func() ([]*common.NodeInfo, error)
+
+		GetAllInactiveNodes func() ([]*common.NodeInfo, error)
 
 		GetNodeWeight func(nodeID string) (uint64, error)
 
@@ -185,6 +197,10 @@ func (proxy *stateQueryProxyObject) GetBalance(addr tpcrtypes.Address, symbol cu
 	return proxy.ProxyObject.GetBalance(addr, symbol)
 }
 
+func (proxy *stateQueryProxyObject) GetAllAccounts() ([]*tpacc.Account, error) {
+	return proxy.ProxyObject.GetAllAccounts()
+}
+
 func (proxy *stateQueryProxyObject) GetLatestBlock() (*tpchaintypes.Block, error) {
 	return proxy.ProxyObject.GetLatestBlock()
 }
@@ -215,6 +231,26 @@ func (proxy *stateQueryProxyObject) GetActiveProposerIDs() ([]string, error) {
 
 func (proxy *stateQueryProxyObject) GetActiveValidatorIDs() ([]string, error) {
 	return proxy.ProxyObject.GetActiveValidatorIDs()
+}
+
+func (proxy *stateQueryProxyObject) GetInactiveNodeIDs() ([]string, error) {
+	return proxy.ProxyObject.GetInactiveNodeIDs()
+}
+
+func (proxy *stateQueryProxyObject) GetAllActiveExecutors() ([]*common.NodeInfo, error) {
+	return proxy.ProxyObject.GetAllActiveExecutors()
+}
+
+func (proxy *stateQueryProxyObject) GetAllActiveProposers() ([]*common.NodeInfo, error) {
+	return proxy.ProxyObject.GetAllActiveProposers()
+}
+
+func (proxy *stateQueryProxyObject) GetAllActiveValidators() ([]*common.NodeInfo, error) {
+	return proxy.ProxyObject.GetAllActiveValidators()
+}
+
+func (proxy *stateQueryProxyObject) GetAllInactiveNodes() ([]*common.NodeInfo, error) {
+	return proxy.ProxyObject.GetAllInactiveNodes()
 }
 
 func (proxy *stateQueryProxyObject) GetNodeWeight(nodeID string) (uint64, error) {

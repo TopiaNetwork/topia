@@ -24,6 +24,8 @@ require (
 	github.com/libp2p/go-libp2p-kad-dht v0.15.0
 	github.com/libp2p/go-libp2p-kbucket v0.4.7
 	github.com/libp2p/go-libp2p-pubsub v0.6.0
+	github.com/libp2p/go-libp2p-swarm v0.9.0
+	github.com/miguelmota/go-solidity-sha3 v0.1.1
 	github.com/multiformats/go-multiaddr v0.4.0
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/cobra v1.3.0
@@ -34,7 +36,6 @@ require (
 	go.uber.org/atomic v1.9.0
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e
 	golang.org/x/net v0.0.0-20211209124913-491a49abca63
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 	lukechampine.com/frand v1.4.2
 )
 
@@ -104,7 +105,6 @@ require (
 	github.com/libp2p/go-libp2p-pnet v0.2.0 // indirect
 	github.com/libp2p/go-libp2p-quic-transport v0.15.2 // indirect
 	github.com/libp2p/go-libp2p-record v0.1.3 // indirect
-	github.com/libp2p/go-libp2p-swarm v0.9.0 // indirect
 	github.com/libp2p/go-libp2p-tls v0.3.1 // indirect
 	github.com/libp2p/go-libp2p-transport-upgrader v0.6.0 // indirect
 	github.com/libp2p/go-libp2p-yamux v0.7.0 // indirect
@@ -180,6 +180,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220110181412-a018aaa089fe // indirect
 	golang.org/x/tools v0.1.8 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect

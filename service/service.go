@@ -6,6 +6,7 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	"github.com/TopiaNetwork/topia/wallet"
 )
 
 type Service interface {
@@ -18,6 +19,7 @@ type service struct {
 	network   tpnet.Network
 	ledger    ledger.Ledger
 	txPool    txpool.TransactionPool
+	w         wallet.Wallet
 }
 
 func (s *service) StateQueryService() StateQueryService {
@@ -36,5 +38,8 @@ func (s *service) BlockService() BlockService {
 
 func (s *service) TransactionService() TransactionService {
 	return newTransactionService(s.nodeID, s.log, s.marshaler, s.network, s.ledger, s.txPool)
+}
 
+func (s *service) WalletService() WalletService {
+	return NewWalletService(s.w)
 }

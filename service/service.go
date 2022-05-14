@@ -43,3 +43,7 @@ func (s *service) TransactionService() TransactionService {
 func (s *service) WalletService() WalletService {
 	return NewWalletService(s.w)
 }
+
+func (s *service) ContractService() ContractService {
+	return NewContractService(s.log, s.marshaler, s.StateQueryService(), s.TransactionService(), s.WalletService())
+}

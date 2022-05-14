@@ -14,6 +14,9 @@ import (
 )
 
 type ContractService interface {
+	Deploy(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, code []byte) (txbasic.TxID, tpcrtypes.Address, error)
+
+	Invoke(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, ContractAddr tpcrtypes.Address, Method string, Args string) (txbasic.TxID, []byte, error)
 }
 
 type contractService struct {
@@ -22,6 +25,16 @@ type contractService struct {
 	stateQueryService StateQueryService
 	txService         TransactionService
 	walletService     WalletService
+}
+
+func NewContractService(log tplog.Logger, marshaler codec.Marshaler, stateQueryService StateQueryService, txService TransactionService, walletService WalletService) ContractService {
+	return &contractService{
+		log:               log,
+		marshaler:         marshaler,
+		stateQueryService: stateQueryService,
+		txService:         txService,
+		walletService:     walletService,
+	}
 }
 
 func (cs *contractService) getTxUniRS(txRS *txbasic.TransactionResult) (*txuni.TransactionResultUniversal, error) {
@@ -92,6 +105,30 @@ func (cs *contractService) makeTransaction(fromAddr tpcrtypes.Address, payerAddr
 	}, nil
 }
 
+func (cs *contractService) doAction(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, txUniType txuni.TransactionUniversalType, txUniDataBytes []byte, actionName string) (txbasic.TxID, *txuni.TransactionResultUniversal, error) {
+	tx, err := cs.makeTransaction(fromAddr, payerAddr, gasPrice, gasLimit, txUniType, txUniDataBytes)
+	if err != nil {
+		cs.log.Errorf("Make deployment transaction err: %v", err)
+		return "", nil, err
+	}
+
+	txRS, err := cs.txService.ForwardTxSync(ctx, tx)
+	if err != nil {
+		cs.log.Errorf("Forward %s transaction err: %v", err, actionName)
+		return "", nil, err
+	}
+
+	txUniRS, err := cs.getTxUniRS(txRS)
+	if err != nil {
+		cs.log.Errorf("Can't get tx uni result when %s: %v", err, actionName)
+		return "", nil, err
+	}
+
+	txID, _ := tx.TxID()
+
+	return txID, txUniRS, nil
+}
+
 func (cs *contractService) Deploy(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, code []byte) (txbasic.TxID, tpcrtypes.Address, error) {
 	deployDataBytes, _ := json.Marshal(&struct {
 		ContractAddress tpcrtypes.Address
@@ -101,27 +138,37 @@ func (cs *contractService) Deploy(ctx context.Context, fromAddr tpcrtypes.Addres
 		code,
 	})
 
-	tx, err := cs.makeTransaction(fromAddr, payerAddr, gasPrice, gasLimit, txuni.TransactionUniversalType_ContractDeploy, deployDataBytes)
+	txID, txUniRS, err := cs.doAction(ctx, fromAddr, payerAddr, gasPrice, gasLimit, txuni.TransactionUniversalType_ContractDeploy, deployDataBytes, "deployment")
 	if err != nil {
-		cs.log.Errorf("Make deployment transaction err: %v", err)
-		return "", tpcrtypes.UndefAddress, err
-	}
-	txRS, err := cs.txService.ForwardTxSync(ctx, tx)
-	if err != nil {
-		cs.log.Errorf("Forward deployment transaction err: %v", err)
 		return "", tpcrtypes.UndefAddress, err
 	}
 
-	txUniRS, err := cs.getTxUniRS(txRS)
-	if err != nil {
-		cs.log.Errorf("Can't get tx uni result: %v", err)
-		return "", tpcrtypes.UndefAddress, err
-	}
-
-	txID, _ := tx.TxID()
 	if txUniRS.Status != txuni.TransactionResultUniversal_OK {
-		return txID, tpcrtypes.UndefAddress, fmt.Errorf("The final execute result err: %s", string(txUniRS.ErrString))
+		return txID, tpcrtypes.UndefAddress, fmt.Errorf("The final deployment result err: %s", string(txUniRS.ErrString))
 	}
 
 	return txID, tpcrtypes.NewFromBytes(txUniRS.Data), nil
+}
+
+func (cs *contractService) Invoke(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, ContractAddr tpcrtypes.Address, Method string, Args string) (txbasic.TxID, []byte, error) {
+	invokeDataBytes, _ := json.Marshal(&struct {
+		ContractAddress tpcrtypes.Address
+		Method          string
+		Args            string
+	}{
+		ContractAddr,
+		Method,
+		Args,
+	})
+
+	txID, txUniRS, err := cs.doAction(ctx, fromAddr, payerAddr, gasPrice, gasLimit, txuni.TransactionUniversalType_ContractInvoke, invokeDataBytes, "invoking")
+	if err != nil {
+		return "", nil, err
+	}
+
+	if txUniRS.Status != txuni.TransactionResultUniversal_OK {
+		return txID, nil, fmt.Errorf("The final deployment result err: %s", string(txUniRS.ErrString))
+	}
+
+	return txID, txUniRS.Data, nil
 }

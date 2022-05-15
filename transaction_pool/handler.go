@@ -2,7 +2,6 @@ package transactionpool
 
 import (
 	"context"
-
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/transaction/basic"
@@ -27,12 +26,14 @@ func NewTransactionPoolHandler(log tplog.Logger, txPool *transactionPool) *trans
 
 func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
 	var tx *basic.Transaction
+	txId, _ := tx.TxID()
 	err := tx.Unmarshal(msg.Data)
 	if err != nil {
 		handler.log.Error("txmessage data error")
 		return err
 	}
 	if err := handler.txPool.ValidateTx(tx, false); err != nil {
+		handler.txPool.txCache.Add(txId,StateTxInValid)
 		return err
 	}
 	category := basic.TransactionCategory(tx.Head.Category)
@@ -40,6 +41,8 @@ func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
 	if err := handler.txPool.AddTx(tx, false); err != nil {
 		return err
 	}
+
+	handler.txPool.txCache.Add(txId, StateTxAdded)
 	return nil
 }
 

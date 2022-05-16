@@ -113,7 +113,12 @@ func (txiv *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.L
 	gasUsed := uint64(0)
 	errMsg := ""
 	status := TransactionResultUniversal_Err
-	vmResult, err := tpvm.GetVMFactory().GetVM(tpvmtype.VMType_TVM).DeployContract(vmContext)
+
+	vmType := tpvmtype.VMType_TVM
+	if tpcrtypes.IsNativeContractAddress(txiv.ContractAddr) {
+		vmType = tpvmtype.VMType_NATIVE
+	}
+	vmResult, err := tpvm.GetVMFactory().GetVM(vmType).ExecuteContract(vmContext)
 	if err != nil {
 		errMsg = err.Error()
 	}

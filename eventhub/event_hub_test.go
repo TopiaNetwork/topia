@@ -35,8 +35,8 @@ func TestEventHub(t *testing.T) {
 
 	assert.Equal(t, nil, err)
 
-	evHub.Observe(context.Background(), EventName_TxReceived, receivedTxCallBack_test)
-	evHub.Trig(context.Background(), EventName_TxReceived, &txbasic.Transaction{})
+	evHub.Observe(context.Background(), EventName_TxPoolChanged, receivedTxCallBack_test)
+	evHub.Trig(context.Background(), EventName_TxPoolChanged, &txbasic.Transaction{})
 
 	time.Sleep(time.Second * 5)
 }

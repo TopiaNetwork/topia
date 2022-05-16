@@ -47,3 +47,7 @@ func (s *service) WalletService() WalletService {
 func (s *service) ContractService() ContractService {
 	return NewContractService(s.log, s.marshaler, s.StateQueryService(), s.TransactionService(), s.WalletService())
 }
+
+func (s *service) AccountService() AccountService {
+	return NewAccountService(s.log, s.ContractService())
+}

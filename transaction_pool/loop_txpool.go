@@ -4,7 +4,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func (pool *transactionPool) loopChanSelect() {
@@ -108,14 +108,14 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 		select {
 		// Handle inactive account transaction eviction
 		case <-evict.C:
-			f1 := func(string2 basic.TxID) time.Duration {
+			f1 := func(string2 txbasic.TxID) time.Duration {
 				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.LifetimeForTx
-			f2 := func(string2 basic.TxID) {
+			f2 := func(string2 txbasic.TxID) {
 				pool.RemoveTxByKey(string2)
 			}
-			f3 := func(string2 basic.TxID) uint64 {
+			f3 := func(string2 txbasic.TxID) uint64 {
 				curheight := pool.query.CurrentHeight()
 				txheight := pool.HeightIntervals.HI[string2]
 				if curheight > txheight {
@@ -180,14 +180,14 @@ func (pool *transactionPool) loopRegularRepublic() {
 	for {
 		select {
 		case <-republic.C:
-			f1 := func(string2 basic.TxID) time.Duration {
+			f1 := func(string2 txbasic.TxID) time.Duration {
 				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.DurationForTxRePublic
-			f2 := func(tx *basic.Transaction) {
+			f2 := func(tx *txbasic.Transaction) {
 				pool.query.PublishTx(pool.ctx, tx)
 			}
-			f3 := func(string2 basic.TxID) uint64 {
+			f3 := func(string2 txbasic.TxID) uint64 {
 				curHeight := pool.query.CurrentHeight()
 				txHeight := pool.HeightIntervals.getTxHeightByKey(string2)
 				if curHeight > txHeight {

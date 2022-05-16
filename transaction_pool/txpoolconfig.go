@@ -6,7 +6,7 @@ import (
 	"time"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TransactionPoolConfig struct {
@@ -14,8 +14,8 @@ type TransactionPoolConfig struct {
 	NoLocalFile          bool
 	NoRemoteFile         bool
 	NoConfigFile         bool
-	PathLocal            map[basic.TransactionCategory]string
-	PathRemote           map[basic.TransactionCategory]string
+	PathLocal            map[txbasic.TransactionCategory]string
+	PathRemote           map[txbasic.TransactionCategory]string
 	PathConfig           string
 	ReStoredDur          time.Duration
 	TxExpiredPolicy      TxExpiredPolicy
@@ -40,12 +40,12 @@ type TransactionPoolConfig struct {
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
-	PathLocal: map[basic.TransactionCategory]string{
-		basic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_localTransactions.json",
-		basic.TransactionCategory_Eth:             "savedtxs/Eth_localTransactions.json"},
-	PathRemote: map[basic.TransactionCategory]string{
-		basic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json",
-		basic.TransactionCategory_Eth:             "savedtxs/Eth_remoteTransactions.json"},
+	PathLocal: map[txbasic.TransactionCategory]string{
+		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_localTransactions.json",
+		txbasic.TransactionCategory_Eth:             "savedtxs/Eth_localTransactions.json"},
+	PathRemote: map[txbasic.TransactionCategory]string{
+		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json",
+		txbasic.TransactionCategory_Eth:             "savedtxs/Eth_remoteTransactions.json"},
 	PathConfig:      "configuration/txPoolConfigs.json",
 	ReStoredDur:     30 * time.Minute,
 	TxExpiredPolicy: TxExpiredTimeAndHeight,

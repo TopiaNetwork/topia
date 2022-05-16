@@ -8,7 +8,7 @@ import (
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func Test_transactionPool_truncateQueue(t *testing.T) {
@@ -23,10 +23,10 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	keyLocals = make([]basic.TxID, 0)
-	keyRemotes = make([]basic.TxID, 0)
-	txLocals = make([]*basic.Transaction, 0)
-	txRemotes = make([]*basic.Transaction, 0)
+	keyLocals = make([]txbasic.TxID, 0)
+	keyRemotes = make([]txbasic.TxID, 0)
+	txLocals = make([]*txbasic.Transaction, 0)
+	txRemotes = make([]*txbasic.Transaction, 0)
 
 	for i := 1; i <= 400; i++ {
 		nonce := uint64(i)
@@ -82,10 +82,10 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	keyLocals = make([]basic.TxID, 0)
-	keyRemotes = make([]basic.TxID, 0)
-	txLocals = make([]*basic.Transaction, 0)
-	txRemotes = make([]*basic.Transaction, 0)
+	keyLocals = make([]txbasic.TxID, 0)
+	keyRemotes = make([]txbasic.TxID, 0)
+	txLocals = make([]*txbasic.Transaction, 0)
+	txRemotes = make([]*txbasic.Transaction, 0)
 	var fromlocal, fromremote tpcrtypes.Address
 
 	for i := 1; i <= 400; i++ {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func Test_transactionPool_AddLocal(t *testing.T) {
@@ -96,13 +96,13 @@ func Test_transactionPool_SaveLocalTxs(t *testing.T) {
 	if err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	var locals map[basic.TxID]*basic.Transaction
+	var locals map[txbasic.TxID]*txbasic.Transaction
 	err = json.Unmarshal(data, &locals)
 	if err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	wants := make(map[basic.TxID]*basic.Transaction, 0)
-	gots := make(map[basic.TxID]*basic.Transaction, 0)
+	wants := make(map[txbasic.TxID]*txbasic.Transaction, 0)
+	gots := make(map[txbasic.TxID]*txbasic.Transaction, 0)
 
 	for k, v := range pool.allTxsForLook.all[Category1].locals {
 		wants[k] = v
@@ -181,10 +181,10 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	txs := make([]*basic.Transaction, 0)
+	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, TxR1)
 	txs = append(txs, TxR2)
-	txsMap := make(map[tpcrtypes.Address][]*basic.Transaction)
+	txsMap := make(map[tpcrtypes.Address][]*txbasic.Transaction)
 	txsMap[From2] = txs
 	pool.AddRemotes(txs)
 	assert.Equal(t, 1, len(pool.queues.getAddrTxListOfCategory(Category1)))

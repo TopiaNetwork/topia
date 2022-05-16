@@ -11,7 +11,7 @@ import (
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
@@ -41,14 +41,14 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	hashs := make([]basic.TxID, 0)
+	hashs := make([]txbasic.TxID, 0)
 	hashs = append(hashs, Key1)
 	hashs = append(hashs, Key2)
 	hashs = append(hashs, KeyR1)
 	hashs = append(hashs, KeyR2)
 	pool.RemoveTxHashs(hashs)
-	var hashs1, hashs2 []basic.TxID
-	var hash basic.TxID
+	var hashs1, hashs2 []txbasic.TxID
+	var hash txbasic.TxID
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -162,7 +162,7 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	var hashs []basic.TxID
+	var hashs []txbasic.TxID
 	hashs = append(hashs, Key1)
 	hashs = append(hashs, Key2)
 	hashs = append(hashs, KeyR1)
@@ -300,10 +300,10 @@ func Test_transactionPool_loop(t *testing.T) {
 
 	defer pool.wg.Wait()
 
-	keyLocals = make([]basic.TxID, 0)
-	keyRemotes = make([]basic.TxID, 0)
-	txLocals = make([]*basic.Transaction, 0)
-	txRemotes = make([]*basic.Transaction, 0)
+	keyLocals = make([]txbasic.TxID, 0)
+	keyRemotes = make([]txbasic.TxID, 0)
+	txLocals = make([]*txbasic.Transaction, 0)
+	txRemotes = make([]*txbasic.Transaction, 0)
 	var fromlocal, fromremote tpcrtypes.Address
 	for i := 1; i <= 100; i++ {
 		nonce := uint64(i)

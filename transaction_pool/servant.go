@@ -2,69 +2,60 @@ package transactionpool
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/chain/types"
+	tplog "github.com/TopiaNetwork/topia/log"
+
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	crypttypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/log"
-	"github.com/TopiaNetwork/topia/network"
+	tplgblock "github.com/TopiaNetwork/topia/ledger/block"
+	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state/account"
 	"github.com/TopiaNetwork/topia/state/chain"
 	"github.com/TopiaNetwork/topia/transaction"
-	"github.com/TopiaNetwork/topia/transaction/basic"
-	"github.com/libp2p/go-libp2p-core/peer"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
-type BlockAddedEvent struct{ Block *types.Block }
-
 type TransactionPoolServant interface {
-	StateQueryService
-	BlockService
-	network.Network
-}
-type StateQueryService interface {
 	GetNonce(address crypttypes.Address) (uint64, error)
 	CurrentHeight() uint64
-	GetMaxGasLimit() uint64
-	LocalPeerID() peer.ID
-}
-type BlockService interface {
-	CurrentBlock() *types.Block
-	GetBlockByHash(hash types.BlockHash) *types.Block
-	PublishTx(ctx context.Context, tx *basic.Transaction) error
+	CurrentBlock() *tpchaintypes.Block
+	GetBlockByHash(hash tpchaintypes.BlockHash) *tpchaintypes.Block
+	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
+	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
+	UnSubscribe(topic string) error
 }
 
 type transactionPoolServant struct {
 	accState     account.AccountState
 	chainState   chain.ChainState
-	currentBlock *types.Block
-	Network      network.Network
+	currentBlock *tpchaintypes.Block
+	Network      tpnet.Network
 	marshaler    codec.Marshaler
+	blockStore   tplgblock.BlockStore
 }
 
 func (servant *transactionPoolServant) GetNonce(address crypttypes.Address) (uint64, error) {
 	return servant.accState.GetNonce(address)
 }
+
 func (servant *transactionPoolServant) CurrentHeight() uint64 {
-	return servant.currentBlock.Head.Height
-}
-func (servant *transactionPoolServant) GetMaxGasLimit() uint64 {
-	return 987654321
-}
-func (servant *transactionPoolServant) LocalPeerID() peer.ID {
-	return peer.ID("TEST")
+	curBlock, _ := servant.chainState.GetLatestBlock()
+	curHeight := curBlock.Head.Height
+	return curHeight
 }
 
-func (servant *transactionPoolServant) CurrentBlock() *types.Block {
-	return servant.currentBlock
+func (servant *transactionPoolServant) CurrentBlock() *tpchaintypes.Block {
+	block, _ := servant.chainState.GetLatestBlock()
+	return block
 }
-func (servant *transactionPoolServant) GetBlockByHash(hash types.BlockHash) *types.Block {
-	block := servant.GetBlockByHash(hash)
+func (servant *transactionPoolServant) GetBlockByHash(hash tpchaintypes.BlockHash) *tpchaintypes.Block {
+	block, _ := servant.blockStore.GetBlockByHash(hash)
 	return block
 }
 
-func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *basic.Transaction) error {
+func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
 	if tx == nil {
 		return nil
 	}
@@ -83,14 +74,41 @@ func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *basic.
 	//comment for unit Test
 
 	servant.Network.Publish(ctx, toModuleName, protocol.SyncProtocolID_Msg, sendData)
-
 	return nil
 }
 
-func TxPoolMessageValidator(ctx context.Context, isLocal bool, sendData []byte) message.ValidationResult {
+func (servant *transactionPoolServant) Subscribe(ctx context.Context, topic string, localIgnore bool,
+	validators ...message.PubSubMessageValidator) error {
+	return servant.Network.Subscribe(ctx, topic, localIgnore, validators...)
+}
+func (servant *transactionPoolServant) UnSubscribe(topic string) error {
+	return servant.Network.UnSubscribe(topic)
+}
+
+type TxMessageSubProcessor interface {
+	Validate(ctx context.Context, isLocal bool, data []byte) message.ValidationResult
+	Process(ctx context.Context, subMsgTxMessage *TxMessage) error
+}
+
+var TxMsgSubProcessor TxMessageSubProcessor
+
+type txMessageSubProcessor struct {
+	txpool TransactionPool
+	log    tplog.Logger
+	nodeID string
+}
+
+func (msgSub *txMessageSubProcessor) GetLoger() tplog.Logger {
+	return msgSub.log
+}
+func (msgSub *txMessageSubProcessor) GetNodeID() string {
+	return msgSub.nodeID
+}
+
+func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool, sendData []byte) message.ValidationResult {
 	msg := &TxMessage{}
 	msg.Unmarshal(sendData)
-	var tx *basic.Transaction
+	var tx *txbasic.Transaction
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 	err := marshaler.Unmarshal(msg.Data, &tx)
 	if err != nil {
@@ -103,33 +121,19 @@ func TxPoolMessageValidator(ctx context.Context, isLocal bool, sendData []byte) 
 		return message.ValidationAccept
 	} else {
 		ac := transaction.CreatTransactionAction(tx)
-		verifyResult := ac.Verify(ctx, TxMsgSubProcessor.getLogger(), TxMsgSubProcessor.getNodID(), nil)
+		verifyResult := ac.Verify(ctx, msgSub.GetLoger(), msgSub.GetNodeID(), nil)
 		switch verifyResult {
-		case basic.VerifyResult_Accept:
+		case txbasic.VerifyResult_Accept:
 			return message.ValidationAccept
-		case basic.VerifyResult_Ignore:
+		case txbasic.VerifyResult_Ignore:
 			return message.ValidationIgnore
-		case basic.VerifyResult_Reject:
+		case txbasic.VerifyResult_Reject:
 			return message.ValidationReject
 		}
 	}
 	return message.ValidationAccept
 }
+func (msgSub *txMessageSubProcessor) Process(ctx context.Context, subMsgTxMessage *TxMessage) error {
 
-var TxMsgSubProcessor TxMessageSubProcessor
-
-type TxMessageSubProcessor interface {
-	getLogger() log.Logger
-	getNodID() string
-}
-type txMessageSubProcessor struct {
-	logger log.Logger
-	nodID  string
-}
-
-func (pr *txMessageSubProcessor) getLogger() log.Logger {
-	return pr.logger
-}
-func (pr *txMessageSubProcessor) getNodID() string {
-	return pr.nodID
+	return nil
 }

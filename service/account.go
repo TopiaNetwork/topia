@@ -37,7 +37,7 @@ func NewAccountService(log tplog.Logger, contractService ContractService) Accoun
 func (as *accountService) BindName(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, accountAddr tpcrtypes.Address, accountName tpacc.AccountName) (txbasic.TxID, error) {
 	args := fmt.Sprintf("%s@%s@%s", fromAddr, accountAddr, accountName)
 
-	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpacc.NativeContractAccount_Account.Addr, "BindName", args)
+	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpcrtypes.NativeContractAddr_Account, "BindName", args)
 
 	return txID, err
 }
@@ -45,7 +45,7 @@ func (as *accountService) BindName(ctx context.Context, fromAddr tpcrtypes.Addre
 func (as *accountService) GrantAccessRoot(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, accountAddr tpcrtypes.Address) (txbasic.TxID, error) {
 	args := fmt.Sprintf("%s@%s", fromAddr, accountAddr)
 
-	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpacc.NativeContractAccount_Account.Addr, "GrantAccessRoot", args)
+	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpcrtypes.NativeContractAddr_Account, "GrantAccessRoot", args)
 
 	return txID, err
 }
@@ -53,7 +53,7 @@ func (as *accountService) GrantAccessRoot(ctx context.Context, fromAddr tpcrtype
 func (as *accountService) GrantAccessMethods(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, accountAddr tpcrtypes.Address, contractAddr tpcrtypes.Address, methods []string, gasAllowance uint64) (txbasic.TxID, error) {
 	args := fmt.Sprintf("%s@%s@%s@%v@%d", fromAddr, accountAddr, contractAddr, methods, gasAllowance)
 
-	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpacc.NativeContractAccount_Account.Addr, "GrantAccessMethods", args)
+	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpcrtypes.NativeContractAddr_Account, "GrantAccessMethods", args)
 
 	return txID, err
 }
@@ -61,7 +61,7 @@ func (as *accountService) GrantAccessMethods(ctx context.Context, fromAddr tpcrt
 func (as *accountService) RevokeGrantAccess(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, accountAddr tpcrtypes.Address) (txbasic.TxID, error) {
 	args := fmt.Sprintf("%s@%s", fromAddr, accountAddr)
 
-	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpacc.NativeContractAccount_Account.Addr, "RevokeGrantAccess", args)
+	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpcrtypes.NativeContractAddr_Account, "RevokeGrantAccess", args)
 
 	return txID, err
 }
@@ -69,7 +69,7 @@ func (as *accountService) RevokeGrantAccess(ctx context.Context, fromAddr tpcrty
 func (as *accountService) RevokeGrantAccessMethods(ctx context.Context, fromAddr tpcrtypes.Address, payerAddr tpcrtypes.Address, gasPrice uint64, gasLimit uint64, accountAddr tpcrtypes.Address, contractAddr tpcrtypes.Address, methods []string) (txbasic.TxID, error) {
 	args := fmt.Sprintf("%s@%s@%s@%v", fromAddr, accountAddr, contractAddr, methods)
 
-	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpacc.NativeContractAccount_Account.Addr, "RevokeGrantAccessMethods", args)
+	txID, _, err := as.contractService.Invoke(ctx, fromAddr, payerAddr, gasPrice, gasLimit, tpcrtypes.NativeContractAddr_Account, "RevokeGrantAccessMethods", args)
 
 	return txID, err
 }

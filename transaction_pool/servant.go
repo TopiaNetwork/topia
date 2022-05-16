@@ -93,7 +93,7 @@ type TxMessageSubProcessor interface {
 var TxMsgSubProcessor TxMessageSubProcessor
 
 type txMessageSubProcessor struct {
-	txpool TransactionPool
+	txpool *transactionPool
 	log    tplog.Logger
 	nodeID string
 }
@@ -134,6 +134,23 @@ func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool,
 	return message.ValidationAccept
 }
 func (msgSub *txMessageSubProcessor) Process(ctx context.Context, subMsgTxMessage *TxMessage) error {
+	var tx *txbasic.Transaction
+	txId, _ := tx.TxID()
+	err := tx.Unmarshal(subMsgTxMessage.Data)
+	if err != nil {
+		msgSub.log.Error("txmessage data error")
+		return err
+	}
+	if err := msgSub.txpool.ValidateTx(tx, false); err != nil {
+		msgSub.txpool.txCache.Add(txId, StateTxInValid)
+		return err
+	}
+	category := txbasic.TransactionCategory(tx.Head.Category)
+	msgSub.txpool.newTxListStructs(category)
+	if err := msgSub.txpool.AddTx(tx, false); err != nil {
+		return err
+	}
 
+	msgSub.txpool.txCache.Add(txId, StateTxAdded)
 	return nil
 }

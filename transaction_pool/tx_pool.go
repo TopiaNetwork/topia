@@ -108,7 +108,7 @@ type transactionPool struct {
 	log                 tplog.Logger
 	level               tplogcmm.LogLevel
 	ctx                 context.Context
-	handler             TransactionPoolHandler
+	handler             *transactionPoolHandler
 	marshaler           codec.Marshaler
 	hasher              tpcmm.Hasher
 	changesSinceReorg   int // counter for drops we've performed in-between reorg.
@@ -144,8 +144,6 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.sortedLists = newTxSortedList()
-	poolHandler := NewTransactionPoolHandler(poolLog, pool)
-	pool.handler = poolHandler
 
 	if !pool.config.NoLocalFile {
 		for category := range pool.config.PathLocal {
@@ -176,6 +174,8 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 	pool.query.Subscribe(ctx, protocol.SyncProtocolID_Msg,
 		true,
 		TxMsgSubProcessor.Validate)
+	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
+	pool.handler = poolHandler
 	return pool
 }
 func (pool *transactionPool) newTxListStructs(category txbasic.TransactionCategory) {
@@ -262,7 +262,7 @@ func (pool *transactionPool) Dispatch(context actor.Context, data []byte) {
 }
 
 func (pool *transactionPool) processTx(msg *TxMessage) error {
-	err := pool.handler.ProcessTx(msg)
+	err := pool.handler.ProcessTx(pool.ctx, msg)
 	if err != nil {
 		return err
 

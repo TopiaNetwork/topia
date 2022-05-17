@@ -14,10 +14,8 @@ import (
 func Test_transactionPool_SaveConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 
 	//pool.config.PathRemote[Category1] = "newremote.json"
 

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 var (
@@ -210,12 +210,12 @@ func TestCntAccountHeap_Pop(t *testing.T) {
 }
 
 func Test_txSortedMap_Get(t *testing.T) {
-	testitem := make(map[uint64]*basic.Transaction, 0)
+	testitem := make(map[uint64]*txbasic.Transaction, 0)
 	testitem[uint64(1)] = Tx1
 	type fields struct {
-		items map[uint64]*basic.Transaction
+		items map[uint64]*txbasic.Transaction
 		index *nonceHp
-		cache []*basic.Transaction
+		cache []*txbasic.Transaction
 	}
 	type args struct {
 		nonce uint64
@@ -224,7 +224,7 @@ func Test_txSortedMap_Get(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		want   *basic.Transaction
+		want   *txbasic.Transaction
 	}{
 		// TODO: Add test cases.
 		{"test get", fields{
@@ -250,17 +250,15 @@ func Test_txSortedMap_Get(t *testing.T) {
 func Test_transactionPool_AddLocals(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	txs := make([]*basic.Transaction, 0)
+	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, Tx1)
 	txs = append(txs, Tx2)
 	pool.AddLocals(txs)

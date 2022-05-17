@@ -4,8 +4,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func (pool *transactionPool) loopChanSelect() {
@@ -76,8 +75,10 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 		}
 	}()
 	// Track the previous head headers for transaction reorgs
-	var head = pool.query.CurrentBlock()
-
+	head, err := pool.query.GetLatestBlock()
+	if err != nil {
+		pool.log.Errorf("loopResetIfBlockAdded get current block err:", err)
+	}
 	for {
 		select {
 		// Handle ChainHeadEvent
@@ -109,18 +110,30 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 		select {
 		// Handle inactive account transaction eviction
 		case <-evict.C:
-			f0 := func(address tpcrtypes.Address) bool { return pool.locals.contains(address) }
-			f1 := func(string2 string) time.Duration {
+			f1 := func(string2 txbasic.TxID) time.Duration {
 				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.LifetimeForTx
-			f2 := func(string2 string) {
+			f2 := func(string2 txbasic.TxID) {
 				pool.RemoveTxByKey(string2)
 			}
+			f3 := func(string2 txbasic.TxID) uint64 {
+				curheight, err := pool.query.CurrentHeight()
+				if err != nil {
+					pool.log.Errorf("get current height error:", err)
+				}
+				txheight := pool.HeightIntervals.HI[string2]
+				if curheight > txheight {
+					return curheight - txheight
+				}
+				return 0
+			}
+			diffHeight := pool.config.LifeHeight
 			for category, _ := range pool.queues.getAll() {
-				pool.queues.removeTxForLifeTime(category, f0, f1, time2, f2)
+				pool.queues.removeTxForLifeTime(category, pool.config.TxExpiredPolicy, f1, time2, f2, f3, diffHeight)
 
 			}
+
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRemoveTxForUptoLifeTime stopped")
 			return
@@ -172,15 +185,27 @@ func (pool *transactionPool) loopRegularRepublic() {
 	for {
 		select {
 		case <-republic.C:
-			f1 := func(string2 string) time.Duration {
+			f1 := func(string2 txbasic.TxID) time.Duration {
 				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.DurationForTxRePublic
-			f2 := func(tx *basic.Transaction) {
-				pool.BroadCastTx(tx)
+			f2 := func(tx *txbasic.Transaction) {
+				pool.query.PublishTx(pool.ctx, tx)
 			}
+			f3 := func(string2 txbasic.TxID) uint64 {
+				curHeight, err := pool.query.CurrentHeight()
+				if err != nil {
+					pool.log.Errorf("get current height error:", err)
+				}
+				txHeight := pool.HeightIntervals.getTxHeightByKey(string2)
+				if curHeight > txHeight {
+					return curHeight - txHeight
+				}
+				return 0
+			}
+			diffHeight := pool.config.DiffHeightForTxRePublic
 			for category, _ := range pool.queues.getAll() {
-				pool.queues.republicTx(category, f1, time2, f2)
+				pool.queues.republicTx(category, f1, time2, f2, f3, diffHeight)
 			}
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRegularRepublic stopped")

@@ -3,43 +3,44 @@ package transactionpool
 import (
 	"context"
 	"encoding/json"
+	"github.com/TopiaNetwork/topia/network/protocol"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/golang/mock/gomock"
+	"github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/TopiaNetwork/topia/chain/types"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	"github.com/TopiaNetwork/topia/transaction/basic"
-	"github.com/TopiaNetwork/topia/transaction/universal"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 )
 
 var (
-	Category1, Category2                                                             basic.TransactionCategory
+	Category1, Category2                                                             txbasic.TransactionCategory
 	TestTxPoolConfig                                                                 TransactionPoolConfig
-	TxlowGasPrice, TxHighGasLimit, txlocal, txremote, Tx1, Tx2, Tx3, Tx4, TxR1, TxR2 *basic.Transaction
-	txHead                                                                           *basic.TransactionHead
-	txData                                                                           *basic.TransactionData
-	keylocal, keyremote, Key1, Key2, Key3, Key4, KeyR1, KeyR2                        string
+	TxlowGasPrice, TxHighGasLimit, txlocal, txremote, Tx1, Tx2, Tx3, Tx4, TxR1, TxR2 *txbasic.Transaction
+	txHead                                                                           *txbasic.TransactionHead
+	txData                                                                           *txbasic.TransactionData
+	keylocal, keyremote, Key1, Key2, Key3, Key4, KeyR1, KeyR2                        txbasic.TxID
 	from, to, From1, From2                                                           tpcrtypes.Address
-	txLocals, txRemotes                                                              []*basic.Transaction
-	keyLocals, keyRemotes                                                            []string
+	txLocals, txRemotes                                                              []*txbasic.Transaction
+	keyLocals, keyRemotes                                                            []txbasic.TxID
 	fromLocals, fromRemotes, toLocals, toRemotes                                     []tpcrtypes.Address
 
-	OldBlock, NewBlock                                             *types.Block
-	OldBlockHead, NewBlockHead                                     *types.BlockHead
-	OldBlockData, NewBlockData                                     *types.BlockData
-	OldTx1, OldTx2, OldTx3, OldTx4, NewTx1, NewTx2, NewTx3, NewTx4 *basic.Transaction
+	OldBlock, NewBlock                                             *tpchaintypes.Block
+	OldBlockHead, NewBlockHead                                     *tpchaintypes.BlockHead
+	OldBlockData, NewBlockData                                     *tpchaintypes.BlockData
+	OldTx1, OldTx2, OldTx3, OldTx4, NewTx1, NewTx2, NewTx3, NewTx4 *txbasic.Transaction
 	sysActor                                                       *actor.ActorSystem
 	newcontext                                                     actor.Context
-	State                                                          *StatePoolDB
 	TpiaLog                                                        tplog.Logger
 	starttime                                                      uint64
 	NodeID                                                         string
@@ -49,12 +50,12 @@ var (
 func init() {
 	NodeID = "TestNode"
 	Ctx = context.Background()
-	Category1 = basic.TransactionCategory_Topia_Universal
+	Category1 = txbasic.TransactionCategory_Topia_Universal
 	TpiaLog, _ = tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
 	TestTxPoolConfig = DefaultTransactionPoolConfig
 	starttime = uint64(time.Now().Unix() - 105)
-	keyLocals = make([]string, 0)
-	keyRemotes = make([]string, 0)
+	keyLocals = make([]txbasic.TxID, 0)
+	keyRemotes = make([]txbasic.TxID, 0)
 	for i := 1; i <= 100; i++ {
 		nonce := uint64(i)
 		gasprice := uint64(i * 1000)
@@ -64,7 +65,7 @@ func init() {
 		if i > 1 {
 			txlocal.Head.FromAddr = append(txlocal.Head.FromAddr, byte(i))
 		}
-		keylocal, _ = txlocal.HashHex()
+		keylocal, _ = txlocal.TxID()
 		keyLocals = append(keyLocals, keylocal)
 		txLocals = append(txLocals, txlocal)
 
@@ -73,7 +74,7 @@ func init() {
 		if i > 1 {
 			txremote.Head.FromAddr = append(txremote.Head.FromAddr, byte(i))
 		}
-		keyremote, _ = txremote.HashHex()
+		keyremote, _ = txremote.TxID()
 		keyRemotes = append(keyRemotes, keyremote)
 		txRemotes = append(txRemotes, txremote)
 	}
@@ -84,16 +85,16 @@ func init() {
 	Tx4 = setTxLocal(4, 14000, 123456)
 
 	From1 = tpcrtypes.Address(Tx1.Head.FromAddr)
-	Key1, _ = Tx1.HashHex()
-	Key2, _ = Tx2.HashHex()
-	Key3, _ = Tx3.HashHex()
-	Key4, _ = Tx4.HashHex()
+	Key1, _ = Tx1.TxID()
+	Key2, _ = Tx2.TxID()
+	Key3, _ = Tx3.TxID()
+	Key4, _ = Tx4.TxID()
 
 	TxR1 = setTxRemote(1, 11000, 123456)
 	TxR2 = setTxRemote(2, 12000, 123456)
 	From2 = tpcrtypes.Address(TxR1.Head.FromAddr)
-	KeyR1, _ = TxR1.HashHex()
-	KeyR2, _ = TxR2.HashHex()
+	KeyR1, _ = TxR1.TxID()
+	KeyR2, _ = TxR2.TxID()
 
 	TxlowGasPrice = setTxRemote(300, 100, 1000)
 	TxHighGasLimit = setTxRemote(301, 10000, 9987654321)
@@ -113,7 +114,7 @@ func init() {
 	OldKey2, _ := OldTx2.HashHex()
 	OldKey3, _ := OldTx3.HashHex()
 	OldKey4, _ := OldTx4.HashHex()
-	OldTxs := make(map[string]*basic.Transaction, 0)
+	OldTxs := make(map[string]*txbasic.Transaction, 0)
 	OldTxs[OldKey1] = OldTx1
 	OldTxs[OldKey2] = OldTx2
 	OldTxs[OldKey3] = OldTx3
@@ -128,7 +129,7 @@ func init() {
 	NewKey3, _ := NewTx3.HashHex()
 	NewKey4, _ := NewTx4.HashHex()
 
-	NewTxs := make(map[string]*basic.Transaction, 0)
+	NewTxs := make(map[string]*txbasic.Transaction, 0)
 	NewTxs[NewKey1] = NewTx1
 	NewTxs[NewKey2] = NewTx2
 	NewTxs[NewKey3] = NewTx3
@@ -140,13 +141,12 @@ func init() {
 	NewBlock = SetBlock(NewBlockHead, NewBlockData)
 
 	sysActor = actor.NewActorSystem()
-	State = &StatePoolDB{}
 
 }
 
-func setTxHeadLocal(nonce uint64) *basic.TransactionHead {
-	Category := basic.TransactionCategory_Topia_Universal
-	txhead := &basic.TransactionHead{
+func setTxHeadLocal(nonce uint64) *txbasic.TransactionHead {
+	Category := txbasic.TransactionCategory_Topia_Universal
+	txhead := &txbasic.TransactionHead{
 		Category:  []byte(Category),
 		ChainID:   []byte{0x01},
 		Version:   1,
@@ -156,9 +156,9 @@ func setTxHeadLocal(nonce uint64) *basic.TransactionHead {
 	}
 	return txhead
 }
-func setTxHeadRemote(nonce uint64) *basic.TransactionHead {
-	Category := basic.TransactionCategory_Topia_Universal
-	txhead := &basic.TransactionHead{
+func setTxHeadRemote(nonce uint64) *txbasic.TransactionHead {
+	Category := txbasic.TransactionCategory_Topia_Universal
+	txhead := &txbasic.TransactionHead{
 		Category:  []byte(Category),
 		ChainID:   []byte{0x01},
 		Version:   1,
@@ -168,38 +168,38 @@ func setTxHeadRemote(nonce uint64) *basic.TransactionHead {
 	}
 	return txhead
 }
-func setTxDataLocal(nonce, gasprice, gaslimit uint64) *basic.TransactionData {
+func setTxDataLocal(nonce, gasprice, gaslimit uint64) *txbasic.TransactionData {
 	txdatauniversal := setTxUniversalLocal(nonce, gasprice, gaslimit)
 	byteSpecification, _ := json.Marshal(txdatauniversal)
-	txdata := &basic.TransactionData{
+	txdata := &txbasic.TransactionData{
 		Specification: byteSpecification,
 	}
 
 	return txdata
 }
-func setTxDataRemote(nonce, gasprice, gaslimit uint64) *basic.TransactionData {
+func setTxDataRemote(nonce, gasprice, gaslimit uint64) *txbasic.TransactionData {
 	txdatauniversal := setTxUniversalRemote(nonce, gasprice, gaslimit)
 	bytesSpecification, _ := json.Marshal(txdatauniversal)
-	txdata := &basic.TransactionData{
+	txdata := &txbasic.TransactionData{
 		Specification: bytesSpecification,
 	}
 
 	return txdata
 }
-func setTxLocal(nonce, gasPrice, gasLimit uint64) *basic.Transaction {
+func setTxLocal(nonce, gasPrice, gasLimit uint64) *txbasic.Transaction {
 	head := setTxHeadLocal(nonce)
 	data := setTxDataLocal(nonce, gasPrice, gasLimit)
-	local := &basic.Transaction{
+	local := &txbasic.Transaction{
 		Head: head,
 		Data: data,
 	}
 
 	return local
 }
-func setTxRemote(nonce, gasPrice, gasLimit uint64) *basic.Transaction {
+func setTxRemote(nonce, gasPrice, gasLimit uint64) *txbasic.Transaction {
 	head := setTxHeadRemote(nonce)
 	data := setTxDataRemote(nonce, gasPrice, gasLimit)
-	remote := &basic.Transaction{
+	remote := &txbasic.Transaction{
 		Head: head,
 		Data: data,
 	}
@@ -207,11 +207,10 @@ func setTxRemote(nonce, gasPrice, gasLimit uint64) *basic.Transaction {
 	return remote
 }
 
-func setTxUniversalLocalHead(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversalHead {
-	txuniversalhead := &universal.TransactionUniversalHead{
+func setTxUniversalLocalHead(nonce, gasPrice, gasLimit uint64) *txuni.TransactionUniversalHead {
+	txuniversalhead := &txuni.TransactionUniversalHead{
 		Version:           1,
 		FeePayer:          []byte{0x01, 0x01},
-		Nonce:             nonce,
 		GasPrice:          gasPrice,
 		GasLimit:          gasLimit,
 		FeePayerSignature: []byte{0x01, 0x01},
@@ -220,11 +219,10 @@ func setTxUniversalLocalHead(nonce, gasPrice, gasLimit uint64) *universal.Transa
 	}
 	return txuniversalhead
 }
-func setTxUniversalRemoteHead(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversalHead {
-	txuniversalhead := &universal.TransactionUniversalHead{
+func setTxUniversalRemoteHead(nonce, gasPrice, gasLimit uint64) *txuni.TransactionUniversalHead {
+	txuniversalhead := &txuni.TransactionUniversalHead{
 		Version:           1,
 		FeePayer:          []byte{0x01, 0x01},
-		Nonce:             nonce,
 		GasPrice:          gasPrice,
 		GasLimit:          gasLimit,
 		FeePayerSignature: []byte{0x01, 0x01},
@@ -234,58 +232,58 @@ func setTxUniversalRemoteHead(nonce, gasPrice, gasLimit uint64) *universal.Trans
 	return txuniversalhead
 }
 
-func setTxUniversalLocalData(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversalData {
+func setTxUniversalLocalData(nonce, gasPrice, gasLimit uint64) *txuni.TransactionUniversalData {
 	txtranserferlocal := setTxUniversalTransferLocal(nonce, gasPrice, gasLimit)
 	byteSpecification, _ := json.Marshal(txtranserferlocal)
-	txuniversaldata := &universal.TransactionUniversalData{
+	txuniversaldata := &txuni.TransactionUniversalData{
 		Specification: byteSpecification,
 	}
 
 	return txuniversaldata
 }
-func setTxUniversalRemoteData(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversalData {
+func setTxUniversalRemoteData(nonce, gasPrice, gasLimit uint64) *txuni.TransactionUniversalData {
 	txtranserferremote := setTxUniversalTransferRemote(nonce, gasPrice, gasLimit)
 	byteSpecification, _ := json.Marshal(txtranserferremote)
-	txuniversaldata := &universal.TransactionUniversalData{
+	txuniversaldata := &txuni.TransactionUniversalData{
 		Specification: byteSpecification,
 	}
 
 	return txuniversaldata
 }
-func setTxUniversalLocal(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversal {
+func setTxUniversalLocal(nonce, gasPrice, gasLimit uint64) *txuni.TransactionUniversal {
 	head := setTxUniversalLocalHead(nonce, gasPrice, gasLimit)
 	data := setTxUniversalLocalData(nonce, gasPrice, gasLimit)
-	txuniversal := &universal.TransactionUniversal{
+	txuniversal := &txuni.TransactionUniversal{
 		Head: head,
 		Data: data,
 	}
 
 	return txuniversal
 }
-func setTxUniversalRemote(nonce, gasPrice, gasLimit uint64) *universal.TransactionUniversal {
+func setTxUniversalRemote(nonce, gasPrice, gasLimit uint64) *txuni.TransactionUniversal {
 	head := setTxUniversalRemoteHead(nonce, gasPrice, gasLimit)
 	data := setTxUniversalRemoteData(nonce, gasPrice, gasLimit)
-	txuniversal := &universal.TransactionUniversal{
+	txuniversal := &txuni.TransactionUniversal{
 		Head: head,
 		Data: data,
 	}
 	return txuniversal
 
 }
-func setTxUniversalTransferLocal(nonce, gasprice, gaslimit uint64) *universal.TransactionUniversalTransfer {
+func setTxUniversalTransferLocal(nonce, gasprice, gaslimit uint64) *txuni.TransactionUniversalTransfer {
 	basicHead := setTxHeadLocal(nonce)
 	headUniversal := setTxUniversalLocalHead(nonce, gasprice, gaslimit)
-	txuniversaltransfer := &universal.TransactionUniversalTransfer{
+	txuniversaltransfer := &txuni.TransactionUniversalTransfer{
 		TransactionHead:          *basicHead,
 		TransactionUniversalHead: *headUniversal,
 		TargetAddr:               tpcrtypes.Address("0x01a1a1a"),
 	}
 	return txuniversaltransfer
 }
-func setTxUniversalTransferRemote(nonce, gasprice, gaslimit uint64) *universal.TransactionUniversalTransfer {
+func setTxUniversalTransferRemote(nonce, gasprice, gaslimit uint64) *txuni.TransactionUniversalTransfer {
 	basicHead := setTxHeadRemote(nonce)
 	headUniversal := setTxUniversalRemoteHead(nonce, gasprice, gaslimit)
-	txuniversaltransfer := &universal.TransactionUniversalTransfer{
+	txuniversaltransfer := &txuni.TransactionUniversalTransfer{
 		TransactionHead:          *basicHead,
 		TransactionUniversalHead: *headUniversal,
 		TargetAddr:               tpcrtypes.Address("0x02b2b2b"),
@@ -293,23 +291,23 @@ func setTxUniversalTransferRemote(nonce, gasprice, gaslimit uint64) *universal.T
 	return txuniversaltransfer
 }
 
-func setBlockHead(height, epoch, round uint64, txcount uint32, timestamp uint64) *types.BlockHead {
-	blockhead := &types.BlockHead{ChainID: []byte{0x01}, Version: 1, Height: height, Epoch: epoch, Round: round,
+func setBlockHead(height, epoch, round uint64, txcount uint32, timestamp uint64) *tpchaintypes.BlockHead {
+	blockhead := &tpchaintypes.BlockHead{ChainID: []byte{0x01}, Version: 1, Height: height, Epoch: epoch, Round: round,
 		ParentBlockHash: nil, Launcher: nil, Proposer: nil, Proof: nil, VRFProof: nil,
 		MaxPri: nil, VoteAggSignature: nil, TxCount: txcount, TxRoot: nil,
 		TxResultRoot: nil, StateRoot: nil, GasFees: nil, TimeStamp: timestamp, ElapsedSpan: 0, Hash: nil,
 		Reserved: nil}
 	return blockhead
 }
-func SetBlock(head *types.BlockHead, data *types.BlockData) *types.Block {
-	block := &types.Block{
+func SetBlock(head *tpchaintypes.BlockHead, data *tpchaintypes.BlockData) *tpchaintypes.Block {
+	block := &tpchaintypes.Block{
 		Head: head,
 		Data: data,
 	}
 	return block
 }
-func SetBlockData(txs map[string]*basic.Transaction) *types.BlockData {
-	blockdata := &types.BlockData{
+func SetBlockData(txs map[string]*txbasic.Transaction) *tpchaintypes.BlockData {
+	blockdata := &tpchaintypes.BlockData{
 		Version: 1,
 		Txs:     nil,
 	}
@@ -340,57 +338,64 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 		TxHashCategory:      newTxHashCategory(),
 		chanBlockAdded:      make(chan BlockAddedEvent, ChanBlockAddedSize),
 		chanReqReset:        make(chan *txPoolResetHeads),
-		chanReqPromote:      make(chan *accountSet),
 		chanReorgDone:       make(chan chan struct{}),
 		chanReorgShutdown:   make(chan struct{}), // requests shutdown of scheduleReorgLoop
-		chanRmTxs:           make(chan []string),
+		chanRmTxs:           make(chan []txbasic.TxID),
 
 		marshaler: codec.CreateMarshaler(codecType),
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
 
-	//pool.network.Subscribe(ctx, protocol.pool.network.Subscribe, message.TopicValidator())
-	pool.allTxsForLook = newAllTxsLookupMap()
+	pool.txCache, _ = lru.New(pool.config.TxStateCap)
+
+	pool.curMaxGasLimit = pool.config.GasPriceLimit
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
+	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.sortedLists = newTxSortedList()
 
-	poolHandler := NewTransactionPoolHandler(poolLog, pool)
-
-	pool.handler = poolHandler
-
-	pool.locals = newAccountSet()
-	if len(conf.Locals) > 0 {
-		for _, addr := range conf.Locals {
-			pool.log.Info("Setting new local account")
-			pool.locals.add(addr)
+	if !pool.config.NoLocalFile {
+		for category := range pool.config.PathLocal {
+			pool.newTxListStructs(category)
+			pool.loadLocal(category, pool.config.NoLocalFile, pool.config.PathLocal[category])
 		}
 	}
+	if !pool.config.NoRemoteFile {
+		for category := range pool.config.PathRemote {
+			pool.newTxListStructs(category)
+			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
+		}
+	}
+	curBlock, err := pool.query.GetLatestBlock()
+	if err != nil {
+		pool.log.Errorf("NewTransactionPool get current block error:", err)
+	}
+	pool.Reset(nil, curBlock.GetHead())
 
-	pool.curMaxGasLimit = uint64(987654321)
+	pool.wg.Add(1)
+	go pool.ReorgTxpoolLoop()
+	for category, _ := range pool.allTxsForLook.getAll() {
+		pool.loadLocal(category, conf.NoLocalFile, conf.PathLocal[category])
+		pool.loadRemote(category, conf.NoRemoteFile, conf.PathRemote[category])
+	}
 
-	//pool.Reset(nil, pool.query.CurrentBlock().GetHead())
-
-	//pool.wg.Add(1)
-	//go pool.scheduleReorgLoop()
-	//
-	//pool.loadLocal(conf.NoLocalFile, conf.PathLocal)
-	//pool.loadRemote(conf.NoRemoteFile, conf.PathRemote)
-	//pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
-
-	//pool.pubSubService = pool.query.SubChainHeadEvent(pool.chanChainHead)
-	//pool.wg.Add(1)
-	//go pool.loop()
+	pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
+	pool.loopChanSelect()
+	TxMsgSubProcessor = &txMessageSubProcessor{txpool: pool, log: pool.log, nodeID: pool.nodeId}
+	//subscribe
+	pool.query.Subscribe(ctx, protocol.SyncProtocolID_Msg,
+		true,
+		TxMsgSubProcessor.Validate)
+	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
+	pool.handler = poolHandler
 	return pool
 }
 
 func Test_transactionPool_ValidateTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 
 	if err := pool.ValidateTx(TxHighGasLimit, true); err != ErrTxGasLimit {
 		t.Error("expected", ErrTxGasLimit, "got", err)
@@ -403,22 +408,20 @@ func Test_transactionPool_ValidateTx(t *testing.T) {
 func Test_transactionPool_GetLocalTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
 	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
-	txs := make([]*basic.Transaction, 0)
+	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, Tx1)
 	txs = append(txs, Tx2)
 
 	//txs = append(txs, txLocals[80])
-	txsMap := make(map[tpcrtypes.Address][]*basic.Transaction)
+	txsMap := make(map[tpcrtypes.Address][]*txbasic.Transaction)
 	txsMap[From1] = txs
 	pool.AddLocals(txs)
 
@@ -435,10 +438,8 @@ func Test_transactionPool_GetLocalTxs(t *testing.T) {
 func Test_transactionPool_AddTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -496,10 +497,8 @@ func Test_transactionPool_AddTx(t *testing.T) {
 func Test_transactionPool_RemoveTxByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -531,10 +530,8 @@ func Test_transactionPool_RemoveTxByKey(t *testing.T) {
 func Test_transactionPool_RemoveTxHashs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -551,7 +548,7 @@ func Test_transactionPool_RemoveTxHashs(t *testing.T) {
 	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
 	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
-	hashs := make([]string, 0)
+	hashs := make([]txbasic.TxID, 0)
 	hashs = append(hashs, Key1)
 	hashs = append(hashs, Key2)
 	hashs = append(hashs, KeyR1)
@@ -569,10 +566,8 @@ func Test_transactionPool_RemoveTxHashs(t *testing.T) {
 func Test_transactionPool_turnTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -601,10 +596,8 @@ func Test_transactionPool_turnTx(t *testing.T) {
 func Test_transactionPool_UpdateTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -637,10 +630,8 @@ func Test_transactionPool_UpdateTx(t *testing.T) {
 func Test_transactionPool_Pending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -666,10 +657,8 @@ func Test_transactionPool_Pending(t *testing.T) {
 func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -687,7 +676,7 @@ func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 	_ = pool.turnTx(From2, KeyR1, TxR1)
 	_ = pool.turnTx(From2, KeyR2, TxR2)
 	pending := pool.PendingMapAddrTxsOfCategory(Category1)
-	txs := make([]*basic.Transaction, 0)
+	txs := make([]*txbasic.Transaction, 0)
 	txSet := NewTxsByPriceAndNonce(pending)
 	var cnt int
 	for {
@@ -708,10 +697,8 @@ func Test_transactionPool_CommitTxsByPriceAndNonce(t *testing.T) {
 func Test_transactionPool_CommitTxsForPending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -721,7 +708,7 @@ func Test_transactionPool_CommitTxsForPending(t *testing.T) {
 	pool.AddTx(Tx1, true)
 	pool.turnTx(From1, Key1, Tx1)
 	txls := pool.pendings.getAddrTxListOfCategory(Category1)
-	var txs = make([]*basic.Transaction, 0)
+	var txs = make([]*txbasic.Transaction, 0)
 	for _, txlist := range txls {
 		for _, tx := range txlist.txs.cache {
 			txs = append(txs, tx)
@@ -736,10 +723,8 @@ func Test_transactionPool_CommitTxsForPending(t *testing.T) {
 func Test_transactionPool_PickTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -757,7 +742,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	_ = pool.turnTx(From2, KeyR1, TxR1)
 	_ = pool.turnTx(From2, KeyR2, TxR2)
 	pending := pool.PendingMapAddrTxsOfCategory(Category1)
-	txs := make([]*basic.Transaction, 0)
+	txs := make([]*txbasic.Transaction, 0)
 	for _, v := range pending {
 		for _, tx := range v {
 			txs = append(txs, tx)
@@ -769,7 +754,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 		t.Error("PickTxsOfCategory want", want, "got", got)
 	}
 
-	txs2 := make([]*basic.Transaction, 0)
+	txs2 := make([]*txbasic.Transaction, 0)
 	txSet := NewTxsByPriceAndNonce(pending)
 	for {
 
@@ -792,10 +777,8 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 func Test_transactionPool_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -819,10 +802,8 @@ func Test_transactionPool_Get(t *testing.T) {
 func Test_transactionPool_Size(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -842,10 +823,8 @@ func Test_transactionPool_Size(t *testing.T) {
 func Test_transactionPool_Start(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().RegisterModule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -862,10 +841,8 @@ func Test_transactionPool_Start(t *testing.T) {
 func Test_transactionPool_Stop(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))

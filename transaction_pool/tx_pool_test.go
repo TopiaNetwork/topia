@@ -366,7 +366,7 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
-	curBlock, err := pool.query.CurrentBlock()
+	curBlock, err := pool.query.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}

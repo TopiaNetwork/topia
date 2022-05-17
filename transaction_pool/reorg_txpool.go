@@ -182,7 +182,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 		}
 	}
 	if newBlockHead == nil {
-		curblock, _ := pool.query.CurrentBlock()
+		curblock, _ := pool.query.GetLatestBlock()
 		newBlockHead = curblock.GetHead()
 	}
 

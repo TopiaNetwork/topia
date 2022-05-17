@@ -158,7 +158,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
-	curBlock, err := pool.query.CurrentBlock()
+	curBlock, err := pool.query.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
@@ -494,12 +494,20 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, local, pool.config.TxSegmentSize)
 
 		pool.ActivationIntervals.setTxActiv(key, time.Now())
-		pool.HeightIntervals.setTxHeight(key, pool.query.CurrentHeight())
+		currentheight, err := pool.query.CurrentHeight()
+		if err != nil {
+			pool.log.Errorf("get current height error:", err)
+		}
+		pool.HeightIntervals.setTxHeight(key, currentheight)
 	}
 	f5 := func(key txbasic.TxID, category txbasic.TransactionCategory, local bool) {
 
 		pool.ActivationIntervals.setTxActiv(key, time.Now())
-		pool.HeightIntervals.setTxHeight(key, pool.query.CurrentHeight())
+		currentheight, err := pool.query.CurrentHeight()
+		if err != nil {
+			pool.log.Errorf("get current height error:", err)
+		}
+		pool.HeightIntervals.setTxHeight(key, currentheight)
 		pool.TxHashCategory.setHashCat(key, category)
 		if local {
 			pool.query.PublishTx(pool.ctx, tx)
@@ -623,7 +631,11 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 	}
 	f5 := func(txId txbasic.TxID) {
 		pool.ActivationIntervals.setTxActiv(txId, time.Now())
-		pool.HeightIntervals.setTxHeight(txId, pool.query.CurrentHeight())
+		currentheight, err := pool.query.CurrentHeight()
+		if err != nil {
+			pool.log.Errorf("get current height error:", err)
+		}
+		pool.HeightIntervals.setTxHeight(txId, currentheight)
 		pool.log.Tracef("Pooled new executable transaction ", "hash:", txId, "from:", from)
 	}
 	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f2, f3, f4, f5); !ok {
@@ -670,7 +682,11 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId txbasic.TxID, t
 	// Successful replace tx, bump the ActivationInterval
 
 	pool.ActivationIntervals.setTxActiv(txId, time.Now())
-	pool.HeightIntervals.setTxHeight(txId, pool.query.CurrentHeight())
+	currentheight, err := pool.query.CurrentHeight()
+	if err != nil {
+		pool.log.Errorf("get current height error:", err)
+	}
+	pool.HeightIntervals.setTxHeight(txId, currentheight)
 	pool.txCache.Add(txId, StateTxTurntoPending)
 	return true
 }
@@ -726,7 +742,11 @@ func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCate
 		ft5 := func(txId txbasic.TxID) {
 
 			pool.ActivationIntervals.setTxActiv(txId, time.Now())
-			pool.HeightIntervals.setTxHeight(txId, pool.query.CurrentHeight())
+			currentheight, err := pool.query.CurrentHeight()
+			if err != nil {
+				pool.log.Errorf("get current height error:", err)
+			}
+			pool.HeightIntervals.setTxHeight(txId, currentheight)
 		}
 		replacedCnt := pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft3, ft4, ft5, replaced, category, addr)
 

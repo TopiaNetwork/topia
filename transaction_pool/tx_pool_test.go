@@ -3,12 +3,14 @@ package transactionpool
 import (
 	"context"
 	"encoding/json"
+	"github.com/TopiaNetwork/topia/network/protocol"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/golang/mock/gomock"
+	"github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -344,30 +346,48 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
 
-	//pool.network.Subscribe(ctx, protocol.SyncProtocolID_Msg, message.TopicValidator())
-	pool.allTxsForLook = newAllTxsLookupMap()
+	pool.txCache, _ = lru.New(pool.config.TxStateCap)
+
+	pool.curMaxGasLimit = pool.config.GasPriceLimit
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
+	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.sortedLists = newTxSortedList()
 
-	poolHandler := NewTransactionPoolHandler(poolLog, pool)
+	if !pool.config.NoLocalFile {
+		for category := range pool.config.PathLocal {
+			pool.newTxListStructs(category)
+			pool.loadLocal(category, pool.config.NoLocalFile, pool.config.PathLocal[category])
+		}
+	}
+	if !pool.config.NoRemoteFile {
+		for category := range pool.config.PathRemote {
+			pool.newTxListStructs(category)
+			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
+		}
+	}
+	curBlock, err := pool.query.CurrentBlock()
+	if err != nil {
+		pool.log.Errorf("NewTransactionPool get current block error:", err)
+	}
+	pool.Reset(nil, curBlock.GetHead())
 
+	pool.wg.Add(1)
+	go pool.ReorgTxpoolLoop()
+	for category, _ := range pool.allTxsForLook.getAll() {
+		pool.loadLocal(category, conf.NoLocalFile, conf.PathLocal[category])
+		pool.loadRemote(category, conf.NoRemoteFile, conf.PathRemote[category])
+	}
+
+	pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
+	pool.loopChanSelect()
+	TxMsgSubProcessor = &txMessageSubProcessor{txpool: pool, log: pool.log, nodeID: pool.nodeId}
+	//subscribe
+	pool.query.Subscribe(ctx, protocol.SyncProtocolID_Msg,
+		true,
+		TxMsgSubProcessor.Validate)
+	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
 	pool.handler = poolHandler
-
-	pool.curMaxGasLimit = uint64(987654321)
-
-	//pool.Reset(nil, pool.query.CurrentBlock().GetHead())
-
-	//pool.wg.Add(1)
-	//go pool.scheduleReorgLoop()
-	//
-	//pool.loadLocal(conf.NoLocalFile, conf.PathLocal)
-	//pool.loadRemote(conf.NoRemoteFile, conf.PathRemote)
-	//pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
-
-	//pool.pubSubService = pool.query.SubChainHeadEvent(pool.chanChainHead)
-	//pool.wg.Add(1)
-	//go pool.loop()
 	return pool
 }
 

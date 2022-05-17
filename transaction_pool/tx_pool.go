@@ -45,6 +45,7 @@ var (
 	ErrUnderpriced        = errors.New("transaction underpriced")
 	ErrTxGasLimit         = errors.New("exceeds block gas limit")
 	ErrTxNotExist         = errors.New("transaction not found")
+	ErrTxIsNil            = errors.New("transaction is nil")
 	ErrTxPoolOverflow     = errors.New("txPool is full")
 	ErrOversizedData      = errors.New("transaction overSized data")
 	ErrTxUpdate           = errors.New("can not update tx")
@@ -157,8 +158,11 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
-
-	pool.Reset(nil, pool.query.CurrentBlock().GetHead())
+	curBlock, err := pool.query.CurrentBlock()
+	if err != nil {
+		pool.log.Errorf("NewTransactionPool get current block error:", err)
+	}
+	pool.Reset(nil, curBlock.GetHead())
 
 	pool.wg.Add(1)
 	go pool.ReorgTxpoolLoop()
@@ -178,6 +182,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 	pool.handler = poolHandler
 	return pool
 }
+
 func (pool *transactionPool) newTxListStructs(category txbasic.TransactionCategory) {
 	if _, ok := pool.queues.queue[category]; !ok {
 		pool.queues.queue[category] = newQueueTxs()

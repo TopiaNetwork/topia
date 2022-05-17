@@ -75,8 +75,10 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 		}
 	}()
 	// Track the previous head headers for transaction reorgs
-	var head = pool.query.CurrentBlock()
-
+	head, err := pool.query.CurrentBlock()
+	if err != nil {
+		pool.log.Errorf("loopResetIfBlockAdded get current block err:", err)
+	}
 	for {
 		select {
 		// Handle ChainHeadEvent
@@ -117,6 +119,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 			}
 			f3 := func(string2 txbasic.TxID) uint64 {
 				curheight := pool.query.CurrentHeight()
+
 				txheight := pool.HeightIntervals.HI[string2]
 				if curheight > txheight {
 					return curheight - txheight

@@ -75,7 +75,7 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 		}
 	}()
 	// Track the previous head headers for transaction reorgs
-	head, err := pool.query.CurrentBlock()
+	head, err := pool.query.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("loopResetIfBlockAdded get current block err:", err)
 	}
@@ -118,8 +118,10 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 				pool.RemoveTxByKey(string2)
 			}
 			f3 := func(string2 txbasic.TxID) uint64 {
-				curheight := pool.query.CurrentHeight()
-
+				curheight, err := pool.query.CurrentHeight()
+				if err != nil {
+					pool.log.Errorf("get current height error:", err)
+				}
 				txheight := pool.HeightIntervals.HI[string2]
 				if curheight > txheight {
 					return curheight - txheight
@@ -191,7 +193,10 @@ func (pool *transactionPool) loopRegularRepublic() {
 				pool.query.PublishTx(pool.ctx, tx)
 			}
 			f3 := func(string2 txbasic.TxID) uint64 {
-				curHeight := pool.query.CurrentHeight()
+				curHeight, err := pool.query.CurrentHeight()
+				if err != nil {
+					pool.log.Errorf("get current height error:", err)
+				}
 				txHeight := pool.HeightIntervals.getTxHeightByKey(string2)
 				if curHeight > txHeight {
 					return curHeight - txHeight

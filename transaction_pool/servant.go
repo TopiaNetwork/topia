@@ -16,8 +16,8 @@ import (
 )
 
 type TransactionPoolServant interface {
-	CurrentHeight() uint64
-	CurrentBlock() (*tpchaintypes.Block, error)
+	CurrentHeight() (uint64, error)
+	GetLatestBlock() (*tpchaintypes.Block, error)
 	GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
 	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
@@ -31,13 +31,16 @@ type transactionPoolServant struct {
 	Network    tpnet.Network
 }
 
-func (servant *transactionPoolServant) CurrentHeight() uint64 {
-	curBlock, _ := servant.chainState.GetLatestBlock()
+func (servant *transactionPoolServant) CurrentHeight() (uint64, error) {
+	curBlock, err := servant.chainState.GetLatestBlock()
+	if err != nil {
+		return 0, err
+	}
 	curHeight := curBlock.Head.Height
-	return curHeight
+	return curHeight, nil
 }
 
-func (servant *transactionPoolServant) CurrentBlock() (*tpchaintypes.Block, error) {
+func (servant *transactionPoolServant) GetLatestBlock() (*tpchaintypes.Block, error) {
 	return servant.chainState.GetLatestBlock()
 }
 func (servant *transactionPoolServant) GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {

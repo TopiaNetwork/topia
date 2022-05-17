@@ -346,9 +346,9 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
 
-	pool.txCache, _ = lru.New(pool.config.TxStateCap)
+	pool.txCache, _ = lru.New(pool.config.TxCacheSize)
 
-	pool.curMaxGasLimit = pool.config.GasPriceLimit
+	pool.BlockMaxGasLimit = pool.config.GasPriceLimit
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
@@ -366,7 +366,7 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
-	curBlock, err := pool.query.GetLatestBlock()
+	curBlock, err := pool.txServant.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
@@ -383,26 +383,12 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 	pool.loopChanSelect()
 	TxMsgSubProcessor = &txMessageSubProcessor{txpool: pool, log: pool.log, nodeID: pool.nodeId}
 	//subscribe
-	pool.query.Subscribe(ctx, protocol.SyncProtocolID_Msg,
+	pool.txServant.Subscribe(ctx, protocol.SyncProtocolID_Msg,
 		true,
 		TxMsgSubProcessor.Validate)
 	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
 	pool.handler = poolHandler
 	return pool
-}
-
-func Test_transactionPool_ValidateTx(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-
-	if err := pool.ValidateTx(TxHighGasLimit, true); err != ErrTxGasLimit {
-		t.Error("expected", ErrTxGasLimit, "got", err)
-	}
-	if err := pool.ValidateTx(TxlowGasPrice, false); err != ErrGasPriceTooLow {
-		t.Error("expected", ErrGasPriceTooLow, "got", err)
-	}
 }
 
 func Test_transactionPool_GetLocalTxs(t *testing.T) {

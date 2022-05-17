@@ -75,7 +75,7 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 		}
 	}()
 	// Track the previous head headers for transaction reorgs
-	head, err := pool.query.GetLatestBlock()
+	head, err := pool.txServant.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("loopResetIfBlockAdded get current block err:", err)
 	}
@@ -118,7 +118,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 				pool.RemoveTxByKey(string2)
 			}
 			f3 := func(string2 txbasic.TxID) uint64 {
-				curheight, err := pool.query.CurrentHeight()
+				curheight, err := pool.txServant.CurrentHeight()
 				if err != nil {
 					pool.log.Errorf("get current height error:", err)
 				}
@@ -188,12 +188,12 @@ func (pool *transactionPool) loopRegularRepublic() {
 			f1 := func(string2 txbasic.TxID) time.Duration {
 				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
 			}
-			time2 := pool.config.DurationForTxRePublic
+			time2 := pool.config.TxTTLTimeOfRepublic
 			f2 := func(tx *txbasic.Transaction) {
-				pool.query.PublishTx(pool.ctx, tx)
+				pool.txServant.PublishTx(pool.ctx, tx)
 			}
 			f3 := func(string2 txbasic.TxID) uint64 {
-				curHeight, err := pool.query.CurrentHeight()
+				curHeight, err := pool.txServant.CurrentHeight()
 				if err != nil {
 					pool.log.Errorf("get current height error:", err)
 				}
@@ -203,7 +203,7 @@ func (pool *transactionPool) loopRegularRepublic() {
 				}
 				return 0
 			}
-			diffHeight := pool.config.DiffHeightForTxRePublic
+			diffHeight := pool.config.TxTTLHeightOfRepublic
 			for category, _ := range pool.queues.getAll() {
 				pool.queues.republicTx(category, f1, time2, f2, f3, diffHeight)
 			}

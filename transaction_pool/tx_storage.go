@@ -5,10 +5,10 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
-func (pool *transactionPool) SaveLocalTxs(category basic.TransactionCategory) error {
+func (pool *transactionPool) SaveLocalTxs(category txbasic.TransactionCategory) error {
 
 	locals, err := json.Marshal(pool.allTxsForLook.getLocalKeyTxFromAllTxsLookupByCategory(category))
 	if err != nil {
@@ -21,19 +21,19 @@ func (pool *transactionPool) SaveLocalTxs(category basic.TransactionCategory) er
 	return nil
 }
 
-func (pool *transactionPool) loadLocal(category basic.TransactionCategory, nofile bool, path string) {
+func (pool *transactionPool) loadLocal(category txbasic.TransactionCategory, nofile bool, path string) {
 	if !nofile && path != "" {
 		if err := pool.LoadLocalTxs(category); err != nil {
 			pool.log.Warnf("Failed to load local transaction from stored file", "err", err)
 		}
 	}
 }
-func (pool *transactionPool) LoadLocalTxs(category basic.TransactionCategory) error {
+func (pool *transactionPool) LoadLocalTxs(category txbasic.TransactionCategory) error {
 	data, err := ioutil.ReadFile(pool.config.PathLocal[category])
 	if err != nil {
 		return nil
 	}
-	var locals map[string]*basic.Transaction
+	var locals map[string]*txbasic.Transaction
 	err = json.Unmarshal(data, &locals)
 	if err != nil {
 		return err
@@ -45,16 +45,18 @@ func (pool *transactionPool) LoadLocalTxs(category basic.TransactionCategory) er
 }
 
 type remoteTxs struct {
-	Txs                 map[string]*basic.Transaction
-	ActivationIntervals map[string]time.Time
-	TxHashCategorys     map[string]basic.TransactionCategory
+	Txs                 map[txbasic.TxID]*txbasic.Transaction
+	ActivationIntervals map[txbasic.TxID]time.Time
+	HeightIntervals     map[txbasic.TxID]uint64
+	TxHashCategorys     map[txbasic.TxID]txbasic.TransactionCategory
 }
 
-func (pool *transactionPool) SaveRemoteTxs(category basic.TransactionCategory) error {
+func (pool *transactionPool) SaveRemoteTxs(category txbasic.TransactionCategory) error {
 
 	var remotetxs = &remoteTxs{
 		Txs:                 pool.allTxsForLook.getRemoteMapTxsLookupByCategory(category),
 		ActivationIntervals: pool.ActivationIntervals.getAll(),
+		HeightIntervals:     pool.HeightIntervals.getAll(),
 		TxHashCategorys:     pool.TxHashCategory.getAll(),
 	}
 	remotes, err := json.Marshal(remotetxs)
@@ -68,14 +70,14 @@ func (pool *transactionPool) SaveRemoteTxs(category basic.TransactionCategory) e
 	return nil
 }
 
-func (pool *transactionPool) loadRemote(category basic.TransactionCategory, nofile bool, path string) {
+func (pool *transactionPool) loadRemote(category txbasic.TransactionCategory, nofile bool, path string) {
 	if !nofile && path != "" {
 		if err := pool.LoadRemoteTxs(category); err != nil {
 			pool.log.Warnf("Failed to load remote transactions", "err", err)
 		}
 	}
 }
-func (pool *transactionPool) LoadRemoteTxs(category basic.TransactionCategory) error {
+func (pool *transactionPool) LoadRemoteTxs(category txbasic.TransactionCategory) error {
 	data, err := ioutil.ReadFile(pool.config.PathRemote[category])
 	if err != nil {
 		return nil
@@ -91,6 +93,9 @@ func (pool *transactionPool) LoadRemoteTxs(category basic.TransactionCategory) e
 	}
 	for txId, ActivationInterval := range remotetxs.ActivationIntervals {
 		pool.ActivationIntervals.setTxActiv(txId, ActivationInterval)
+	}
+	for txId, height := range remotetxs.HeightIntervals {
+		pool.HeightIntervals.setTxHeight(txId, height)
 	}
 	for txId, TxHashCategory := range remotetxs.TxHashCategorys {
 		pool.TxHashCategory.setHashCat(txId, TxHashCategory)

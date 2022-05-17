@@ -6,38 +6,29 @@ import (
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
-	crypttypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplgblock "github.com/TopiaNetwork/topia/ledger/block"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/protocol"
-	"github.com/TopiaNetwork/topia/state/account"
 	"github.com/TopiaNetwork/topia/state/chain"
 	"github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TransactionPoolServant interface {
-	GetNonce(address crypttypes.Address) (uint64, error)
 	CurrentHeight() uint64
-	CurrentBlock() *tpchaintypes.Block
-	GetBlockByHash(hash tpchaintypes.BlockHash) *tpchaintypes.Block
+	CurrentBlock() (*tpchaintypes.Block, error)
+	GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
 	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
 	UnSubscribe(topic string) error
 }
 
 type transactionPoolServant struct {
-	accState     account.AccountState
-	chainState   chain.ChainState
-	currentBlock *tpchaintypes.Block
-	Network      tpnet.Network
-	marshaler    codec.Marshaler
-	blockStore   tplgblock.BlockStore
-}
-
-func (servant *transactionPoolServant) GetNonce(address crypttypes.Address) (uint64, error) {
-	return servant.accState.GetNonce(address)
+	chainState chain.ChainState
+	marshaler  codec.Marshaler
+	blockStore tplgblock.BlockStore
+	Network    tpnet.Network
 }
 
 func (servant *transactionPoolServant) CurrentHeight() uint64 {
@@ -46,18 +37,16 @@ func (servant *transactionPoolServant) CurrentHeight() uint64 {
 	return curHeight
 }
 
-func (servant *transactionPoolServant) CurrentBlock() *tpchaintypes.Block {
-	block, _ := servant.chainState.GetLatestBlock()
-	return block
+func (servant *transactionPoolServant) CurrentBlock() (*tpchaintypes.Block, error) {
+	return servant.chainState.GetLatestBlock()
 }
-func (servant *transactionPoolServant) GetBlockByHash(hash tpchaintypes.BlockHash) *tpchaintypes.Block {
-	block, _ := servant.blockStore.GetBlockByHash(hash)
-	return block
+func (servant *transactionPoolServant) GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
+	return servant.blockStore.GetBlockByHash(hash)
 }
 
 func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
 	if tx == nil {
-		return nil
+		return ErrTxIsNil
 	}
 	msg := &TxMessage{}
 	data, err := servant.marshaler.Marshal(tx)
@@ -71,8 +60,6 @@ func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasi
 	}
 	var toModuleName []string
 	toModuleName = append(toModuleName, MOD_NAME)
-	//comment for unit Test
-
 	servant.Network.Publish(ctx, toModuleName, protocol.SyncProtocolID_Msg, sendData)
 	return nil
 }
@@ -112,7 +99,7 @@ func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool,
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 	err := marshaler.Unmarshal(msg.Data, &tx)
 	if err != nil {
-		return message.ValidationIgnore
+		return message.ValidationReject
 	}
 	if isLocal {
 		if numSegments(tx, DefaultTransactionPoolConfig.TxSegmentSize) > DefaultTransactionPoolConfig.TxMaxSegmentSize {
@@ -142,7 +129,6 @@ func (msgSub *txMessageSubProcessor) Process(ctx context.Context, subMsgTxMessag
 		return err
 	}
 	if err := msgSub.txpool.ValidateTx(tx, false); err != nil {
-		msgSub.txpool.txCache.Add(txId, StateTxInValid)
 		return err
 	}
 	category := txbasic.TransactionCategory(tx.Head.Category)

@@ -5,38 +5,35 @@ import (
 	"io/ioutil"
 	"time"
 
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TransactionPoolConfig struct {
-	Locals               []tpcrtypes.Address
-	NoLocalFile          bool
-	NoRemoteFile         bool
-	NoConfigFile         bool
-	PathLocal            map[txbasic.TransactionCategory]string
-	PathRemote           map[txbasic.TransactionCategory]string
-	PathConfig           string
-	ReStoredDur          time.Duration
-	TxExpiredPolicy      TxExpiredPolicy
-	TxStateCap           int
-	GasPriceLimit        uint64
-	TxSegmentSize        int
-	TxMaxSegmentSize     int
-	TxpoolMaxSegmentSize int
+	NoLocalFile     bool
+	NoRemoteFile    bool
+	NoConfigFile    bool
+	PathLocal       map[txbasic.TransactionCategory]string
+	PathRemote      map[txbasic.TransactionCategory]string
+	PathConfig      string
+	ReStoredDur     time.Duration
+	TxExpiredPolicy TxExpiredPolicy
+	TxCacheSize     int
+	GasPriceLimit   uint64
+	TxSegmentSize   int64
+	TxMaxSize       uint64
+	TxpoolMaxSize   uint64
 
 	PendingAccountSegments uint64 // Number of executable transaction slots guaranteed per account
 	PendingGlobalSegments  uint64 // Maximum number of executable transaction slots for all accounts
 	QueueMaxTxsAccount     uint64 // Maximum number of non-executable transaction slots permitted per account
 	QueueMaxTxsGlobal      uint64 // Maximum number of non-executable transaction slots for all accounts
 
-	LifetimeForTx           time.Duration
-	LifeHeight              uint64
-	DurationForTxRePublic   time.Duration
-	DiffHeightForTxRePublic uint64
-	EvictionInterval        time.Duration //= 29989 * time.Millisecond // Time interval to check for evictable transactions
-	StatsReportInterval     time.Duration //= 499 * time.Millisecond // Time interval to report transaction pool stats
-	RepublicInterval        time.Duration //= 30011 * time.Millisecond       //time interval to check transaction lifetime for report
+	LifetimeForTx         time.Duration
+	LifeHeight            uint64
+	TxTTLTimeOfRepublic   time.Duration
+	TxTTLHeightOfRepublic uint64
+	EvictionInterval      time.Duration //= 29989 * time.Millisecond // Time interval to check for evictable transactions
+	RepublicInterval      time.Duration //= 30011 * time.Millisecond       //time interval to check transaction lifetime for report
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
@@ -51,24 +48,23 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	TxExpiredPolicy: TxExpiredTimeAndHeight,
 	GasPriceLimit:   1000, // 1000
 
-	TxStateCap: 36000000,
+	TxCacheSize: 36000000,
 
-	TxSegmentSize:        32 * 1024,
-	TxMaxSegmentSize:     4 * 32 * 1024,
-	TxpoolMaxSegmentSize: 8192 * 2 * 4 * 32 * 1024,
+	TxSegmentSize: 32 * 1024,
+	TxMaxSize:     4 * 32 * 1024,
+	TxpoolMaxSize: 8192 * 2 * 4 * 32 * 1024,
 
 	PendingAccountSegments: 64,       //64
 	PendingGlobalSegments:  8192,     //8192
 	QueueMaxTxsAccount:     64,       //64
 	QueueMaxTxsGlobal:      8192 * 2, //PendingGlobalSlots*2
 
-	LifetimeForTx:           30 * time.Minute,
-	LifeHeight:              uint64(30 * 60),
-	DurationForTxRePublic:   30011 * time.Millisecond, //Prime Numbers 30second
-	DiffHeightForTxRePublic: 30,
-	EvictionInterval:        30013 * time.Millisecond, // Time interval to check for evictable transactions
-	StatsReportInterval:     499 * time.Millisecond,   // Time interval to report transaction pool stats
-	RepublicInterval:        30029 * time.Millisecond, //time interval to check transaction lifetime for report
+	LifetimeForTx:         30 * time.Minute,
+	LifeHeight:            uint64(30 * 60),
+	TxTTLTimeOfRepublic:   30011 * time.Millisecond, //Prime Numbers 30second
+	TxTTLHeightOfRepublic: 30,
+	EvictionInterval:      30013 * time.Millisecond, // Time interval to check for evictable transactions
+	RepublicInterval:      30029 * time.Millisecond, //time interval to check transaction lifetime for report
 
 }
 
@@ -92,8 +88,8 @@ func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 	if conf.LifetimeForTx < 1 {
 		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
 	}
-	if conf.DurationForTxRePublic < 1 {
-		conf.DurationForTxRePublic = DefaultTransactionPoolConfig.DurationForTxRePublic
+	if conf.TxTTLTimeOfRepublic < 1 {
+		conf.TxTTLTimeOfRepublic = DefaultTransactionPoolConfig.TxTTLTimeOfRepublic
 	}
 	if conf.PathConfig == "" {
 		conf.PathConfig = DefaultTransactionPoolConfig.PathConfig

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/TopiaNetwork/topia/service"
 	"sync"
 	"time"
 
@@ -70,9 +71,9 @@ type TransactionPool interface {
 
 	PickTxs(txType PickTxType) []*txbasic.Transaction
 
-	Count() int
+	Count() int64
 
-	Size() int
+	Size() int64
 
 	TruncateTxPool()
 
@@ -95,7 +96,7 @@ type transactionPool struct {
 	chanReorgDone     chan chan struct{}
 	chanReorgShutdown chan struct{} // requests shutdown of scheduleReorgLoop
 	chanRmTxs         chan []txbasic.TxID
-	query             TransactionPoolServant
+	txServant         TransactionPoolServant
 
 	pendings            *pendingsMap
 	queues              *queuesMap
@@ -105,7 +106,7 @@ type transactionPool struct {
 	HeightIntervals     *HeightInterval     // HeightIntervals for each txID
 	TxHashCategory      *txHashCategory
 	txCache             *lru.Cache
-	curMaxGasLimit      uint64
+	BlockMaxGasLimit    uint64
 	log                 tplog.Logger
 	level               tplogcmm.LogLevel
 	ctx                 context.Context
@@ -116,7 +117,9 @@ type transactionPool struct {
 	wg                  sync.WaitGroup
 }
 
-func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
+func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel,
+	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
+	blockService service.BlockService, network tpnet.Network) *transactionPool {
 	conf = (&conf).check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
@@ -138,13 +141,14 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 		marshaler: codec.CreateMarshaler(codecType),
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
-	pool.txCache, _ = lru.New(pool.config.TxStateCap)
+	pool.txCache, _ = lru.New(pool.config.TxCacheSize)
 
-	pool.curMaxGasLimit = pool.config.GasPriceLimit
+	pool.BlockMaxGasLimit = pool.config.GasPriceLimit
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.sortedLists = newTxSortedList()
+	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
 
 	if !pool.config.NoLocalFile {
 		for category := range pool.config.PathLocal {
@@ -158,12 +162,11 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
-	curBlock, err := pool.query.GetLatestBlock()
+	curBlock, err := pool.txServant.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
 	pool.Reset(nil, curBlock.GetHead())
-
 	pool.wg.Add(1)
 	go pool.ReorgTxpoolLoop()
 	for category, _ := range pool.allTxsForLook.getAll() {
@@ -175,7 +178,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 	pool.loopChanSelect()
 	TxMsgSubProcessor = &txMessageSubProcessor{txpool: pool, log: pool.log, nodeID: pool.nodeId}
 	//subscribe
-	pool.query.Subscribe(ctx, protocol.SyncProtocolID_Msg,
+	pool.txServant.Subscribe(ctx, protocol.SyncProtocolID_Msg,
 		true,
 		TxMsgSubProcessor.Validate)
 	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
@@ -395,10 +398,10 @@ func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxI
 	}
 }
 
-func (pool *transactionPool) Size() int {
+func (pool *transactionPool) Size() int64 {
 	return pool.allTxsForLook.getAllSize()
 }
-func (pool *transactionPool) Count() int {
+func (pool *transactionPool) Count() int64 {
 	return pool.allTxsForLook.getAllCount()
 }
 
@@ -494,7 +497,7 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, local, pool.config.TxSegmentSize)
 
 		pool.ActivationIntervals.setTxActiv(key, time.Now())
-		currentheight, err := pool.query.CurrentHeight()
+		currentheight, err := pool.txServant.CurrentHeight()
 		if err != nil {
 			pool.log.Errorf("get current height error:", err)
 		}
@@ -503,14 +506,14 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 	f5 := func(key txbasic.TxID, category txbasic.TransactionCategory, local bool) {
 
 		pool.ActivationIntervals.setTxActiv(key, time.Now())
-		currentheight, err := pool.query.CurrentHeight()
+		currentheight, err := pool.txServant.CurrentHeight()
 		if err != nil {
 			pool.log.Errorf("get current height error:", err)
 		}
 		pool.HeightIntervals.setTxHeight(key, currentheight)
 		pool.TxHashCategory.setHashCat(key, category)
 		if local {
-			pool.query.PublishTx(pool.ctx, tx)
+			pool.txServant.PublishTx(pool.ctx, tx)
 		}
 		txAdded := &eventhub.TxPoolEvent{
 			EvType: eventhub.TxPoolEVType_Received,
@@ -527,31 +530,6 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 func (pool *transactionPool) GetLocalTxs(category txbasic.TransactionCategory) []*txbasic.Transaction {
 	txs := pool.allTxsForLook.getLocalTxsByCategory(category)
 	return txs
-}
-
-func (pool *transactionPool) ValidateTx(tx *txbasic.Transaction, local bool) error {
-
-	if uint64(tx.Size()) > uint64(pool.config.TxMaxSegmentSize) {
-		return ErrOversizedData
-	}
-	// Ensure the transaction doesn't exceed the current block limit gas.
-	if pool.curMaxGasLimit < GasLimit(tx) {
-		return ErrTxGasLimit
-	}
-
-	switch txbasic.TransactionCategory(tx.Head.Category) {
-	case txbasic.TransactionCategory_Topia_Universal:
-		if !local && GasPrice(tx) < pool.config.GasPriceLimit {
-			return ErrGasPriceTooLow
-		}
-	case txbasic.TransactionCategory_Eth:
-		if !local && GasPrice(tx) < pool.config.GasPriceLimit {
-			return ErrGasPriceTooLow
-		}
-	default:
-		return nil
-	}
-	return nil
 }
 
 // stats retrieves the current pool stats,
@@ -579,7 +557,7 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.allTxsForLook.getSegmentFromAllTxsLookupByCategory(category)+numSegments(tx, pool.config.TxSegmentSize)) > pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal ||
-		pool.allTxsForLook.getAllSegments() > pool.config.TxpoolMaxSegmentSize {
+		uint64(pool.allTxsForLook.getAllSegments()) > pool.config.TxpoolMaxSize {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.sortedLists.getPricedlistByCategory(category).Underpriced(tx) {
 			pool.txCache.Add(txId, StateTxDiscardForUnderpriced)
@@ -593,7 +571,7 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 		}
 
 		segment := pool.allTxsForLook.getSegmentFromAllTxsLookupByCategory(category) -
-			int(pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal) + numSegments(tx, pool.config.TxSegmentSize)
+			int64(pool.config.PendingGlobalSegments+pool.config.QueueMaxTxsGlobal) + numSegments(tx, pool.config.TxSegmentSize)
 		drop, success := pool.sortedLists.DiscardFromPricedlistByCategor(category, segment, isLocal, pool.config.TxSegmentSize)
 
 		// Special case, we still can't make the room for the new remote one.
@@ -631,7 +609,7 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 	}
 	f5 := func(txId txbasic.TxID) {
 		pool.ActivationIntervals.setTxActiv(txId, time.Now())
-		currentheight, err := pool.query.CurrentHeight()
+		currentheight, err := pool.txServant.CurrentHeight()
 		if err != nil {
 			pool.log.Errorf("get current height error:", err)
 		}
@@ -682,7 +660,7 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId txbasic.TxID, t
 	// Successful replace tx, bump the ActivationInterval
 
 	pool.ActivationIntervals.setTxActiv(txId, time.Now())
-	currentheight, err := pool.query.CurrentHeight()
+	currentheight, err := pool.txServant.CurrentHeight()
 	if err != nil {
 		pool.log.Errorf("get current height error:", err)
 	}
@@ -694,7 +672,7 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId txbasic.TxID, t
 func (pool *transactionPool) Stop() {
 
 	// Unsubscribe subscriptions registered from blockchain
-	pool.query.UnSubscribe(protocol.SyncProtocolID_Msg)
+	pool.txServant.UnSubscribe(protocol.SyncProtocolID_Msg)
 	eventhub.GetEventHubManager().GetEventHub(pool.nodeId).UnObserve(pool.ctx, ObsID, eventhub.EventName_BlockAdded)
 	pool.log.Info("TransactionPool stopped")
 }
@@ -742,7 +720,7 @@ func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCate
 		ft5 := func(txId txbasic.TxID) {
 
 			pool.ActivationIntervals.setTxActiv(txId, time.Now())
-			currentheight, err := pool.query.CurrentHeight()
+			currentheight, err := pool.txServant.CurrentHeight()
 			if err != nil {
 				pool.log.Errorf("get current height error:", err)
 			}

@@ -1137,8 +1137,10 @@ func (queuemap *queuesMap) addTxByKeyOfCategory(
 }
 
 type allTxsLookupMap struct {
-	Mu  sync.RWMutex
-	all map[txbasic.TransactionCategory]*txForLookup
+	Mu   sync.RWMutex
+	all  map[txbasic.TransactionCategory]*txForLookup
+	cnt  int64
+	size int64
 }
 
 func newAllTxsLookupMap() *allTxsLookupMap {
@@ -1151,24 +1153,24 @@ func newAllTxsLookupMap() *allTxsLookupMap {
 func (alltxsmap *allTxsLookupMap) getAll() map[txbasic.TransactionCategory]*txForLookup {
 	return alltxsmap.all
 }
-func (alltxsmap *allTxsLookupMap) getAllSegments() int {
-	totalSegments := 0
+func (alltxsmap *allTxsLookupMap) getAllSegments() int64 {
+	totalSegments := int64(0)
 	for cat, _ := range alltxsmap.all {
 		totalSegments += alltxsmap.all[cat].segments
 	}
 	return totalSegments
 }
-func (alltxsmap *allTxsLookupMap) getAllCount() int {
-	var cnt int
+func (alltxsmap *allTxsLookupMap) getAllCount() int64 {
+	var cnt int64
 	for category, _ := range alltxsmap.getAll() {
-		cnt += alltxsmap.getCountFromAllTxsLookupByCategory(category)
+		cnt += alltxsmap.getTxCntFromAllTxsLookupByCategory(category)
 	}
 	return cnt
 }
-func (alltxsmap *allTxsLookupMap) getAllSize() int {
-	var size int
+func (alltxsmap *allTxsLookupMap) getAllSize() int64 {
+	var size int64
 	for category, _ := range alltxsmap.getAll() {
-		size += alltxsmap.getSizeFromAllTxsLookupByCategory(category)
+		size += alltxsmap.getSegmentFromAllTxsLookupByCategory(category)
 	}
 	return size
 }
@@ -1210,12 +1212,21 @@ func (alltxsmap *allTxsLookupMap) getRemoteCountByCategory(category txbasic.Tran
 	return 0
 }
 
-func (alltxsmap *allTxsLookupMap) getSegmentFromAllTxsLookupByCategory(category txbasic.TransactionCategory) int {
+func (alltxsmap *allTxsLookupMap) getSegmentFromAllTxsLookupByCategory(category txbasic.TransactionCategory) int64 {
 
 	if txlookup := alltxsmap.getAllTxsLookupByCategory(category); txlookup != nil {
 		txlookup.lock.RLock()
 		defer txlookup.lock.RUnlock()
 		return txlookup.segments
+	}
+	return 0
+}
+func (alltxsmap *allTxsLookupMap) getTxCntFromAllTxsLookupByCategory(category txbasic.TransactionCategory) int64 {
+
+	if txlookup := alltxsmap.getAllTxsLookupByCategory(category); txlookup != nil {
+		txlookup.lock.RLock()
+		defer txlookup.lock.RUnlock()
+		return txlookup.cnt
 	}
 	return 0
 }
@@ -1226,23 +1237,6 @@ func (alltxsmap *allTxsLookupMap) getCountFromAllTxsLookupByCategory(category tx
 		txlookup.lock.RLock()
 		defer txlookup.lock.RUnlock()
 		return len(txlookup.locals) + len(txlookup.remotes)
-	}
-	return 0
-}
-
-func (alltxsmap *allTxsLookupMap) getSizeFromAllTxsLookupByCategory(category txbasic.TransactionCategory) int {
-	size := 0
-	if txlookup := alltxsmap.getAllTxsLookupByCategory(category); txlookup != nil {
-		txlookup.lock.RLock()
-		defer txlookup.lock.RUnlock()
-		for _, tx := range txlookup.locals {
-			size += tx.Size()
-		}
-		for _, tx := range txlookup.remotes {
-			size += tx.Size()
-		}
-
-		return size
 	}
 	return 0
 }
@@ -1272,7 +1266,7 @@ func (alltxsmap *allTxsLookupMap) getTxFromKeyFromAllTxsLookupByCategory(categor
 }
 
 func (alltxsmap *allTxsLookupMap) addTxToAllTxsLookupByCategory(category txbasic.TransactionCategory,
-	tx *txbasic.Transaction, isLocal bool, txSegmentSize int) {
+	tx *txbasic.Transaction, isLocal bool, txSegmentSize int64) {
 
 	catAllMap := alltxsmap.getAllTxsLookupByCategory(category)
 	if catAllMap == nil {
@@ -1281,7 +1275,8 @@ func (alltxsmap *allTxsLookupMap) addTxToAllTxsLookupByCategory(category txbasic
 
 	catAllMap.lock.Lock()
 	defer catAllMap.lock.Unlock()
-	catAllMap.segments += numSegments(tx, txSegmentSize)
+	atomic.AddInt64(&catAllMap.segments, numSegments(tx, txSegmentSize))
+	atomic.AddInt64(&catAllMap.cnt, 1)
 	if txId, err := tx.TxID(); err == nil {
 		if isLocal {
 			catAllMap.locals[txId] = tx
@@ -1291,7 +1286,7 @@ func (alltxsmap *allTxsLookupMap) addTxToAllTxsLookupByCategory(category txbasic
 	}
 }
 
-func (alltxsmap *allTxsLookupMap) removeTxHashFromAllTxsLookupByCategory(category txbasic.TransactionCategory, txhash txbasic.TxID, txSegmentSize int) {
+func (alltxsmap *allTxsLookupMap) removeTxHashFromAllTxsLookupByCategory(category txbasic.TransactionCategory, txhash txbasic.TxID, txSegmentSize int64) {
 
 	if txlookup := alltxsmap.getAllTxsLookupByCategory(category); txlookup != nil {
 		txlookup.lock.Lock()
@@ -1303,7 +1298,8 @@ func (alltxsmap *allTxsLookupMap) removeTxHashFromAllTxsLookupByCategory(categor
 		if !ok {
 			return
 		}
-		txlookup.segments -= numSegments(tx, txSegmentSize)
+		atomic.AddInt64(&txlookup.segments, -numSegments(tx, txSegmentSize))
+		atomic.AddInt64(&txlookup.cnt, -1)
 		delete(txlookup.locals, txhash)
 		delete(txlookup.remotes, txhash)
 	}
@@ -1441,7 +1437,8 @@ func (hashCat *txHashCategory) removeHashCat(key txbasic.TxID) {
 }
 
 type txForLookup struct {
-	segments int
+	segments int64
+	cnt      int64
 	lock     sync.RWMutex
 	locals   map[txbasic.TxID]*txbasic.Transaction
 	remotes  map[txbasic.TxID]*txbasic.Transaction
@@ -1571,13 +1568,13 @@ func (txsorts *txSortedList) getAllRemoteTxsByCategory(category txbasic.Transact
 	return nil
 }
 
-func (txsorts *txSortedList) DiscardFromPricedlistByCategor(category txbasic.TransactionCategory, segments int, force bool, txSegmentSize int) ([]*txbasic.Transaction, bool) {
+func (txsorts *txSortedList) DiscardFromPricedlistByCategor(category txbasic.TransactionCategory, segments int64, force bool, txSegmentSize int64) ([]*txbasic.Transaction, bool) {
 
 	pricelistcap := txsorts.Pricedlist[category]
 	if pricelistcap == nil {
 		return nil, false
 	}
-	discard := func(segments int, force bool) ([]*txbasic.Transaction, bool) {
+	discard := func(segments int64, force bool) ([]*txbasic.Transaction, bool) {
 		drop := make([]*txbasic.Transaction, 0, segments) // Remote underpriced transactions to drop
 		for segments > 0 {
 			if pricelistcap.remoteTxs.Len() == 0 {
@@ -1690,7 +1687,7 @@ func (l *txPricedList) underpricedFor(h *priceHp, tx *txbasic.Transaction) bool 
 	return h.cmp(h.list[0], tx) >= 0
 }
 
-func (l *txPricedList) Discard(segments int, force bool, txSegmentSize int) ([]*txbasic.Transaction, bool) {
+func (l *txPricedList) Discard(segments int64, force bool, txSegmentSize int64) ([]*txbasic.Transaction, bool) {
 	drop := make([]*txbasic.Transaction, 0, segments)
 	for segments > 0 {
 		if l.remoteTxs.Len() == 0 {
@@ -1732,8 +1729,8 @@ func (l *txPricedList) Count() int {
 	return len(l.all.remotes) + len(l.all.locals)
 }
 
-func numSegments(tx *txbasic.Transaction, txSegmentSize int) int {
-	return int((tx.Size() + txSegmentSize - 1) / txSegmentSize)
+func numSegments(tx *txbasic.Transaction, txSegmentSize int64) int64 {
+	return (int64(tx.Size()) + txSegmentSize - 1) / txSegmentSize
 }
 
 type TxByNonce []*txbasic.Transaction

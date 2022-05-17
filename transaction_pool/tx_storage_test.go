@@ -282,7 +282,7 @@ func Test_transactionPool_PublishTx(t *testing.T) {
 
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
 	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	if err := pool.query.PublishTx(pool.ctx, Tx1); err != nil {
+	if err := pool.txServant.PublishTx(pool.ctx, Tx1); err != nil {
 		t.Error("want", nil, "got", err)
 	}
 }

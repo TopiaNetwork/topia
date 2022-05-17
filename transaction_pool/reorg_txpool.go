@@ -102,8 +102,8 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 
 			var curTxPoolTxs, packagedTx []*txbasic.Transaction
 			var (
-				rem, _ = pool.query.GetBlockByHash(tpchaintypes.BlockHash(oldBlockHead.Hash))
-				add, _ = pool.query.GetBlockByHash(tpchaintypes.BlockHash(newBlockHead.Hash))
+				rem, _ = pool.txServant.GetBlockByHash(tpchaintypes.BlockHash(oldBlockHead.Hash))
+				add, _ = pool.txServant.GetBlockByHash(tpchaintypes.BlockHash(newBlockHead.Hash))
 			)
 			if rem == nil {
 
@@ -129,7 +129,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 							curTxPoolTxs = append(curTxPoolTxs, txType)
 						}
 					}
-					if rem, _ = pool.query.GetBlockByHash(tpchaintypes.BlockHash(rem.Head.ParentBlockHash)); rem == nil {
+					if rem, _ = pool.txServant.GetBlockByHash(tpchaintypes.BlockHash(rem.Head.ParentBlockHash)); rem == nil {
 						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldBlockHead.Height,
 							"hash", tpchaintypes.BlockHash(oldBlockHead.Hash))
 						return nil
@@ -144,7 +144,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 							packagedTx = append(packagedTx, txType)
 						}
 					}
-					if add, _ = pool.query.GetBlockByHash(tpchaintypes.BlockHash(add.Head.ParentBlockHash)); add == nil {
+					if add, _ = pool.txServant.GetBlockByHash(tpchaintypes.BlockHash(add.Head.ParentBlockHash)); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newBlockHead.Height,
 							"hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 						return ErrUnRooted
@@ -159,7 +159,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 							curTxPoolTxs = append(curTxPoolTxs, txType)
 						}
 					}
-					if rem, _ = pool.query.GetBlockByHash(tpchaintypes.BlockHash(rem.Head.ParentBlockHash)); rem == nil {
+					if rem, _ = pool.txServant.GetBlockByHash(tpchaintypes.BlockHash(rem.Head.ParentBlockHash)); rem == nil {
 						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldBlockHead.Height,
 							"hash", tpchaintypes.BlockHash(oldBlockHead.Hash))
 						return ErrUnRooted
@@ -171,7 +171,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 							packagedTx = append(packagedTx, txType)
 						}
 					}
-					if add, _ = pool.query.GetBlockByHash(tpchaintypes.BlockHash(add.Head.ParentBlockHash)); add == nil {
+					if add, _ = pool.txServant.GetBlockByHash(tpchaintypes.BlockHash(add.Head.ParentBlockHash)); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newBlockHead.Height,
 							"hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 						return ErrUnRooted
@@ -182,7 +182,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 		}
 	}
 	if newBlockHead == nil {
-		curblock, _ := pool.query.GetLatestBlock()
+		curblock, _ := pool.txServant.GetLatestBlock()
 		newBlockHead = curblock.GetHead()
 	}
 

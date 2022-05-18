@@ -8,42 +8,6 @@ import (
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
-func (pool *transactionPool) SaveLocalTxs(category txbasic.TransactionCategory) error {
-
-	locals, err := json.Marshal(pool.allTxsForLook.getLocalKeyTxFromAllTxsLookupByCategory(category))
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(pool.config.PathLocal[category], locals, 0664)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (pool *transactionPool) loadLocal(category txbasic.TransactionCategory, nofile bool, path string) {
-	if !nofile && path != "" {
-		if err := pool.LoadLocalTxs(category); err != nil {
-			pool.log.Warnf("Failed to load local transaction from stored file", "err", err)
-		}
-	}
-}
-func (pool *transactionPool) LoadLocalTxs(category txbasic.TransactionCategory) error {
-	data, err := ioutil.ReadFile(pool.config.PathLocal[category])
-	if err != nil {
-		return nil
-	}
-	var locals map[string]*txbasic.Transaction
-	err = json.Unmarshal(data, &locals)
-	if err != nil {
-		return err
-	}
-	for _, tx := range locals {
-		pool.AddLocal(tx)
-	}
-	return nil
-}
-
 type remoteTxs struct {
 	Txs                 map[txbasic.TxID]*txbasic.Transaction
 	ActivationIntervals map[txbasic.TxID]time.Time

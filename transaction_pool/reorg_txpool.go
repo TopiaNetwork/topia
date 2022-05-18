@@ -73,7 +73,7 @@ func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolRes
 		pool.truncateQueueByCategory(category)
 	}
 	pool.txCache.Purge()
-	pool.changesSinceReorg = 0 // Reset change counter
+	pool.changeSizeSinceReorg = 0 // Reset change counter
 }
 
 func (pool *transactionPool) requestReset(oldBlockHead *tpchaintypes.BlockHead, newBlockHead *tpchaintypes.BlockHead) chan struct{} {

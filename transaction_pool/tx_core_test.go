@@ -12,28 +12,28 @@ import (
 )
 
 var (
-	newCntAccountHeap CntAccountHeap
-	newCntAccountItem CntAccountItem
+	newSizeAccountHeap SizeAccountHeap
+	newSizeAccountItem SizeAccountItem
 )
 
 func init() {
-	newCntAccountItem = CntAccountItem{
+	newSizeAccountItem = SizeAccountItem{
 		"b0001",
 		5,
 		-1,
 	}
 
-	newCntAccountHeap = CntAccountHeap{
-		&CntAccountItem{
+	newSizeAccountHeap = SizeAccountHeap{
+		&SizeAccountItem{
 			"a0001",
 			33,
 			0,
 		},
-		&CntAccountItem{
+		&SizeAccountItem{
 			"a0002",
 			11,
 			1,
-		}, &CntAccountItem{
+		}, &SizeAccountItem{
 			"a003",
 			22,
 			1,
@@ -88,15 +88,15 @@ func Test_nonceHeap_Less(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Len(t *testing.T) {
+func TestSizeAccountHeap_Len(t *testing.T) {
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		want int
 	}{
 		// TODO: Add test cases.
 		{name: "test for CntAccountHeap_Len",
-			pq:   newCntAccountHeap,
+			pq:   newSizeAccountHeap,
 			want: 3,
 		},
 	}
@@ -116,14 +116,14 @@ func TestCntAccountHeap_Less(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		args args
 		want bool
 	}{
 		// TODO: Add test cases.
-		{name: "test for false", pq: newCntAccountHeap,
+		{name: "test for false", pq: newSizeAccountHeap,
 			args: args{0, 1}, want: false},
-		{name: "test for false", pq: newCntAccountHeap,
+		{name: "test for false", pq: newSizeAccountHeap,
 			args: args{1, 2}, want: false},
 	}
 	for _, tt := range tests {
@@ -142,11 +142,11 @@ func TestCntAccountHeap_Swap(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		args args
 	}{
 		// TODO: Add test cases.
-		{name: "test for swap", pq: newCntAccountHeap,
+		{name: "test for swap", pq: newSizeAccountHeap,
 			args: args{0, 1}},
 	}
 	for _, tt := range tests {
@@ -167,18 +167,18 @@ func TestCntAccountHeap_Push(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		args args
 	}{
 		// TODO: Add test cases.
 		{name: "heap_push",
-			pq:   newCntAccountHeap,
-			args: args{newCntAccountItem}},
+			pq:   newSizeAccountHeap,
+			args: args{newSizeAccountItem}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			want := tt.pq.Len() + 1
-			tt.pq.Push(&newCntAccountItem)
+			tt.pq.Push(&newSizeAccountItem)
 			got := tt.pq.Len()
 			if !assert.Equal(t, want, got) {
 				t.Error("want", want, "got", got)
@@ -190,13 +190,13 @@ func TestCntAccountHeap_Push(t *testing.T) {
 func TestCntAccountHeap_Pop(t *testing.T) {
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		want interface{}
 	}{
 		// TODO: Add test cases.
 		{name: "pop test",
-			pq: newCntAccountHeap,
-			want: &CntAccountItem{"a003",
+			pq: newSizeAccountHeap,
+			want: &SizeAccountItem{"a003",
 				22,
 				-1}},
 	}

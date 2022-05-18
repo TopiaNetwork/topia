@@ -2,20 +2,23 @@ package transactionpool
 
 import (
 	"context"
-	tplog "github.com/TopiaNetwork/topia/log"
-	"github.com/TopiaNetwork/topia/service"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/protocol"
+	"github.com/TopiaNetwork/topia/service"
+	"github.com/TopiaNetwork/topia/state/account"
 	"github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TransactionPoolServant interface {
 	CurrentHeight() (uint64, error)
+	GetNonce(tpcrtypes.Address) (uint64, error)
 	GetLatestBlock() (*tpchaintypes.Block, error)
 	GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
@@ -23,10 +26,10 @@ type TransactionPoolServant interface {
 	UnSubscribe(topic string) error
 }
 
-func newTransactionPoolServant(stateQueryService service.StateQueryService, blockService service.BlockService,
+func newTransactionPoolServant(accountState account.AccountState, stateQueryService service.StateQueryService, blockService service.BlockService,
 	network tpnet.Network) TransactionPoolServant {
-
 	txpoolservant := &transactionPoolServant{
+		AccountState:      accountState,
 		StateQueryService: stateQueryService,
 		BlockService:      blockService,
 		Network:           network,
@@ -35,6 +38,7 @@ func newTransactionPoolServant(stateQueryService service.StateQueryService, bloc
 }
 
 type transactionPoolServant struct {
+	account.AccountState
 	service.StateQueryService
 	service.BlockService
 	tpnet.Network
@@ -48,7 +52,11 @@ func (servant *transactionPoolServant) CurrentHeight() (uint64, error) {
 	curHeight := curBlock.Head.Height
 	return curHeight, nil
 }
+func (servant *transactionPoolServant) GetNonce(address tpcrtypes.Address) (uint64, error) {
 
+	return servant.GetNonce(address)
+
+}
 func (servant *transactionPoolServant) GetLatestBlock() (*tpchaintypes.Block, error) {
 	return servant.GetLatestBlock()
 }
@@ -124,7 +132,7 @@ func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool,
 	}
 
 	if isLocal {
-		if uint64(numSegments(tx, DefaultTransactionPoolConfig.TxSegmentSize)) > DefaultTransactionPoolConfig.TxpoolMaxSize {
+		if uint64(tx.Size()) > DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount {
 			return message.ValidationReject
 		}
 		return message.ValidationAccept

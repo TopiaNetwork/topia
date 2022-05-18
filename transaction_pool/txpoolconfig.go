@@ -9,24 +9,21 @@ import (
 )
 
 type TransactionPoolConfig struct {
-	NoLocalFile     bool
 	NoRemoteFile    bool
 	NoConfigFile    bool
-	PathLocal       map[txbasic.TransactionCategory]string
 	PathRemote      map[txbasic.TransactionCategory]string
 	PathConfig      string
 	ReStoredDur     time.Duration
 	TxExpiredPolicy TxExpiredPolicy
 	TxCacheSize     int
 	GasPriceLimit   uint64
-	TxSegmentSize   int64
 	TxMaxSize       uint64
 	TxpoolMaxSize   uint64
 
-	PendingAccountSegments uint64 // Number of executable transaction slots guaranteed per account
-	PendingGlobalSegments  uint64 // Maximum number of executable transaction slots for all accounts
-	QueueMaxTxsAccount     uint64 // Maximum number of non-executable transaction slots permitted per account
-	QueueMaxTxsGlobal      uint64 // Maximum number of non-executable transaction slots for all accounts
+	MaxSizeOfEachPendingAccount uint64 // Maximum size of executable transaction per account
+	MaxSizeOfPending            uint64 // Maximum size of executable transaction
+	MaxSizeOfEachQueueAccount   uint64 // Maximum number of non-executable transaction slots permitted per account
+	MaxSizeOfQueue              uint64 // Maximum number of non-executable transaction slots for all accounts
 
 	LifetimeForTx         time.Duration
 	LifeHeight            uint64
@@ -37,9 +34,6 @@ type TransactionPoolConfig struct {
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
-	PathLocal: map[txbasic.TransactionCategory]string{
-		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_localTransactions.json",
-		txbasic.TransactionCategory_Eth:             "savedtxs/Eth_localTransactions.json"},
 	PathRemote: map[txbasic.TransactionCategory]string{
 		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json",
 		txbasic.TransactionCategory_Eth:             "savedtxs/Eth_remoteTransactions.json"},
@@ -50,14 +44,13 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 
 	TxCacheSize: 36000000,
 
-	TxSegmentSize: 32 * 1024,
 	TxMaxSize:     4 * 32 * 1024,
 	TxpoolMaxSize: 8192 * 2 * 4 * 32 * 1024,
 
-	PendingAccountSegments: 64,       //64
-	PendingGlobalSegments:  8192,     //8192
-	QueueMaxTxsAccount:     64,       //64
-	QueueMaxTxsGlobal:      8192 * 2, //PendingGlobalSlots*2
+	MaxSizeOfEachPendingAccount: 64 * 32 * 1024,
+	MaxSizeOfPending:            8192 * 32 * 1024,
+	MaxSizeOfEachQueueAccount:   64 * 32 * 1024,
+	MaxSizeOfQueue:              8192 * 2 * 32 * 1024,
 
 	LifetimeForTx:         30 * time.Minute,
 	LifeHeight:            uint64(30 * 60),
@@ -73,17 +66,17 @@ func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 	if conf.GasPriceLimit < 1 {
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
-	if conf.PendingAccountSegments < 2 {
-		conf.PendingAccountSegments = DefaultTransactionPoolConfig.PendingAccountSegments
+	if conf.MaxSizeOfEachPendingAccount < 32*1024 {
+		conf.MaxSizeOfEachQueueAccount = DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount
 	}
-	if conf.PendingGlobalSegments < 1 {
-		conf.PendingGlobalSegments = DefaultTransactionPoolConfig.PendingGlobalSegments
+	if conf.MaxSizeOfPending < 16*32*1024 {
+		conf.MaxSizeOfPending = DefaultTransactionPoolConfig.MaxSizeOfPending
 	}
-	if conf.QueueMaxTxsAccount < 1 {
-		conf.QueueMaxTxsAccount = DefaultTransactionPoolConfig.QueueMaxTxsAccount
+	if conf.MaxSizeOfEachQueueAccount < 64*1024 {
+		conf.MaxSizeOfEachPendingAccount = DefaultTransactionPoolConfig.MaxSizeOfEachQueueAccount
 	}
-	if conf.QueueMaxTxsGlobal < 1 {
-		conf.QueueMaxTxsGlobal = DefaultTransactionPoolConfig.QueueMaxTxsGlobal
+	if conf.MaxSizeOfQueue < 32*64*1024 {
+		conf.MaxSizeOfQueue = DefaultTransactionPoolConfig.MaxSizeOfQueue
 	}
 	if conf.LifetimeForTx < 1 {
 		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
@@ -96,9 +89,6 @@ func (config *TransactionPoolConfig) check() TransactionPoolConfig {
 	}
 	if conf.PathRemote == nil {
 		conf.PathRemote = DefaultTransactionPoolConfig.PathRemote
-	}
-	if conf.PathLocal == nil {
-		conf.PathLocal = DefaultTransactionPoolConfig.PathLocal
 	}
 
 	return conf

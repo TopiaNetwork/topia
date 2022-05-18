@@ -11,7 +11,6 @@ import (
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/service"
-	"github.com/TopiaNetwork/topia/state/account"
 	"github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
@@ -26,10 +25,9 @@ type TransactionPoolServant interface {
 	UnSubscribe(topic string) error
 }
 
-func newTransactionPoolServant(accountState account.AccountState, stateQueryService service.StateQueryService, blockService service.BlockService,
+func newTransactionPoolServant(stateQueryService service.StateQueryService, blockService service.BlockService,
 	network tpnet.Network) TransactionPoolServant {
 	txpoolservant := &transactionPoolServant{
-		AccountState:      accountState,
 		StateQueryService: stateQueryService,
 		BlockService:      blockService,
 		Network:           network,
@@ -38,7 +36,6 @@ func newTransactionPoolServant(accountState account.AccountState, stateQueryServ
 }
 
 type transactionPoolServant struct {
-	account.AccountState
 	service.StateQueryService
 	service.BlockService
 	tpnet.Network

@@ -99,10 +99,14 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 }
 
 func (pool *transactionPool) TruncateTxPool() {
+
 	for category, _ := range pool.allTxsForLook.all {
-		pool.truncatePendingByCategory(category)
-		pool.truncateQueueByCategory(category)
+		pool.queues.removeAll(category)
+		pool.pendings.removeAll(category)
+		pool.allTxsForLook.removeAll(category)
+		pool.sortedLists.removeAll(category)
 	}
+	pool.txCache.Purge()
 	pool.log.Tracef("TransactionPool Truncated")
 
 }

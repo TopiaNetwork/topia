@@ -120,7 +120,7 @@ type transactionPool struct {
 }
 
 func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel,
-	log tplog.Logger, codecType codec.CodecType, accountState account.AccountState, stateQueryService service.StateQueryService,
+	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
 	blockService service.BlockService, network tpnet.Network) *transactionPool {
 	conf = (&conf).check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
@@ -150,7 +150,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPool
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.sortedLists = newTxSortedList()
-	pool.txServant = newTransactionPoolServant(accountState, stateQueryService, blockService, network)
+	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
 
 	if !pool.config.NoRemoteFile {
 		for category := range pool.config.PathRemote {

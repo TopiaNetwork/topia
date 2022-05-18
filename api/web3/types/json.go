@@ -6,7 +6,7 @@ const (
 	vsn = "2.0"
 )
 
-var null = json.RawMessage("null")
+var Null = json.RawMessage("null")
 
 type JsonrpcMessage struct {
 	Version string          `json:"jsonrpc,omitempty"`
@@ -36,7 +36,7 @@ func (msg *JsonrpcMessage) ErrorResponse(err error) *JsonrpcMessage {
 }
 
 func ErrorMessage(err error) *JsonrpcMessage {
-	msg := &JsonrpcMessage{Version: vsn, ID: null, Error: &jsonError{
+	msg := &JsonrpcMessage{Version: vsn, ID: Null, Error: &jsonError{
 		Code:    defaultErrorCode,
 		Message: err.Error(),
 	}}

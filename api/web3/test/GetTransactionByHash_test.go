@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
-	"github.com/TopiaNetwork/topia/api/web3/convert"
+	"github.com/TopiaNetwork/topia/api/web3/handlers"
 	"github.com/TopiaNetwork/topia/api/web3/types"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
@@ -21,14 +21,12 @@ func TestGetTransactionByHash(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	//我应该构造的是servant的mock，即为servant里面的那些方法进行打桩
 	servantMock := mocks.NewMockAPIServant(ctrl)
+	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
 	servantMock.
 		EXPECT().
 		GetTransactionByHash(gomock.Any()).
 		DoAndReturn(func(txHashHex string) (*txbasic.Transaction, error) {
-			//需要构建一个txbasic.Transaction实例才行
-			//构建一个eth的，然后调用方法转换一下
 			to := []byte("0x6fcd7b39e75619a68ab86a68b92d01134ef34ea3")
 			toAddr := types.Address{}
 			toAddr.SetBytes(to)
@@ -37,18 +35,18 @@ func TestGetTransactionByHash(t *testing.T) {
 			sByte, _ := hex.DecodeString("08725bdf6cb82a27e4798cbcb70fa220e1d7459353ef1a2c716f8101f4c9c601")
 
 			ethLegacyTx := types.NewTx(&types.DynamicFeeTx{
-				ChainID:   big.NewInt(9),
+				ChainID:   big.NewInt(3),
 				Nonce:     0x0,
 				To:        &toAddr,
 				Value:     big.NewInt(0x38d7ea4c68000),
 				Gas:       0x5208,
 				GasFeeCap: big.NewInt(0x3ebd697803),
 				GasTipCap: big.NewInt(0x8c347c90),
-				V:         big.NewInt(0x1), //v不对
+				V:         big.NewInt(0x1),
 				R:         new(big.Int).SetBytes(rByte),
 				S:         new(big.Int).SetBytes(sByte),
 			})
-			tx, _ := convert.ConvertEthTransactionToTopiaTransaction(ethLegacyTx)
+			tx, _ := handlers.ConvertEthTransactionToTopiaTransaction(ethLegacyTx)
 			return tx, nil
 		}).
 		Times(1)
@@ -59,7 +57,7 @@ func TestGetTransactionByHash(t *testing.T) {
 		DoAndReturn(func(txHashHex string) (*tpchaintypes.Block, error) {
 			return &tpchaintypes.Block{
 				Head: &tpchaintypes.BlockHead{
-					ChainID:         []byte{9},
+					ChainID:         []byte(ChainId),
 					Version:         1,
 					Height:          10,
 					Epoch:           1,
@@ -88,8 +86,6 @@ func TestGetTransactionByHash(t *testing.T) {
 		}).
 		Times(1)
 
-	//1发送请求
-	//1.1构造请求
 	body := `{
 		"jsonrpc":"2.0",
 		"method":"eth_getTransactionByHash",
@@ -100,15 +96,19 @@ func TestGetTransactionByHash(t *testing.T) {
 	}`
 	req := httptest.NewRequest("POST", "http://localhost:8080/", strings.NewReader(body))
 	res := httptest.NewRecorder()
-	//1.2调用handler
-	w3s := web3.InitWeb3Server(servantMock, nil)
-	w3s.Web3Handler(res, req)
+
+	config := web3.Web3ServerConfiguration{
+		Host: "",
+		Port: "8080",
+	}
+	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
-	ethTransaction := types.EthRpcTransaction{}
+	ethTransaction := handlers.EthRpcTransaction{}
 	json.Unmarshal(j.Result, &ethTransaction)
 
 	if ethTransaction.Nonce != 0 {

@@ -2,11 +2,11 @@ package types
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TxInterface interface {
-	SendTransaction(ctx context.Context, tran *basic.Transaction) error
+	SendTransaction(ctx context.Context, tran *txbasic.Transaction) error
 
-	TransactionByID(ctx context.Context, txHash basic.TxID) (*basic.Transaction, error)
+	TransactionByID(ctx context.Context, txHash txbasic.TxID) (*txbasic.Transaction, error)
 }

@@ -4,7 +4,7 @@ type ChainConfiguration struct {
 	MaxTargetItem         uint64
 	MaxCodeSize           uint64 //unit: byte
 	MaxTxCountOfEachBlock uint64
-	MaxTxSizeOfEachBlock  uint64 /unit: byte
+	MaxTxSizeOfEachBlock  uint64 //unit: byte
 }
 
 func DefChainConfiguration() *ChainConfiguration {

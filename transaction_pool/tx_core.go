@@ -360,7 +360,11 @@ func newPendingsMap() *pendingsMap {
 	}
 	return pendings
 }
-
+func (pendingmap *pendingsMap) removeAll(category txbasic.TransactionCategory) {
+	pendingmap.Mu.Lock()
+	defer pendingmap.Mu.Unlock()
+	delete(pendingmap.pending, category)
+}
 func (pendingmap *pendingsMap) ifEmptyDropCategory(category txbasic.TransactionCategory) {
 	pendingmap.Mu.Lock()
 	defer pendingmap.Mu.Unlock()
@@ -681,6 +685,11 @@ func newQueuesMap() *queuesMap {
 		queue: make(map[txbasic.TransactionCategory]*queueTxs, 0),
 	}
 	return queues
+}
+func (queuemap *queuesMap) removeAll(category txbasic.TransactionCategory) {
+	queuemap.Mu.Lock()
+	defer queuemap.Mu.Unlock()
+	delete(queuemap.queue, category)
 }
 func (queuemap *queuesMap) ifEmptyDropCategory(category txbasic.TransactionCategory) {
 	queuemap.Mu.Lock()
@@ -1196,6 +1205,11 @@ func newAllTxsLookupMap() *allTxsLookupMap {
 	}
 	return allMap
 }
+func (alltxsmap *allTxsLookupMap) removeAll(category txbasic.TransactionCategory) {
+	alltxsmap.Mu.Lock()
+	defer alltxsmap.Mu.Unlock()
+	delete(alltxsmap.all, category)
+}
 
 func (alltxsmap *allTxsLookupMap) getAll() map[txbasic.TransactionCategory]*txForLookup {
 	return alltxsmap.all
@@ -1585,6 +1599,11 @@ type txSortedList struct {
 func newTxSortedList() *txSortedList {
 	txSorted := &txSortedList{Pricedlist: make(map[txbasic.TransactionCategory]*txPricedList, 0)}
 	return txSorted
+}
+func (txsorts *txSortedList) removeAll(category txbasic.TransactionCategory) {
+	txsorts.Mu.Lock()
+	defer txsorts.Mu.Unlock()
+	delete(txsorts.Pricedlist, category)
 }
 func (txsorts *txSortedList) setTxSortedListByCategory(category txbasic.TransactionCategory, all *txForLookup) {
 	txsorts.Mu.Lock()

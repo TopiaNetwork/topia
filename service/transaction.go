@@ -5,6 +5,7 @@ import (
 	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -12,6 +13,7 @@ import (
 	"github.com/TopiaNetwork/topia/state"
 	txfactory "github.com/TopiaNetwork/topia/transaction"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	"math"
 	"math/big"
 
 	"github.com/TopiaNetwork/topia/execution"
@@ -32,6 +34,8 @@ type TransactionService interface {
 
 	ForwardTxAsync(ctx context.Context, tx *txbasic.Transaction) error
 
+	ComputeGasPrice() (uint64, error)
+
 	EstimateGas(ctx context.Context, tx *txbasic.Transaction) (*big.Int, error)
 
 	ExecuteTxSim(ctx context.Context, tx *txbasic.Transaction) (*txbasic.TransactionResult, error)
@@ -40,9 +44,12 @@ type TransactionService interface {
 type transactionService struct {
 	tplgblock.BlockStore
 	execution.ExecutionForwarder
-	nodeID string
-	log    tplog.Logger
-	ledger ledger.Ledger
+	nodeID         string
+	log            tplog.Logger
+	ledger         ledger.Ledger
+	txPool         txpool.TransactionPool
+	latestGasPrice uint64
+	config         *tpconfig.Configuration
 }
 
 func newTransactionService(nodeID string,
@@ -50,13 +57,17 @@ func newTransactionService(nodeID string,
 	marshaler codec.Marshaler,
 	network tpnet.Network,
 	ledger ledger.Ledger,
-	txPool txpool.TransactionPool) TransactionService {
+	txPool txpool.TransactionPool,
+	config *tpconfig.Configuration) TransactionService {
 	return &transactionService{
 		BlockStore:         ledger.GetBlockStore(),
 		ExecutionForwarder: execution.NewExecutionForwarder(nodeID, log, marshaler, network, ledger, txPool),
 		nodeID:             nodeID,
 		log:                log,
 		ledger:             ledger,
+		txPool:             txPool,
+		config:             config,
+		latestGasPrice:     config.GasConfig.MinGasPrice,
 	}
 }
 
@@ -67,6 +78,33 @@ func (txs *transactionService) GetTransactionCount(addr tpcrtypes.Address, heigh
 	}
 
 	return uint64(block.Head.TxCount), nil
+}
+
+func (txs *transactionService) ComputeGasPrice() (uint64, error) {
+	pendingBlock := uint64(0)
+	if uint64(txs.txPool.Size())%txs.config.ChainConfig.MaxTxSizeOfEachBlock > 0 {
+		pendingBlock = uint64(txs.txPool.Size())/txs.config.ChainConfig.MaxTxSizeOfEachBlock + 1
+	}
+
+	if pendingBlock <= 1 { //idle
+		txs.latestGasPrice = txs.config.GasConfig.MinGasPrice
+		return txs.latestGasPrice, nil
+	}
+
+	tempGasPrice := float64(txs.latestGasPrice)
+	if pendingBlock > 1 {
+		for i := uint64(0); i < pendingBlock-1; i++ {
+			tempGasPrice += math.Pow(tempGasPrice, txs.config.GasConfig.GasPriceMultiple)
+		}
+	}
+
+	txs.latestGasPrice = uint64(tempGasPrice)
+
+	if txs.latestGasPrice >= txs.config.GasConfig.MinGasPrice*5 {
+		txs.latestGasPrice = txs.config.GasConfig.MinGasPrice * 5
+	}
+
+	return txs.latestGasPrice, nil
 }
 
 func (txs *transactionService) getTxServantMem() txbasic.TransactionServant {

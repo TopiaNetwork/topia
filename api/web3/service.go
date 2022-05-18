@@ -17,8 +17,7 @@ import (
 
 func HandlerWapper(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 		w.Header().Add("Access-Control-Allow-Headers", "*")
 		w.Header().Add("Access-Control-Allow-Credentials", "true")
 		w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
@@ -34,9 +33,9 @@ func HandlerWapper(f http.HandlerFunc) http.HandlerFunc {
 func StartServer(config Web3ServerConfiguration, apiServant servant.APIServant, txInterface types.TxInterface) {
 	w3Server := InitWeb3Server(config, apiServant, txInterface)
 
-	//addr := config.Host + ":" + config.Port
+	addr := config.Host + ":" + config.Port
 	srv := &http.Server{
-		Addr:         ":8080",
+		Addr:         addr,
 		Handler:      nil,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,

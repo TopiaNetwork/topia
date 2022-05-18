@@ -3,7 +3,6 @@ package transactionpool
 import (
 	"context"
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/network/protocol"
 	"reflect"
 	"testing"
 	"time"
@@ -19,6 +18,7 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	"github.com/TopiaNetwork/topia/network/protocol"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 )
@@ -323,10 +323,10 @@ func SetBlockData(txs map[string]*txbasic.Transaction) *tpchaintypes.BlockData {
 func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 
 	conf = (&conf).check()
-	conf.PendingAccountSegments = 16
-	conf.PendingGlobalSegments = 128
-	conf.QueueMaxTxsAccount = 32
-	conf.QueueMaxTxsGlobal = 256
+	conf.MaxSizeOfEachPendingAccount = 16 * 32 * 1024
+	conf.MaxSizeOfPending = 128 * 32 * 1024
+	conf.MaxSizeOfEachQueueAccount = 32 * 32 * 1024
+	conf.MaxSizeOfQueue = 256 * 32 * 1024
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
 		nodeId:              nodeId,
@@ -354,16 +354,10 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.sortedLists = newTxSortedList()
 
-	if !pool.config.NoLocalFile {
-		for category := range pool.config.PathLocal {
-			pool.newTxListStructs(category)
-			pool.loadLocal(category, pool.config.NoLocalFile, pool.config.PathLocal[category])
-		}
-	}
 	if !pool.config.NoRemoteFile {
 		for category := range pool.config.PathRemote {
 			pool.newTxListStructs(category)
-			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
+			pool.loadRemote(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
 	curBlock, err := pool.txServant.GetLatestBlock()
@@ -375,7 +369,6 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 	pool.wg.Add(1)
 	go pool.ReorgTxpoolLoop()
 	for category, _ := range pool.allTxsForLook.getAll() {
-		pool.loadLocal(category, conf.NoLocalFile, conf.PathLocal[category])
 		pool.loadRemote(category, conf.NoRemoteFile, conf.PathRemote[category])
 	}
 

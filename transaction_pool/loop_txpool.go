@@ -158,7 +158,7 @@ func (pool *transactionPool) loopRegularSaveLocalTxs() {
 		// Handle local transaction  store
 		case <-stored.C:
 			for category, _ := range pool.allTxsForLook.getAll() {
-				if err := pool.SaveLocalTxs(category); err != nil {
+				if err := pool.SaveRemoteTxs(category); err != nil {
 					pool.log.Warnf("Failed to save local tx ", "err", err)
 				}
 			}
@@ -205,7 +205,7 @@ func (pool *transactionPool) loopRegularRepublic() {
 			}
 			diffHeight := pool.config.TxTTLHeightOfRepublic
 			for category, _ := range pool.queues.getAll() {
-				pool.queues.republicTx(category, f1, time2, f2, f3, diffHeight)
+				pool.queues.republicTx(category, TxRepublicTime, f1, time2, f2, f3, diffHeight)
 			}
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRegularRepublic stopped")
@@ -216,9 +216,6 @@ func (pool *transactionPool) loopRegularRepublic() {
 
 func (pool *transactionPool) saveAllWhenSysShutDown() {
 	for category, _ := range pool.allTxsForLook.getAll() {
-		if err := pool.SaveLocalTxs(category); err != nil {
-			pool.log.Warnf("Failed to save local transaction", "err", err)
-		}
 		//remote txs save
 		if err := pool.SaveRemoteTxs(category); err != nil {
 			pool.log.Warnf("Failed to save remote transaction", "err", err)

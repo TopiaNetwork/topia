@@ -139,6 +139,7 @@ func ConvertTopiaBlockToEthBlock(block *tpchaintypes.Block) *GetBlockResponseTyp
 
 	gas := big.NewInt(10_000_000_000)
 	height := new(big.Int).SetUint64(block.GetHead().GetHeight())
+	baseFee := big.NewInt(0)
 	var blockHash types.Hash
 	blockHash.SetBytes(block.GetHead().GetHash())
 	var parentBlockHash types.Hash
@@ -155,6 +156,7 @@ func ConvertTopiaBlockToEthBlock(block *tpchaintypes.Block) *GetBlockResponseTyp
 	txReceiptRoot.SetBytes(block.GetHead().GetTxResultRoot())
 	result := &GetBlockResponseType{
 		Number:           (*hexutil.Big)(height),
+		BaseFeePerGas:    (*hexutil.Big)(baseFee),
 		Hash:             blockHash,
 		ParentHash:       parentBlockHash,
 		Nonce:            []byte{},

@@ -76,7 +76,7 @@ func (s *service) BlockService() BlockService {
 }
 
 func (s *service) TransactionService() TransactionService {
-	return newTransactionService(s.nodeID, s.log, s.marshaler, s.network, s.ledger, s.txPool, s.config)
+	return newTransactionService(s.nodeID, s.log, s.marshaler, s.network, s.ledger, s.txPool, s.StateQueryService(), s.config)
 }
 
 func (s *service) WalletService() WalletService {

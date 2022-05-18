@@ -293,7 +293,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
-		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, txPool)
+		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, codec.CodecType_PROTO, txPool)
 
 		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, exeScheduler, config)
 

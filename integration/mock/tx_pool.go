@@ -28,6 +28,36 @@ type TransactionPoolMock struct {
 	pendingTxs   []txbasic.Transaction //tx hex hash -> Transaction
 }
 
+func (txm *TransactionPoolMock) RemoveTxHashs(hashs []txbasic.TxID) []error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) Count() int {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) TruncateTxPool() {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) SetTxPoolConfig(conf txpool.TransactionPoolConfig) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) PeekTxState(hash txbasic.TxID) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewTransactionPoolMock(log tplog.Logger, nodeID string, cryptService tpcrt.CryptService) *TransactionPoolMock {
 	fromPriKey, _, _ := cryptService.GeneratePriPubKey()
 
@@ -55,13 +85,13 @@ func (txm *TransactionPoolMock) AddTx(tx *txbasic.Transaction, local bool) error
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) RemoveTxByKey(key string) error {
+func (txm *TransactionPoolMock) RemoveTxByKey(key txbasic.TxID) error {
 	txm.sync.Lock()
 	defer txm.sync.Unlock()
 
 	for i, tx := range txm.pendingTxs {
-		txHash, _ := tx.HashHex()
-		if txHash == string(key) {
+		txHash, _ := tx.TxID()
+		if txHash == key {
 			txm.pendingTxs = append(txm.pendingTxs[:i], txm.pendingTxs[i+1:]...)
 			i--
 		}
@@ -70,17 +100,7 @@ func (txm *TransactionPoolMock) RemoveTxByKey(key string) error {
 	return nil
 }
 
-func (txm *TransactionPoolMock) RemoveTxHashs(hashs []string) []error {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (txm *TransactionPoolMock) Reset(oldHead, newHead *tpchaintypes.BlockHead) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (txm *TransactionPoolMock) UpdateTx(tx *txbasic.Transaction, txKey string) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -109,8 +129,8 @@ func (txm *TransactionPoolMock) processBlockAddedEvent(ctx context.Context, data
 		for _, txBytes := range block.Data.Txs {
 			var tx txbasic.Transaction
 			marshaler.Unmarshal(txBytes, &tx)
-			txHash, _ := tx.HashHex()
-			txm.RemoveTxByKey(txHash)
+			txID, _ := tx.TxID()
+			txm.RemoveTxByKey(txID)
 		}
 
 		return nil
@@ -170,4 +190,3 @@ func (txm *TransactionPoolMock) SysShutDown() {
 	//TODO implement me
 	panic("implement me")
 }
-

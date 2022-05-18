@@ -28,7 +28,7 @@ func TestContextContract(t *testing.T) {
 
 	compState := state.GetStateBuilder().CreateCompositionState(log, "NCTest", lg, 1, "NCTest")
 
-	txServant := txbasic.NewTransactionServant(compState, compState)
+	txServant := txbasic.NewTransactionServant(compState, compState, nil, nil)
 
 	vmServant := tpvmmservice.NewVMServant(txServant, math.MaxUint64)
 

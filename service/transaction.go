@@ -3,20 +3,22 @@ package service
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
+	tplgblock "github.com/TopiaNetwork/topia/ledger/block"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/state"
 	txfactory "github.com/TopiaNetwork/topia/transaction"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
-	"math/big"
-
-	"github.com/TopiaNetwork/topia/execution"
-	tplgblock "github.com/TopiaNetwork/topia/ledger/block"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txuni "github.com/TopiaNetwork/topia/transaction/universal"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
 
 type TransactionService interface {
@@ -32,6 +34,8 @@ type TransactionService interface {
 
 	ForwardTxAsync(ctx context.Context, tx *txbasic.Transaction) error
 
+	SuggestGasPrice() (uint64, error)
+
 	EstimateGas(ctx context.Context, tx *txbasic.Transaction) (*big.Int, error)
 
 	ExecuteTxSim(ctx context.Context, tx *txbasic.Transaction) (*txbasic.TransactionResult, error)
@@ -40,9 +44,13 @@ type TransactionService interface {
 type transactionService struct {
 	tplgblock.BlockStore
 	execution.ExecutionForwarder
-	nodeID string
-	log    tplog.Logger
-	ledger ledger.Ledger
+	nodeID     string
+	log        tplog.Logger
+	ledger     ledger.Ledger
+	txPool     txpool.TransactionPool
+	stateQuery StateQueryService
+	marshaler  codec.Marshaler
+	config     *tpconfig.Configuration
 }
 
 func newTransactionService(nodeID string,
@@ -50,13 +58,19 @@ func newTransactionService(nodeID string,
 	marshaler codec.Marshaler,
 	network tpnet.Network,
 	ledger ledger.Ledger,
-	txPool txpool.TransactionPool) TransactionService {
+	txPool txpool.TransactionPool,
+	stateQuery StateQueryService,
+	config *tpconfig.Configuration) TransactionService {
 	return &transactionService{
 		BlockStore:         ledger.GetBlockStore(),
 		ExecutionForwarder: execution.NewExecutionForwarder(nodeID, log, marshaler, network, ledger, txPool),
 		nodeID:             nodeID,
 		log:                log,
 		ledger:             ledger,
+		txPool:             txPool,
+		stateQuery:         stateQuery,
+		marshaler:          marshaler,
+		config:             config,
 	}
 }
 
@@ -69,11 +83,15 @@ func (txs *transactionService) GetTransactionCount(addr tpcrtypes.Address, heigh
 	return uint64(block.Head.TxCount), nil
 }
 
+func (txs *transactionService) SuggestGasPrice() (uint64, error) {
+	return txuni.NewGasPriceComputer(txs.marshaler, txs.txPool.Size, txs.stateQuery.GetLatestBlock, txs.config.GasConfig, txs.config.ChainConfig).ComputeGasPrice()
+}
+
 func (txs *transactionService) getTxServantMem() txbasic.TransactionServant {
 	compStateRN := state.CreateCompositionStateReadonly(txs.log, txs.ledger)
 	compStateMem := state.CreateCompositionStateMem(txs.log, compStateRN)
 
-	return txbasic.NewTransactionServant(compStateMem, compStateMem)
+	return txbasic.NewTransactionServant(compStateMem, compStateMem, txs.marshaler, txs.txPool.Size)
 }
 
 func (txs *transactionService) EstimateGas(ctx context.Context, tx *txbasic.Transaction) (*big.Int, error) {

@@ -12,6 +12,7 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/state"
 	txfactory "github.com/TopiaNetwork/topia/transaction"
+	"github.com/TopiaNetwork/topia/transaction/universal"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 	"math"
 	"math/big"
@@ -44,12 +45,13 @@ type TransactionService interface {
 type transactionService struct {
 	tplgblock.BlockStore
 	execution.ExecutionForwarder
-	nodeID         string
-	log            tplog.Logger
-	ledger         ledger.Ledger
-	txPool         txpool.TransactionPool
-	latestGasPrice uint64
-	config         *tpconfig.Configuration
+	nodeID     string
+	log        tplog.Logger
+	ledger     ledger.Ledger
+	txPool     txpool.TransactionPool
+	stateQuery StateQueryService
+	marshaler  codec.Marshaler
+	config     *tpconfig.Configuration
 }
 
 func newTransactionService(nodeID string,
@@ -58,6 +60,7 @@ func newTransactionService(nodeID string,
 	network tpnet.Network,
 	ledger ledger.Ledger,
 	txPool txpool.TransactionPool,
+	stateQuery StateQueryService,
 	config *tpconfig.Configuration) TransactionService {
 	return &transactionService{
 		BlockStore:         ledger.GetBlockStore(),
@@ -66,8 +69,9 @@ func newTransactionService(nodeID string,
 		log:                log,
 		ledger:             ledger,
 		txPool:             txPool,
+		stateQuery:         stateQuery,
+		marshaler:          marshaler,
 		config:             config,
-		latestGasPrice:     config.GasConfig.MinGasPrice,
 	}
 }
 
@@ -80,6 +84,45 @@ func (txs *transactionService) GetTransactionCount(addr tpcrtypes.Address, heigh
 	return uint64(block.Head.TxCount), nil
 }
 
+func (txs *transactionService) getMinGasPriceOfLatestBlock() (uint64, error) {
+	latestBlock, err := txs.stateQuery.GetLatestBlock()
+	if err != nil {
+		return 0, err
+	}
+
+	if latestBlock.Head.TxCount == 0 {
+		return txs.config.GasConfig.MinGasPrice, nil
+	}
+
+	var txMinGasPrice uint64
+	for _, txBytes := range latestBlock.Data.Txs {
+		var tx txbasic.Transaction
+		err = txs.marshaler.Unmarshal(txBytes, &tx)
+		if err != nil {
+			panic("Unmarshal tx: " + err.Error())
+		}
+
+		switch txbasic.TransactionCategory(tx.Head.Category) {
+		case txbasic.TransactionCategory_Topia_Universal:
+			var txUni universal.TransactionUniversal
+			err = txs.marshaler.Unmarshal(tx.Data.Specification, &txUni)
+			if err != nil {
+				panic("Unmarshal tx data: " + err.Error())
+			}
+
+			if txMinGasPrice == 0 || txMinGasPrice > txUni.Head.GasPrice {
+				txMinGasPrice = txUni.Head.GasPrice
+			}
+		}
+	}
+
+	if txMinGasPrice == 0 {
+		txMinGasPrice = txs.config.GasConfig.MinGasPrice
+	}
+
+	return txMinGasPrice, nil
+}
+
 func (txs *transactionService) ComputeGasPrice() (uint64, error) {
 	pendingBlock := uint64(0)
 	if uint64(txs.txPool.Size())%txs.config.ChainConfig.MaxTxSizeOfEachBlock > 0 {
@@ -87,24 +130,28 @@ func (txs *transactionService) ComputeGasPrice() (uint64, error) {
 	}
 
 	if pendingBlock <= 1 { //idle
-		txs.latestGasPrice = txs.config.GasConfig.MinGasPrice
-		return txs.latestGasPrice, nil
+		return txs.config.GasConfig.MinGasPrice, nil
 	}
 
-	tempGasPrice := float64(txs.latestGasPrice)
+	txMinGasPrice, err := txs.getMinGasPriceOfLatestBlock()
+	if err != nil {
+		return 0, err
+	}
+
+	tempGasPriceF := float64(txMinGasPrice)
 	if pendingBlock > 1 {
 		for i := uint64(0); i < pendingBlock-1; i++ {
-			tempGasPrice += math.Pow(tempGasPrice, txs.config.GasConfig.GasPriceMultiple)
+			tempGasPriceF += math.Pow(tempGasPriceF, txs.config.GasConfig.GasPriceMultiple)
 		}
 	}
 
-	txs.latestGasPrice = uint64(tempGasPrice)
+	tempGasPriceUInt64 := uint64(tempGasPriceF)
 
-	if txs.latestGasPrice >= txs.config.GasConfig.MinGasPrice*5 {
-		txs.latestGasPrice = txs.config.GasConfig.MinGasPrice * 5
+	if tempGasPriceUInt64 >= txs.config.GasConfig.MinGasPrice*5 {
+		tempGasPriceUInt64 = txs.config.GasConfig.MinGasPrice * 5
 	}
 
-	return txs.latestGasPrice, nil
+	return tempGasPriceUInt64, nil
 }
 
 func (txs *transactionService) getTxServantMem() txbasic.TransactionServant {

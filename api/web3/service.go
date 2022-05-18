@@ -8,6 +8,8 @@ import (
 	"github.com/TopiaNetwork/topia/api/service"
 	"github.com/TopiaNetwork/topia/api/web3/handlers"
 	types "github.com/TopiaNetwork/topia/api/web3/types"
+	tplog "github.com/TopiaNetwork/topia/log"
+	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"net/http"
 	"reflect"
 	"time"
@@ -50,12 +52,12 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 	reqBodyMsg, err := readJson(req)
 	req.Body.Close()
 
-	//if len(req.Header) > w.MaxHeader && w.MaxHeader != 0 || len(reqBodyMsg.String()) > w.MaxBody && w.MaxBody != 0 {
-	//	res.WriteHeader(http.StatusInternalServerError)
-	//	return
-	//}
-	//log, _ := tplog.CreateMainLogger(tplogcmm.DebugLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
-	//log.Info(reqBodyMsg.Method)
+	if len(req.Header) > w.MaxHeader && w.MaxHeader != 0 || len(reqBodyMsg.String()) > w.MaxBody && w.MaxBody != 0 {
+		res.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	log, _ := tplog.CreateMainLogger(tplogcmm.DebugLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
+	log.Info(reqBodyMsg.Method)
 	var result *types.JsonrpcMessage
 	if err != nil {
 		result = types.ErrorMessage(&types.InvalidRequestError{err.Error()})
@@ -64,7 +66,6 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 		return
 	} else {
 		method := reqBodyMsg.Method
-		fmt.Println(method)
 		if _, exist := w.methodApiMap[method]; exist {
 			var Handler handlers.HandlerService
 			Handler = &service.Handler{}
@@ -87,7 +88,6 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	fmt.Println(result)
 	re := constructResult(result, *reqBodyMsg)
 	res.Write(re)
 }

@@ -34,7 +34,7 @@ func (h *Handler) CallHandler(parmas interface{}, apiServant interface{}, txInte
 	_ = marshaler.Unmarshal(callResult.GetData().GetSpecification(), &transactionResultUniversal)
 	//result := transactionResultUniversal.GetData()
 	var re hexutil.Bytes
-	re = callResult.GetData().GetSpecification()[2:]
+	re = callResult.GetData().GetSpecification()
 	enc, err := json.Marshal(re)
 	if err != nil {
 		return types.ErrorMessage(err)

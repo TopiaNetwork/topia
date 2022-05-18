@@ -74,13 +74,13 @@ func NewNode(endPoint string, seed string) *Node {
 
 	txPoolConf := txpool.DefaultTransactionPoolConfig
 	txPool := txpool.NewTransactionPool(nodeID, ctx, txPoolConf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
-	exeScheduler := execution.NewExecutionScheduler(nodeID, mainLog, config, txPool)
+	exeScheduler := execution.NewExecutionScheduler(nodeID, mainLog, config, codec.CodecType_PROTO, txPool)
 	evHub := eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 	cons := consensus.NewConsensus(compStateRN.ChainID(), nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, exeScheduler, config)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	chain := chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, codec.CodecType_PROTO, ledger, exeScheduler, config)
 	w := wallet.NewWallet(tplogcmm.InfoLevel, mainLog, chainRootPath)
-	service := service.NewService(nodeID, mainLog, codec.CodecType_PROTO, network, ledger, txPool, w)
+	service := service.NewService(nodeID, mainLog, codec.CodecType_PROTO, network, ledger, txPool, w, config)
 
 	return &Node{
 		log:       mainLog,

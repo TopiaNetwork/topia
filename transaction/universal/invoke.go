@@ -110,7 +110,9 @@ func (txiv *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.L
 		Args:         txiv.Args,
 	}
 
-	gasUsed := uint64(0)
+	txUniData, _ := txiv.DataBytes()
+	gasUsed := computeBasicGas(txServant.GetGasConfig(), uint64(len(txUniData)))
+
 	errMsg := ""
 	status := TransactionResultUniversal_Err
 
@@ -127,7 +129,7 @@ func (txiv *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.L
 	}
 
 	status = TransactionResultUniversal_OK
-	gasUsed = vmResult.GasUsed
+	gasUsed += vmResult.GasUsed
 
 	txHashBytes, _ := txiv.HashBytes()
 	txUniRS := &TransactionResultUniversal{

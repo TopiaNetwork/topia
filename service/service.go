@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/TopiaNetwork/topia/codec"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
@@ -37,6 +38,7 @@ type service struct {
 	ledger    ledger.Ledger
 	txPool    txpool.TransactionPool
 	w         wallet.Wallet
+	config    *tpconfig.Configuration
 }
 
 func NewService(nodeID string,
@@ -45,7 +47,8 @@ func NewService(nodeID string,
 	network tpnet.Network,
 	ledger ledger.Ledger,
 	txPool txpool.TransactionPool,
-	w wallet.Wallet) Service {
+	w wallet.Wallet,
+	config *tpconfig.Configuration) Service {
 	return &service{
 		nodeID:    nodeID,
 		log:       log,
@@ -54,6 +57,7 @@ func NewService(nodeID string,
 		ledger:    ledger,
 		txPool:    txPool,
 		w:         w,
+		config:    config,
 	}
 }
 
@@ -72,7 +76,7 @@ func (s *service) BlockService() BlockService {
 }
 
 func (s *service) TransactionService() TransactionService {
-	return newTransactionService(s.nodeID, s.log, s.marshaler, s.network, s.ledger, s.txPool)
+	return newTransactionService(s.nodeID, s.log, s.marshaler, s.network, s.ledger, s.txPool, s.StateQueryService(), s.config)
 }
 
 func (s *service) WalletService() WalletService {

@@ -5,6 +5,7 @@ import (
 	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
 	"github.com/TopiaNetwork/topia/api/web3/types"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/golang/mock/gomock"
 	"io"
@@ -18,6 +19,7 @@ func TestGetTransactionCount(t *testing.T) {
 	defer ctrl.Finish()
 
 	servantMock := mocks.NewMockAPIServant(ctrl)
+	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
 	servantMock.
 		EXPECT().
 		GetTransactionCount(gomock.Any(), gomock.Any()).
@@ -25,8 +27,7 @@ func TestGetTransactionCount(t *testing.T) {
 			return 10, nil
 		}).
 		Times(1)
-	//1发送请求
-	//1.1构造请求
+
 	body := `{
 		"jsonrpc":"2.0",
 		"method":"eth_getTransactionCount",
@@ -38,18 +39,22 @@ func TestGetTransactionCount(t *testing.T) {
 	}`
 	req := httptest.NewRequest("POST", "http://localhost:8080/home", strings.NewReader(body))
 	res := httptest.NewRecorder()
-	//1.2调用handler
-	w3s := web3.InitWeb3Server(servantMock, nil)
-	w3s.Web3Handler(res, req)
+
+	config := web3.Web3ServerConfiguration{
+		Host: "",
+		Port: "8080",
+	}
+	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
 
-	count := new(uint64)
+	count := new(hexutil.Uint64)
 	json.Unmarshal(j.Result, count)
-	if *count != 10 {
+	if count.String() != "0xa" {
 		t.Errorf("failed")
 	}
 }

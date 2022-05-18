@@ -5,6 +5,7 @@ import (
 	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
 	"github.com/TopiaNetwork/topia/api/web3/types"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/golang/mock/gomock"
 	"io"
@@ -14,16 +15,12 @@ import (
 	"testing"
 )
 
-//TODO:需要其他handler的mock
-//getTransactionByHasg
-//getBlockByHash
 func TestEstimateGas(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	//我应该构造的是servant的mock，即为servant里面的那些方法进行打桩
 	servantMock := mocks.NewMockAPIServant(controller)
-	//能不能只对目标代码进行更新？可以，使用DoAndReturn
+	txInterfaceMock := mocks.NewMockTxInterface(controller)
 	servantMock.
 		EXPECT().
 		EstimateGas(gomock.Any()).
@@ -32,8 +29,6 @@ func TestEstimateGas(t *testing.T) {
 		}).
 		Times(1)
 
-	//1发送请求
-	//1.1构造请求
 	body := `{
 		"jsonrpc":"2.0",
 		"method":"eth_estimateGas",
@@ -48,19 +43,25 @@ func TestEstimateGas(t *testing.T) {
 	}`
 	req := httptest.NewRequest("POST", "http://localhost:8080/", strings.NewReader(body))
 	res := httptest.NewRecorder()
-	//1.2调用handler
-	w3s := web3.InitWeb3Server(servantMock, nil)
-	w3s.Web3Handler(res, req)
+
+	config := web3.Web3ServerConfiguration{
+		Host: "",
+		Port: "8080",
+	}
+	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
 
-	estimateGas := new(big.Int)
-	json.Unmarshal(j.Result, &estimateGas)
-
-	if estimateGas.Cmp(big.NewInt(10000)) != 0 {
+	estimateGas := new(hexutil.Big)
+	err := json.Unmarshal(j.Result, &estimateGas)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	if estimateGas.ToInt().Cmp(big.NewInt(30000)) != 0 {
 		t.Errorf("failed!")
 	}
 }

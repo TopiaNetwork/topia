@@ -85,3 +85,9 @@ type InvalidParamsError struct{ Message string }
 func (e *InvalidParamsError) ErrorCode() int { return -32602 }
 
 func (e *InvalidParamsError) Error() string { return e.Message }
+
+type InvalidHttpMethodError struct{ Message string }
+
+func (e *InvalidHttpMethodError) ErrorCode() int { return -32610 }
+
+func (e *InvalidHttpMethodError) Error() string { return e.Message }

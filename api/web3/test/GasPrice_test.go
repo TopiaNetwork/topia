@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
-	"github.com/TopiaNetwork/topia/api/web3/convert"
+	"github.com/TopiaNetwork/topia/api/web3/handlers"
 	"github.com/TopiaNetwork/topia/api/web3/types"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/golang/mock/gomock"
@@ -22,13 +23,14 @@ func TestGasPrice(t *testing.T) {
 	defer ctrl.Finish()
 
 	servantMock := mocks.NewMockAPIServant(ctrl)
+	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
 	servantMock.
 		EXPECT().
 		GetLatestBlock().
 		DoAndReturn(func() (*tpchaintypes.Block, error) {
 			return &tpchaintypes.Block{
 				Head: &tpchaintypes.BlockHead{
-					ChainID:         []byte{9},
+					ChainID:         []byte(ChainId),
 					Version:         1,
 					Height:          10,
 					Epoch:           1,
@@ -92,8 +94,6 @@ func TestGasPrice(t *testing.T) {
 		EXPECT().
 		GetTransactionByHash(gomock.Any()).
 		DoAndReturn(func(txHashHex string) (*txbasic.Transaction, error) {
-			//需要构建一个txbasic.Transaction实例才行
-			//构建一个eth的，然后调用方法转换一下
 			to := []byte("0x6fcd7b39e75619a68ab86a68b92d01134ef34ea3")
 			toAddr := types.Address{}
 			toAddr.SetBytes(to)
@@ -109,16 +109,14 @@ func TestGasPrice(t *testing.T) {
 				Gas:       0x5208,
 				GasFeeCap: big.NewInt(0x3ebd697803),
 				GasTipCap: big.NewInt(0x8c347c90),
-				V:         big.NewInt(0x1), //v不对
+				V:         big.NewInt(0x1),
 				R:         new(big.Int).SetBytes(rByte),
 				S:         new(big.Int).SetBytes(sByte),
 			})
-			tx, _ := convert.ConvertEthTransactionToTopiaTransaction(ethLegacyTx)
+			tx, _ := handlers.ConvertEthTransactionToTopiaTransaction(ethLegacyTx)
 			return tx, nil
 		}).AnyTimes()
 
-	//1发送请求
-	//1.1构造请求
 	body := `{
 		"jsonrpc":"2.0",
 		"method":"eth_gasPrice",
@@ -127,19 +125,22 @@ func TestGasPrice(t *testing.T) {
 	}`
 	req := httptest.NewRequest("POST", "http://localhost:8080/home", strings.NewReader(body))
 	res := httptest.NewRecorder()
-	//1.2调用handler
-	w3s := web3.InitWeb3Server(servantMock, nil)
-	w3s.Web3Handler(res, req)
+	config := web3.Web3ServerConfiguration{
+		Host: "",
+		Port: "8080",
+	}
+	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
 
-	gasPrice := new(big.Int)
+	gasPrice := new(hexutil.Big)
 	json.Unmarshal(j.Result, gasPrice)
 
-	if gasPrice.Cmp(big.NewInt(269465778179)) != 0 {
+	if gasPrice.ToInt().Cmp(big.NewInt(269465778179)) != 0 {
 		t.Errorf("failed")
 	}
 }

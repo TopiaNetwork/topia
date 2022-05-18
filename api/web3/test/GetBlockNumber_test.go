@@ -5,6 +5,7 @@ import (
 	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
 	"github.com/TopiaNetwork/topia/api/web3/types"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/golang/mock/gomock"
 	"io"
@@ -18,13 +19,14 @@ func TestGetBlockNumber(t *testing.T) {
 	defer ctrl.Finish()
 
 	servantMock := mocks.NewMockAPIServant(ctrl)
+	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
 	servantMock.
 		EXPECT().
 		GetLatestBlock().
 		DoAndReturn(func() (*tpchaintypes.Block, error) {
 			return &tpchaintypes.Block{
 				Head: &tpchaintypes.BlockHead{
-					ChainID:         []byte{9},
+					ChainID:         []byte(ChainId),
 					Version:         1,
 					Height:          10,
 					Epoch:           1,
@@ -52,8 +54,6 @@ func TestGetBlockNumber(t *testing.T) {
 			}, nil
 		}).
 		Times(1)
-	//1发送请求
-	//1.1构造请求
 	body := `{
 		"jsonrpc":"2.0",
 		"method":"eth_blockNumber",
@@ -62,19 +62,22 @@ func TestGetBlockNumber(t *testing.T) {
 	}`
 	req := httptest.NewRequest("POST", "http://localhost:8080/home", strings.NewReader(body))
 	res := httptest.NewRecorder()
-	//1.2调用handler
-	w3s := web3.InitWeb3Server(servantMock, nil)
-	w3s.Web3Handler(res, req)
+	config := web3.Web3ServerConfiguration{
+		Host: "",
+		Port: "8080",
+	}
+	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
 
-	ethBlock := new(uint64)
+	ethBlock := new(hexutil.Uint64)
 	json.Unmarshal(j.Result, ethBlock)
 
-	if *ethBlock != uint64(10) {
+	if ethBlock.String() != "0xa" {
 		t.Errorf("failed")
 	}
 }

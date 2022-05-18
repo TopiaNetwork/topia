@@ -5,7 +5,6 @@ import (
 )
 
 // SoliditySHA3 solidity sha3
-//用来做哈希计算
 func SHA3(data ...interface{}) []byte {
 	types, ok := data[0].([]string)
 	if len(data) > 1 && ok {

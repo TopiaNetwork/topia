@@ -19,7 +19,6 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/service"
-	"github.com/TopiaNetwork/topia/state/account"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
@@ -27,10 +26,7 @@ import (
 
 var ObsID string
 
-const (
-	PickTransactionsFromPending _interface.PickTxType = iota
-	PickTransactionsSortedByGasPriceAndNonce
-)
+
 
 const (
 	ChanBlockAddedSize = 10
@@ -650,7 +646,10 @@ func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCate
 	// Iterate over all accounts and promote any executable transactions
 	for _, addr := range accounts {
 		f1 := func(address tpcrtypes.Address) uint64 {
-			var nonce, _ = account.AccountState.GetNonce(account.StateStore_Name, address)
+			var nonce, err = pool.txServant.GetNonce(address)
+			if err != nil{
+				pool.log.Errorf("replaceExecutables get nonce error:",err)
+			}
 			return nonce
 		}
 		f2 := func(transactionCategory txbasic.TransactionCategory, string2 txbasic.TxID) {
@@ -717,7 +716,10 @@ func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCate
 func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCategory) {
 	// Iterate over all accounts and demote any non-executable transactions
 	f1 := func(address tpcrtypes.Address) uint64 {
-		var nonce, _ = account.AccountState.GetNonce(account.StateStore_Name, address)
+		var nonce, err = pool.txServant.GetNonce(address)
+		if err != nil{
+			pool.log.Errorf("demoteUnexecutables get nonce error:",err)
+		}
 		return nonce
 	}
 	f2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
@@ -740,11 +742,11 @@ func (pool *transactionPool) PickTxs(txType _interface.PickTxType) (txs []*txbas
 	}(time.Now())
 	txs = make([]*txbasic.Transaction, 0)
 	switch txType {
-	case PickTransactionsFromPending:
+	case _interface.PickTransactionsFromPending:
 		txs = pool.pendings.getAllCommitTxs()
 
 		return txs
-	case PickTransactionsSortedByGasPriceAndNonce:
+	case _interface.PickTransactionsSortedByGasPriceAndNonce:
 		for category, _ := range pool.allTxsForLook.getAll() {
 			txs = append(txs, pool.CommitTxsByPriceAndNonce(category)...)
 		}
@@ -758,10 +760,10 @@ func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCateg
 		pool.log.Infof("PickTxs of category:", category, "cost time:", time.Since(t0))
 	}(time.Now())
 	switch txType {
-	case PickTransactionsFromPending:
+	case _interface.PickTransactionsFromPending:
 		return pool.CommitTxsForPending(category)
 
-	case PickTransactionsSortedByGasPriceAndNonce:
+	case _interface.PickTransactionsSortedByGasPriceAndNonce:
 		return pool.CommitTxsByPriceAndNonce(category)
 	default:
 		return nil

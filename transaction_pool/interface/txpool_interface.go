@@ -12,7 +12,10 @@ import (
 const MOD_NAME = "TransactionPool"
 
 type PickTxType uint32
-
+const (
+	PickTransactionsFromPending PickTxType = iota
+	PickTransactionsSortedByGasPriceAndNonce
+)
 type TxExpiredPolicy byte
 
 const (

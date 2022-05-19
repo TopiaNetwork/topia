@@ -730,7 +730,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	}
 	want := len(txs)
 
-	if got := len(pool.PickTxsOfCategory(Category1, PickTransactionsFromPending)); got != want {
+	if got := len(pool.PickTxsOfCategory(Category1, _interface.PickTransactionsFromPending)); got != want {
 		t.Error("PickTxsOfCategory want", want, "got", got)
 	}
 
@@ -749,7 +749,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	//if got := pool.PickTxsOfCategory(Category1, PickTransactionsSortedByGasPriceAndNonce); !reflect.DeepEqual(got, txs2) {
 	//	t.Errorf("CommitTxsByPriceAndNonce() = %v\n,                            want %v", got, txs)
 	//}
-	if got := len(pool.PickTxsOfCategory(Category1, PickTransactionsSortedByGasPriceAndNonce)); got != want {
+	if got := len(pool.PickTxsOfCategory(Category1, _interface.PickTransactionsSortedByGasPriceAndNonce)); got != want {
 		t.Error("want", want, "got", got)
 	}
 }

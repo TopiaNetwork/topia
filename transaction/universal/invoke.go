@@ -110,10 +110,17 @@ func (txiv *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.L
 		Args:         txiv.Args,
 	}
 
-	gasUsed := uint64(0)
+	txUniData, _ := txiv.DataBytes()
+	gasUsed := computeBasicGas(txServant.GetGasConfig(), uint64(len(txUniData)))
+
 	errMsg := ""
 	status := TransactionResultUniversal_Err
-	vmResult, err := tpvm.GetVMFactory().GetVM(tpvmtype.VMType_TVM).DeployContract(vmContext)
+
+	vmType := tpvmtype.VMType_TVM
+	if tpcrtypes.IsNativeContractAddress(txiv.ContractAddr) {
+		vmType = tpvmtype.VMType_NATIVE
+	}
+	vmResult, err := tpvm.GetVMFactory().GetVM(vmType).ExecuteContract(vmContext)
 	if err != nil {
 		errMsg = err.Error()
 	}
@@ -122,7 +129,7 @@ func (txiv *TransactionUniversalInvoke) Execute(ctx context.Context, log tplog.L
 	}
 
 	status = TransactionResultUniversal_OK
-	gasUsed = vmResult.GasUsed
+	gasUsed += vmResult.GasUsed
 
 	txHashBytes, _ := txiv.HashBytes()
 	txUniRS := &TransactionResultUniversal{

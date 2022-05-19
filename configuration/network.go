@@ -3,7 +3,7 @@ package configuration
 import "time"
 
 type PubSubConfiguration struct {
-	Bootstrapper          bool
+	ISSeedPeer            bool
 	DirectPeers           []string
 	IPColocationWhitelist []string
 }
@@ -12,7 +12,7 @@ type ConnectionConfiguration struct {
 	HighWater      int
 	LowWater       int
 	DurationPrune  time.Duration
-	BootstrapPeers []string
+	SeedPeers      []string
 	ProtectedPeers []string
 }
 
@@ -23,7 +23,7 @@ type NetworkConfiguration struct {
 
 func DefPubSubConfiguration() *PubSubConfiguration {
 	return &PubSubConfiguration{
-		Bootstrapper: false,
+		ISSeedPeer: false,
 	}
 }
 

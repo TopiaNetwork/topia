@@ -18,12 +18,10 @@ type TransactionState string
 const (
 	StateTxAdded                   TransactionState = "Tx Added"
 	StateTxRemoved                                  = "tx removed"
-	StateTxInValid                                  = "tx verification failed"
 	StateTxTurntoPending                            = "Tx Turn to Pending"
 	StateTxDiscardForUnderpriced                    = "Tx Discard For Underpriced"
 	StateTxDiscardForReplaceFailed                  = "Tx Discard For Replace Failed"
 	StateTxAddToQueue                               = "Tx Add To Queue"
-	StateTx                                         = "Tx Add To Queue"
 )
 
 type TxRepublicPolicy byte
@@ -1160,7 +1158,6 @@ func (queuemap *queuesMap) addTxByKeyOfCategory(
 		if queuecat.mapAddrTxCoreList[from] == nil {
 			queuecat.mapAddrTxCoreList[from] = newCoreList(false)
 		}
-
 		inserted, old := queuecat.mapAddrTxCoreList[from].txCoreAdd(tx)
 		if !inserted {
 			// An older transaction was existed
@@ -1206,13 +1203,7 @@ func (alltxsmap *allTxsLookupMap) removeAll(category txbasic.TransactionCategory
 func (alltxsmap *allTxsLookupMap) getAll() map[txbasic.TransactionCategory]*txForLookup {
 	return alltxsmap.all
 }
-func (alltxsmap *allTxsLookupMap) getAllSegments() int64 {
-	totalSegments := int64(0)
-	for cat, _ := range alltxsmap.all {
-		totalSegments += alltxsmap.all[cat].sizes
-	}
-	return totalSegments
-}
+
 func (alltxsmap *allTxsLookupMap) getAllCount() int64 {
 	var cnt int64
 	for category, _ := range alltxsmap.getAll() {
@@ -1802,11 +1793,11 @@ func (s TxByNonce) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 // SizeAccountItem is an item  we manage in a priority queue for cnt.
 type SizeAccountItem struct {
 	accountAddr tpcrtypes.Address
-	size        int64 // The priority of CntAccountItem in the queue is counts of account in txPool.
-	index       int   // The index of the CntAccountItem item in the heap.
+	size        int64 // The priority of SizeAccountItem in the queue is counts of account in txPool.
+	index       int   // The index of the SizeAccountItem item in the heap.
 }
 
-// A CntAccountHeap implements heap.Interface and holds GreyAccCnt.
+// A SizeAccountHeap implements heap.Interface and holds GreyAccCnt.
 type SizeAccountHeap []*SizeAccountItem
 
 func (pq SizeAccountHeap) Len() int { return len(pq) }

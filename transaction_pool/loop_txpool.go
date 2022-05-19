@@ -75,7 +75,7 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 		}
 	}()
 	// Track the previous head headers for transaction reorgs
-	head, err := pool.txServant.GetLatestBlock()
+	head, err := pool.txServant.LatestBlock()
 	if err != nil {
 		pool.log.Errorf("loopResetIfBlockAdded get current block err:", err)
 	}

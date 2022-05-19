@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"errors"
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"testing"
 	"time"
 
@@ -17,9 +18,13 @@ import (
 func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
 	//assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	//assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -37,10 +42,10 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
-
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
+	fmt.Println(3)
 	hashs := make([]txbasic.TxID, 0)
 	hashs = append(hashs, Key1)
 	hashs = append(hashs, Key2)
@@ -52,14 +57,16 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	for _, tx := range txLocals[1:10] {
 		hash, _ = tx.TxID()
 		hashs1 = append(hashs1, hash)
 		pool.AddTx(tx, false)
 	}
+	fmt.Println(7)
+
 	for _, tx := range txLocals[20:40] {
 		hash, _ = tx.TxID()
 		hashs2 = append(hashs2, hash)
@@ -78,14 +85,18 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 		defer pool.wg.Done()
 		pool.chanRmTxs <- hashs2
 	}()
+	pool.wg.Add(1)
+	go func() {
+		defer pool.wg.Done()
+		pool.ctx.Done()
+	}()
 	pool.wg.Wait()
-
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	fmt.Println("test001")
 
 }
@@ -94,17 +105,19 @@ func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-
-	newnetwork := NewMockNetwork(ctrl)
-	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -112,10 +125,9 @@ func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
-
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	//pool.wg.Add(1)
 	//go pool.chanRemoveTxHashs()
@@ -138,19 +150,22 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	defer ctrl.Finish()
 
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-
-	newnetwork := NewMockNetwork(ctrl)
-	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(OldBlock.Head.Hash)).AnyTimes().Return(OldBlock, nil)
+	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(NewBlock.Head.Hash)).AnyTimes().Return(NewBlock, nil)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
 	defer pool.wg.Wait()
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -158,10 +173,10 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
 	var hashs []txbasic.TxID
 	hashs = append(hashs, Key1)
 	hashs = append(hashs, Key2)
@@ -178,18 +193,21 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	newnetwork := NewMockNetwork(ctrl)
-	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
 	defer pool.wg.Wait()
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -197,10 +215,10 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	waitChannel := make(chan struct{})
 
@@ -213,29 +231,30 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 }
 
 func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-
-	newnetwork := NewMockNetwork(ctrl)
-	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
 	defer pool.wg.Wait()
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -243,10 +262,10 @@ func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	//check new local file:localTransactions.json,
 	pool.wg.Add(1)
@@ -259,19 +278,21 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 	defer ctrl.Finish()
 
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-
-	newnetwork := NewMockNetwork(ctrl)
-	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
 	defer pool.wg.Wait()
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -279,10 +300,10 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	pool.wg.Add(1)
 	go pool.loopRegularRepublic()
@@ -294,9 +315,14 @@ func Test_transactionPool_loop(t *testing.T) {
 	defer ctrl.Finish()
 
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	newnetwork := NewMockNetwork(ctrl)
-	newnetwork.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(OldBlock.Head.Hash)).AnyTimes().Return(OldBlock, nil)
+	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(NewBlock.Head.Hash)).AnyTimes().Return(NewBlock, nil)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
 	defer pool.wg.Wait()
 
@@ -341,10 +367,10 @@ func Test_transactionPool_loop(t *testing.T) {
 	assert.Equal(t, 200, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 100, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 100, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 100, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 100, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 100, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 100, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 100, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	pool.loopChanSelect()
 
@@ -367,8 +393,8 @@ func Test_transactionPool_loop(t *testing.T) {
 	assert.Equal(t, 200, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 100, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 100, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 100, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 100, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 100, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 100, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
+	assert.Equal(t, 100, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 }

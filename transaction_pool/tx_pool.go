@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -25,8 +26,6 @@ import (
 )
 
 var ObsID string
-
-
 
 const (
 	ChanBlockAddedSize = 10
@@ -119,7 +118,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.Tran
 			pool.loadRemote(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
-	curBlock, err := pool.txServant.GetLatestBlock()
+	curBlock, err := pool.txServant.LatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
@@ -182,7 +181,7 @@ func (pool *transactionPool) AddTx(tx *txbasic.Transaction, local bool) error {
 
 func (pool *transactionPool) AddLocals(txs []*txbasic.Transaction) []error {
 
-	return pool.addTxs(txs, true, true)
+	return pool.addTxs(txs, true)
 }
 
 func (pool *transactionPool) AddLocal(tx *txbasic.Transaction) error {
@@ -191,7 +190,7 @@ func (pool *transactionPool) AddLocal(tx *txbasic.Transaction) error {
 }
 
 func (pool *transactionPool) AddRemotes(txs []*txbasic.Transaction) []error {
-	return pool.addTxs(txs, false, false)
+	return pool.addTxs(txs, false)
 }
 func (pool *transactionPool) AddRemote(tx *txbasic.Transaction) error {
 	errs := pool.AddRemotes([]*txbasic.Transaction{tx})
@@ -299,13 +298,12 @@ func (pool *transactionPool) QueueMapAddrTxsOfCategory(category txbasic.Transact
 	return pool.queues.getAddrTxsByCategory(category)
 }
 
-func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local, sync bool) []error {
+func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local bool) []error {
 	var (
 		errs     = make([]error, len(txs))
 		news     = make([]*txbasic.Transaction, 0, len(txs))
 		category txbasic.TransactionCategory
 	)
-
 	for i, tx := range txs {
 		category = txbasic.TransactionCategory(tx.Head.Category)
 		if txId, err := tx.TxID(); err == nil {
@@ -322,6 +320,7 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local, sync bool
 
 	// Process all the new transaction and merge any errors into the original slice
 	newErrs := pool.addTxsLocked(news, local)
+
 	var nilSlot = 0
 	for _, err := range newErrs {
 
@@ -394,9 +393,7 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 }
 
 func (pool *transactionPool) RemoveTxByKey(key txbasic.TxID) error {
-
 	category := pool.TxHashCategory.getByHash(key)
-
 	tx := pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, key)
 	if tx == nil {
 		return ErrTxNotExist
@@ -406,11 +403,12 @@ func (pool *transactionPool) RemoveTxByKey(key txbasic.TxID) error {
 	pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key)
 	// Remove it from the list of sortedByPriced
 	pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
-	txRemoved := &eventhub.TxPoolEvent{
-		EvType: eventhub.TxPoolEVTypee_Removed,
-		Tx:     tx,
-	}
-	eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txRemoved)
+	//commit when unit testing
+	//txRemoved := &eventhub.TxPoolEvent{
+	//	EvType: eventhub.TxPoolEVTypee_Removed,
+	//	Tx:     tx,
+	//}
+	//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txRemoved)
 
 	// Remove the transaction from the pending lists and reset the account nonce
 	f1 := func(txId txbasic.TxID, tx *txbasic.Transaction) {
@@ -471,7 +469,6 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 		pool.HeightIntervals.setTxHeight(key, currentheight)
 	}
 	f5 := func(key txbasic.TxID, category txbasic.TransactionCategory, local bool) {
-
 		pool.ActivationIntervals.setTxActiv(key, time.Now())
 		currentheight, err := pool.txServant.CurrentHeight()
 		if err != nil {
@@ -479,14 +476,15 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 		}
 		pool.HeightIntervals.setTxHeight(key, currentheight)
 		pool.TxHashCategory.setHashCat(key, category)
-		if local {
-			pool.txServant.PublishTx(pool.ctx, tx)
-		}
-		txAdded := &eventhub.TxPoolEvent{
-			EvType: eventhub.TxPoolEVType_Received,
-			Tx:     tx,
-		}
-		eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txAdded)
+		//comment for unit testing
+		//if local {
+		//	pool.txServant.PublishTx(pool.ctx, tx)
+		//}
+		//txAdded := &eventhub.TxPoolEvent{
+		//	EvType: eventhub.TxPoolEVType_Received,
+		//	Tx:     tx,
+		//}
+		//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txAdded)
 		pool.txCache.Add(key, StateTxAddToQueue)
 
 	}
@@ -505,7 +503,6 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 	// the sender is marked as local previously, treat it as the local transaction.
 	txId, _ := tx.TxID()
 	isLocal := local
-
 	category := txbasic.TransactionCategory(tx.Head.Category)
 	// If the transaction is already known, discard it
 	if pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txId) != nil {
@@ -514,8 +511,12 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 	}
 
 	// If the transaction pool is full, discard underpriced transactions
+	fmt.Println("alltxs size for category:", pool.allTxsForLook.getSizeFromAllTxsLookupByCategory(category))
+	fmt.Println("queue+pending size:", pool.config.MaxSizeOfPending+pool.config.MaxSizeOfQueue)
+	fmt.Println("alltxs size :", pool.allTxsForLook.getAllSize())
+	fmt.Println("TxPoolMaxSize :", pool.config.TxPoolMaxSize)
 	if uint64(pool.allTxsForLook.getSizeFromAllTxsLookupByCategory(category)) > pool.config.MaxSizeOfPending+pool.config.MaxSizeOfQueue ||
-		uint64(pool.allTxsForLook.getAllSegments()) > pool.config.TxpoolMaxSize {
+		uint64(pool.allTxsForLook.getAllSize()) > pool.config.TxPoolMaxSize {
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.sortedLists.getPricedlistByCategory(category).Underpriced(tx) {
 			pool.txCache.Add(txId, StateTxDiscardForUnderpriced)
@@ -582,6 +583,7 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 		pool.txCache.Add(txId, StateTxDiscardForReplaceFailed)
 		return ok, err
 	}
+
 	// New transaction isn't replacing a pending one, push into queue
 	replaced, err = pool.queueAddTx(txId, tx, isLocal, true)
 	if err != nil {
@@ -646,9 +648,9 @@ func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCate
 	// Iterate over all accounts and promote any executable transactions
 	for _, addr := range accounts {
 		f1 := func(address tpcrtypes.Address) uint64 {
-			var nonce, err = pool.txServant.GetNonce(address)
-			if err != nil{
-				pool.log.Errorf("replaceExecutables get nonce error:",err)
+			var nonce, err = pool.txServant.Nonce(address)
+			if err != nil {
+				pool.log.Errorf("replaceExecutables get nonce error:", err)
 			}
 			return nonce
 		}
@@ -661,7 +663,7 @@ func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCate
 
 		// Gather all executable transactions and promote them
 		ft0 := func(address tpcrtypes.Address) uint64 {
-			nonce, err := pool.txServant.GetNonce(address)
+			nonce, err := pool.txServant.Nonce(address)
 			if err != nil {
 				pool.log.Errorf("replaceExecutables get tx nonce error:", err)
 			}
@@ -716,9 +718,9 @@ func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCate
 func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCategory) {
 	// Iterate over all accounts and demote any non-executable transactions
 	f1 := func(address tpcrtypes.Address) uint64 {
-		var nonce, err = pool.txServant.GetNonce(address)
-		if err != nil{
-			pool.log.Errorf("demoteUnexecutables get nonce error:",err)
+		var nonce, err = pool.txServant.Nonce(address)
+		if err != nil {
+			pool.log.Errorf("demoteUnexecutables get nonce error:", err)
 		}
 		return nonce
 	}

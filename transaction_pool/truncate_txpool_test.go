@@ -1,6 +1,7 @@
 package transactionpool
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -15,7 +16,12 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
@@ -28,7 +34,7 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 	txLocals = make([]*txbasic.Transaction, 0)
 	txRemotes = make([]*txbasic.Transaction, 0)
 
-	for i := 1; i <= 400; i++ {
+	for i := 1; i <= 1000; i++ {
 		nonce := uint64(i)
 		gasprice := uint64(i * 1000)
 		gaslimit := uint64(i * 1000000)
@@ -49,16 +55,18 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 		keyremote, _ = txremote.TxID()
 		keyRemotes = append(keyRemotes, keyremote)
 		txRemotes = append(txRemotes, txremote)
+		fmt.Println("i:", i, "AddTx local")
 		_ = pool.AddTx(txlocal, true)
+		fmt.Println("i:", i, "AddTx remote")
 		_ = pool.AddTx(txremote, false)
 	}
-	assert.Equal(t, 449, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 514, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 400, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 192, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 400, pool.allTxsForLook.all[Category1].RemoteCount())
 
 	assert.Equal(t, 400, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 192, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 400, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	pool.truncateQueueByCategory(Category1)
 	assert.Equal(t, 257, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
@@ -74,7 +82,12 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))

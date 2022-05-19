@@ -6,8 +6,9 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"github.com/TopiaNetwork/topia/wallet"
+
 )
 
 type Service interface {

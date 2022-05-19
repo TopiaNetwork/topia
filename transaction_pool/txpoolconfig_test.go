@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"encoding/json"
+	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"io/ioutil"
 	"reflect"
 	"testing"
@@ -27,7 +28,7 @@ func Test_transactionPool_SaveConfig(t *testing.T) {
 	if err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	var conf TransactionPoolConfig
+	var conf _interface.TransactionPoolConfig
 	config := &conf
 	err = json.Unmarshal(data, &config)
 	want := pool.config

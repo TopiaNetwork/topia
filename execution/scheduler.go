@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	txservant "github.com/TopiaNetwork/topia/transaction/basic"
 	"sync"
 	"time"
 
@@ -25,7 +24,8 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txservant "github.com/TopiaNetwork/topia/transaction/basic"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (

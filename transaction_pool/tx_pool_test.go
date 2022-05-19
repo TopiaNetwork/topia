@@ -3,6 +3,7 @@ package transactionpool
 import (
 	"context"
 	"encoding/json"
+	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"reflect"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ import (
 
 var (
 	Category1, Category2                                                             txbasic.TransactionCategory
-	TestTxPoolConfig                                                                 TransactionPoolConfig
+	TestTxPoolConfig                                                                 _interface.TransactionPoolConfig
 	TxlowGasPrice, TxHighGasLimit, txlocal, txremote, Tx1, Tx2, Tx3, Tx4, TxR1, TxR2 *txbasic.Transaction
 	txHead                                                                           *txbasic.TransactionHead
 	txData                                                                           *txbasic.TransactionData
@@ -52,7 +53,7 @@ func init() {
 	Ctx = context.Background()
 	Category1 = txbasic.TransactionCategory_Topia_Universal
 	TpiaLog, _ = tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
-	TestTxPoolConfig = DefaultTransactionPoolConfig
+	TestTxPoolConfig = _interface.DefaultTransactionPoolConfig
 	starttime = uint64(time.Now().Unix() - 105)
 	keyLocals = make([]txbasic.TxID, 0)
 	keyRemotes = make([]txbasic.TxID, 0)
@@ -320,9 +321,9 @@ func SetBlockData(txs map[string]*txbasic.Transaction) *tpchaintypes.BlockData {
 	return blockdata
 }
 
-func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
+func SetNewTransactionPool(nodeId string, ctx context.Context, conf _interface.TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 
-	conf = (&conf).check()
+	conf = (&conf).Check()
 	conf.MaxSizeOfEachPendingAccount = 16 * 32 * 1024
 	conf.MaxSizeOfPending = 128 * 32 * 1024
 	conf.MaxSizeOfEachQueueAccount = 32 * 32 * 1024

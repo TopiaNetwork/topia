@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"container/heap"
+	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -23,15 +24,6 @@ const (
 	StateTxDiscardForReplaceFailed                  = "Tx Discard For Replace Failed"
 	StateTxAddToQueue                               = "Tx Add To Queue"
 	StateTx                                         = "Tx Add To Queue"
-)
-
-type TxExpiredPolicy byte
-
-const (
-	TxExpiredTime TxExpiredPolicy = iota
-	TxExpiredHeight
-	TxExpiredTimeAndHeight
-	TxExpiredTimeOrHeight
 )
 
 type TxRepublicPolicy byte
@@ -1068,7 +1060,7 @@ func (queuemap *queuesMap) removeTxsForTruncateQueue(category txbasic.Transactio
 	}
 }
 
-func (queuemap *queuesMap) removeTxForLifeTime(category txbasic.TransactionCategory, expiredPolicy TxExpiredPolicy,
+func (queuemap *queuesMap) removeTxForLifeTime(category txbasic.TransactionCategory, expiredPolicy _interface.TxExpiredPolicy,
 	f1 func(string2 txbasic.TxID) time.Duration, duration2 time.Duration, f2 func(string2 txbasic.TxID),
 	f3 func(string2 txbasic.TxID) uint64, dltHeight uint64) {
 	queuecat := queuemap.getQueueTxsByCategory(category)
@@ -1082,19 +1074,19 @@ func (queuemap *queuesMap) removeTxForLifeTime(category txbasic.TransactionCateg
 		for _, tx := range list {
 			txId, _ := tx.TxID()
 			switch expiredPolicy {
-			case TxExpiredTime:
+			case _interface.TxExpiredTime:
 				if f1(txId) > duration2 {
 					f2(txId)
 				}
-			case TxExpiredHeight:
+			case _interface.TxExpiredHeight:
 				if f3(txId) > dltHeight {
 					f2(txId)
 				}
-			case TxExpiredTimeAndHeight:
+			case _interface.TxExpiredTimeAndHeight:
 				if f1(txId) > duration2 && f3(txId) > dltHeight {
 					f2(txId)
 				}
-			case TxExpiredTimeOrHeight:
+			case _interface.TxExpiredTimeOrHeight:
 				if f1(txId) > duration2 || f3(txId) > dltHeight {
 					f2(txId)
 				}

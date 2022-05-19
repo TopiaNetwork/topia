@@ -11,7 +11,7 @@ import (
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"math/rand"
 	"time"
 

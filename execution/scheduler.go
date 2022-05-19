@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	txservant "github.com/TopiaNetwork/topia/transaction/basic"
 	"sync"
 	"time"
 
@@ -25,7 +24,8 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txservant "github.com/TopiaNetwork/topia/transaction/basic"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -139,8 +139,8 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 		scheduler.exePackedTxsList.PushBack(exePackedTxs)
 
 		for _, tx := range txPacked.TxList {
-			txHash, _ := tx.HashHex()
-			scheduler.txPool.RemoveTxByKey(txHash)
+			txID, _ := tx.TxID()
+			scheduler.txPool.RemoveTxByKey(txID)
 		}
 
 		if scheduler.exePackedTxsList.Len() >= int(scheduler.config.CSConfig.MaxPrepareMsgCache) {

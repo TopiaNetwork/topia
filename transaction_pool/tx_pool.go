@@ -21,12 +21,10 @@ import (
 	"github.com/TopiaNetwork/topia/service"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
-	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 var ObsID string
-
-
 
 const (
 	ChanBlockAddedSize = 10
@@ -51,7 +49,7 @@ var (
 
 type transactionPool struct {
 	nodeId string
-	config _interface.TransactionPoolConfig
+	config txpooli.TransactionPoolConfig
 
 	chanSysShutdown   chan error
 	chanBlockAdded    chan BlockAddedEvent
@@ -80,9 +78,9 @@ type transactionPool struct {
 	wg                   sync.WaitGroup
 }
 
-func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.TransactionPoolConfig, level tplogcmm.LogLevel,
+func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig, level tplogcmm.LogLevel,
 	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
-	blockService service.BlockService, network tpnet.Network) *transactionPool {
+	blockService service.BlockService, network tpnet.Network) txpooli.TransactionPool {
 	conf = (&conf).Check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
@@ -380,7 +378,7 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 		pool.log.Panicf("CreateTransactionPoolActor error: %v", err)
 		return err
 	}
-	network.RegisterModule(_interface.MOD_NAME, actorPID, pool.marshaler)
+	network.RegisterModule(txpooli.MOD_NAME, actorPID, pool.marshaler)
 
 	ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
 		Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)
@@ -647,8 +645,8 @@ func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCate
 	for _, addr := range accounts {
 		f1 := func(address tpcrtypes.Address) uint64 {
 			var nonce, err = pool.txServant.GetNonce(address)
-			if err != nil{
-				pool.log.Errorf("replaceExecutables get nonce error:",err)
+			if err != nil {
+				pool.log.Errorf("replaceExecutables get nonce error:", err)
 			}
 			return nonce
 		}
@@ -717,8 +715,8 @@ func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCat
 	// Iterate over all accounts and demote any non-executable transactions
 	f1 := func(address tpcrtypes.Address) uint64 {
 		var nonce, err = pool.txServant.GetNonce(address)
-		if err != nil{
-			pool.log.Errorf("demoteUnexecutables get nonce error:",err)
+		if err != nil {
+			pool.log.Errorf("demoteUnexecutables get nonce error:", err)
 		}
 		return nonce
 	}
@@ -736,17 +734,17 @@ func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCat
 }
 
 // PickTxs if txsType is 0,pick current pending txs,if 1 pick txs sorted by price and nonce
-func (pool *transactionPool) PickTxs(txType _interface.PickTxType) (txs []*txbasic.Transaction) {
+func (pool *transactionPool) PickTxs(txType txpooli.PickTxType) (txs []*txbasic.Transaction) {
 	defer func(t0 time.Time) {
 		pool.log.Infof("PickTxs cost time:", time.Since(t0))
 	}(time.Now())
 	txs = make([]*txbasic.Transaction, 0)
 	switch txType {
-	case _interface.PickTransactionsFromPending:
+	case txpooli.PickTransactionsFromPending:
 		txs = pool.pendings.getAllCommitTxs()
 
 		return txs
-	case _interface.PickTransactionsSortedByGasPriceAndNonce:
+	case txpooli.PickTransactionsSortedByGasPriceAndNonce:
 		for category, _ := range pool.allTxsForLook.getAll() {
 			txs = append(txs, pool.CommitTxsByPriceAndNonce(category)...)
 		}
@@ -755,15 +753,15 @@ func (pool *transactionPool) PickTxs(txType _interface.PickTxType) (txs []*txbas
 		return nil
 	}
 }
-func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCategory, txType _interface.PickTxType) []*txbasic.Transaction {
+func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCategory, txType txpooli.PickTxType) []*txbasic.Transaction {
 	defer func(t0 time.Time) {
 		pool.log.Infof("PickTxs of category:", category, "cost time:", time.Since(t0))
 	}(time.Now())
 	switch txType {
-	case _interface.PickTransactionsFromPending:
+	case txpooli.PickTransactionsFromPending:
 		return pool.CommitTxsForPending(category)
 
-	case _interface.PickTransactionsSortedByGasPriceAndNonce:
+	case txpooli.PickTransactionsSortedByGasPriceAndNonce:
 		return pool.CommitTxsByPriceAndNonce(category)
 	default:
 		return nil

@@ -18,9 +18,9 @@ import (
 
 type TransactionPoolServant interface {
 	CurrentHeight() (uint64, error)
-	GetNonce(tpcrtypes.Address) (uint64, error)
-	GetLatestBlock() (*tpchaintypes.Block, error)
-	GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
+	Nonce(tpcrtypes.Address) (uint64, error)
+	LatestBlock() (*tpchaintypes.Block, error)
+	BlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
 	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
 	UnSubscribe(topic string) error
@@ -50,15 +50,15 @@ func (servant *transactionPoolServant) CurrentHeight() (uint64, error) {
 	curHeight := curBlock.Head.Height
 	return curHeight, nil
 }
-func (servant *transactionPoolServant) GetNonce(address tpcrtypes.Address) (uint64, error) {
+func (servant *transactionPoolServant) Nonce(address tpcrtypes.Address) (uint64, error) {
 
 	return servant.GetNonce(address)
 
 }
-func (servant *transactionPoolServant) GetLatestBlock() (*tpchaintypes.Block, error) {
+func (servant *transactionPoolServant) LatestBlock() (*tpchaintypes.Block, error) {
 	return servant.GetLatestBlock()
 }
-func (servant *transactionPoolServant) GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
+func (servant *transactionPoolServant) BlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
 	return servant.GetBlockByHash(hash)
 }
 

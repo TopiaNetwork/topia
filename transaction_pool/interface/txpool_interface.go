@@ -12,10 +12,12 @@ import (
 const MOD_NAME = "TransactionPool"
 
 type PickTxType uint32
+
 const (
 	PickTransactionsFromPending PickTxType = iota
 	PickTransactionsSortedByGasPriceAndNonce
 )
+
 type TxExpiredPolicy byte
 
 const (
@@ -35,7 +37,7 @@ type TransactionPoolConfig struct {
 	TxCacheSize     int
 	GasPriceLimit   uint64
 	TxMaxSize       uint64
-	TxpoolMaxSize   uint64
+	TxPoolMaxSize   uint64
 
 	MaxSizeOfEachPendingAccount uint64 // Maximum size of executable transaction per account
 	MaxSizeOfPending            uint64 // Maximum size of executable transaction
@@ -58,16 +60,15 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	ReStoredDur:     30 * time.Minute,
 	TxExpiredPolicy: TxExpiredTimeAndHeight,
 	GasPriceLimit:   1000, // 1000
+	TxCacheSize:     36000000,
 
-	TxCacheSize: 36000000,
+	TxMaxSize:     4 * 1024,
+	TxPoolMaxSize: 16 * 4 * 1024,
 
-	TxMaxSize:     4 * 32 * 1024,
-	TxpoolMaxSize: 8192 * 2 * 4 * 32 * 1024,
-
-	MaxSizeOfEachPendingAccount: 64 * 32 * 1024,
-	MaxSizeOfPending:            8192 * 32 * 1024,
-	MaxSizeOfEachQueueAccount:   64 * 32 * 1024,
-	MaxSizeOfQueue:              8192 * 2 * 32 * 1024,
+	MaxSizeOfEachPendingAccount: 2 * 1024,
+	MaxSizeOfPending:            16 * 1024,
+	MaxSizeOfEachQueueAccount:   2 * 1024,
+	MaxSizeOfQueue:              32 * 1024,
 
 	LifetimeForTx:         30 * time.Minute,
 	LifeHeight:            uint64(30 * 60),

@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 	"github.com/TopiaNetwork/topia/wallet"
 	"os"
 	"os/signal"
@@ -28,7 +29,7 @@ import (
 	"github.com/TopiaNetwork/topia/service"
 	"github.com/TopiaNetwork/topia/state"
 	"github.com/TopiaNetwork/topia/sync"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type Node struct {
@@ -40,7 +41,7 @@ type Node struct {
 	network   tpnet.Network
 	ledger    ledger.Ledger
 	consensus consensus.Consensus
-	txPool    txpool.TransactionPool
+	txPool    txpooli.TransactionPool
 	syncer    sync.Syncer
 	chain     chain.Chain
 	config    *tpconfig.Configuration
@@ -72,15 +73,19 @@ func NewNode(endPoint string, seed string) *Node {
 	network := tpnet.NewNetwork(ctx, mainLog, config.NetConfig, sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, ledger))
 	nodeID := network.ID()
 
-	txPoolConf := txpool.DefaultTransactionPoolConfig
-	txPool := txpool.NewTransactionPool(nodeID, ctx, txPoolConf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
+	w := wallet.NewWallet(tplogcmm.InfoLevel, mainLog, chainRootPath)
+	service := service.NewService(nodeID, mainLog, codec.CodecType_PROTO, network, ledger, nil, w, config)
+
+	txPoolConf := txpooli.DefaultTransactionPoolConfig
+	txPool := txpool.NewTransactionPool(nodeID, ctx, txPoolConf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, service.StateQueryService(), service.BlockService(), network)
+
+	service.SetTxPool(txPool)
+
 	exeScheduler := execution.NewExecutionScheduler(nodeID, mainLog, config, codec.CodecType_PROTO, txPool)
 	evHub := eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 	cons := consensus.NewConsensus(compStateRN.ChainID(), nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, exeScheduler, config)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	chain := chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, codec.CodecType_PROTO, ledger, exeScheduler, config)
-	w := wallet.NewWallet(tplogcmm.InfoLevel, mainLog, chainRootPath)
-	service := service.NewService(nodeID, mainLog, codec.CodecType_PROTO, network, ledger, txPool, w, config)
 
 	return &Node{
 		log:       mainLog,

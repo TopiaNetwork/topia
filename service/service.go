@@ -6,12 +6,13 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"github.com/TopiaNetwork/topia/wallet"
-
 )
 
 type Service interface {
+	SetTxPool(txPool txpooli.TransactionPool)
+
 	StateQueryService() StateQueryService
 
 	NetworkService() NetworkService
@@ -37,7 +38,7 @@ type service struct {
 	marshaler codec.Marshaler
 	network   tpnet.Network
 	ledger    ledger.Ledger
-	txPool    txpool.TransactionPool
+	txPool    txpooli.TransactionPool
 	w         wallet.Wallet
 	config    *tpconfig.Configuration
 }
@@ -47,7 +48,7 @@ func NewService(nodeID string,
 	codecType codec.CodecType,
 	network tpnet.Network,
 	ledger ledger.Ledger,
-	txPool txpool.TransactionPool,
+	txPool txpooli.TransactionPool,
 	w wallet.Wallet,
 	config *tpconfig.Configuration) Service {
 	return &service{
@@ -60,6 +61,10 @@ func NewService(nodeID string,
 		w:         w,
 		config:    config,
 	}
+}
+
+func (s *service) SetTxPool(txPool txpooli.TransactionPool) {
+	s.txPool = txPool
 }
 
 func (s *service) StateQueryService() StateQueryService {

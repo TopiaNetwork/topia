@@ -3,20 +3,20 @@ package execution
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"time"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger"
+	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	txuni "github.com/TopiaNetwork/topia/transaction/universal"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
-	"math/rand"
-	"time"
-
-	tplog "github.com/TopiaNetwork/topia/log"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txuni "github.com/TopiaNetwork/topia/transaction/universal"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type ExecutionForwarder interface {
@@ -31,7 +31,7 @@ type executionForwarder struct {
 	marshaler codec.Marshaler
 	network   tpnet.Network
 	ledger    ledger.Ledger
-	txPool    txpool.TransactionPool
+	txPool    txpooli.TransactionPool
 }
 
 func NewExecutionForwarder(nodeID string,
@@ -39,7 +39,7 @@ func NewExecutionForwarder(nodeID string,
 	marshaler codec.Marshaler,
 	network tpnet.Network,
 	ledger ledger.Ledger,
-	txPool txpool.TransactionPool) ExecutionForwarder {
+	txPool txpooli.TransactionPool) ExecutionForwarder {
 	return &executionForwarder{
 		nodeID:    nodeID,
 		log:       log,
@@ -70,7 +70,7 @@ func (forwarder executionForwarder) sendTx(ctx context.Context, tx *txbasic.Tran
 			return err
 		}
 
-		err = forwarder.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, txpool.MOD_NAME, txBytes)
+		err = forwarder.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, txpooli.MOD_NAME, txBytes)
 		if err != nil {
 			forwarder.log.Errorf("Send tx to executors err: err=%v", err)
 			return err

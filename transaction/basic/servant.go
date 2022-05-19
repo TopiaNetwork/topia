@@ -41,7 +41,7 @@ type TransactionServantBaseRead interface {
 
 	GetMarshaler() codec.Marshaler
 
-	GetTxPoolSize() int
+	GetTxPoolSize() int64
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 }
@@ -69,7 +69,7 @@ type TransactionServant interface {
 func NewTransactionServant(chainState statechain.ChainState,
 	accountState stateaccount.AccountState,
 	marshaler codec.Marshaler,
-	txPoolSize func() int) TransactionServant {
+	txPoolSize func() int64) TransactionServant {
 	return &transactionServant{
 		ChainState:   chainState,
 		AccountState: accountState,
@@ -90,7 +90,7 @@ type transactionServant struct {
 	statechain.ChainState
 	stateaccount.AccountState
 	marshaler  codec.Marshaler
-	txPoolSize func() int
+	txPoolSize func() int64
 }
 
 type transactionServantSimulate struct {
@@ -114,7 +114,7 @@ func (ts *transactionServant) GetMarshaler() codec.Marshaler {
 	return ts.marshaler
 }
 
-func (ts *transactionServant) GetTxPoolSize() int {
+func (ts *transactionServant) GetTxPoolSize() int64 {
 	return ts.txPoolSize()
 }
 

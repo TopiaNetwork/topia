@@ -4,14 +4,13 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	swarm "github.com/libp2p/go-libp2p-swarm"
-	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	"net"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-connmgr"
@@ -22,9 +21,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	swarm "github.com/libp2p/go-libp2p-swarm"
+	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	ma "github.com/multiformats/go-multiaddr"
-
-	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -34,6 +33,7 @@ import (
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	"github.com/TopiaNetwork/topia/network/message"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
+	"github.com/TopiaNetwork/topia/version"
 )
 
 type DHTServiceType int
@@ -113,6 +113,7 @@ func NewP2PService(ctx context.Context, log tplog.Logger, config *configuration.
 		libp2p.DefaultTransports,
 		libp2p.DisableRelay(),
 		libp2p.NATPortMap(),
+		libp2p.UserAgent("topia-" + version.TMVersion),
 		p2p.connectionManagerOption(),
 	}
 
@@ -182,13 +183,13 @@ func (p2p *P2PService) connectionManagerOption() libp2p.Option {
 		connMng.Protect(peerID, "config-prot")
 	}
 
-	for _, bootPeer := range p2p.config.Connection.BootstrapPeers {
-		peerID, err := peer.IDFromString(bootPeer)
+	for _, seedPeer := range p2p.config.Connection.SeedPeers {
+		peerID, err := peer.IDFromString(seedPeer)
 		if err != nil {
 			panic(fmt.Sprintf("failed to parse peer ID in boot peers array: %v", err))
 			return nil
 		}
-		connMng.Protect(peerID, "bootstrap")
+		connMng.Protect(peerID, "seedpeer")
 	}
 
 	return libp2p.ConnectionManager(connMng)
@@ -300,7 +301,7 @@ func (p2p *P2PService) defaultPubSubOptions() []pubsub.Option {
 		pubsub.WithPeerScore(
 			&pubsub.PeerScoreParams{
 				AppSpecificScore: func(p peer.ID) float64 {
-					if p2p.isBootNode(p) && !p2p.config.PubSub.Bootstrapper {
+					if p2p.isBootNode(p) && !p2p.config.PubSub.ISSeedPeer {
 						return 2500
 					}
 					return 0
@@ -338,7 +339,7 @@ func (p2p *P2PService) defaultPubSubOptions() []pubsub.Option {
 	}
 
 	// enable Peer eXchange on bootstrappers
-	if p2p.config.PubSub.Bootstrapper {
+	if p2p.config.PubSub.ISSeedPeer {
 		// turn off the mesh in bootstrappers -- only do gossip and PX
 		pubsub.GossipSubD = 0
 		pubsub.GossipSubDscore = 0
@@ -941,6 +942,50 @@ func (p2p *P2PService) Publish(ctx context.Context, toModuleNames []string, topi
 }
 
 func (p2p *P2PService) Start() {
+	timer := time.NewTicker(5 * time.Second)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			peerCount := len(p2p.ConnectedPeers())
+			if peerCount == 0 {
+				if len(p2p.config.Connection.SeedPeers) == 0 {
+					p2p.log.Warn("Connected 0 peer while no any seed peer")
+					break
+				}
+
+				wg := sync.WaitGroup{}
+				for _, seedPeer := range p2p.config.Connection.SeedPeers {
+					wg.Add(1)
+					go func(sPeer string) {
+						defer wg.Done()
+
+						peerAddr, err := peer.AddrInfoFromString(sPeer)
+						if err != nil {
+							p2p.log.Errorf("Invalid seed peer addr %s: %v", sPeer, err)
+							return
+						}
+
+						if err = p2p.host.Connect(p2p.ctx, *peerAddr); err != nil {
+							p2p.log.Errorf("Failed to connect seed peer addr %s: %v", sPeer, err)
+							return
+						}
+					}(seedPeer)
+				}
+				wg.Wait()
+			}
+
+			if peerCount < p2p.config.Connection.LowWater {
+				if err := p2p.dhtServices[DHTServiceType_General].dht.Bootstrap(p2p.ctx); err != nil {
+					p2p.log.Errorf("General dht bootstrap err: %v", err)
+					continue
+				}
+			}
+		case <-p2p.ctx.Done():
+
+		}
+	}
 }
 
 func (p2p *P2PService) Close() {

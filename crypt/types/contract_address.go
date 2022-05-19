@@ -53,3 +53,11 @@ func CreateUserContractAddress(fromAddr Address, nonce uint64) Address {
 
 	return newAddr
 }
+
+func IsNativeContractAddress(contractAddr Address) bool {
+	if contractAddr == NativeContractAddr_Account {
+		return true
+	}
+
+	return false
+}

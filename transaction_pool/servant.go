@@ -2,21 +2,23 @@ package transactionpool
 
 import (
 	"context"
-	tplog "github.com/TopiaNetwork/topia/log"
+	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
-	tplgblock "github.com/TopiaNetwork/topia/ledger/block"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/protocol"
-	"github.com/TopiaNetwork/topia/state/chain"
+	"github.com/TopiaNetwork/topia/service"
 	"github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TransactionPoolServant interface {
 	CurrentHeight() (uint64, error)
+	GetNonce(tpcrtypes.Address) (uint64, error)
 	GetLatestBlock() (*tpchaintypes.Block, error)
 	GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
@@ -24,27 +26,40 @@ type TransactionPoolServant interface {
 	UnSubscribe(topic string) error
 }
 
+func newTransactionPoolServant(stateQueryService service.StateQueryService, blockService service.BlockService,
+	network tpnet.Network) TransactionPoolServant {
+	txpoolservant := &transactionPoolServant{
+		StateQueryService: stateQueryService,
+		BlockService:      blockService,
+		Network:           network,
+	}
+	return txpoolservant
+}
+
 type transactionPoolServant struct {
-	chainState chain.ChainState
-	marshaler  codec.Marshaler
-	blockStore tplgblock.BlockStore
-	Network    tpnet.Network
+	service.StateQueryService
+	service.BlockService
+	tpnet.Network
 }
 
 func (servant *transactionPoolServant) CurrentHeight() (uint64, error) {
-	curBlock, err := servant.chainState.GetLatestBlock()
+	curBlock, err := servant.GetLatestBlock()
 	if err != nil {
 		return 0, err
 	}
 	curHeight := curBlock.Head.Height
 	return curHeight, nil
 }
+func (servant *transactionPoolServant) GetNonce(address tpcrtypes.Address) (uint64, error) {
 
+	return servant.GetNonce(address)
+
+}
 func (servant *transactionPoolServant) GetLatestBlock() (*tpchaintypes.Block, error) {
-	return servant.chainState.GetLatestBlock()
+	return servant.GetLatestBlock()
 }
 func (servant *transactionPoolServant) GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
-	return servant.blockStore.GetBlockByHash(hash)
+	return servant.GetBlockByHash(hash)
 }
 
 func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
@@ -52,7 +67,8 @@ func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasi
 		return ErrTxIsNil
 	}
 	msg := &TxMessage{}
-	data, err := servant.marshaler.Marshal(tx)
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+	data, err := marshaler.Marshal(tx)
 	if err != nil {
 		return err
 	}
@@ -62,7 +78,7 @@ func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasi
 		return err
 	}
 	var toModuleName []string
-	toModuleName = append(toModuleName, MOD_NAME)
+	toModuleName = append(toModuleName, _interface.MOD_NAME)
 	servant.Network.Publish(ctx, toModuleName, protocol.SyncProtocolID_Msg, sendData)
 	return nil
 }
@@ -104,8 +120,17 @@ func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool,
 	if err != nil {
 		return message.ValidationReject
 	}
+	if uint64(tx.Size()) > _interface.DefaultTransactionPoolConfig.TxMaxSize {
+		msgSub.log.Errorf("transaction size is up to the TxMaxSize")
+		return message.ValidationReject
+	}
+	if _interface.DefaultTransactionPoolConfig.GasPriceLimit < GasLimit(tx) {
+		msgSub.log.Errorf("transaction gaslimit is up to GasPriceLimit")
+		return message.ValidationReject
+	}
+
 	if isLocal {
-		if numSegments(tx, DefaultTransactionPoolConfig.TxSegmentSize) > DefaultTransactionPoolConfig.TxMaxSegmentSize {
+		if uint64(tx.Size()) > _interface.DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount {
 			return message.ValidationReject
 		}
 		return message.ValidationAccept
@@ -129,9 +154,6 @@ func (msgSub *txMessageSubProcessor) Process(ctx context.Context, subMsgTxMessag
 	err := tx.Unmarshal(subMsgTxMessage.Data)
 	if err != nil {
 		msgSub.log.Error("txmessage data error")
-		return err
-	}
-	if err := msgSub.txpool.ValidateTx(tx, false); err != nil {
 		return err
 	}
 	category := txbasic.TransactionCategory(tx.Head.Category)

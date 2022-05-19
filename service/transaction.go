@@ -17,8 +17,8 @@ import (
 	"github.com/TopiaNetwork/topia/state"
 	txfactory "github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 )
 
 type TransactionService interface {

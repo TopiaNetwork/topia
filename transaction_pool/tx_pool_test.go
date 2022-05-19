@@ -3,7 +3,7 @@ package transactionpool
 import (
 	"context"
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/network/protocol"
+	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"reflect"
 	"testing"
 	"time"
@@ -19,13 +19,14 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	"github.com/TopiaNetwork/topia/network/protocol"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 )
 
 var (
 	Category1, Category2                                                             txbasic.TransactionCategory
-	TestTxPoolConfig                                                                 TransactionPoolConfig
+	TestTxPoolConfig                                                                 _interface.TransactionPoolConfig
 	TxlowGasPrice, TxHighGasLimit, txlocal, txremote, Tx1, Tx2, Tx3, Tx4, TxR1, TxR2 *txbasic.Transaction
 	txHead                                                                           *txbasic.TransactionHead
 	txData                                                                           *txbasic.TransactionData
@@ -52,7 +53,7 @@ func init() {
 	Ctx = context.Background()
 	Category1 = txbasic.TransactionCategory_Topia_Universal
 	TpiaLog, _ = tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
-	TestTxPoolConfig = DefaultTransactionPoolConfig
+	TestTxPoolConfig = _interface.DefaultTransactionPoolConfig
 	starttime = uint64(time.Now().Unix() - 105)
 	keyLocals = make([]txbasic.TxID, 0)
 	keyRemotes = make([]txbasic.TxID, 0)
@@ -320,13 +321,13 @@ func SetBlockData(txs map[string]*txbasic.Transaction) *tpchaintypes.BlockData {
 	return blockdata
 }
 
-func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
+func SetNewTransactionPool(nodeId string, ctx context.Context, conf _interface.TransactionPoolConfig, level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType) *transactionPool {
 
-	conf = (&conf).check()
-	conf.PendingAccountSegments = 16
-	conf.PendingGlobalSegments = 128
-	conf.QueueMaxTxsAccount = 32
-	conf.QueueMaxTxsGlobal = 256
+	conf = (&conf).Check()
+	conf.MaxSizeOfEachPendingAccount = 16 * 32 * 1024
+	conf.MaxSizeOfPending = 128 * 32 * 1024
+	conf.MaxSizeOfEachQueueAccount = 32 * 32 * 1024
+	conf.MaxSizeOfQueue = 256 * 32 * 1024
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
 		nodeId:              nodeId,
@@ -346,27 +347,21 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
 
-	pool.txCache, _ = lru.New(pool.config.TxStateCap)
+	pool.txCache, _ = lru.New(pool.config.TxCacheSize)
 
-	pool.curMaxGasLimit = pool.config.GasPriceLimit
+	pool.BlockMaxGasLimit = pool.config.GasPriceLimit
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.sortedLists = newTxSortedList()
 
-	if !pool.config.NoLocalFile {
-		for category := range pool.config.PathLocal {
-			pool.newTxListStructs(category)
-			pool.loadLocal(category, pool.config.NoLocalFile, pool.config.PathLocal[category])
-		}
-	}
 	if !pool.config.NoRemoteFile {
 		for category := range pool.config.PathRemote {
 			pool.newTxListStructs(category)
-			pool.loadLocal(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
+			pool.loadRemote(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
-	curBlock, err := pool.query.GetLatestBlock()
+	curBlock, err := pool.txServant.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
@@ -375,7 +370,6 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 	pool.wg.Add(1)
 	go pool.ReorgTxpoolLoop()
 	for category, _ := range pool.allTxsForLook.getAll() {
-		pool.loadLocal(category, conf.NoLocalFile, conf.PathLocal[category])
 		pool.loadRemote(category, conf.NoRemoteFile, conf.PathRemote[category])
 	}
 
@@ -383,26 +377,12 @@ func SetNewTransactionPool(nodeId string, ctx context.Context, conf TransactionP
 	pool.loopChanSelect()
 	TxMsgSubProcessor = &txMessageSubProcessor{txpool: pool, log: pool.log, nodeID: pool.nodeId}
 	//subscribe
-	pool.query.Subscribe(ctx, protocol.SyncProtocolID_Msg,
+	pool.txServant.Subscribe(ctx, protocol.SyncProtocolID_Msg,
 		true,
 		TxMsgSubProcessor.Validate)
 	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
 	pool.handler = poolHandler
 	return pool
-}
-
-func Test_transactionPool_ValidateTx(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-
-	if err := pool.ValidateTx(TxHighGasLimit, true); err != ErrTxGasLimit {
-		t.Error("expected", ErrTxGasLimit, "got", err)
-	}
-	if err := pool.ValidateTx(TxlowGasPrice, false); err != ErrGasPriceTooLow {
-		t.Error("expected", ErrGasPriceTooLow, "got", err)
-	}
 }
 
 func Test_transactionPool_GetLocalTxs(t *testing.T) {
@@ -750,7 +730,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	}
 	want := len(txs)
 
-	if got := len(pool.PickTxsOfCategory(Category1, PickTransactionsFromPending)); got != want {
+	if got := len(pool.PickTxsOfCategory(Category1, _interface.PickTransactionsFromPending)); got != want {
 		t.Error("PickTxsOfCategory want", want, "got", got)
 	}
 
@@ -769,7 +749,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	//if got := pool.PickTxsOfCategory(Category1, PickTransactionsSortedByGasPriceAndNonce); !reflect.DeepEqual(got, txs2) {
 	//	t.Errorf("CommitTxsByPriceAndNonce() = %v\n,                            want %v", got, txs)
 	//}
-	if got := len(pool.PickTxsOfCategory(Category1, PickTransactionsSortedByGasPriceAndNonce)); got != want {
+	if got := len(pool.PickTxsOfCategory(Category1, _interface.PickTransactionsSortedByGasPriceAndNonce)); got != want {
 		t.Error("want", want, "got", got)
 	}
 }

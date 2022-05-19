@@ -25,20 +25,6 @@ const (
 	NodeRole_Validator          = 0x40
 )
 
-type NodeInfo struct {
-	NodeID        string
-	Weight        uint64
-	DKGPartPubKey string
-	Role          NodeRole
-	State         NodeState
-}
-
-type EpochInfo struct {
-	Epoch          uint64
-	StartTimeStamp uint64
-	StartHeight    uint64
-}
-
 var CurrentNetworkType = NetworkType_Testnet
 
 type NetworkType byte
@@ -69,4 +55,18 @@ func (n NetworkType) Value(netType byte) NetworkType {
 	default:
 		return NetworkType_Unknown
 	}
+}
+
+type NodeInfo struct {
+	NodeID        string
+	Weight        uint64
+	DKGPartPubKey string
+	Role          NodeRole
+	State         NodeState
+}
+
+type EpochInfo struct {
+	Epoch          uint64
+	StartTimeStamp uint64
+	StartHeight    uint64
 }

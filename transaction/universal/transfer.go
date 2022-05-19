@@ -116,7 +116,7 @@ func (txfer *TransactionUniversalTransfer) currencyTransfer(txServant txbasic.Tr
 			},
 		},
 	}
-	gasUsed = computeBasicGas(txServant.GetGasConfig(), txUniWithHead)
+	gasUsed = computeBasicGas(txServant.GetGasConfig(), txUniWithHead.DataLen())
 	gasVal := tpcmm.SafeMul(gasUsed, txfer.GasPrice)
 
 	fromAcc, err := txServant.GetAccount(tpcrtypes.NewFromBytes(txfer.FromAddr))

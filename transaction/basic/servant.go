@@ -1,6 +1,7 @@
 package basic
 
 import (
+	"github.com/TopiaNetwork/topia/codec"
 	"github.com/TopiaNetwork/topia/common"
 	"math/big"
 
@@ -37,6 +38,12 @@ type TransactionServantBaseRead interface {
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
 	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
+
+	GetMarshaler() codec.Marshaler
+
+	GetTxPoolSize() int
+
+	GetLatestBlock() (*tpchaintypes.Block, error)
 }
 
 type TransactionServant interface {
@@ -59,10 +66,15 @@ type TransactionServant interface {
 	UpdateName(addr tpcrtypes.Address, name tpacc.AccountName) error
 }
 
-func NewTransactionServant(chainState statechain.ChainState, accountState stateaccount.AccountState) TransactionServant {
+func NewTransactionServant(chainState statechain.ChainState,
+	accountState stateaccount.AccountState,
+	marshaler codec.Marshaler,
+	txPoolSize func() int) TransactionServant {
 	return &transactionServant{
 		ChainState:   chainState,
 		AccountState: accountState,
+		marshaler:    marshaler,
+		txPoolSize:   txPoolSize,
 	}
 }
 
@@ -77,6 +89,8 @@ func NewTansactionServantSimulate(tsBaseRead TransactionServantBaseRead) Transac
 type transactionServant struct {
 	statechain.ChainState
 	stateaccount.AccountState
+	marshaler  codec.Marshaler
+	txPoolSize func() int
 }
 
 type transactionServantSimulate struct {
@@ -94,6 +108,14 @@ func (ts *transactionServant) GetGasConfig() *configuration.GasConfiguration {
 
 func (ts *transactionServant) GetChainConfig() *configuration.ChainConfiguration {
 	return configuration.GetConfiguration().ChainConfig
+}
+
+func (ts *transactionServant) GetMarshaler() codec.Marshaler {
+	return ts.marshaler
+}
+
+func (ts *transactionServant) GetTxPoolSize() int {
+	return ts.txPoolSize()
 }
 
 func (ts *transactionServantSimulate) GetCryptService(log tplog.Logger, cryptType tpcrtypes.CryptType) (tpcrt.CryptService, error) {

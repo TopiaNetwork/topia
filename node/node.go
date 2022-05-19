@@ -3,10 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/chain"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tpcmm "github.com/TopiaNetwork/topia/common"
-	"github.com/TopiaNetwork/topia/execution"
+	"github.com/TopiaNetwork/topia/wallet"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,16 +11,21 @@ import (
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
+	"github.com/TopiaNetwork/topia/chain"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/consensus"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/eventhub"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/service"
 	"github.com/TopiaNetwork/topia/state"
 	"github.com/TopiaNetwork/topia/sync"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool"
@@ -42,6 +44,7 @@ type Node struct {
 	syncer    sync.Syncer
 	chain     chain.Chain
 	config    *tpconfig.Configuration
+	service   service.Service
 }
 
 func NewNode(endPoint string, seed string) *Node {
@@ -71,11 +74,13 @@ func NewNode(endPoint string, seed string) *Node {
 
 	txPoolConf := txpool.DefaultTransactionPoolConfig
 	txPool := txpool.NewTransactionPool(nodeID, ctx, txPoolConf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
-	exeScheduler := execution.NewExecutionScheduler(nodeID, mainLog, config, txPool)
+	exeScheduler := execution.NewExecutionScheduler(nodeID, mainLog, config, codec.CodecType_PROTO, txPool)
 	evHub := eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 	cons := consensus.NewConsensus(compStateRN.ChainID(), nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, network, txPool, ledger, exeScheduler, config)
 	syncer := sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 	chain := chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, codec.CodecType_PROTO, ledger, exeScheduler, config)
+	w := wallet.NewWallet(tplogcmm.InfoLevel, mainLog, chainRootPath)
+	service := service.NewService(nodeID, mainLog, codec.CodecType_PROTO, network, ledger, txPool, w, config)
 
 	return &Node{
 		log:       mainLog,
@@ -90,6 +95,7 @@ func NewNode(endPoint string, seed string) *Node {
 		syncer:    syncer,
 		chain:     chain,
 		config:    config,
+		service:   service,
 	}
 }
 

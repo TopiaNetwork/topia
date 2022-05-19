@@ -64,11 +64,12 @@ type executionScheduler struct {
 	lastStateVersion *atomic.Uint64
 	exePackedTxsList *list.List
 	config           *configuration.Configuration
+	marshaler        codec.Marshaler
 	txPool           txpool.TransactionPool
 	syncCommitBlock  sync.RWMutex
 }
 
-func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, txPool txpool.TransactionPool) *executionScheduler {
+func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, codecType codec.CodecType, txPool txpool.TransactionPool) *executionScheduler {
 	exeLog := tplog.CreateModuleLogger(logcomm.InfoLevel, MOD_NAME, log)
 	return &executionScheduler{
 		nodeID:           nodeID,
@@ -79,6 +80,7 @@ func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuratio
 		schedulerState:   atomic.NewUint32(uint32(SchedulerState_Idle)),
 		exePackedTxsList: list.New(),
 		config:           config,
+		marshaler:        codec.CreateMarshaler(codecType),
 		txPool:           txPool,
 	}
 }
@@ -131,7 +133,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 
 	exePackedTxs := newExecutionPackedTxs(scheduler.nodeID, txPacked, compState)
 
-	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txservant.NewTransactionServant(compState, compState))
+	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txservant.NewTransactionServant(compState, compState, scheduler.marshaler, scheduler.txPool.Size))
 	if err == nil {
 		compState.UpdateCompSState(state.CompSState_Normal)
 		scheduler.lastStateVersion.Store(txPacked.StateVersion)

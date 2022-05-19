@@ -10,7 +10,6 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/hashicorp/golang-lru"
 
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -23,20 +22,18 @@ import (
 	"github.com/TopiaNetwork/topia/state/account"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
+	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
-
-type PickTxType uint32
 
 var ObsID string
 
 const (
-	PickTransactionsFromPending PickTxType = iota
+	PickTransactionsFromPending _interface.PickTxType = iota
 	PickTransactionsSortedByGasPriceAndNonce
 )
 
 const (
 	ChanBlockAddedSize = 10
-	MOD_NAME           = "TransactionPool"
 )
 
 var (
@@ -56,41 +53,9 @@ var (
 	ErrQueueEmpty         = errors.New("queue is empty")
 )
 
-type TransactionPool interface {
-	AddTx(tx *txbasic.Transaction, local bool) error
-
-	RemoveTxByKey(key txbasic.TxID) error
-
-	RemoveTxHashs(hashs []txbasic.TxID) []error
-
-	Reset(oldHead, newHead *tpchaintypes.BlockHead) error
-
-	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
-
-	Pending() ([]*txbasic.Transaction, error)
-
-	PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error)
-
-	PickTxs(txType PickTxType) []*txbasic.Transaction
-
-	Count() int64
-
-	Size() int64
-
-	TruncateTxPool()
-
-	Start(sysActor *actor.ActorSystem, network tpnet.Network) error
-
-	SysShutDown()
-
-	SetTxPoolConfig(conf TransactionPoolConfig)
-
-	PeekTxState(hash txbasic.TxID) interface{}
-}
-
 type transactionPool struct {
 	nodeId string
-	config TransactionPoolConfig
+	config _interface.TransactionPoolConfig
 
 	chanSysShutdown   chan error
 	chanBlockAdded    chan BlockAddedEvent
@@ -119,10 +84,10 @@ type transactionPool struct {
 	wg                   sync.WaitGroup
 }
 
-func NewTransactionPool(nodeID string, ctx context.Context, conf TransactionPoolConfig, level tplogcmm.LogLevel,
+func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.TransactionPoolConfig, level tplogcmm.LogLevel,
 	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
 	blockService service.BlockService, network tpnet.Network) *transactionPool {
-	conf = (&conf).check()
+	conf = (&conf).Check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
 		nodeId:              nodeID,
@@ -419,7 +384,7 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 		pool.log.Panicf("CreateTransactionPoolActor error: %v", err)
 		return err
 	}
-	network.RegisterModule(MOD_NAME, actorPID, pool.marshaler)
+	network.RegisterModule(_interface.MOD_NAME, actorPID, pool.marshaler)
 
 	ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
 		Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)
@@ -769,7 +734,7 @@ func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCat
 }
 
 // PickTxs if txsType is 0,pick current pending txs,if 1 pick txs sorted by price and nonce
-func (pool *transactionPool) PickTxs(txType PickTxType) (txs []*txbasic.Transaction) {
+func (pool *transactionPool) PickTxs(txType _interface.PickTxType) (txs []*txbasic.Transaction) {
 	defer func(t0 time.Time) {
 		pool.log.Infof("PickTxs cost time:", time.Since(t0))
 	}(time.Now())
@@ -788,7 +753,7 @@ func (pool *transactionPool) PickTxs(txType PickTxType) (txs []*txbasic.Transact
 		return nil
 	}
 }
-func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCategory, txType PickTxType) []*txbasic.Transaction {
+func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCategory, txType _interface.PickTxType) []*txbasic.Transaction {
 	defer func(t0 time.Time) {
 		pool.log.Infof("PickTxs of category:", category, "cost time:", time.Since(t0))
 	}(time.Now())

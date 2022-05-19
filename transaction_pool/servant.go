@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"context"
+	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -77,7 +78,7 @@ func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasi
 		return err
 	}
 	var toModuleName []string
-	toModuleName = append(toModuleName, MOD_NAME)
+	toModuleName = append(toModuleName, _interface.MOD_NAME)
 	servant.Network.Publish(ctx, toModuleName, protocol.SyncProtocolID_Msg, sendData)
 	return nil
 }
@@ -119,17 +120,17 @@ func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool,
 	if err != nil {
 		return message.ValidationReject
 	}
-	if uint64(tx.Size()) > DefaultTransactionPoolConfig.TxMaxSize {
+	if uint64(tx.Size()) > _interface.DefaultTransactionPoolConfig.TxMaxSize {
 		msgSub.log.Errorf("transaction size is up to the TxMaxSize")
 		return message.ValidationReject
 	}
-	if DefaultTransactionPoolConfig.GasPriceLimit < GasLimit(tx) {
+	if _interface.DefaultTransactionPoolConfig.GasPriceLimit < GasLimit(tx) {
 		msgSub.log.Errorf("transaction gaslimit is up to GasPriceLimit")
 		return message.ValidationReject
 	}
 
 	if isLocal {
-		if uint64(tx.Size()) > DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount {
+		if uint64(tx.Size()) > _interface.DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount {
 			return message.ValidationReject
 		}
 		return message.ValidationAccept

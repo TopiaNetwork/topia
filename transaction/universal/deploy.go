@@ -104,7 +104,9 @@ func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.L
 		Code:      txdp.Code,
 	}
 
-	gasUsed := uint64(0)
+	txUniData, _ := txdp.DataBytes()
+	gasUsed := computeBasicGas(txServant.GetGasConfig(), uint64(len(txUniData)))
+
 	errMsg := ""
 	status := TransactionResultUniversal_Err
 	vmResult, err := tpvm.GetVMFactory().GetVM(tpvmtype.VMType_TVM).DeployContract(vmContext)
@@ -116,7 +118,6 @@ func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.L
 	}
 
 	status = TransactionResultUniversal_OK
-	gasUsed = vmResult.GasUsed
 
 	txHashBytes, _ := txdp.HashBytes()
 	txUniRS := &TransactionResultUniversal{

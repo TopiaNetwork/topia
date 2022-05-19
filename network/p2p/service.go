@@ -4,14 +4,13 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	swarm "github.com/libp2p/go-libp2p-swarm"
-	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	"net"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-connmgr"
@@ -22,9 +21,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	swarm "github.com/libp2p/go-libp2p-swarm"
+	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	ma "github.com/multiformats/go-multiaddr"
-
-	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -34,6 +33,7 @@ import (
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	"github.com/TopiaNetwork/topia/network/message"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
+	"github.com/TopiaNetwork/topia/version"
 )
 
 type DHTServiceType int
@@ -113,6 +113,7 @@ func NewP2PService(ctx context.Context, log tplog.Logger, config *configuration.
 		libp2p.DefaultTransports,
 		libp2p.DisableRelay(),
 		libp2p.NATPortMap(),
+		libp2p.UserAgent("topia-" + version.TMVersion),
 		p2p.connectionManagerOption(),
 	}
 

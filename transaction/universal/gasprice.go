@@ -14,7 +14,7 @@ type GasPriceComputer interface {
 }
 
 func NewGasPriceComputer(marshaler codec.Marshaler,
-	txPoolSize func() int,
+	txPoolSize func() int64,
 	latestBlock func() (*tpchaintypes.Block, error),
 	gasConfig *tpconfig.GasConfiguration,
 	chainConfig *tpconfig.ChainConfiguration) GasPriceComputer {
@@ -28,7 +28,7 @@ func NewGasPriceComputer(marshaler codec.Marshaler,
 }
 
 type gasPriceComputer struct {
-	txPoolSize  func() int
+	txPoolSize  func() int64
 	latestBlock func() (*tpchaintypes.Block, error)
 	marshaler   codec.Marshaler
 	gasConfig   *tpconfig.GasConfiguration

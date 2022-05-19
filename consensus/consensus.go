@@ -18,7 +18,7 @@ import (
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -72,7 +72,7 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	log tplog.Logger,
 	codecType codec.CodecType,
 	network tpnet.Network,
-	txPool txpool.TransactionPool,
+	txPool txpooli.TransactionPool,
 	ledger ledger.Ledger,
 	exeScheduler execution.ExecutionScheduler,
 	config *tpconfig.Configuration) Consensus {

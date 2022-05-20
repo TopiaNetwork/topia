@@ -148,6 +148,7 @@ func NewP2PService(ctx context.Context, log tplog.Logger, config *configuration.
 	p2p.host.SetStreamHandler(tpnetprotoc.HeatBeatPtotocolID, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_Msg, p2p.streamService.handleIncomingStream)
 	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_SyncMsg, p2p.streamService.handleIncomingStreamWithResp)
+	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_SyncTx, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.ForwardPropose_Msg, p2p.streamService.handleIncomingStream)
 	p2p.host.SetStreamHandler(tpnetprotoc.FrowardValidate_Msg, p2p.streamService.handleIncomingStream)
 
@@ -184,12 +185,12 @@ func (p2p *P2PService) connectionManagerOption() libp2p.Option {
 	}
 
 	for _, seedPeer := range p2p.config.Connection.SeedPeers {
-		peerID, err := peer.IDFromString(seedPeer)
+		addrInfo, err := p2p.getAddrInfo(seedPeer.NetAddrString)
 		if err != nil {
 			panic(fmt.Sprintf("failed to parse peer ID in boot peers array: %v", err))
 			return nil
 		}
-		connMng.Protect(peerID, "seedpeer")
+		connMng.Protect(addrInfo.ID, "seedpeer")
 	}
 
 	return libp2p.ConnectionManager(connMng)
@@ -942,50 +943,55 @@ func (p2p *P2PService) Publish(ctx context.Context, toModuleNames []string, topi
 }
 
 func (p2p *P2PService) Start() {
-	timer := time.NewTicker(5 * time.Second)
-	defer timer.Stop()
+	go func() {
+		timer := time.NewTicker(5 * time.Second)
+		defer timer.Stop()
+		for {
+			select {
+			case <-timer.C:
+				peerCount := len(p2p.ConnectedPeers())
+				if peerCount == 0 {
+					if len(p2p.config.Connection.SeedPeers) == 0 {
+						p2p.log.Warn("Connected 0 peer while no any seed peer")
+						break
+					}
 
-	for {
-		select {
-		case <-timer.C:
-			peerCount := len(p2p.ConnectedPeers())
-			if peerCount == 0 {
-				if len(p2p.config.Connection.SeedPeers) == 0 {
-					p2p.log.Warn("Connected 0 peer while no any seed peer")
-					break
-				}
-
-				wg := sync.WaitGroup{}
-				for _, seedPeer := range p2p.config.Connection.SeedPeers {
-					wg.Add(1)
-					go func(sPeer string) {
-						defer wg.Done()
-
-						peerAddr, err := peer.AddrInfoFromString(sPeer)
-						if err != nil {
-							p2p.log.Errorf("Invalid seed peer addr %s: %v", sPeer, err)
-							return
+					wg := sync.WaitGroup{}
+					for _, seedPeer := range p2p.config.Connection.SeedPeers {
+						peerAddr, err := p2p.getAddrInfo(seedPeer.NetAddrString)
+						if peerAddr.ID == p2p.ID() {
+							continue
 						}
 
-						if err = p2p.host.Connect(p2p.ctx, *peerAddr); err != nil {
-							p2p.log.Errorf("Failed to connect seed peer addr %s: %v", sPeer, err)
-							return
-						}
-					}(seedPeer)
-				}
-				wg.Wait()
-			}
+						wg.Add(1)
+						go func(sPeer peer.AddrInfo) {
+							defer wg.Done()
 
-			if peerCount < p2p.config.Connection.LowWater {
-				if err := p2p.dhtServices[DHTServiceType_General].dht.Bootstrap(p2p.ctx); err != nil {
-					p2p.log.Errorf("General dht bootstrap err: %v", err)
-					continue
-				}
-			}
-		case <-p2p.ctx.Done():
+							if err != nil {
+								p2p.log.Errorf("Invalid seed peer addr %s: %v", sPeer, err)
+								return
+							}
 
+							if err = p2p.host.Connect(p2p.ctx, *peerAddr); err != nil {
+								p2p.log.Errorf("Failed to connect seed peer addr %s: %v", sPeer, err)
+								return
+							}
+						}(*peerAddr)
+					}
+					wg.Wait()
+				}
+
+				if peerCount < p2p.config.Connection.LowWater {
+					if err := p2p.dhtServices[DHTServiceType_General].dht.Bootstrap(p2p.ctx); err != nil {
+						p2p.log.Errorf("General dht bootstrap err: %v", err)
+						continue
+					}
+				}
+			case <-p2p.ctx.Done():
+
+			}
 		}
-	}
+	}()
 }
 
 func (p2p *P2PService) Close() {

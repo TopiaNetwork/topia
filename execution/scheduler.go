@@ -497,8 +497,18 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 			return err
 		}
 
+		chainMsg := &tpchaintypes.ChainMessage{
+			MsgType: tpchaintypes.ChainMessage_BlockInfo,
+			Data:    pubsubBlockInfoBytes,
+		}
+		chainMsgBytes, err := marshaler.Marshal(chainMsg)
+		if err != nil {
+			scheduler.log.Errorf("Marshal chain msg err: stateVersion=%d, err=%v", stateVersion, err)
+			return err
+		}
+
 		go func() {
-			err := network.Publish(ctx, []string{tpchaintypes.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, pubsubBlockInfoBytes)
+			err := network.Publish(ctx, []string{tpchaintypes.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, chainMsgBytes)
 			if err != nil {
 				scheduler.log.Errorf("Publish block info err: stateVersion=%d, err=%v", stateVersion, err)
 			}

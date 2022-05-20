@@ -148,6 +148,7 @@ func NewP2PService(ctx context.Context, log tplog.Logger, config *configuration.
 	p2p.host.SetStreamHandler(tpnetprotoc.HeatBeatPtotocolID, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_Msg, p2p.streamService.handleIncomingStream)
 	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_SyncMsg, p2p.streamService.handleIncomingStreamWithResp)
+	p2p.host.SetStreamHandler(tpnetprotoc.ForwardExecute_SyncTx, p2p.streamService.handleIncomingStreamWithResp)
 	p2p.host.SetStreamHandler(tpnetprotoc.ForwardPropose_Msg, p2p.streamService.handleIncomingStream)
 	p2p.host.SetStreamHandler(tpnetprotoc.FrowardValidate_Msg, p2p.streamService.handleIncomingStream)
 

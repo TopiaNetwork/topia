@@ -135,7 +135,7 @@ func (md *messageDeliver) deliverSendWithRespCommon(ctx context.Context, protoco
 		_, respBytes, respErrs := tpnetmsg.ParseSendResp(resps)
 		rtnBytes := [][]byte(nil)
 		for i, respErr := range respErrs {
-			if respErr != "" {
+			if respErr == "" {
 				rtnBytes = append(rtnBytes, respBytes[i])
 			}
 		}

@@ -39,8 +39,7 @@ func (pool *transactionPool) truncatePendingByCategory(category txbasic.Transact
 		for pendingSize > pool.config.MaxSizeOfPending && len(greyAccounts) > 0 {
 
 			bePunished := heap.Pop(&greyAccountsQueue).(*SizeAccountItem)
-			sizeCaps := pool.pendings.truncatePendingByCategoryFun3(f31, category, bePunished.accountAddr)
-			pool.sortedLists.removedPricedlistByCategory(category, sizeCaps)
+			pool.pendings.truncatePendingByCategoryFun3(f31, category, bePunished.accountAddr)
 			pendingSize -= uint64(bePunished.size)
 		}
 
@@ -63,8 +62,7 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 	}
 	f4 := func(category txbasic.TransactionCategory, txId txbasic.TxID, tx *txbasic.Transaction) {
 		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-		// Remove it from the list of sortedByPriced
-		pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
+
 		txRemoved := &eventhub.TxPoolEvent{
 			EvType: eventhub.TxPoolEVTypee_Removed,
 			Tx:     tx,
@@ -76,7 +74,6 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 	}
 	f511 := func(category txbasic.TransactionCategory, txid txbasic.TxID, tx *txbasic.Transaction) {
 		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txid)
-		pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
 	}
 	f512 := func(category txbasic.TransactionCategory, txId txbasic.TxID) *txbasic.Transaction {
 		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txId)
@@ -99,12 +96,10 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 }
 
 func (pool *transactionPool) TruncateTxPool() {
-
 	for category, _ := range pool.allTxsForLook.all {
 		pool.queues.removeAll(category)
 		pool.pendings.removeAll(category)
 		pool.allTxsForLook.removeAll(category)
-		pool.sortedLists.removeAll(category)
 	}
 	pool.txCache.Purge()
 	pool.log.Tracef("TransactionPool Truncated")

@@ -28,15 +28,13 @@ func Test_transactionPool_AddLocal(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+
 	pool.AddLocal(Tx1)
 	assert.Equal(t, 1, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 1, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 1, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+
 }
 
 func Test_transactionPool_AddRemote(t *testing.T) {
@@ -54,16 +52,12 @@ func Test_transactionPool_AddRemote(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	pool.AddRemote(TxR1)
 	assert.Equal(t, 1, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 1, pool.allTxsForLook.all[Category1].RemoteCount())
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 1, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 }
 
 func Test_TransactionPool_AddRemotes(t *testing.T) {
@@ -81,8 +75,6 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, TxR1)
 	txs = append(txs, TxR2)
@@ -95,8 +87,6 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 2, pool.allTxsForLook.all[Category1].RemoteCount())
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 }
 
 func Test_transactionPool_SaveRemoteTxs(t *testing.T) {
@@ -114,8 +104,6 @@ func Test_transactionPool_SaveRemoteTxs(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	pool.AddTx(TxR1, false)
 	pool.AddTx(TxR2, false)
 
@@ -157,8 +145,6 @@ func Test_transactionPool_LoadRemoteTxs(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 }
 
@@ -177,8 +163,6 @@ func Test_transactionPool_PublishTx(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	if err := pool.txServant.PublishTx(pool.ctx, Tx1); err != nil {
 		t.Error("want", nil, "got", err)
 	}

@@ -43,8 +43,6 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	fmt.Println(3)
 	hashs := make([]txbasic.TxID, 0)
 	hashs = append(hashs, Key1)
@@ -58,8 +56,6 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	for _, tx := range txLocals[1:10] {
 		hash, _ = tx.TxID()
 		hashs1 = append(hashs1, hash)
@@ -95,8 +91,6 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	fmt.Println("test001")
 
 }
@@ -116,8 +110,6 @@ func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -126,8 +118,6 @@ func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	//pool.wg.Add(1)
 	//go pool.chanRemoveTxHashs()
@@ -164,8 +154,6 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -174,9 +162,6 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-
-	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
 	var hashs []txbasic.TxID
 	hashs = append(hashs, Key1)
 	hashs = append(hashs, Key2)
@@ -206,8 +191,6 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -216,9 +199,6 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-
-	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	waitChannel := make(chan struct{})
 
@@ -232,8 +212,7 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
+
 }
 
 func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
@@ -253,8 +232,6 @@ func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -263,9 +240,6 @@ func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-
-	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	//check new local file:localTransactions.json,
 	pool.wg.Add(1)
@@ -291,8 +265,6 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 0, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 	pool.AddTx(Tx1, true)
 	pool.AddTx(Tx2, true)
 	pool.AddTx(TxR1, false)
@@ -301,9 +273,6 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 2, pool.allTxsForLook.getRemoteCountByCategory(Category1))
-
-	assert.Equal(t, 2, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 2, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 
 	pool.wg.Add(1)
 	go pool.loopRegularRepublic()
@@ -369,9 +338,6 @@ func Test_transactionPool_loop(t *testing.T) {
 	assert.Equal(t, 100, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 100, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 100, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 100, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
-
 	pool.loopChanSelect()
 
 	go func() {
@@ -395,6 +361,4 @@ func Test_transactionPool_loop(t *testing.T) {
 	assert.Equal(t, 100, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 100, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 100, len(pool.sortedLists.getAllLocalTxsByCategory(Category1)))
-	assert.Equal(t, 100, len(pool.sortedLists.getAllRemoteTxsByCategory(Category1)))
 }

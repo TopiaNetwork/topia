@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -33,14 +33,12 @@ const (
 
 var (
 	ErrAlreadyKnown       = errors.New("transaction is already know")
-	ErrGasPriceTooLow     = errors.New("transaction gas price too low for miner")
+	ErrTxPoolFull         = errors.New("drop tx for transaction is full")
 	ErrReplaceUnderpriced = errors.New("new transaction price under priced")
 	ErrUnderpriced        = errors.New("transaction underpriced")
-	ErrTxGasLimit         = errors.New("exceeds block gas limit")
 	ErrTxNotExist         = errors.New("transaction not found")
 	ErrTxIsNil            = errors.New("transaction is nil")
 	ErrTxPoolOverflow     = errors.New("txPool is full")
-	ErrOversizedData      = errors.New("transaction overSized data")
 	ErrTxUpdate           = errors.New("can not update tx")
 	ErrPendingIsNil       = errors.New("pending is nil")
 	ErrQueueIsNil         = errors.New("Queue is nil")
@@ -55,15 +53,16 @@ type transactionPool struct {
 	chanSysShutdown   chan error
 	chanBlockAdded    chan BlockAddedEvent
 	chanReqReset      chan *txPoolResetHeads
+	chanReqTurn       chan *accountCache
 	chanReorgDone     chan chan struct{}
 	chanReorgShutdown chan struct{} // requests shutdown of scheduleReorgLoop
 	chanRmTxs         chan []txbasic.TxID
 	txServant         TransactionPoolServant
 
-	pendings             *pendingsMap
-	queues               *queuesMap
-	allTxsForLook        *allTxsLookupMap
-	sortedLists          *txSortedList
+	pendings      *pendingsMap
+	queues        *queuesMap
+	allTxsForLook *allTxsLookupMap
+
 	ActivationIntervals  *activationInterval // ActivationIntervals for each txID
 	HeightIntervals      *HeightInterval     // HeightIntervals for each txID
 	TxHashCategory       *txHashCategory
@@ -96,6 +95,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.Tran
 		TxHashCategory:      newTxHashCategory(),
 		chanBlockAdded:      make(chan BlockAddedEvent, ChanBlockAddedSize),
 		chanReqReset:        make(chan *txPoolResetHeads),
+		chanReqTurn:         make(chan *accountCache),
 		chanReorgDone:       make(chan chan struct{}),
 		chanReorgShutdown:   make(chan struct{}), // requests shutdown of scheduleReorgLoop
 		chanRmTxs:           make(chan []txbasic.TxID),
@@ -109,7 +109,6 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.Tran
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
-	pool.sortedLists = newTxSortedList()
 	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
 
 	if !pool.config.NoRemoteFile {
@@ -124,7 +123,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.Tran
 	}
 	pool.Reset(nil, curBlock.GetHead())
 	pool.wg.Add(1)
-	go pool.ReorgTxpoolLoop()
+	go pool.ReorgAndTurnTxLoop()
 	for category, _ := range pool.allTxsForLook.getAll() {
 		pool.loadRemote(category, conf.NoRemoteFile, conf.PathRemote[category])
 	}
@@ -151,12 +150,9 @@ func (pool *transactionPool) newTxListStructs(category txbasic.TransactionCatego
 	if _, ok := pool.allTxsForLook.all[category]; !ok {
 		pool.allTxsForLook.all[category] = newTxForLookup()
 	}
-	if _, ok := pool.sortedLists.Pricedlist[category]; !ok {
-		pool.sortedLists.setTxSortedListByCategory(category, pool.allTxsForLook.getAllTxsLookupByCategory(category))
-	}
+
 }
 func (pool *transactionPool) DropCategoryFromStruct(category txbasic.TransactionCategory) {
-	pool.sortedLists.ifEmptyDropCategory(category)
 	pool.allTxsForLook.ifEmptyDropCategory(category)
 	pool.pendings.ifEmptyDropCategory(category)
 	pool.queues.ifEmptyDropCategory(category)
@@ -319,7 +315,7 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local bool) []er
 	}
 
 	// Process all the new transaction and merge any errors into the original slice
-	newErrs := pool.addTxsLocked(news, local)
+	newErrs, dirtyAddrCache := pool.addTxsLocked(news, local)
 
 	var nilSlot = 0
 	for _, err := range newErrs {
@@ -331,17 +327,23 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local bool) []er
 		errs[nilSlot] = err
 		nilSlot++
 	}
+	// Reorg the pool internals if needed and return
+	pool.requestTurnToPending(dirtyAddrCache)
 
 	return errs
 }
 
-func (pool *transactionPool) addTxsLocked(txs []*txbasic.Transaction, local bool) []error {
+func (pool *transactionPool) addTxsLocked(txs []*txbasic.Transaction, local bool) ([]error, *accountCache) {
+	dirtyAccounts := newAccountCache()
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
-		_, err := pool.add(tx, local)
+		replaced, err := pool.add(tx, local)
 		errs[i] = err
+		if err != nil && !replaced {
+			dirtyAccounts.addTx(tx)
+		}
 	}
-	return errs
+	return errs, dirtyAccounts
 }
 
 func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error {
@@ -401,8 +403,7 @@ func (pool *transactionPool) RemoveTxByKey(key txbasic.TxID) error {
 	addr := tpcrtypes.Address(tx.Head.FromAddr)
 	// Remove it from the list of known transactions
 	pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key)
-	// Remove it from the list of sortedByPriced
-	pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
+
 	//commit when unit testing
 	//txRemoved := &eventhub.TxPoolEvent{
 	//	EvType: eventhub.TxPoolEVTypee_Removed,
@@ -449,7 +450,6 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 	// Try to insert the transaction into the future queue
 	f1 := func(category txbasic.TransactionCategory, key txbasic.TxID, tx *txbasic.Transaction) {
 		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key)
-		pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
 
 	}
 	f2 := func(category txbasic.TransactionCategory, string2 txbasic.TxID) *txbasic.Transaction {
@@ -510,65 +510,22 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 		return false, ErrAlreadyKnown
 	}
 
-	// If the transaction pool is full, discard underpriced transactions
-	fmt.Println("alltxs size for category:", pool.allTxsForLook.getSizeFromAllTxsLookupByCategory(category))
-	fmt.Println("queue+pending size:", pool.config.MaxSizeOfPending+pool.config.MaxSizeOfQueue)
-	fmt.Println("alltxs size :", pool.allTxsForLook.getAllSize())
-	fmt.Println("TxPoolMaxSize :", pool.config.TxPoolMaxSize)
 	if uint64(pool.allTxsForLook.getSizeFromAllTxsLookupByCategory(category)) > pool.config.MaxSizeOfPending+pool.config.MaxSizeOfQueue ||
 		uint64(pool.allTxsForLook.getAllSize()) > pool.config.TxPoolMaxSize {
-		// If the new transaction is underpriced, don't accept it
-		if !isLocal && pool.sortedLists.getPricedlistByCategory(category).Underpriced(tx) {
-			pool.txCache.Add(txId, StateTxDiscardForUnderpriced)
-			gasprice := GasPrice(tx)
-			pool.log.Tracef("Discarding underpriced transaction ", "hash:", txId, "GasPrice:", gasprice)
-			return false, ErrUnderpriced
-		}
 
-		if pool.changeSizeSinceReorg > int(pool.config.MaxSizeOfPending/4) {
-			return false, ErrTxPoolOverflow
-		}
+		pool.RemoveTxByKey(txId)
+		pool.txCache.Add(txId, StateTxDiscardForTxPoolFull)
+		return false, ErrTxPoolFull
 
-		diffSize := pool.allTxsForLook.getSizeFromAllTxsLookupByCategory(category) -
-			int64(pool.config.MaxSizeOfQueue+pool.config.MaxSizeOfPending)
-		drop, success := pool.sortedLists.DiscardFromPricedlistByCategor(category, diffSize, isLocal)
-
-		// Special case, we still can't make the room for the new remote one.
-		if !isLocal && !success {
-
-			pool.log.Tracef("Discarding overflown transaction ", "txId:", txId)
-			return false, ErrTxPoolOverflow
-		}
-
-		// Bump the counter of rejections-since-reorg
-		dropSize := 0
-		for _, txTmp := range drop {
-			dropSize += txTmp.Size()
-		}
-		pool.changeSizeSinceReorg += dropSize
-		// Kick out the underpriced remote transactions.
-		for _, txi := range drop {
-			txIdi, _ := txi.TxID()
-			gasprice := GasPrice(txi)
-			pool.log.Tracef("Discarding freshly underpriced transaction ", "hash:", txId, "gasPrice:", gasprice)
-			pool.RemoveTxByKey(txIdi)
-			pool.txCache.Add(txId, StateTxDiscardForUnderpriced)
-
-		}
 	}
+
 	// Try to replace an existing transaction in the pending pool
 	from := tpcrtypes.Address(tx.Head.FromAddr)
 	f1 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
 		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
 	}
-	f2 := func(category txbasic.TransactionCategory, tx *txbasic.Transaction) {
-		pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
-	}
 	f3 := func(category txbasic.TransactionCategory, tx *txbasic.Transaction, isLocal bool) {
 		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, isLocal)
-	}
-	f4 := func(category txbasic.TransactionCategory, tx *txbasic.Transaction, isLocal bool) {
-		pool.sortedLists.putTxToPricedlistByCategory(category, tx, isLocal)
 	}
 	f5 := func(txId txbasic.TxID) {
 		pool.ActivationIntervals.setTxActiv(txId, time.Now())
@@ -579,7 +536,7 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 		pool.HeightIntervals.setTxHeight(txId, currentheight)
 		pool.log.Tracef("Pooled new executable transaction ", "hash:", txId, "from:", from)
 	}
-	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f2, f3, f4, f5); !ok {
+	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f3, f5); !ok {
 		pool.txCache.Add(txId, StateTxDiscardForReplaceFailed)
 		return ok, err
 	}
@@ -592,6 +549,75 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 
 	pool.log.Tracef("Pooled new future transaction,", "txId:", txId, "from:", from, "to:", ToAddress(tx))
 	return replaced, nil
+}
+
+// turnAccTxsToPending adds  account's transaction list to the pending.
+func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Address) {
+	var turnedTxs []*txbasic.Transaction
+	for _, addr := range addrsNeedTurn {
+		for category, _ := range pool.allTxsForLook.all {
+			f1 := func(address tpcrtypes.Address) uint64 {
+				var nonce, err = pool.txServant.Nonce(address)
+				if err != nil {
+					pool.log.Errorf("replaceExecutables get nonce error:", err)
+				}
+				return nonce
+			}
+			f2 := func(category txbasic.TransactionCategory, string2 txbasic.TxID) {
+				pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, string2)
+			}
+			f3 := func(err error) {
+				pool.log.Errorf("turnAddrTxsToPending get txID error:", err)
+			}
+			pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2, f3)
+
+			ft0 := func(address tpcrtypes.Address) uint64 {
+				nonce, err := pool.txServant.Nonce(address)
+				if err != nil {
+					pool.log.Errorf("replaceExecutables get tx nonce error:", err)
+				}
+				return nonce
+			}
+			ft1 := func(category txbasic.TransactionCategory, address tpcrtypes.Address, tx *txbasic.Transaction) (bool, *txbasic.Transaction) {
+				if pool.pendings.getTxListByAddrOfCategory(category, addr) == nil {
+					pool.pendings.setTxListOfCategory(category, addr, newCoreList(false))
+				}
+				inserted, old := pool.pendings.addTxToTxListByAddrOfCategory(category, address, tx)
+				return inserted, old
+			}
+			ft2 := func(category txbasic.TransactionCategory, txId txbasic.TxID, tx *txbasic.Transaction) {
+				pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+			}
+			ft3 := func(category txbasic.TransactionCategory, addr tpcrtypes.Address, tx *txbasic.Transaction) {
+				pool.queues.removeTxFromTxListByAddrOfCategory(category, addr, tx)
+			}
+			ft4 := func(category txbasic.TransactionCategory, oldkey txbasic.TxID, tx *txbasic.Transaction) {
+				pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey)
+			}
+			ft5 := func(txId txbasic.TxID) {
+
+				pool.ActivationIntervals.setTxActiv(txId, time.Now())
+				currentheight, err := pool.txServant.CurrentHeight()
+				if err != nil {
+					pool.log.Errorf("get current height error:", err)
+				}
+				pool.HeightIntervals.setTxHeight(txId, currentheight)
+			}
+			_ = pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft3, ft4, ft5, turnedTxs, category, addr)
+
+			// Drop all transactions over the allowed limit
+			fl2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
+				pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+				pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
+			}
+			pool.queues.replaceExecutablesDropOverLimit(fl2, pool.config.MaxSizeOfEachQueueAccount, category, addr)
+
+			// Delete the entire queue entry if it became empty.
+			pool.queues.replaceExecutablesDeleteEmpty(category, addr)
+
+		}
+	}
+	return
 }
 
 // turnTx adds a transaction to the pending (processable) list of transactions
@@ -610,7 +636,6 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId txbasic.TxID, t
 	if !inserted {
 		// An older transaction was existed, discard this
 		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-		pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
 		return false
 	} else {
 		pool.queues.removeTxFromTxListByAddrOfCategory(category, addr, tx)
@@ -619,7 +644,6 @@ func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId txbasic.TxID, t
 	if old != nil {
 		oldkey, _ := old.TxID()
 		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey)
-		pool.sortedLists.removedPricedlistByCategory(category, old.Size())
 	}
 	// Successful replace tx, bump the ActivationInterval
 
@@ -639,80 +663,6 @@ func (pool *transactionPool) Stop() {
 	pool.txServant.UnSubscribe(protocol.SyncProtocolID_Msg)
 	eventhub.GetEventHubManager().GetEventHub(pool.nodeId).UnObserve(pool.ctx, ObsID, eventhub.EventName_BlockAdded)
 	pool.log.Info("TransactionPool stopped")
-}
-
-func (pool *transactionPool) replaceExecutables(category txbasic.TransactionCategory, accounts []tpcrtypes.Address) {
-	// Track the promoted transactions to broadcast them at once
-	var replaced []*txbasic.Transaction
-
-	// Iterate over all accounts and promote any executable transactions
-	for _, addr := range accounts {
-		f1 := func(address tpcrtypes.Address) uint64 {
-			var nonce, err = pool.txServant.Nonce(address)
-			if err != nil {
-				pool.log.Errorf("replaceExecutables get nonce error:", err)
-			}
-			return nonce
-		}
-		f2 := func(transactionCategory txbasic.TransactionCategory, string2 txbasic.TxID) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, string2)
-		}
-		forwardsCnt := pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2)
-
-		pool.log.Tracef("Removed old queued transactions", "count", forwardsCnt)
-
-		// Gather all executable transactions and promote them
-		ft0 := func(address tpcrtypes.Address) uint64 {
-			nonce, err := pool.txServant.Nonce(address)
-			if err != nil {
-				pool.log.Errorf("replaceExecutables get tx nonce error:", err)
-			}
-			return nonce
-		}
-		ft1 := func(category txbasic.TransactionCategory, address tpcrtypes.Address, tx *txbasic.Transaction) (bool, *txbasic.Transaction) {
-			if pool.pendings.getTxListByAddrOfCategory(category, addr) == nil {
-				pool.pendings.setTxListOfCategory(category, addr, newCoreList(false))
-			}
-			inserted, old := pool.pendings.addTxToTxListByAddrOfCategory(category, address, tx)
-			return inserted, old
-		}
-		ft2 := func(category txbasic.TransactionCategory, txId txbasic.TxID, tx *txbasic.Transaction) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-			pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
-		}
-		ft3 := func(category txbasic.TransactionCategory, addr tpcrtypes.Address, tx *txbasic.Transaction) {
-			pool.queues.removeTxFromTxListByAddrOfCategory(category, addr, tx)
-		}
-		ft4 := func(category txbasic.TransactionCategory, oldkey txbasic.TxID, tx *txbasic.Transaction) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey)
-			pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
-		}
-		ft5 := func(txId txbasic.TxID) {
-
-			pool.ActivationIntervals.setTxActiv(txId, time.Now())
-			currentheight, err := pool.txServant.CurrentHeight()
-			if err != nil {
-				pool.log.Errorf("get current height error:", err)
-			}
-			pool.HeightIntervals.setTxHeight(txId, currentheight)
-		}
-		replacedCnt := pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft3, ft4, ft5, replaced, category, addr)
-
-		pool.log.Tracef("Promoted queued transactions", "count", replacedCnt)
-
-		// Drop all transactions over the allowed limit
-		fl2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-			pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
-		}
-		capsCnt := pool.queues.replaceExecutablesDropOverLimit(fl2, pool.config.MaxSizeOfQueue, category, addr)
-
-		// Mark all the items dropped as removed
-		pool.sortedLists.removedPricedlistByCategory(category, forwardsCnt+capsCnt)
-
-		// Delete the entire queue entry if it became empty.
-		pool.queues.replaceExecutablesDeleteEmpty(category, addr)
-	}
 }
 
 func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCategory) {
@@ -783,16 +733,8 @@ func (pool *transactionPool) CommitTxsForPending(category txbasic.TransactionCat
 
 // CommitTxsByPriceAndNonce  : Block packaged transactions sorted by price and nonce
 func (pool *transactionPool) CommitTxsByPriceAndNonce(category txbasic.TransactionCategory) []*txbasic.Transaction {
-	txSet := NewTxsByPriceAndNonce(pool.PendingMapAddrTxsOfCategory(category))
-	txs := make([]*txbasic.Transaction, 0)
-	for {
-		tx := txSet.Peek()
-		if tx == nil {
-			break
-		}
-		txs = append(txs, tx)
-		txSet.Pop()
-	}
+	txs := pool.PendingTxsForCatgory(category)
+	sort.Sort(TxByPriceAndNonce(txs))
 	return txs
 }
 

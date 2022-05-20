@@ -1,6 +1,7 @@
 package transactionpool
 
 import (
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"math"
 	"time"
 
@@ -12,20 +13,21 @@ type txPoolResetHeads struct {
 	oldBlockHead, newBlockHead *tpchaintypes.BlockHead
 }
 
-func (pool *transactionPool) ReorgTxpoolLoop() {
+func (pool *transactionPool) ReorgAndTurnTxLoop() {
 	defer pool.wg.Done()
 	var (
 		currentDone   chan struct{} // non-nil while runReorg is active
 		nextDone      = make(chan struct{})
 		launchNextRun bool
 		reset         *txPoolResetHeads
+		accountsCache *accountCache
 	)
 	for {
 		if currentDone == nil && launchNextRun {
-			go pool.runReorgTxpool(nextDone, reset)
+			go pool.runReorgTxpool(nextDone, reset, accountsCache)
 			currentDone, nextDone = nextDone, make(chan struct{})
 			launchNextRun = false
-			reset = nil
+			reset, accountsCache = nil, nil
 		}
 
 		select {
@@ -34,6 +36,15 @@ func (pool *transactionPool) ReorgTxpoolLoop() {
 				reset = req
 			} else {
 				reset.newBlockHead = req.newBlockHead
+			}
+			launchNextRun = true
+			pool.chanReorgDone <- nextDone
+		case req := <-pool.chanReqTurn:
+			// Promote request: update address set if request is already pending.
+			if accountsCache == nil {
+				accountsCache = req
+			} else {
+				accountsCache.merge(req)
 			}
 			launchNextRun = true
 			pool.chanReorgDone <- nextDone
@@ -52,33 +63,46 @@ func (pool *transactionPool) ReorgTxpoolLoop() {
 	}
 }
 
-func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolResetHeads) {
+func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolResetHeads, accountCache *accountCache) {
 
 	defer close(done)
+
+	var addrsNeedTurn []tpcrtypes.Address
+	if accountCache != nil && reset == nil {
+		addrsNeedTurn = accountCache.flatten()
+	}
+
 	if reset != nil {
 		pool.Reset(reset.oldBlockHead, reset.newBlockHead)
+		// Reset needs turn all addresses to pending
+		addrsNeedTurn = pool.queues.getAllAddress()
 	}
+
+	pool.turnAddrTxsToPending(addrsNeedTurn)
 
 	if reset != nil {
 		for category, _ := range pool.allTxsForLook.getAll() {
 			pool.demoteUnexecutables(category) //demote transactions
-			if reset.newBlockHead != nil {
-				pool.sortedLists.ReheapForPricedlistByCategory(category)
-			}
-			pool.pendings.noncesForAddrTxListOfCategory(category)
 		}
 	}
 	for category, _ := range pool.allTxsForLook.getAll() {
 		pool.truncatePendingByCategory(category)
 		pool.truncateQueueByCategory(category)
 	}
-	pool.txCache.Purge()
 	pool.changeSizeSinceReorg = 0 // Reset change counter
 }
 
 func (pool *transactionPool) requestReset(oldBlockHead *tpchaintypes.BlockHead, newBlockHead *tpchaintypes.BlockHead) chan struct{} {
 	select {
 	case pool.chanReqReset <- &txPoolResetHeads{oldBlockHead, newBlockHead}:
+		return <-pool.chanReorgDone
+	case <-pool.chanReorgShutdown:
+		return pool.chanReorgShutdown
+	}
+}
+func (pool *transactionPool) requestTurnToPending(cache *accountCache) chan struct{} {
+	select {
+	case pool.chanReqTurn <- cache:
 		return <-pool.chanReorgDone
 	case <-pool.chanReorgShutdown:
 		return pool.chanReorgShutdown

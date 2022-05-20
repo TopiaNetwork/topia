@@ -16,6 +16,8 @@ import (
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
+const MaxUint64 = 1<<64 - 1
+
 type TransactionPoolServant interface {
 	CurrentHeight() (uint64, error)
 	Nonce(tpcrtypes.Address) (uint64, error)
@@ -122,6 +124,10 @@ func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool,
 	}
 	if uint64(tx.Size()) > _interface.DefaultTransactionPoolConfig.TxMaxSize {
 		msgSub.log.Errorf("transaction size is up to the TxMaxSize")
+		return message.ValidationReject
+	}
+	if tx.Head.Nonce > MaxUint64 {
+		msgSub.log.Errorf("transaction nonce is up to the MaxUint64")
 		return message.ValidationReject
 	}
 	if _interface.DefaultTransactionPoolConfig.GasPriceLimit < GasLimit(tx) {

@@ -2,7 +2,10 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 	"math/rand"
 	"time"
 
@@ -55,10 +58,12 @@ func (forwarder executionForwarder) sendTx(ctx context.Context, tx *txbasic.Tran
 	compStateRN := state.CreateCompositionStateReadonly(forwarder.log, forwarder.ledger)
 	activeExecutors, _ := compStateRN.GetActiveExecutorIDs()
 
+	txID, _ := tx.TxID()
+
 	if tpcmm.IsContainString(forwarder.nodeID, activeExecutors) {
 		err := forwarder.txPool.AddTx(tx, true)
 		if err != nil {
-			forwarder.log.Errorf("Add local tx to pool err: %v", err)
+			forwarder.log.Errorf("Add local tx to pool err: txID %s %v", txID, err)
 			return err
 		}
 	} else {
@@ -66,15 +71,47 @@ func (forwarder executionForwarder) sendTx(ctx context.Context, tx *txbasic.Tran
 		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 		txBytes, err := forwarder.marshaler.Marshal(tx)
 		if err != nil {
-			forwarder.log.Errorf("Tx marshal err: err=%v", err)
+			forwarder.log.Errorf("Tx marshal err: txID %s %v", txID, err)
 			return err
 		}
 
-		err = forwarder.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, txpooli.MOD_NAME, txBytes)
+		respList, err := forwarder.network.SendWithResponse(ctx, tpnetprotoc.ForwardExecute_SyncTx, tpchaintypes.MOD_NAME, txBytes)
 		if err != nil {
-			forwarder.log.Errorf("Send tx to executors err: err=%v", err)
+			forwarder.log.Errorf("Send tx to executors err: txID %s %v", txID, err)
 			return err
 		}
+
+		var respErrs []string
+		for i, resp := range respList {
+			errMsg := func() string {
+				respErrI := fmt.Sprintf("resp%d, nodeID %s:", i, resp.NodeID)
+				if resp.Err != nil {
+					respErrI += resp.Err.Error()
+					return respErrI
+				}
+				var respData tpnetmsg.ResponseData
+				err = json.Unmarshal(resp.RespData, &respData)
+				if err != nil {
+					respErrI += err.Error()
+					return respErrI
+				}
+				if respData.ErrMsg != "" {
+					respErrI += respData.ErrMsg
+					return respErrI
+				}
+
+				forwarder.log.Infof("Tx pool successfully add tx %s from %", txID, resp.NodeID)
+				return ""
+			}()
+			if errMsg != "" {
+				respErrs = append(respErrs, errMsg)
+				continue
+			}
+
+			return nil
+		}
+
+		forwarder.log.Errorf("All executor can't add tx %s: %v", txID, respErrs)
 	}
 
 	return nil

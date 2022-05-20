@@ -250,7 +250,7 @@ func (cons *consensus) dispatch(actorCtx actor.Context, data []byte) {
 	var consMsg ConsensusMessage
 	err := cons.marshaler.Unmarshal(data, &consMsg)
 	if err != nil {
-		cons.log.Errorf("Consensus receive invalid data %v", data)
+		cons.log.Errorf("Consensus receive invalid data %v", err)
 		return
 	}
 

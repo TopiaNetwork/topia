@@ -72,3 +72,13 @@ message PubSubMessageBlockInfo {
   bytes Block       = 1  [(gogoproto.jsontag) = "block"];
   bytes BlockResult = 2  [(gogoproto.jsontag) = "blockResult"];
 }
+
+message ChainMessage {
+  enum Type {
+    Unknown = 0;
+    Tx = 1;
+    BlockInfo = 2;
+  }
+  Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
+  bytes Data = 2  [(gogoproto.jsontag) = "data"];
+}

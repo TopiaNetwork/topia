@@ -296,7 +296,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, codec.CodecType_PROTO, txPool)
 
-		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, exeScheduler, config)
+		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
 
 		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
 

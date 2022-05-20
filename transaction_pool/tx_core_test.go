@@ -261,8 +261,7 @@ func Test_transactionPool_AddLocals(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+
 	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, Tx1)
 	txs = append(txs, Tx2)
@@ -272,6 +271,5 @@ func Test_transactionPool_AddLocals(t *testing.T) {
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+
 }

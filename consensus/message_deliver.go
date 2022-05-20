@@ -2,9 +2,13 @@ package consensus
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"go.uber.org/atomic"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
@@ -13,9 +17,9 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/network"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
+	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	"go.uber.org/atomic"
 )
 
 type DeliverStrategy byte
@@ -43,7 +47,7 @@ type messageDeliverI interface {
 
 	deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error)
 
-	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error
+	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage, err error) error
 
 	deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error
 
@@ -123,21 +127,21 @@ func (md *messageDeliver) deliverSendWithRespCommon(ctx context.Context, protoco
 
 	sendCycleMaxCount := 3
 	for sendCycleMaxCount > 0 {
-		var respData [][]byte
 		sendCycleMaxCount--
 		resps, err := md.network.SendWithResponse(ctx, protocolID, moduleName, csMsgBytes)
 		if err != nil {
 			return nil, err
 		}
-
-		for _, resp := range resps {
-			if resp.Err == nil {
-				respData = append(respData, resp.RespData)
+		_, respBytes, respErrs := tpnetmsg.ParseSendResp(resps)
+		rtnBytes := [][]byte(nil)
+		for i, respErr := range respErrs {
+			if respErr != "" {
+				rtnBytes = append(rtnBytes, respBytes[i])
 			}
 		}
 
-		if len(respData) > 0 {
-			return respData, nil
+		if len(rtnBytes) > 0 {
+			return rtnBytes, nil
 		}
 	}
 
@@ -411,31 +415,48 @@ func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, m
 	return &validateResp, err
 }
 
-func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error {
-	msg.Executor = []byte(md.nodeID)
+func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage, err error) error {
+	errRtn := err
+	msgBytes := []byte(nil)
+	defer func() {
+		respData := &tpnetmsg.ResponseData{
+			Data: msgBytes,
+		}
+		if errRtn != nil {
+			respData.ErrMsg = errRtn.Error()
+		}
 
-	sigData, err := md.cryptService.Sign(md.priKey, msg.TxAndResultProofsData())
-	if err != nil {
-		md.log.Errorf("Sign err for execution result validate response msg: %v", err)
-		return err
+		respDataBytes, _ := json.Marshal(&respData)
+		actorCtx.Respond(respDataBytes)
+		md.log.Infof("Successfully deliver result validate resp message: state version %d, self node %s", msg.StateVersion, md.nodeID)
+
+	}()
+
+	if errRtn != nil {
+		return errRtn
 	}
 
-	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
-	if err != nil {
-		md.log.Errorf("Can't get public key from private key: %v", err)
-		return err
+	msg.Executor = []byte(md.nodeID)
+
+	sigData, errRtn := md.cryptService.Sign(md.priKey, msg.TxAndResultProofsData())
+	if errRtn != nil {
+		md.log.Errorf("Sign err for execution result validate response msg: %v", errRtn)
+		return errRtn
+	}
+
+	pubKey, errRtn := md.cryptService.ConvertToPublic(md.priKey)
+	if errRtn != nil {
+		md.log.Errorf("Can't get public key from private key: %v", errRtn)
+		return errRtn
 	}
 	msg.Signature = sigData
 	msg.PubKey = pubKey
-	msgBytes, err := md.marshaler.Marshal(msg)
-	if err != nil {
-		md.log.Errorf("ExeResultValidateRespMessage marshal err: %v", err)
-		return err
+
+	msgBytes, errRtn = md.marshaler.Marshal(msg)
+	if errRtn != nil {
+		md.log.Errorf("ExeResultValidateRespMessage marshal err: %v", errRtn)
+		return errRtn
 	}
-
-	actorCtx.Respond(msgBytes)
-
-	md.log.Infof("Successfully deliver result validate resp message: state version %d, self node %s", msg.StateVersion, md.nodeID)
 
 	return nil
 }

@@ -2,7 +2,6 @@ package execution
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
@@ -81,37 +80,20 @@ func (forwarder executionForwarder) sendTx(ctx context.Context, tx *txbasic.Tran
 			return err
 		}
 
-		var respErrs []string
-		for i, resp := range respList {
-			errMsg := func() string {
-				respErrI := fmt.Sprintf("resp%d, nodeID %s:", i, resp.NodeID)
-				if resp.Err != nil {
-					respErrI += resp.Err.Error()
-					return respErrI
-				}
-				var respData tpnetmsg.ResponseData
-				err = json.Unmarshal(resp.RespData, &respData)
-				if err != nil {
-					respErrI += err.Error()
-					return respErrI
-				}
-				if respData.ErrMsg != "" {
-					respErrI += respData.ErrMsg
-					return respErrI
-				}
-
-				forwarder.log.Infof("Tx pool successfully add tx %s from %", txID, resp.NodeID)
-				return ""
-			}()
-			if errMsg != "" {
-				respErrs = append(respErrs, errMsg)
-				continue
+		remoteNodes, _, respErrs := tpnetmsg.ParseSendResp(respList)
+		errCount := 0
+		for i, respErr := range respErrs {
+			if respErr == "" {
+				forwarder.log.Infof("Tx pool successfully add tx %s from %", txID, remoteNodes[i])
+			} else {
+				errCount++
 			}
-
-			return nil
 		}
-
-		forwarder.log.Errorf("All executor can't add tx %s: %v", txID, respErrs)
+		if errCount == len(respErrs) {
+			err = fmt.Errorf("All executor can't add tx %s: %v", txID, respErrs)
+			forwarder.log.Errorf("%v", err)
+			return err
+		}
 	}
 
 	return nil

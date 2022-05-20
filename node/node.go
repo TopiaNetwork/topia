@@ -3,8 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
-	"github.com/TopiaNetwork/topia/wallet"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -29,7 +27,9 @@ import (
 	"github.com/TopiaNetwork/topia/service"
 	"github.com/TopiaNetwork/topia/state"
 	"github.com/TopiaNetwork/topia/sync"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	"github.com/TopiaNetwork/topia/wallet"
 )
 
 type Node struct {

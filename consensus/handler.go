@@ -195,7 +195,7 @@ func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Conte
 		validateResp.TxResultProofs = txRSProofs
 	}
 
-	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp)
+	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp, err)
 }
 
 func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {

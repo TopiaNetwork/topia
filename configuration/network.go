@@ -21,7 +21,7 @@ type ConnectionConfiguration struct {
 	LowWater       int
 	DurationPrune  time.Duration
 	SeedPeers      []*SeedPeer
-	ProtectedPeers []string
+	ProtectedPeers []string //peer id string
 }
 
 type NetworkConfiguration struct {

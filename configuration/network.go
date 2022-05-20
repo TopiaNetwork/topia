@@ -1,6 +1,9 @@
 package configuration
 
-import "time"
+import (
+	tpcmm "github.com/TopiaNetwork/topia/common"
+	"time"
+)
 
 type PubSubConfiguration struct {
 	ISSeedPeer            bool
@@ -8,11 +11,16 @@ type PubSubConfiguration struct {
 	IPColocationWhitelist []string
 }
 
+type SeedPeer struct {
+	Role          tpcmm.NodeRole
+	NetAddrString string
+}
+
 type ConnectionConfiguration struct {
 	HighWater      int
 	LowWater       int
 	DurationPrune  time.Duration
-	SeedPeers      []string
+	SeedPeers      []*SeedPeer
 	ProtectedPeers []string
 }
 

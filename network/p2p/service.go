@@ -184,7 +184,7 @@ func (p2p *P2PService) connectionManagerOption() libp2p.Option {
 	}
 
 	for _, seedPeer := range p2p.config.Connection.SeedPeers {
-		peerID, err := peer.IDFromString(seedPeer)
+		peerID, err := peer.IDFromString(seedPeer.NetAddrString)
 		if err != nil {
 			panic(fmt.Sprintf("failed to parse peer ID in boot peers array: %v", err))
 			return nil
@@ -971,7 +971,7 @@ func (p2p *P2PService) Start() {
 							p2p.log.Errorf("Failed to connect seed peer addr %s: %v", sPeer, err)
 							return
 						}
-					}(seedPeer)
+					}(seedPeer.NetAddrString)
 				}
 				wg.Wait()
 			}

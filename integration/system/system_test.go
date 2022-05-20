@@ -1,4 +1,4 @@
-package system_interaction
+package system
 
 import (
 	"context"

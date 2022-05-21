@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	"github.com/TopiaNetwork/topia/configuration"
@@ -12,7 +14,6 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/state"
-	"sync"
 )
 
 type BlockInfoSubProcessor interface {
@@ -71,13 +72,20 @@ func (bsp *blockInfoSubProcessor) checkAndParseSubData(subMsgBlockInfo *tpchaint
 
 func (bsp *blockInfoSubProcessor) Validate(ctx context.Context, isLocal bool, data []byte) tpnetmsg.ValidationResult {
 	if data == nil {
-		err := errors.New("Received blank block info pubsub message")
+		err := errors.New("Chain received blank pubsub data")
 		bsp.log.Errorf("%v", err)
 		return tpnetmsg.ValidationReject
 	}
 
+	var chainMsg tpchaintypes.ChainMessage
+	err := bsp.marshaler.Unmarshal(data, &chainMsg)
+	if err != nil {
+		bsp.log.Errorf("Received invalid chain msg: %v", err)
+		return tpnetmsg.ValidationReject
+	}
+
 	var blockInfo tpchaintypes.PubSubMessageBlockInfo
-	err := bsp.marshaler.Unmarshal(data, &blockInfo)
+	err = bsp.marshaler.Unmarshal(chainMsg.Data, &blockInfo)
 	if err != nil {
 		bsp.log.Errorf("Can't Unmarshal received block info pubsub message: %v", err)
 		return tpnetmsg.ValidationReject

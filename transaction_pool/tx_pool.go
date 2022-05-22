@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -23,7 +24,7 @@ import (
 	"github.com/TopiaNetwork/topia/service"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
-	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 var ObsID string
@@ -48,7 +49,7 @@ var (
 
 type transactionPool struct {
 	nodeId string
-	config _interface.TransactionPoolConfig
+	config txpooli.TransactionPoolConfig
 
 	chanSysShutdown   chan error
 	chanBlockAdded    chan BlockAddedEvent
@@ -67,7 +68,6 @@ type transactionPool struct {
 	HeightIntervals     *HeightInterval     // HeightIntervals for each txID
 	TxHashCategory      *txHashCategory
 	txCache             *lru.Cache
-	BlockMaxGasLimit    uint64
 	log                 tplog.Logger
 	level               tplogcmm.LogLevel
 	ctx                 context.Context
@@ -79,7 +79,7 @@ type transactionPool struct {
 	wg                  sync.WaitGroup
 }
 
-func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.TransactionPoolConfig, level tplogcmm.LogLevel,
+func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig, level tplogcmm.LogLevel,
 	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
 	blockService service.BlockService, network tpnet.Network) *transactionPool {
 	conf = (&conf).Check()
@@ -105,34 +105,25 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.Tran
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
 	pool.txCache, _ = lru.New(pool.config.TxCacheSize)
-
-	pool.BlockMaxGasLimit = pool.config.GasPriceLimit
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
-	if !pool.config.NoTxsInfoFile {
-		pool.loadTxsInfo(pool.config.NoConfigFile, pool.config.PathTxsINfo)
+	if pool.config.PathConfigFile != "" {
+		pool.loadConfig(conf.PathConfigFile)
 	}
-	if !pool.config.NoRemoteFile {
-		for category := range pool.config.PathRemote {
-			pool.newTxListStructs(category)
-			pool.loadRemote(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
-		}
+	if pool.config.PathTxsInfoFile != "" {
+		pool.loadTxsInfo(pool.config.PathTxsInfoFile)
 	}
 
-	curBlock, err := pool.txServant.LatestBlock()
+	curBlock, err := pool.txServant.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
 	pool.Reset(nil, curBlock.GetHead())
 	pool.wg.Add(1)
 	go pool.ReorgAndTurnTxLoop()
-	for category := range pool.config.PathRemote {
-		pool.loadRemote(category, conf.NoRemoteFile, conf.PathRemote[category])
-	}
 
-	pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
 	pool.loopChanSelect()
 	TxMsgSubProcessor = &txMessageSubProcessor{txpool: pool, log: pool.log, nodeID: pool.nodeId}
 	//subscribe
@@ -141,6 +132,12 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.Tran
 		TxMsgSubProcessor.Validate)
 	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
 	pool.handler = poolHandler
+
+	// ReorgAndTurnTxLoop and loopChanSelect need run before loadRemote txs
+	for category := range pool.config.PathMapRemoteTxsByCategory {
+		pool.newTxListStructs(category)
+		pool.loadRemote(category, pool.config.PathMapRemoteTxsByCategory[category])
+	}
 	return pool
 }
 
@@ -180,7 +177,6 @@ func (pool *transactionPool) AddTx(tx *txbasic.Transaction, local bool) error {
 }
 
 func (pool *transactionPool) AddLocals(txs []*txbasic.Transaction) []error {
-
 	return pool.addTxs(txs, true)
 }
 
@@ -250,7 +246,7 @@ func (pool *transactionPool) Pending() ([]*txbasic.Transaction, error) {
 		pool.log.Infof("get Pending txs list cost time:", time.Since(t0))
 	}(time.Now())
 	TxList := make([]*txbasic.Transaction, 0)
-	for category := range pool.config.PathRemote {
+	for category := range pool.config.PathMapRemoteTxsByCategory {
 		TxList = append(TxList, pool.pendings.getTxsByCategory(category)...)
 	}
 	if len(TxList) == 0 {
@@ -277,7 +273,7 @@ func (pool *transactionPool) Queue() ([]*txbasic.Transaction, error) {
 		pool.log.Infof("get Queue txs, cost time:", time.Since(t0))
 	}(time.Now())
 	TxList := make([]*txbasic.Transaction, 0)
-	for category := range pool.config.PathRemote {
+	for category := range pool.config.PathMapRemoteTxsByCategory {
 		TxList = append(TxList, pool.queues.getTxsByCategory(category)...)
 	}
 	if len(TxList) == 0 {
@@ -317,22 +313,14 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local bool) []er
 	if len(news) == 0 {
 		return errs
 	}
-
+	fmt.Println("addTxs 001 txs", news)
 	// Process all the new transaction and merge any errors into the original slice
 	newErrs, dirtyAddrCache := pool.addTxsLocked(news, local)
+	fmt.Println("addTxs 002 newErrs,dirtyAddrCache", newErrs, dirtyAddrCache)
 
-	var nilSlot = 0
-	for _, err := range newErrs {
-
-		for errs[nilSlot] != nil {
-			nilSlot++
-		}
-
-		errs[nilSlot] = err
-		nilSlot++
-	}
 	// Reorg the pool internals if needed and return
 	done := pool.requestTurnToPending(dirtyAddrCache)
+	fmt.Println("requestTurnToPending done")
 	<-done
 	return errs
 }
@@ -342,9 +330,12 @@ func (pool *transactionPool) addTxsLocked(txs []*txbasic.Transaction, local bool
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
 		replaced, err := pool.add(tx, local)
+		fmt.Println("addTxsLocked 001 replaced,err", replaced, err)
 		errs[i] = err
 		if err == nil && !replaced {
 			dirtyAccounts.addTx(tx)
+			fmt.Println("addTxsLocked 002 dirtyAccounts.flatten", dirtyAccounts.flatten())
+
 		}
 	}
 	return errs, dirtyAccounts
@@ -387,7 +378,7 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 		pool.log.Panicf("CreateTransactionPoolActor error: %v", err)
 		return err
 	}
-	network.RegisterModule(_interface.MOD_NAME, actorPID, pool.marshaler)
+	network.RegisterModule(txpooli.MOD_NAME, actorPID, pool.marshaler)
 
 	ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
 		Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)
@@ -563,6 +554,7 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 		pool.HeightIntervals.setTxHeight(txId, currentheight)
 		pool.log.Tracef("Pooled new executable transaction ", "hash:", txId, "from:", from)
 	}
+
 	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f3, f5); err != nil {
 		pool.txCache.Add(txId, StateTxDiscardForReplaceFailed)
 		return ok, err
@@ -579,11 +571,12 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 
 // turnAccTxsToPending adds  account's transaction list to the pending.
 func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Address) {
+	fmt.Println("turnAddrTxsToPending 001 addrsNeedTurn", addrsNeedTurn)
 	var turnedTxs []*txbasic.Transaction
 	for _, addr := range addrsNeedTurn {
-		for category := range pool.config.PathRemote {
+		for category := range pool.config.PathMapRemoteTxsByCategory {
 			f1 := func(address tpcrtypes.Address) uint64 {
-				var nonce, err = pool.txServant.Nonce(address)
+				var nonce, err = pool.txServant.GetNonce(address)
 				if err != nil {
 					pool.log.Errorf("replaceExecutables get nonce error:", err)
 				}
@@ -595,13 +588,10 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 					atomic.AddInt64(&pool.poolCount, -1)
 				}
 			}
-			f3 := func(err error) {
-				pool.log.Errorf("turnAddrTxsToPending get txID error:", err)
-			}
-			pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2, f3)
-
+			pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2)
+			fmt.Println("replaceExecutablesDropTooOld done")
 			ft0 := func(address tpcrtypes.Address) uint64 {
-				nonce, err := pool.txServant.Nonce(address)
+				nonce, err := pool.txServant.GetNonce(address)
 				if err != nil {
 					pool.log.Errorf("replaceExecutables get tx nonce error:", err)
 				}
@@ -637,6 +627,8 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 
 			}
 			pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft4, ft5, turnedTxs, category, addr)
+			fmt.Println("replaceExecutablesTurnTx done")
+
 			// Drop all transactions over the allowed limit
 			fl2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
 				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
@@ -647,6 +639,7 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 				}
 			}
 			pool.queues.replaceExecutablesDropOverLimit(fl2, pool.config.MaxSizeOfEachQueueAccount, category, addr)
+			fmt.Println("replaceExecutablesDropOverLimit done")
 
 			// Delete the entire queue entry if it became empty.
 			pool.queues.replaceExecutablesDeleteEmpty(category, addr)
@@ -667,7 +660,7 @@ func (pool *transactionPool) Stop() {
 func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCategory) {
 	// Iterate over all accounts and demote any non-executable transactions
 	f1 := func(address tpcrtypes.Address) uint64 {
-		var nonce, err = pool.txServant.Nonce(address)
+		var nonce, err = pool.txServant.GetNonce(address)
 		if err != nil {
 			pool.log.Errorf("demoteUnexecutables get nonce error:", err)
 		}
@@ -690,23 +683,23 @@ func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCat
 }
 
 // PickTxs if txsType is 0,pick current pending txs,if 1 pick txs sorted by price and nonce
-func (pool *transactionPool) PickTxs(txType _interface.PickTxType) (txs []*txbasic.Transaction) {
+func (pool *transactionPool) PickTxs(txType txpooli.PickTxType) (txs []*txbasic.Transaction) {
 	defer func(t0 time.Time) {
 		pool.log.Infof("PickTxs cost time:", time.Since(t0))
 	}(time.Now())
 	txs = make([]*txbasic.Transaction, 0)
 	switch txType {
-	case _interface.PickTransactionsFromPending:
+	case txpooli.PickTransactionsFromPending:
 		txs = pool.pendings.getAllCommitTxs()
 
 		return txs
-	case _interface.PickTransactionsSortedByGasPriceAndNonce:
-		for category := range pool.config.PathRemote {
+	case txpooli.PickTransactionsSortedByGasPriceAndNonce:
+		for category := range pool.config.PathMapRemoteTxsByCategory {
 			txs = append(txs, pool.CommitTxsByPriceAndNonce(category)...)
 		}
 		return txs
-	case _interface.PickTransactionsSortedByGasPriceAndTime:
-		for category := range pool.config.PathRemote {
+	case txpooli.PickTransactionsSortedByGasPriceAndTime:
+		for category := range pool.config.PathMapRemoteTxsByCategory {
 			txs = append(txs, pool.CommitTxsByPriceAndTime(category)...)
 		}
 		return txs
@@ -714,18 +707,18 @@ func (pool *transactionPool) PickTxs(txType _interface.PickTxType) (txs []*txbas
 		return nil
 	}
 }
-func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCategory, txType _interface.PickTxType) []*txbasic.Transaction {
+func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCategory, txType txpooli.PickTxType) []*txbasic.Transaction {
 	defer func(t0 time.Time) {
 		pool.log.Infof("PickTxs of category:", category, "cost time:", time.Since(t0))
 	}(time.Now())
 	switch txType {
-	case _interface.PickTransactionsFromPending:
+	case txpooli.PickTransactionsFromPending:
 		return pool.CommitTxsForPending(category)
 
-	case _interface.PickTransactionsSortedByGasPriceAndNonce:
+	case txpooli.PickTransactionsSortedByGasPriceAndNonce:
 		return pool.CommitTxsByPriceAndNonce(category)
 
-	case _interface.PickTransactionsSortedByGasPriceAndTime:
+	case txpooli.PickTransactionsSortedByGasPriceAndTime:
 		return pool.CommitTxsByPriceAndTime(category)
 	default:
 		return nil
@@ -765,42 +758,56 @@ func (pool *transactionPool) PeekTxState(txid txbasic.TxID) interface{} {
 }
 
 func ToAddress(tx *txbasic.Transaction) tpcrtypes.Address {
-	var toAddress tpcrtypes.Address
-	var targetData txuni.TransactionUniversalTransfer
-	if txbasic.TransactionCategory(tx.Head.Category) == txbasic.TransactionCategory_Topia_Universal {
-		var txData txuni.TransactionUniversal
-		_ = json.Unmarshal(tx.Data.Specification, &txData)
-		if txData.Head.Type == uint32(txuni.TransactionUniversalType_Transfer) {
-			_ = json.Unmarshal(txData.Data.Specification, &targetData)
-			toAddress = targetData.TargetAddr
-		}
-	} else {
+	toAddress := explainTx(tx, explainToAddress)
+	if toAddress == nil {
 		return ""
 	}
-	return toAddress
+	return toAddress.(tpcrtypes.Address)
 }
 
 func GasPrice(tx *txbasic.Transaction) uint64 {
-	var gasPrice uint64
-	switch txbasic.TransactionCategory(tx.Head.Category) {
-	case txbasic.TransactionCategory_Topia_Universal:
-		var txUniver txuni.TransactionUniversal
-		_ = json.Unmarshal(tx.Data.Specification, &txUniver)
-		gasPrice = txUniver.Head.GasPrice
-		return gasPrice
-	default:
+	gasPrice := explainTx(tx, explainGasPrice)
+	if gasPrice == nil {
 		return 0
 	}
+	return gasPrice.(uint64)
 }
 
 func GasLimit(tx *txbasic.Transaction) uint64 {
-	var gasLimit uint64
-	if txbasic.TransactionCategory(tx.Head.Category) == txbasic.TransactionCategory_Topia_Universal {
-		var txData txuni.TransactionUniversal
-		_ = json.Unmarshal(tx.Data.Specification, &txData)
-		gasLimit = txData.Head.GasLimit
-		return gasLimit
-	} else {
+	gasLimit := explainTx(tx, explainGasLimit)
+	if gasLimit == nil {
 		return 0
 	}
+	return gasLimit.(uint64)
+}
+
+type explainType int
+
+const (
+	explainToAddress explainType = iota
+	explainGasPrice
+	explainGasLimit
+)
+
+func explainTx(tx *txbasic.Transaction, eType explainType) interface{} {
+	switch txbasic.TransactionCategory(tx.Head.Category) {
+	case txbasic.TransactionCategory_Topia_Universal:
+		var txUniversal txuni.TransactionUniversal
+		_ = json.Unmarshal(tx.Data.Specification, &txUniversal)
+		switch eType {
+		case explainToAddress:
+			if txUniversal.Head.Type == uint32(txuni.TransactionUniversalType_Transfer) {
+				var targetData txuni.TransactionUniversalTransfer
+				_ = json.Unmarshal(txUniversal.Data.Specification, &targetData)
+				return targetData.TargetAddr
+			} else {
+				return ""
+			}
+		case explainGasPrice:
+			return txUniversal.Head.GasPrice
+		case explainGasLimit:
+			return txUniversal.Head.GasLimit
+		}
+	}
+	return nil
 }

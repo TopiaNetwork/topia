@@ -2,7 +2,6 @@ package transactionpool
 
 import (
 	"context"
-	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -14,16 +13,17 @@ import (
 	"github.com/TopiaNetwork/topia/service"
 	"github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const MaxUint64 = 1<<64 - 1
 
 type TransactionPoolServant interface {
 	CurrentHeight() (uint64, error)
-	Nonce(tpcrtypes.Address) (uint64, error)
-	LatestBlock() (*tpchaintypes.Block, error)
-	BlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
-	BlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error)
+	GetNonce(tpcrtypes.Address) (uint64, error)
+	GetLatestBlock() (*tpchaintypes.Block, error)
+	GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
+	GetBlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error)
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
 	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
 	UnSubscribe(topic string) error
@@ -53,20 +53,6 @@ func (servant *transactionPoolServant) CurrentHeight() (uint64, error) {
 	curHeight := curBlock.Head.Height
 	return curHeight, nil
 }
-func (servant *transactionPoolServant) Nonce(address tpcrtypes.Address) (uint64, error) {
-
-	return servant.GetNonce(address)
-
-}
-func (servant *transactionPoolServant) LatestBlock() (*tpchaintypes.Block, error) {
-	return servant.GetLatestBlock()
-}
-func (servant *transactionPoolServant) BlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
-	return servant.GetBlockByHash(hash)
-}
-func (servant *transactionPoolServant) BlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error) {
-	return servant.GetBlockByNumber(blockNum)
-}
 
 func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
 	if tx == nil {
@@ -84,7 +70,7 @@ func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasi
 		return err
 	}
 	var toModuleName []string
-	toModuleName = append(toModuleName, _interface.MOD_NAME)
+	toModuleName = append(toModuleName, txpooli.MOD_NAME)
 	servant.Network.Publish(ctx, toModuleName, protocol.SyncProtocolID_Msg, sendData)
 	return nil
 }
@@ -129,7 +115,7 @@ func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool,
 	if err != nil {
 		return message.ValidationReject
 	}
-	if uint64(tx.Size()) > _interface.DefaultTransactionPoolConfig.TxMaxSize {
+	if uint64(tx.Size()) > txpooli.DefaultTransactionPoolConfig.TxMaxSize {
 		msgSub.log.Errorf("transaction size is up to the TxMaxSize")
 		return message.ValidationReject
 	}
@@ -137,13 +123,13 @@ func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool,
 		msgSub.log.Errorf("transaction nonce is up to the MaxUint64")
 		return message.ValidationReject
 	}
-	if _interface.DefaultTransactionPoolConfig.GasPriceLimit < GasLimit(tx) {
+	if txpooli.DefaultTransactionPoolConfig.GasPriceLimit < GasLimit(tx) {
 		msgSub.log.Errorf("transaction gaslimit is up to GasPriceLimit")
 		return message.ValidationReject
 	}
 
 	if isLocal {
-		if uint64(tx.Size()) > _interface.DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount {
+		if uint64(tx.Size()) > txpooli.DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount {
 			return message.ValidationReject
 		}
 		return message.ValidationAccept

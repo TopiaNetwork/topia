@@ -1,6 +1,7 @@
 package transactionpool
 
 import (
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -26,22 +27,22 @@ func (pool *transactionPool) SaveRemoteTxs(category txbasic.TransactionCategory)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(pool.config.PathRemote[category], remotes, 0664)
+	err = ioutil.WriteFile(pool.config.PathMapRemoteTxsByCategory[category], remotes, 0664)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (pool *transactionPool) loadRemote(category txbasic.TransactionCategory, nofile bool, path string) {
-	if !nofile && path != "" {
+func (pool *transactionPool) loadRemote(category txbasic.TransactionCategory, path string) {
+	if path != "" {
 		if err := pool.LoadRemoteTxs(category); err != nil {
 			pool.log.Warnf("Failed to load remote transactions", "err", err)
 		}
 	}
 }
 func (pool *transactionPool) LoadRemoteTxs(category txbasic.TransactionCategory) error {
-	data, err := ioutil.ReadFile(pool.config.PathRemote[category])
+	data, err := ioutil.ReadFile(pool.config.PathMapRemoteTxsByCategory[category])
 	if err != nil {
 		return err
 	}
@@ -53,6 +54,7 @@ func (pool *transactionPool) LoadRemoteTxs(category txbasic.TransactionCategory)
 
 	for _, tx := range remotetxs.Txs {
 		txId, err := tx.TxID()
+		fmt.Println("ready to load remote txid", txId)
 		if err != nil {
 			pool.log.Errorf("error Txid :", txId, err)
 		}
@@ -72,22 +74,22 @@ func (pool *transactionPool) SaveTxsInfo() error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(pool.config.PathTxsINfo, info, 0664)
+	err = ioutil.WriteFile(pool.config.PathTxsInfoFile, info, 0664)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (pool *transactionPool) loadTxsInfo(nofile bool, path string) {
-	if !nofile && path != "" {
+func (pool *transactionPool) loadTxsInfo(path string) {
+	if path != "" {
 		if err := pool.LoadTxsInfo(); err != nil {
-			pool.log.Warnf("Failed to load remote transactions", "err", err)
+			pool.log.Warnf("Failed to load txs info", "err", err)
 		}
 	}
 }
 func (pool *transactionPool) LoadTxsInfo() error {
-	data, err := ioutil.ReadFile(pool.config.PathTxsINfo)
+	data, err := ioutil.ReadFile(pool.config.PathTxsInfoFile)
 	if err != nil {
 		return err
 	}

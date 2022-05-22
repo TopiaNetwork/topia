@@ -2,13 +2,13 @@ package transactionpool
 
 import (
 	"errors"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"

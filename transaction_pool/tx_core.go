@@ -2,7 +2,6 @@ package transactionpool
 
 import (
 	"container/heap"
-	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -11,6 +10,7 @@ import (
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type TransactionState string
@@ -618,7 +618,7 @@ func (pendingmap *pendingsMap) replaceTxOfAddrOfCategory(category txbasic.Transa
 	var old *txbasic.Transaction
 	pendingcat := pendingmap.getPendingTxsByCategory(category)
 	if pendingcat == nil {
-		return false, ErrPendingIsNil
+		pendingcat = newPendingTxs()
 	}
 	pendingcat.Mu.Lock()
 	defer pendingcat.Mu.Unlock()
@@ -876,8 +876,7 @@ func (queuemap *queuesMap) replaceExecutablesDeleteEmpty(category txbasic.Transa
 
 func (queuemap *queuesMap) replaceExecutablesDropTooOld(category txbasic.TransactionCategory, addr tpcrtypes.Address,
 	f1 func(address tpcrtypes.Address) uint64,
-	f2 func(transactionCategory txbasic.TransactionCategory, txId txbasic.TxID),
-	f3 func(err error)) {
+	f2 func(transactionCategory txbasic.TransactionCategory, txId txbasic.TxID)) {
 
 	queuecat := queuemap.getQueueTxsByCategory(category)
 	if queuecat == nil {
@@ -894,11 +893,9 @@ func (queuemap *queuesMap) replaceExecutablesDropTooOld(category txbasic.Transac
 	DropsLessNonce := list.RemovedTxForLessNonce(f1(addr))
 
 	for _, tx := range DropsLessNonce {
-		if txId, err := tx.TxID(); err != nil {
-			f3(err)
-		} else {
-			f2(category, txId)
-		}
+		txID, _ := tx.TxID()
+		f2(category, txID)
+
 	}
 	return
 }
@@ -1060,7 +1057,7 @@ func (queuemap *queuesMap) removeTxsForTruncateQueue(category txbasic.Transactio
 	}
 }
 
-func (queuemap *queuesMap) removeTxForLifeTime(category txbasic.TransactionCategory, expiredPolicy _interface.TxExpiredPolicy,
+func (queuemap *queuesMap) removeTxForLifeTime(category txbasic.TransactionCategory, expiredPolicy txpooli.TxExpiredPolicy,
 	f1 func(string2 txbasic.TxID) time.Duration, duration2 time.Duration, f2 func(string2 txbasic.TxID),
 	f3 func(string2 txbasic.TxID) uint64, dltHeight uint64) {
 	queuecat := queuemap.getQueueTxsByCategory(category)
@@ -1074,19 +1071,19 @@ func (queuemap *queuesMap) removeTxForLifeTime(category txbasic.TransactionCateg
 		for _, tx := range list {
 			txId, _ := tx.TxID()
 			switch expiredPolicy {
-			case _interface.TxExpiredTime:
+			case txpooli.TxExpiredTime:
 				if f1(txId) > duration2 {
 					f2(txId)
 				}
-			case _interface.TxExpiredHeight:
+			case txpooli.TxExpiredHeight:
 				if f3(txId) > dltHeight {
 					f2(txId)
 				}
-			case _interface.TxExpiredTimeAndHeight:
+			case txpooli.TxExpiredTimeAndHeight:
 				if f1(txId) > duration2 && f3(txId) > dltHeight {
 					f2(txId)
 				}
-			case _interface.TxExpiredTimeOrHeight:
+			case txpooli.TxExpiredTimeOrHeight:
 				if f1(txId) > duration2 || f3(txId) > dltHeight {
 					f2(txId)
 				}

@@ -2,15 +2,15 @@ package transactionpool
 
 import (
 	"encoding/json"
-	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"reflect"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/TopiaNetwork/topia/codec"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 func Test_transactionPool_SaveConfig(t *testing.T) {
@@ -26,17 +26,15 @@ func Test_transactionPool_SaveConfig(t *testing.T) {
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
-	//pool.config.PathRemote[Category1] = "newremote.json"
-
 	if err := pool.SaveConfig(); err != nil {
 		t.Error("want", nil, "got", err)
 	}
 
-	data, err := ioutil.ReadFile(pool.config.PathConfig)
+	data, err := ioutil.ReadFile(pool.config.PathConfigFile)
 	if err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	var conf _interface.TransactionPoolConfig
+	var conf txpooli.TransactionPoolConfig
 	config := &conf
 	err = json.Unmarshal(data, &config)
 	want := pool.config

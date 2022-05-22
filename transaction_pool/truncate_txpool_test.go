@@ -33,7 +33,7 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 	txLocals = make([]*txbasic.Transaction, 0)
 	txRemotes = make([]*txbasic.Transaction, 0)
 
-	for i := 1; i <= 100; i++ {
+	for i := 1; i <= 400; i++ {
 		nonce := uint64(i)
 		gasprice := uint64(i * 1000)
 		gaslimit := uint64(i * 1000000)
@@ -58,15 +58,15 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 		_ = pool.AddTx(txremote, false)
 	}
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 116, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 59, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 59, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 233, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 118, pool.allTxsForLook.getLocalCountByCategory(Category1))
+	assert.Equal(t, 117, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
 	pool.truncateQueueByCategory(Category1)
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 116, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 59, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 59, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 233, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 118, pool.allTxsForLook.getLocalCountByCategory(Category1))
+	assert.Equal(t, 117, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
 }
 
@@ -121,14 +121,14 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 
 	}
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 116, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 59, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 59, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 233, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 118, pool.allTxsForLook.getLocalCountByCategory(Category1))
+	assert.Equal(t, 117, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
 	pool.truncatePendingByCategory(Category1)
 	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 116, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 59, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 59, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+	assert.Equal(t, 233, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 118, pool.allTxsForLook.getLocalCountByCategory(Category1))
+	assert.Equal(t, 117, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
 }

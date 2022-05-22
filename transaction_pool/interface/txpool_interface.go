@@ -16,6 +16,7 @@ type PickTxType uint32
 const (
 	PickTransactionsFromPending PickTxType = iota
 	PickTransactionsSortedByGasPriceAndNonce
+	PickTransactionsSortedByGasPriceAndTime
 )
 
 type TxExpiredPolicy byte
@@ -30,8 +31,10 @@ const (
 type TransactionPoolConfig struct {
 	NoRemoteFile    bool
 	NoConfigFile    bool
+	NoTxsInfoFile   bool
 	PathRemote      map[txbasic.TransactionCategory]string
 	PathConfig      string
+	PathTxsINfo     string
 	ReStoredDur     time.Duration
 	TxExpiredPolicy TxExpiredPolicy
 	TxCacheSize     int
@@ -55,15 +58,16 @@ type TransactionPoolConfig struct {
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	PathRemote: map[txbasic.TransactionCategory]string{
 		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json",
-		txbasic.TransactionCategory_Eth:             "savedtxs/Eth_remoteTransactions.json"},
+	},
 	PathConfig:      "configuration/txPoolConfigs.json",
+	PathTxsINfo:     "savedtxs/TxsInfo.json",
 	ReStoredDur:     30 * time.Minute,
 	TxExpiredPolicy: TxExpiredTimeAndHeight,
 	GasPriceLimit:   1000, // 1000
 	TxCacheSize:     36000000,
 
-	TxMaxSize:     4 * 1024,
-	TxPoolMaxSize: 16 * 4 * 1024,
+	TxMaxSize:     2 * 1024,
+	TxPoolMaxSize: 64 * 2 * 1024,
 
 	MaxSizeOfEachPendingAccount: 2 * 1024,
 	MaxSizeOfPending:            16 * 1024,
@@ -121,7 +125,7 @@ type TransactionPool interface {
 
 	Reset(oldHead, newHead *tpchaintypes.BlockHead) error
 
-	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
+	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID, isLocal bool) error
 
 	Pending() ([]*txbasic.Transaction, error)
 

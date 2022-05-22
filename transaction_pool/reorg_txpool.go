@@ -37,7 +37,7 @@ func (pool *transactionPool) ReorgAndTurnTxLoop() {
 			} else {
 				reset.newBlockHead = req.newBlockHead
 			}
-			launchNextRun = true
+			launchNextRun = true //start to reset tx
 			pool.chanReorgDone <- nextDone
 		case req := <-pool.chanReqTurn:
 			// Promote request: update address set if request is already pending.
@@ -46,7 +46,7 @@ func (pool *transactionPool) ReorgAndTurnTxLoop() {
 			} else {
 				accountsCache.merge(req)
 			}
-			launchNextRun = true
+			launchNextRun = true //start to turn txs for accountsCache
 			pool.chanReorgDone <- nextDone
 
 		case <-currentDone:
@@ -64,7 +64,6 @@ func (pool *transactionPool) ReorgAndTurnTxLoop() {
 }
 
 func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolResetHeads, accountCache *accountCache) {
-
 	defer close(done)
 
 	var addrsNeedTurn []tpcrtypes.Address
@@ -77,19 +76,17 @@ func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolRes
 		// Reset needs turn all addresses to pending
 		addrsNeedTurn = pool.queues.getAllAddress()
 	}
-
 	pool.turnAddrTxsToPending(addrsNeedTurn)
 
 	if reset != nil {
-		for category, _ := range pool.allTxsForLook.getAll() {
+		for category := range pool.config.PathRemote {
 			pool.demoteUnexecutables(category) //demote transactions
 		}
 	}
-	for category, _ := range pool.allTxsForLook.getAll() {
+	for category := range pool.config.PathRemote {
 		pool.truncatePendingByCategory(category)
 		pool.truncateQueueByCategory(category)
 	}
-	pool.changeSizeSinceReorg = 0 // Reset change counter
 }
 
 func (pool *transactionPool) requestReset(oldBlockHead *tpchaintypes.BlockHead, newBlockHead *tpchaintypes.BlockHead) chan struct{} {
@@ -115,22 +112,20 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 	}(time.Now())
 
 	var reinjectTxs []*txbasic.Transaction
-	if oldBlockHead != nil && tpchaintypes.BlockHash(oldBlockHead.Hash) != tpchaintypes.BlockHash(newBlockHead.Hash) {
 
+	if oldBlockHead != nil && tpchaintypes.BlockHash(oldBlockHead.Hash) != tpchaintypes.BlockHash(newBlockHead.ParentBlockHash) {
 		oldBlockHeight := oldBlockHead.GetHeight()
 		newBlockHeight := newBlockHead.GetHeight()
-
 		if depth := uint64(math.Abs(float64(oldBlockHeight) - float64(newBlockHeight))); depth > 64 {
 			pool.log.Debugf("Skipping deep transaction reorg,", "depth:", depth)
 		} else {
 
 			var curTxPoolTxs, packagedTx []*txbasic.Transaction
 			var (
-				rem, _ = pool.txServant.BlockByHash(tpchaintypes.BlockHash(oldBlockHead.Hash))
-				add, _ = pool.txServant.BlockByHash(tpchaintypes.BlockHash(newBlockHead.Hash))
+				rem, _ = pool.txServant.BlockByNumber(tpchaintypes.BlockNum(oldBlockHead.Height))
+				add, _ = pool.txServant.BlockByNumber(tpchaintypes.BlockNum(newBlockHead.Height))
 			)
 			if rem == nil {
-
 				if newBlockHeight >= oldBlockHeight {
 
 					pool.log.Warnf("Transcation pool reset with missing oldhead",
@@ -143,59 +138,38 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 					"oldhead hash", tpchaintypes.BlockHash(oldBlockHead.Hash), "oldnum", oldBlockHeight,
 					"newhead hash", tpchaintypes.BlockHash(newBlockHead.Hash), "newnum", newBlockHeight)
 			} else {
-
-				for rem.Head.Height > add.Head.Height {
-
-					for _, tx := range rem.Data.Txs {
-						var txType *txbasic.Transaction
-						err := pool.marshaler.Unmarshal(tx, &txType)
-						if err != nil {
-							curTxPoolTxs = append(curTxPoolTxs, txType)
-						}
-					}
-					if rem, _ = pool.txServant.BlockByHash(tpchaintypes.BlockHash(rem.Head.ParentBlockHash)); rem == nil {
-						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldBlockHead.Height,
-							"hash", tpchaintypes.BlockHash(oldBlockHead.Hash))
-						return nil
-					}
+				for category := range pool.config.PathRemote {
+					curTxPoolTxs = append(curTxPoolTxs, pool.allTxsForLook.getAllTxsByCategory(category)...)
 				}
+				for add.GetHead().GetHeight() > rem.GetHead().GetHeight() {
 
-				for add.Head.Height > rem.Head.Height {
 					for _, tx := range add.Data.Txs {
 						var txType *txbasic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
-							packagedTx = append(packagedTx, txType)
+							pool.log.Errorf("Unmarshal tx error:", err)
 						}
+						packagedTx = append(packagedTx, txType)
+
 					}
-					if add, _ = pool.txServant.BlockByHash(tpchaintypes.BlockHash(add.Head.ParentBlockHash)); add == nil {
+					if add, _ = pool.txServant.BlockByNumber(add.BlockNum() - 1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newBlockHead.Height,
 							"hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 						return ErrUnRooted
 					}
 				}
 
-				for tpchaintypes.BlockHash(rem.Head.Hash) != tpchaintypes.BlockHash(add.Head.Hash) {
-					for _, tx := range rem.Data.Txs {
-						var txType *txbasic.Transaction
-						err := pool.marshaler.Unmarshal(tx, &txType)
-						if err != nil {
-							curTxPoolTxs = append(curTxPoolTxs, txType)
-						}
-					}
-					if rem, _ = pool.txServant.BlockByHash(tpchaintypes.BlockHash(rem.Head.ParentBlockHash)); rem == nil {
-						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldBlockHead.Height,
-							"hash", tpchaintypes.BlockHash(oldBlockHead.Hash))
-						return ErrUnRooted
-					}
+				for tpchaintypes.BlockHash(rem.GetHead().GetHash()) != tpchaintypes.BlockHash(add.GetHead().GetHash()) {
 					for _, tx := range add.Data.Txs {
 						var txType *txbasic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
-							packagedTx = append(packagedTx, txType)
+							pool.log.Errorf("Unmarshal tx error:", err)
 						}
+						packagedTx = append(packagedTx, txType)
 					}
-					if add, _ = pool.txServant.BlockByHash(tpchaintypes.BlockHash(add.Head.ParentBlockHash)); add == nil {
+
+					if add, _ = pool.txServant.BlockByNumber(add.BlockNum() - 1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newBlockHead.Height,
 							"hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 						return ErrUnRooted
@@ -205,13 +179,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 			}
 		}
 	}
-	if newBlockHead == nil {
-		curblock, _ := pool.txServant.LatestBlock()
-		newBlockHead = curblock.GetHead()
-	}
-
 	pool.addTxsLocked(reinjectTxs, false)
-
 	return nil
 }
 

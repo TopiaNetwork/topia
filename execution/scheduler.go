@@ -25,7 +25,7 @@ import (
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
 	txservant "github.com/TopiaNetwork/topia/transaction/basic"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -65,11 +65,11 @@ type executionScheduler struct {
 	exePackedTxsList *list.List
 	config           *configuration.Configuration
 	marshaler        codec.Marshaler
-	txPool           txpool.TransactionPool
+	txPool           txpooli.TransactionPool
 	syncCommitBlock  sync.RWMutex
 }
 
-func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, codecType codec.CodecType, txPool txpool.TransactionPool) *executionScheduler {
+func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, codecType codec.CodecType, txPool txpooli.TransactionPool) *executionScheduler {
 	exeLog := tplog.CreateModuleLogger(logcomm.InfoLevel, MOD_NAME, log)
 	return &executionScheduler{
 		nodeID:           nodeID,
@@ -497,8 +497,18 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 			return err
 		}
 
+		chainMsg := &tpchaintypes.ChainMessage{
+			MsgType: tpchaintypes.ChainMessage_BlockInfo,
+			Data:    pubsubBlockInfoBytes,
+		}
+		chainMsgBytes, err := marshaler.Marshal(chainMsg)
+		if err != nil {
+			scheduler.log.Errorf("Marshal chain msg err: stateVersion=%d, err=%v", stateVersion, err)
+			return err
+		}
+
 		go func() {
-			err := network.Publish(ctx, []string{tpchaintypes.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, pubsubBlockInfoBytes)
+			err := network.Publish(ctx, []string{tpchaintypes.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, chainMsgBytes)
 			if err != nil {
 				scheduler.log.Errorf("Publish block info err: stateVersion=%d, err=%v", stateVersion, err)
 			}

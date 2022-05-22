@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"math/big"
 	"sync"
 	"time"
@@ -17,7 +18,7 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type TransactionPoolMock struct {
@@ -26,6 +27,21 @@ type TransactionPoolMock struct {
 	cryptService tpcrt.CryptService
 	sync         sync.RWMutex
 	pendingTxs   []txbasic.Transaction //tx hex hash -> Transaction
+}
+
+func (txm *TransactionPoolMock) PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) Count() int64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) Size() int64 {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (txm *TransactionPoolMock) RemoveTxHashs(hashs []txbasic.TxID) []error {
@@ -38,17 +54,12 @@ func (txm *TransactionPoolMock) UpdateTx(tx *txbasic.Transaction, txKey txbasic.
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) Count() int {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (txm *TransactionPoolMock) TruncateTxPool() {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) SetTxPoolConfig(conf txpool.TransactionPoolConfig) {
+func (txm *TransactionPoolMock) SetTxPoolConfig(conf txpooli.TransactionPoolConfig) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -118,11 +129,6 @@ func (txm *TransactionPoolMock) Pending() ([]*txbasic.Transaction, error) {
 	return newTxs, nil
 }
 
-func (txm *TransactionPoolMock) Size() int {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (txm *TransactionPoolMock) processBlockAddedEvent(ctx context.Context, data interface{}) error {
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 	if block, ok := data.(*tpchaintypes.Block); ok {
@@ -181,7 +187,7 @@ func (txm *TransactionPoolMock) Start(sysActor *actor.ActorSystem, network tpnet
 	return nil
 }
 
-func (txm *TransactionPoolMock) PickTxs(txType txpool.PickTxType) []*txbasic.Transaction {
+func (txm *TransactionPoolMock) PickTxs(txType txpooli.PickTxType) []*txbasic.Transaction {
 	//TODO implement me
 	panic("implement me")
 }

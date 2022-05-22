@@ -38,6 +38,7 @@ type consensusProposer struct {
 	blockMaxCyclePeriod     time.Duration
 	isProposing             uint32
 	lastProposeHeight       uint64 //the block height which self-proposer launched based on last time
+	lastProposeTimeStamp    time.Time
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -300,19 +301,24 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
-	var proposeHeightNew uint64
-	blTime := time.Unix(0, int64(latestBlock.Head.TimeStamp))
-	elapsedTime := time.Since(blTime).Microseconds()
-	deltaHeight := uint64(elapsedTime)/uint64(p.blockMaxCyclePeriod.Microseconds()) + 1
-	if latestBlock.Head.Height > 1 {
-		proposeHeightNew = latestBlock.Head.Height + deltaHeight
-	} else {
-		proposeHeightNew = 2
+	if p.lastProposeHeight == 0 {
+		p.lastProposeHeight = latestBlock.Head.Height
+		p.lastProposeTimeStamp = time.Now()
 	}
+
+	var proposeHeightNew uint64
+	elapsedTime := time.Since(p.lastProposeTimeStamp).Microseconds()
+	deltaHeight := uint64(elapsedTime)/uint64(p.blockMaxCyclePeriod.Microseconds()) + 1
+	/*if deltaHeight > 1 {
+		err = fmt.Errorf("Not synced and can't proposing block: lastProposeHeight %d, deltaHeight %d, latest height %d", p.lastProposeHeight, deltaHeight, latestBlock.Head.Height)
+		p.log.Warnf("%s", err.Error())
+		return err
+	}*/
+	proposeHeightNew = latestBlock.Head.Height + deltaHeight
 
 	if p.lastProposeHeight > 0 && p.lastProposeHeight >= proposeHeightNew {
 		err = fmt.Errorf("Have launched proposing block at propose height %d, latest height %d", p.lastProposeHeight, latestBlock.Head.Height)
-		p.log.Warnf("%v", err)
+		p.log.Warnf("%s", err.Error())
 		return err
 	}
 
@@ -325,6 +331,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	p.log.Infof("Avail PPM prop state version %d", pppProp.StateVersion)
 
 	p.lastProposeHeight = proposeHeightNew
+	p.lastProposeTimeStamp = time.Now()
 
 	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock, proposeHeightNew)
 	if !canPropose {

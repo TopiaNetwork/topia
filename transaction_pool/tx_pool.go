@@ -81,7 +81,7 @@ type transactionPool struct {
 
 func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig, level tplogcmm.LogLevel,
 	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
-	blockService service.BlockService, network tpnet.Network) *transactionPool {
+	blockService service.BlockService, network tpnet.Network) txpooli.TransactionPool {
 	conf = (&conf).Check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
@@ -656,6 +656,7 @@ func (pool *transactionPool) Stop() {
 	eventhub.GetEventHubManager().GetEventHub(pool.nodeId).UnObserve(pool.ctx, ObsID, eventhub.EventName_BlockAdded)
 	pool.log.Info("TransactionPool stopped")
 }
+
 
 func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCategory) {
 	// Iterate over all accounts and demote any non-executable transactions

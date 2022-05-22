@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"sync"
 	"time"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -16,14 +16,14 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type consensusExecutor struct {
 	log                          tplog.Logger
 	nodeID                       string
 	priKey                       tpcrtypes.PrivateKey
-	txPool                       txpool.TransactionPool
+	txPool                       txpooli.TransactionPool
 	marshaler                    codec.Marshaler
 	ledger                       ledger.Ledger
 	exeScheduler                 execution.ExecutionScheduler
@@ -38,7 +38,7 @@ type consensusExecutor struct {
 func newConsensusExecutor(log tplog.Logger,
 	nodeID string,
 	priKey tpcrtypes.PrivateKey,
-	txPool txpool.TransactionPool,
+	txPool txpooli.TransactionPool,
 	marshaler codec.Marshaler,
 	ledger ledger.Ledger,
 	exeScheduler execution.ExecutionScheduler,

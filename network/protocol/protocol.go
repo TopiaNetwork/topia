@@ -29,6 +29,7 @@ const (
 	P2PProtocolExecutePrefix   = "/topia/execute"
 	ForwardExecute_Msg         = P2PProtocolExecutePrefix + "/forward/msg/0.0.1"
 	ForwardExecute_SyncMsg     = P2PProtocolExecutePrefix + "/forward/sync/msg/0.0.1"
+	ForwardExecute_SyncTx      = P2PProtocolExecutePrefix + "/forward/sync/tx/0.0.1"
 	P2PProtocolProposePrefix   = "/topia/propose"
 	ForwardPropose_Msg         = P2PProtocolProposePrefix + "/forward/msg/0.0.1"
 	P2PProtocolValidatePrefix  = "/topia/validate"

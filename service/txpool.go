@@ -10,7 +10,7 @@ type TxPoolService interface {
 
 	Size() int64
 
-	//UpdateTx(tx *basic.Transaction, txID basic.TxID) error
+	//UpdateTx(tx *basic.Transaction, txID basic.TxID, isLocal bool) error
 }
 
 type txPoolService struct {

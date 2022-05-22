@@ -25,8 +25,9 @@ func (pool *transactionPool) loopChanSelect() {
 func (pool *transactionPool) loopChanRemoveTxHashs() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
-			pool.log.Errorf("chanRemoveTxHashs err:", err, debug.Stack())
+		err := recover()
+		if err != nil {
+			pool.log.Errorf("loopChanRemoveTxHashs err:", err, debug.Stack())
 		}
 	}()
 
@@ -45,8 +46,9 @@ func (pool *transactionPool) loopChanRemoveTxHashs() {
 func (pool *transactionPool) loopSaveAllIfShutDown() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
-			pool.log.Errorf("saveAllIfShutDown err:", err, debug.Stack())
+		err := recover()
+		if err != nil {
+			pool.log.Errorf("loopSaveAllIfShutDown err:", err, debug.Stack())
 		}
 	}()
 
@@ -60,7 +62,7 @@ func (pool *transactionPool) loopSaveAllIfShutDown() {
 			pool.saveAllWhenSysShutDown()
 			return
 		case <-pool.ctx.Done():
-			pool.log.Info("Systemshutdown stopped")
+			pool.log.Info("loopSaveAllIfShutDown stopped")
 			return
 		}
 	}
@@ -70,7 +72,8 @@ func (pool *transactionPool) loopSaveAllIfShutDown() {
 func (pool *transactionPool) loopResetIfBlockAdded() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
+		err := recover()
+		if err != nil {
 			pool.log.Errorf("loopResetIfBlockAdded err:", err, debug.Stack())
 		}
 	}()
@@ -98,7 +101,8 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
+		err := recover()
+		if err != nil {
 			pool.log.Errorf("removeTxForUptoLifeTime err:", err, debug.Stack())
 		}
 	}()
@@ -129,7 +133,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 				return 0
 			}
 			diffHeight := pool.config.LifeHeight
-			for category, _ := range pool.queues.getAll() {
+			for category := range pool.config.PathRemote {
 				pool.queues.removeTxForLifeTime(category, pool.config.TxExpiredPolicy, f1, time2, f2, f3, diffHeight)
 
 			}
@@ -144,7 +148,8 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 func (pool *transactionPool) loopRegularSaveLocalTxs() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
+		err := recover()
+		if err != nil {
 			pool.log.Errorf("regularSaveLocalTxs err:", err, debug.Stack())
 		}
 	}()
@@ -157,10 +162,15 @@ func (pool *transactionPool) loopRegularSaveLocalTxs() {
 		select {
 		// Handle local transaction  store
 		case <-stored.C:
-			for category, _ := range pool.allTxsForLook.getAll() {
-				if err := pool.SaveRemoteTxs(category); err != nil {
-					pool.log.Warnf("Failed to save local tx ", "err", err)
+			for category := range pool.config.PathRemote {
+				err := pool.SaveRemoteTxs(category)
+				if err != nil {
+					pool.log.Warnf("Failed to save local tx ", "error:", err)
 				}
+			}
+			err := pool.SaveTxsInfo()
+			if err != nil {
+				pool.log.Errorf("Failed to save Txs info ", "error:", err)
 			}
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRegularSaveLocalTxs stopped")
@@ -174,7 +184,8 @@ func (pool *transactionPool) loopRegularSaveLocalTxs() {
 func (pool *transactionPool) loopRegularRepublic() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
+		err := recover()
+		if err != nil {
 			pool.log.Errorf("regularRepublic err:", err, debug.Stack())
 		}
 	}()
@@ -204,7 +215,7 @@ func (pool *transactionPool) loopRegularRepublic() {
 				return 0
 			}
 			diffHeight := pool.config.TxTTLHeightOfRepublic
-			for category, _ := range pool.queues.getAll() {
+			for category := range pool.config.PathRemote {
 				pool.queues.republicTx(category, TxRepublicTime, f1, time2, f2, f3, diffHeight)
 			}
 		case <-pool.ctx.Done():
@@ -215,14 +226,26 @@ func (pool *transactionPool) loopRegularRepublic() {
 }
 
 func (pool *transactionPool) saveAllWhenSysShutDown() {
-	for category, _ := range pool.allTxsForLook.getAll() {
-		//remote txs save
-		if err := pool.SaveRemoteTxs(category); err != nil {
-			pool.log.Warnf("Failed to save remote transaction", "err", err)
+	if !pool.config.NoRemoteFile && pool.config.PathRemote != nil {
+		for category := range pool.config.PathRemote {
+			err := pool.SaveRemoteTxs(category)
+			if err != nil {
+				pool.log.Errorf("Failed to save remote transaction", "err", err)
+			}
+		}
+	}
+	if !pool.config.NoTxsInfoFile && pool.config.PathTxsINfo != "" {
+		err := pool.SaveTxsInfo()
+		if err != nil {
+			pool.log.Errorf("Failed to save txs info", "err", err)
 		}
 	}
 	//txPool configs save
-	if err := pool.SaveConfig(); err != nil {
-		pool.log.Warnf("Failed to save transaction pool configs", "err", err)
+	if !pool.config.NoConfigFile && pool.config.PathConfig != "" {
+		err := pool.SaveConfig()
+		if err != nil {
+			pool.log.Errorf("Failed to save transaction pool configs", "err", err)
+		}
 	}
+
 }

@@ -20,6 +20,8 @@ func Test_transactionPool_AddLocal(t *testing.T) {
 	log := TpiaLog
 	stateService := NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
 	blockService := NewMockBlockService(ctrl)
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -43,6 +45,8 @@ func Test_transactionPool_AddRemote(t *testing.T) {
 	log := TpiaLog
 	stateService := NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
 	blockService := NewMockBlockService(ctrl)
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -66,6 +70,8 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 	log := TpiaLog
 	stateService := NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
 	blockService := NewMockBlockService(ctrl)
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -95,6 +101,8 @@ func Test_transactionPool_SaveRemoteTxs(t *testing.T) {
 	log := TpiaLog
 	stateService := NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
 	blockService := NewMockBlockService(ctrl)
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -136,6 +144,8 @@ func Test_transactionPool_LoadRemoteTxs(t *testing.T) {
 	log := TpiaLog
 	stateService := NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
 	blockService := NewMockBlockService(ctrl)
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -154,6 +164,8 @@ func Test_transactionPool_PublishTx(t *testing.T) {
 	log := TpiaLog
 	stateService := NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
 	blockService := NewMockBlockService(ctrl)
 	network := NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()

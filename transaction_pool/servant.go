@@ -23,6 +23,7 @@ type TransactionPoolServant interface {
 	Nonce(tpcrtypes.Address) (uint64, error)
 	LatestBlock() (*tpchaintypes.Block, error)
 	BlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
+	BlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error)
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
 	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
 	UnSubscribe(topic string) error
@@ -62,6 +63,9 @@ func (servant *transactionPoolServant) LatestBlock() (*tpchaintypes.Block, error
 }
 func (servant *transactionPoolServant) BlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error) {
 	return servant.GetBlockByHash(hash)
+}
+func (servant *transactionPoolServant) BlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error) {
+	return servant.GetBlockByNumber(blockNum)
 }
 
 func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
@@ -114,6 +118,9 @@ func (msgSub *txMessageSubProcessor) GetNodeID() string {
 }
 
 func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool, sendData []byte) message.ValidationResult {
+	if uint64(msgSub.txpool.Size()) > msgSub.txpool.config.TxPoolMaxSize {
+		return message.ValidationReject
+	}
 	msg := &TxMessage{}
 	msg.Unmarshal(sendData)
 	var tx *txbasic.Transaction
@@ -164,6 +171,7 @@ func (msgSub *txMessageSubProcessor) Process(ctx context.Context, subMsgTxMessag
 	}
 	category := txbasic.TransactionCategory(tx.Head.Category)
 	msgSub.txpool.newTxListStructs(category)
+
 	if err := msgSub.txpool.AddTx(tx, false); err != nil {
 		return err
 	}

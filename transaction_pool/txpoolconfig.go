@@ -1,7 +1,6 @@
 package transactionpool
 
 import (
-	"encoding/json"
 	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"io/ioutil"
 )
@@ -13,7 +12,7 @@ func (pool *transactionPool) LoadConfig() (conf *_interface.TransactionPoolConfi
 		return nil, err
 	}
 	config := &conf
-	err = json.Unmarshal(data, &config)
+	err = pool.marshaler.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +27,7 @@ func (pool *transactionPool) SetTxPoolConfig(conf _interface.TransactionPoolConf
 
 func (pool *transactionPool) SaveConfig() error {
 	//pool.log.Info("saving tx pool config")
-	conf, err := json.Marshal(pool.config)
+	conf, err := pool.marshaler.Marshal(pool.config)
 	if err != nil {
 		return err
 	}

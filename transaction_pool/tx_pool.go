@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
@@ -32,18 +33,17 @@ const (
 )
 
 var (
-	ErrAlreadyKnown       = errors.New("transaction is already know")
-	ErrTxPoolFull         = errors.New("drop tx for transaction is full")
-	ErrReplaceUnderpriced = errors.New("new transaction price under priced")
-	ErrUnderpriced        = errors.New("transaction underpriced")
-	ErrTxNotExist         = errors.New("transaction not found")
-	ErrTxIsNil            = errors.New("transaction is nil")
-	ErrTxPoolOverflow     = errors.New("txPool is full")
-	ErrTxUpdate           = errors.New("can not update tx")
-	ErrPendingIsNil       = errors.New("pending is nil")
-	ErrQueueIsNil         = errors.New("Queue is nil")
-	ErrUnRooted           = errors.New("UnRooted new chain")
-	ErrQueueEmpty         = errors.New("queue is empty")
+	ErrAlreadyKnown             = errors.New("transaction is already know")
+	ErrTxPoolFull               = errors.New("drop tx for transaction is full")
+	ErrReplaceUnderpriced       = errors.New("replace tx error gas price is lower ")
+	ErrTxNotExist               = errors.New("transaction not found")
+	ErrTxIsNil                  = errors.New("transaction is nil")
+	ErrTxUpdate                 = errors.New("can not update tx")
+	ErrPendingIsNil             = errors.New("pending is nil")
+	ErrQueueIsNil               = errors.New("queue is nil")
+	ErrUnRooted                 = errors.New("UnRooted new chain")
+	ErrQueueEmpty               = errors.New("queue is empty")
+	ErrAllTxListOfCategoryIsNil = errors.New("all txs of category is nil")
 )
 
 type transactionPool struct {
@@ -63,19 +63,20 @@ type transactionPool struct {
 	queues        *queuesMap
 	allTxsForLook *allTxsLookupMap
 
-	ActivationIntervals  *activationInterval // ActivationIntervals for each txID
-	HeightIntervals      *HeightInterval     // HeightIntervals for each txID
-	TxHashCategory       *txHashCategory
-	txCache              *lru.Cache
-	BlockMaxGasLimit     uint64
-	log                  tplog.Logger
-	level                tplogcmm.LogLevel
-	ctx                  context.Context
-	handler              *transactionPoolHandler
-	marshaler            codec.Marshaler
-	hasher               tpcmm.Hasher
-	changeSizeSinceReorg int // counter for drops we've performed in-between reorg.
-	wg                   sync.WaitGroup
+	ActivationIntervals *activationInterval // ActivationIntervals for each txID
+	HeightIntervals     *HeightInterval     // HeightIntervals for each txID
+	TxHashCategory      *txHashCategory
+	txCache             *lru.Cache
+	BlockMaxGasLimit    uint64
+	log                 tplog.Logger
+	level               tplogcmm.LogLevel
+	ctx                 context.Context
+	handler             *transactionPoolHandler
+	marshaler           codec.Marshaler
+	hasher              tpcmm.Hasher
+	poolSize            int64
+	poolCount           int64
+	wg                  sync.WaitGroup
 }
 
 func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.TransactionPoolConfig, level tplogcmm.LogLevel,
@@ -110,13 +111,16 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.Tran
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
-
+	if !pool.config.NoTxsInfoFile {
+		pool.loadTxsInfo(pool.config.NoConfigFile, pool.config.PathTxsINfo)
+	}
 	if !pool.config.NoRemoteFile {
 		for category := range pool.config.PathRemote {
 			pool.newTxListStructs(category)
 			pool.loadRemote(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
 		}
 	}
+
 	curBlock, err := pool.txServant.LatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
@@ -124,7 +128,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf _interface.Tran
 	pool.Reset(nil, curBlock.GetHead())
 	pool.wg.Add(1)
 	go pool.ReorgAndTurnTxLoop()
-	for category, _ := range pool.allTxsForLook.getAll() {
+	for category := range pool.config.PathRemote {
 		pool.loadRemote(category, conf.NoRemoteFile, conf.PathRemote[category])
 	}
 
@@ -246,7 +250,7 @@ func (pool *transactionPool) Pending() ([]*txbasic.Transaction, error) {
 		pool.log.Infof("get Pending txs list cost time:", time.Since(t0))
 	}(time.Now())
 	TxList := make([]*txbasic.Transaction, 0)
-	for category, _ := range pool.allTxsForLook.getAll() {
+	for category := range pool.config.PathRemote {
 		TxList = append(TxList, pool.pendings.getTxsByCategory(category)...)
 	}
 	if len(TxList) == 0 {
@@ -273,7 +277,7 @@ func (pool *transactionPool) Queue() ([]*txbasic.Transaction, error) {
 		pool.log.Infof("get Queue txs, cost time:", time.Since(t0))
 	}(time.Now())
 	TxList := make([]*txbasic.Transaction, 0)
-	for category, _ := range pool.allTxsForLook.getAll() {
+	for category := range pool.config.PathRemote {
 		TxList = append(TxList, pool.queues.getTxsByCategory(category)...)
 	}
 	if len(TxList) == 0 {
@@ -328,8 +332,8 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local bool) []er
 		nilSlot++
 	}
 	// Reorg the pool internals if needed and return
-	pool.requestTurnToPending(dirtyAddrCache)
-
+	done := pool.requestTurnToPending(dirtyAddrCache)
+	<-done
 	return errs
 }
 
@@ -339,27 +343,29 @@ func (pool *transactionPool) addTxsLocked(txs []*txbasic.Transaction, local bool
 	for i, tx := range txs {
 		replaced, err := pool.add(tx, local)
 		errs[i] = err
-		if err != nil && !replaced {
+		if err == nil && !replaced {
 			dirtyAccounts.addTx(tx)
 		}
 	}
 	return errs, dirtyAccounts
 }
 
-func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error {
+func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID, isLocal bool) error {
 	defer func(t0 time.Time) {
 		pool.log.Infof("Update transaction cost time:", time.Since(t0))
 	}(time.Now())
 	category := txbasic.TransactionCategory(tx.Head.Category)
-
 	tx2 := pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txKey)
+
 	switch category {
 	case txbasic.TransactionCategory_Topia_Universal:
 		if tpcrtypes.Address(tx2.Head.FromAddr) == tpcrtypes.Address(tx.Head.FromAddr) &&
 			ToAddress(tx) == ToAddress(tx2) &&
-			GasPrice(tx2) <= GasPrice(tx) {
+			GasPrice(tx2) < GasPrice(tx) {
 			pool.RemoveTxByKey(txKey)
-			pool.add(tx, false)
+			txs := make([]*txbasic.Transaction, 0)
+			txs = append(txs, tx)
+			pool.addTxs(txs, isLocal)
 		}
 		return nil
 	default:
@@ -368,10 +374,10 @@ func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxI
 }
 
 func (pool *transactionPool) Size() int64 {
-	return pool.allTxsForLook.getAllSize()
+	return pool.poolSize
 }
 func (pool *transactionPool) Count() int64 {
-	return pool.allTxsForLook.getAllCount()
+	return pool.poolCount
 }
 
 //Start register module
@@ -402,7 +408,11 @@ func (pool *transactionPool) RemoveTxByKey(key txbasic.TxID) error {
 	}
 	addr := tpcrtypes.Address(tx.Head.FromAddr)
 	// Remove it from the list of known transactions
-	pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key)
+
+	if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key); ok {
+		atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+		atomic.AddInt64(&pool.poolCount, -1)
+	}
 
 	//commit when unit testing
 	//txRemoved := &eventhub.TxPoolEvent{
@@ -448,8 +458,11 @@ func (pool *transactionPool) Get(category txbasic.TransactionCategory, key txbas
 
 func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transaction, local bool, addAll bool) (bool, error) {
 	// Try to insert the transaction into the future queue
-	f1 := func(category txbasic.TransactionCategory, key txbasic.TxID, tx *txbasic.Transaction) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key)
+	f1 := func(category txbasic.TransactionCategory, key txbasic.TxID) {
+		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key); ok {
+			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+			atomic.AddInt64(&pool.poolCount, -1)
+		}
 
 	}
 	f2 := func(category txbasic.TransactionCategory, string2 txbasic.TxID) *txbasic.Transaction {
@@ -459,14 +472,19 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 		pool.log.Errorf("Missing transaction in lookup set, please report the issue ", "TxID", key)
 	}
 	f4 := func(category txbasic.TransactionCategory, tx *txbasic.Transaction, local bool) {
-		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, local)
-
-		pool.ActivationIntervals.setTxActiv(key, time.Now())
-		currentheight, err := pool.txServant.CurrentHeight()
-		if err != nil {
-			pool.log.Errorf("get current height error:", err)
+		if ok, err := pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, local); !ok {
+			pool.log.Errorf("add tx to all txs list error", err)
+		} else {
+			atomic.AddInt64(&pool.poolSize, int64(tx.Size()))
+			atomic.AddInt64(&pool.poolCount, 1)
+			pool.ActivationIntervals.setTxActiv(key, time.Now())
+			currentheight, err := pool.txServant.CurrentHeight()
+			if err != nil {
+				pool.log.Errorf("get current height error:", err)
+			}
+			pool.HeightIntervals.setTxHeight(key, currentheight)
 		}
-		pool.HeightIntervals.setTxHeight(key, currentheight)
+
 	}
 	f5 := func(key txbasic.TxID, category txbasic.TransactionCategory, local bool) {
 		pool.ActivationIntervals.setTxActiv(key, time.Now())
@@ -510,8 +528,8 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 		return false, ErrAlreadyKnown
 	}
 
-	if uint64(pool.allTxsForLook.getSizeFromAllTxsLookupByCategory(category)) > pool.config.MaxSizeOfPending+pool.config.MaxSizeOfQueue ||
-		uint64(pool.allTxsForLook.getAllSize()) > pool.config.TxPoolMaxSize {
+	if uint64(pool.Size()) > pool.config.MaxSizeOfPending+pool.config.MaxSizeOfQueue ||
+		uint64(pool.Size()) > pool.config.TxPoolMaxSize {
 
 		pool.RemoveTxByKey(txId)
 		pool.txCache.Add(txId, StateTxDiscardForTxPoolFull)
@@ -522,10 +540,19 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 	// Try to replace an existing transaction in the pending pool
 	from := tpcrtypes.Address(tx.Head.FromAddr)
 	f1 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
+			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+			atomic.AddInt64(&pool.poolCount, -1)
+		}
 	}
 	f3 := func(category txbasic.TransactionCategory, tx *txbasic.Transaction, isLocal bool) {
-		pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, isLocal)
+		if ok, err := pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, isLocal); !ok {
+			pool.log.Errorf("add tx to all txs list error", err)
+		} else {
+			atomic.AddInt64(&pool.poolSize, int64(tx.Size()))
+			atomic.AddInt64(&pool.poolCount, 1)
+		}
+
 	}
 	f5 := func(txId txbasic.TxID) {
 		pool.ActivationIntervals.setTxActiv(txId, time.Now())
@@ -536,11 +563,10 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 		pool.HeightIntervals.setTxHeight(txId, currentheight)
 		pool.log.Tracef("Pooled new executable transaction ", "hash:", txId, "from:", from)
 	}
-	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f3, f5); !ok {
+	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f3, f5); err != nil {
 		pool.txCache.Add(txId, StateTxDiscardForReplaceFailed)
 		return ok, err
 	}
-
 	// New transaction isn't replacing a pending one, push into queue
 	replaced, err = pool.queueAddTx(txId, tx, isLocal, true)
 	if err != nil {
@@ -555,7 +581,7 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Address) {
 	var turnedTxs []*txbasic.Transaction
 	for _, addr := range addrsNeedTurn {
-		for category, _ := range pool.allTxsForLook.all {
+		for category := range pool.config.PathRemote {
 			f1 := func(address tpcrtypes.Address) uint64 {
 				var nonce, err = pool.txServant.Nonce(address)
 				if err != nil {
@@ -564,7 +590,10 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 				return nonce
 			}
 			f2 := func(category txbasic.TransactionCategory, string2 txbasic.TxID) {
-				pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, string2)
+				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, string2); ok {
+					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+					atomic.AddInt64(&pool.poolCount, -1)
+				}
 			}
 			f3 := func(err error) {
 				pool.log.Errorf("turnAddrTxsToPending get txID error:", err)
@@ -586,29 +615,36 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 				return inserted, old
 			}
 			ft2 := func(category txbasic.TransactionCategory, txId txbasic.TxID, tx *txbasic.Transaction) {
-				pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
+				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
+					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+					atomic.AddInt64(&pool.poolCount, -1)
+				}
 			}
-			ft3 := func(category txbasic.TransactionCategory, addr tpcrtypes.Address, tx *txbasic.Transaction) {
-				pool.queues.removeTxFromTxListByAddrOfCategory(category, addr, tx)
-			}
+
 			ft4 := func(category txbasic.TransactionCategory, oldkey txbasic.TxID, tx *txbasic.Transaction) {
-				pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey)
+				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey); ok {
+					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+					atomic.AddInt64(&pool.poolCount, -1)
+				}
 			}
 			ft5 := func(txId txbasic.TxID) {
-
 				pool.ActivationIntervals.setTxActiv(txId, time.Now())
 				currentheight, err := pool.txServant.CurrentHeight()
 				if err != nil {
 					pool.log.Errorf("get current height error:", err)
 				}
 				pool.HeightIntervals.setTxHeight(txId, currentheight)
-			}
-			_ = pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft3, ft4, ft5, turnedTxs, category, addr)
 
+			}
+			pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft4, ft5, turnedTxs, category, addr)
 			// Drop all transactions over the allowed limit
 			fl2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
-				pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-				pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
+				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
+					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+					atomic.AddInt64(&pool.poolCount, -1)
+					pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
+
+				}
 			}
 			pool.queues.replaceExecutablesDropOverLimit(fl2, pool.config.MaxSizeOfEachQueueAccount, category, addr)
 
@@ -618,43 +654,6 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 		}
 	}
 	return
-}
-
-// turnTx adds a transaction to the pending (processable) list of transactions
-func (pool *transactionPool) turnTx(addr tpcrtypes.Address, txId txbasic.TxID, tx *txbasic.Transaction) bool {
-	category := txbasic.TransactionCategory(tx.Head.Category)
-
-	// Try to insert the transaction into the pending queue
-	if pool.queues.getTxListByAddrOfCategory(category, addr) == nil ||
-		pool.queues.getTxByNonceFromTxlistByAddrOfCategory(category, addr, tx.Head.Nonce) != tx {
-		return false
-	}
-	if pool.pendings.getTxListByAddrOfCategory(category, addr) == nil {
-		pool.pendings.setTxListOfCategory(category, addr, newCoreList(false))
-	}
-	inserted, old := pool.pendings.addTxToTxListByAddrOfCategory(category, addr, tx)
-	if !inserted {
-		// An older transaction was existed, discard this
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-		return false
-	} else {
-		pool.queues.removeTxFromTxListByAddrOfCategory(category, addr, tx)
-	}
-
-	if old != nil {
-		oldkey, _ := old.TxID()
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey)
-	}
-	// Successful replace tx, bump the ActivationInterval
-
-	pool.ActivationIntervals.setTxActiv(txId, time.Now())
-	currentheight, err := pool.txServant.CurrentHeight()
-	if err != nil {
-		pool.log.Errorf("get current height error:", err)
-	}
-	pool.HeightIntervals.setTxHeight(txId, currentheight)
-	pool.txCache.Add(txId, StateTxTurntoPending)
-	return true
 }
 
 func (pool *transactionPool) Stop() {
@@ -675,8 +674,11 @@ func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCat
 		return nonce
 	}
 	f2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-		pool.log.Tracef("Removed old pending transaction", "txId", txId)
+		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
+			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+			atomic.AddInt64(&pool.poolCount, -1)
+			pool.log.Tracef("Removed old pending transaction", "txId", txId)
+		}
 	}
 	f3 := func(hash txbasic.TxID, tx *txbasic.Transaction) {
 		pool.log.Errorf("Demoting invalidated transaction", "hash", hash)
@@ -699,8 +701,13 @@ func (pool *transactionPool) PickTxs(txType _interface.PickTxType) (txs []*txbas
 
 		return txs
 	case _interface.PickTransactionsSortedByGasPriceAndNonce:
-		for category, _ := range pool.allTxsForLook.getAll() {
+		for category := range pool.config.PathRemote {
 			txs = append(txs, pool.CommitTxsByPriceAndNonce(category)...)
+		}
+		return txs
+	case _interface.PickTransactionsSortedByGasPriceAndTime:
+		for category := range pool.config.PathRemote {
+			txs = append(txs, pool.CommitTxsByPriceAndTime(category)...)
 		}
 		return txs
 	default:
@@ -717,6 +724,9 @@ func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCateg
 
 	case _interface.PickTransactionsSortedByGasPriceAndNonce:
 		return pool.CommitTxsByPriceAndNonce(category)
+
+	case _interface.PickTransactionsSortedByGasPriceAndTime:
+		return pool.CommitTxsByPriceAndTime(category)
 	default:
 		return nil
 	}
@@ -728,13 +738,20 @@ func (pool *transactionPool) SysShutDown() {
 // CommitTxsForPending  : Block packaged transactions for pending
 func (pool *transactionPool) CommitTxsForPending(category txbasic.TransactionCategory) []*txbasic.Transaction {
 
-	return pool.pendings.getCommitTxsCategory(category)
+	return pool.PendingTxsForCatgory(category)
 }
 
 // CommitTxsByPriceAndNonce  : Block packaged transactions sorted by price and nonce
 func (pool *transactionPool) CommitTxsByPriceAndNonce(category txbasic.TransactionCategory) []*txbasic.Transaction {
 	txs := pool.PendingTxsForCatgory(category)
 	sort.Sort(TxByPriceAndNonce(txs))
+	return txs
+}
+
+// CommitTxsByPriceAndTime  : Block packaged transactions sorted by price and time
+func (pool *transactionPool) CommitTxsByPriceAndTime(category txbasic.TransactionCategory) []*txbasic.Transaction {
+	txs := pool.PendingTxsForCatgory(category)
+	sort.Sort(TxByPriceAndTime(txs))
 	return txs
 }
 

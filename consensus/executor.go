@@ -173,7 +173,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 		for {
 			select {
 			case commitMsg := <-e.commitMsgChan:
-				e.log.Infof("Received commit message, StateVersion %d", commitMsg.StateVersion)
+				e.log.Infof("Received commit message, StateVersion %d, self node %s", commitMsg.StateVersion, e.nodeID)
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
 					defer csStateRN.Stop()

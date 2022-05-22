@@ -29,12 +29,10 @@ const (
 )
 
 type TransactionPoolConfig struct {
-	NoRemoteFile    bool
-	NoConfigFile    bool
-	NoTxsInfoFile   bool
-	PathRemote      map[txbasic.TransactionCategory]string
-	PathConfig      string
-	PathTxsINfo     string
+	PathMapRemoteTxsByCategory map[txbasic.TransactionCategory]string
+	PathConfigFile             string
+	PathTxsInfoFile            string
+
 	ReStoredDur     time.Duration
 	TxExpiredPolicy TxExpiredPolicy
 	TxCacheSize     int
@@ -56,11 +54,10 @@ type TransactionPoolConfig struct {
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
-	PathRemote: map[txbasic.TransactionCategory]string{
-		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json",
-	},
-	PathConfig:      "configuration/txPoolConfigs.json",
-	PathTxsINfo:     "savedtxs/TxsInfo.json",
+	PathMapRemoteTxsByCategory: map[txbasic.TransactionCategory]string{
+		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json"},
+	PathConfigFile:  "configuration/txPoolConfigs.json",
+	PathTxsInfoFile: "savedtxs/TxsInfo.json",
 	ReStoredDur:     30 * time.Minute,
 	TxExpiredPolicy: TxExpiredTimeAndHeight,
 	GasPriceLimit:   1000, // 1000
@@ -88,17 +85,20 @@ func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
 	if conf.GasPriceLimit < 1 {
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
-	if conf.MaxSizeOfEachPendingAccount < 32*1024 {
+	if conf.MaxSizeOfEachPendingAccount < 2*1024 {
 		conf.MaxSizeOfEachQueueAccount = DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount
 	}
-	if conf.MaxSizeOfPending < 16*32*1024 {
+	if conf.MaxSizeOfPending < 32*1024 {
 		conf.MaxSizeOfPending = DefaultTransactionPoolConfig.MaxSizeOfPending
 	}
-	if conf.MaxSizeOfEachQueueAccount < 64*1024 {
+	if conf.MaxSizeOfEachQueueAccount < 2*1024 {
 		conf.MaxSizeOfEachPendingAccount = DefaultTransactionPoolConfig.MaxSizeOfEachQueueAccount
 	}
-	if conf.MaxSizeOfQueue < 32*64*1024 {
+	if conf.MaxSizeOfQueue < 64*1024 {
 		conf.MaxSizeOfQueue = DefaultTransactionPoolConfig.MaxSizeOfQueue
+	}
+	if conf.TxPoolMaxSize < 128*1024 {
+		conf.TxPoolMaxSize = DefaultTransactionPoolConfig.TxPoolMaxSize
 	}
 	if conf.LifetimeForTx < 1 {
 		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
@@ -106,11 +106,14 @@ func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
 	if conf.TxTTLTimeOfRepublic < 1 {
 		conf.TxTTLTimeOfRepublic = DefaultTransactionPoolConfig.TxTTLTimeOfRepublic
 	}
-	if conf.PathConfig == "" {
-		conf.PathConfig = DefaultTransactionPoolConfig.PathConfig
+	if conf.PathConfigFile == "" {
+		conf.PathConfigFile = DefaultTransactionPoolConfig.PathConfigFile
 	}
-	if conf.PathRemote == nil {
-		conf.PathRemote = DefaultTransactionPoolConfig.PathRemote
+	if conf.PathMapRemoteTxsByCategory == nil {
+		conf.PathMapRemoteTxsByCategory = DefaultTransactionPoolConfig.PathMapRemoteTxsByCategory
+	}
+	if conf.PathTxsInfoFile == "" {
+		conf.PathTxsInfoFile = DefaultTransactionPoolConfig.PathTxsInfoFile
 	}
 
 	return conf

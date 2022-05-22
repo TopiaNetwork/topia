@@ -78,7 +78,7 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 		}
 	}()
 	// Track the previous head headers for transaction reorgs
-	head, err := pool.txServant.LatestBlock()
+	head, err := pool.txServant.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("loopResetIfBlockAdded get current block err:", err)
 	}
@@ -133,7 +133,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 				return 0
 			}
 			diffHeight := pool.config.LifeHeight
-			for category := range pool.config.PathRemote {
+			for category := range pool.config.PathMapRemoteTxsByCategory {
 				pool.queues.removeTxForLifeTime(category, pool.config.TxExpiredPolicy, f1, time2, f2, f3, diffHeight)
 
 			}
@@ -162,7 +162,7 @@ func (pool *transactionPool) loopRegularSaveLocalTxs() {
 		select {
 		// Handle local transaction  store
 		case <-stored.C:
-			for category := range pool.config.PathRemote {
+			for category := range pool.config.PathMapRemoteTxsByCategory {
 				err := pool.SaveRemoteTxs(category)
 				if err != nil {
 					pool.log.Warnf("Failed to save local tx ", "error:", err)
@@ -215,7 +215,7 @@ func (pool *transactionPool) loopRegularRepublic() {
 				return 0
 			}
 			diffHeight := pool.config.TxTTLHeightOfRepublic
-			for category := range pool.config.PathRemote {
+			for category := range pool.config.PathMapRemoteTxsByCategory {
 				pool.queues.republicTx(category, TxRepublicTime, f1, time2, f2, f3, diffHeight)
 			}
 		case <-pool.ctx.Done():
@@ -226,22 +226,22 @@ func (pool *transactionPool) loopRegularRepublic() {
 }
 
 func (pool *transactionPool) saveAllWhenSysShutDown() {
-	if !pool.config.NoRemoteFile && pool.config.PathRemote != nil {
-		for category := range pool.config.PathRemote {
+	if pool.config.PathMapRemoteTxsByCategory != nil {
+		for category := range pool.config.PathMapRemoteTxsByCategory {
 			err := pool.SaveRemoteTxs(category)
 			if err != nil {
 				pool.log.Errorf("Failed to save remote transaction", "err", err)
 			}
 		}
 	}
-	if !pool.config.NoTxsInfoFile && pool.config.PathTxsINfo != "" {
+	if pool.config.PathTxsInfoFile != "" {
 		err := pool.SaveTxsInfo()
 		if err != nil {
 			pool.log.Errorf("Failed to save txs info", "err", err)
 		}
 	}
 	//txPool configs save
-	if !pool.config.NoConfigFile && pool.config.PathConfig != "" {
+	if pool.config.PathConfigFile != "" {
 		err := pool.SaveConfig()
 		if err != nil {
 			pool.log.Errorf("Failed to save transaction pool configs", "err", err)

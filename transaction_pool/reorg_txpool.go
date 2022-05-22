@@ -1,11 +1,12 @@
 package transactionpool
 
 import (
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"fmt"
 	"math"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
@@ -70,7 +71,7 @@ func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolRes
 	if accountCache != nil && reset == nil {
 		addrsNeedTurn = accountCache.flatten()
 	}
-
+	fmt.Println("runReorgTxpool addrsNeedTurn", addrsNeedTurn)
 	if reset != nil {
 		pool.Reset(reset.oldBlockHead, reset.newBlockHead)
 		// Reset needs turn all addresses to pending
@@ -79,11 +80,11 @@ func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolRes
 	pool.turnAddrTxsToPending(addrsNeedTurn)
 
 	if reset != nil {
-		for category := range pool.config.PathRemote {
+		for category := range pool.config.PathMapRemoteTxsByCategory {
 			pool.demoteUnexecutables(category) //demote transactions
 		}
 	}
-	for category := range pool.config.PathRemote {
+	for category := range pool.config.PathMapRemoteTxsByCategory {
 		pool.truncatePendingByCategory(category)
 		pool.truncateQueueByCategory(category)
 	}
@@ -122,8 +123,8 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 
 			var curTxPoolTxs, packagedTx []*txbasic.Transaction
 			var (
-				rem, _ = pool.txServant.BlockByNumber(tpchaintypes.BlockNum(oldBlockHead.Height))
-				add, _ = pool.txServant.BlockByNumber(tpchaintypes.BlockNum(newBlockHead.Height))
+				rem, _ = pool.txServant.GetBlockByNumber(tpchaintypes.BlockNum(oldBlockHead.Height))
+				add, _ = pool.txServant.GetBlockByNumber(tpchaintypes.BlockNum(newBlockHead.Height))
 			)
 			if rem == nil {
 				if newBlockHeight >= oldBlockHeight {
@@ -138,7 +139,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 					"oldhead hash", tpchaintypes.BlockHash(oldBlockHead.Hash), "oldnum", oldBlockHeight,
 					"newhead hash", tpchaintypes.BlockHash(newBlockHead.Hash), "newnum", newBlockHeight)
 			} else {
-				for category := range pool.config.PathRemote {
+				for category := range pool.config.PathMapRemoteTxsByCategory {
 					curTxPoolTxs = append(curTxPoolTxs, pool.allTxsForLook.getAllTxsByCategory(category)...)
 				}
 				for add.GetHead().GetHeight() > rem.GetHead().GetHeight() {
@@ -152,7 +153,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 						packagedTx = append(packagedTx, txType)
 
 					}
-					if add, _ = pool.txServant.BlockByNumber(add.BlockNum() - 1); add == nil {
+					if add, _ = pool.txServant.GetBlockByNumber(add.BlockNum() - 1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newBlockHead.Height,
 							"hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 						return ErrUnRooted
@@ -169,7 +170,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 						packagedTx = append(packagedTx, txType)
 					}
 
-					if add, _ = pool.txServant.BlockByNumber(add.BlockNum() - 1); add == nil {
+					if add, _ = pool.txServant.GetBlockByNumber(add.BlockNum() - 1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newBlockHead.Height,
 							"hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 						return ErrUnRooted

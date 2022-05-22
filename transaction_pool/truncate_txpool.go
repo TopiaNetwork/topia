@@ -2,11 +2,11 @@ package transactionpool
 
 import (
 	"container/heap"
-	"github.com/TopiaNetwork/topia/eventhub"
 	"sync/atomic"
 	"time"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/eventhub"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 

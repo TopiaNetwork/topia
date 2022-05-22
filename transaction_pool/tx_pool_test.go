@@ -3,9 +3,7 @@ package transactionpool
 import (
 	"context"
 	"encoding/json"
-	tpnet "github.com/TopiaNetwork/topia/network"
-	"github.com/TopiaNetwork/topia/service"
-	_interface "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -21,13 +19,16 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	tpnet "github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/service"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 var (
 	Category1, Category2                                                             txbasic.TransactionCategory
-	TestTxPoolConfig                                                                 _interface.TransactionPoolConfig
+	TestTxPoolConfig                                                                 txpooli.TransactionPoolConfig
 	TxlowGasPrice, TxHighGasLimit, txlocal, txremote, Tx1, Tx2, Tx3, Tx4, TxR1, TxR2 *txbasic.Transaction
 	txHead                                                                           *txbasic.TransactionHead
 	txData                                                                           *txbasic.TransactionData
@@ -54,7 +55,7 @@ func init() {
 	Ctx = context.Background()
 	Category1 = txbasic.TransactionCategory_Topia_Universal
 	TpiaLog, _ = tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
-	TestTxPoolConfig = _interface.DefaultTransactionPoolConfig
+	TestTxPoolConfig = txpooli.DefaultTransactionPoolConfig
 	starttime = uint64(time.Now().Unix() - 105)
 	keyLocals = make([]txbasic.TxID, 0)
 	keyRemotes = make([]txbasic.TxID, 0)
@@ -295,7 +296,7 @@ func SetBlockData(txs []*txbasic.Transaction) *tpchaintypes.BlockData {
 	return blockdata
 }
 
-func SetNewTransactionPool(nodeID string, ctx context.Context, conf _interface.TransactionPoolConfig, level tplogcmm.LogLevel,
+func SetNewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig, level tplogcmm.LogLevel,
 	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
 	blockService service.BlockService, network tpnet.Network) *transactionPool {
 
@@ -327,43 +328,40 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf _interface.T
 		hasher:    tpcmm.NewBlake2bHasher(0),
 	}
 	pool.txCache, _ = lru.New(pool.config.TxCacheSize)
-	pool.BlockMaxGasLimit = pool.config.GasPriceLimit
 	pool.pendings = newPendingsMap()
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
-	if !pool.config.NoTxsInfoFile {
-		pool.loadTxsInfo(pool.config.NoConfigFile, pool.config.PathTxsINfo)
+
+	if pool.config.PathConfigFile != "" {
+		pool.loadConfig(conf.PathConfigFile)
 	}
-	if !pool.config.NoRemoteFile {
-		for category := range pool.config.PathRemote {
-			pool.newTxListStructs(category)
-			pool.loadRemote(category, pool.config.NoRemoteFile, pool.config.PathRemote[category])
-		}
+	if pool.config.PathTxsInfoFile != "" {
+		pool.loadTxsInfo(pool.config.PathTxsInfoFile)
 	}
 
-	curBlock, err := pool.txServant.LatestBlock()
+	curBlock, err := pool.txServant.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
 	pool.Reset(nil, curBlock.GetHead())
-
 	pool.wg.Add(1)
 	go pool.ReorgAndTurnTxLoop()
-	for category, _ := range pool.allTxsForLook.getAll() {
-		pool.loadRemote(category, conf.NoRemoteFile, conf.PathRemote[category])
-	}
-	pool.loadConfig(conf.NoConfigFile, conf.PathConfig)
-	pool.loopChanSelect()
 
+	pool.loopChanSelect()
 	TxMsgSubProcessor = &txMessageSubProcessor{txpool: pool, log: pool.log, nodeID: pool.nodeId}
-	//comment when unit testing
+	//comment when unit tesing
 	//pool.txServant.Subscribe(ctx, protocol.SyncProtocolID_Msg,
 	//	true,
 	//	TxMsgSubProcessor.Validate)
 	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
 	pool.handler = poolHandler
+	for category := range pool.config.PathMapRemoteTxsByCategory {
+		pool.newTxListStructs(category)
+		pool.loadRemote(category, pool.config.PathMapRemoteTxsByCategory[category])
+	}
 	return pool
+
 }
 
 func Test_transactionPool_GetLocalTxs(t *testing.T) {
@@ -387,10 +385,13 @@ func Test_transactionPool_GetLocalTxs(t *testing.T) {
 	txs = append(txs, Tx2)
 	txsMap := make(map[tpcrtypes.Address][]*txbasic.Transaction)
 	txsMap[From1] = txs
+	fmt.Println("test 001")
 	pool.AddLocals(txs)
 	want := txsMap[From1]
+	fmt.Println("test 002")
 
 	got := pool.GetLocalTxs(Category1)
+	fmt.Println("test 003")
 
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.queues.getLenTxsByAddrOfCategory(Category1, From1))

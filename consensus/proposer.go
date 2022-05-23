@@ -323,6 +323,9 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		return err
 	}
 
+	p.lastProposeHeight = proposeHeightNew
+	p.lastProposeTimeStamp = time.Now()
+
 	pppProp, err := p.getAvailPPMProp(latestBlock.Head.Height)
 	if err != nil {
 		p.log.Errorf("%v", err)
@@ -330,9 +333,6 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	}
 
 	p.log.Infof("Avail PPM prop state version %d", pppProp.StateVersion)
-
-	p.lastProposeHeight = proposeHeightNew
-	p.lastProposeTimeStamp = time.Now()
 
 	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock, proposeHeightNew)
 	if !canPropose {

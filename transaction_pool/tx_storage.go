@@ -1,67 +1,80 @@
 package transactionpool
 
 import (
-	"encoding/json"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"io/ioutil"
 	"time"
 
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
-type remoteTxs struct {
-	Txs                 map[txbasic.TxID]*txbasic.Transaction
+type TxsStorage struct {
+	Categorys           []txbasic.TransactionCategory
+	TxsLocal            []*txbasic.Transaction
+	TxsRemote           []*txbasic.Transaction
 	ActivationIntervals map[txbasic.TxID]time.Time
 	HeightIntervals     map[txbasic.TxID]uint64
 	TxHashCategorys     map[txbasic.TxID]txbasic.TransactionCategory
+	Config              txpooli.TransactionPoolConfig
 }
 
-func (pool *transactionPool) SaveRemoteTxs(category txbasic.TransactionCategory) error {
+func (pool *transactionPool) SaveTxsData(path string) error {
 
-	var remotetxs = &remoteTxs{
-		Txs:                 pool.allTxsForLook.getRemoteMapTxsLookupByCategory(category),
+	var txsStorge = &TxsStorage{
+		Categorys:           pool.allTxsForLook.getAllCategory(),
+		TxsLocal:            pool.allTxsForLook.getAllTxs(true),
+		TxsRemote:           pool.allTxsForLook.getAllTxs(false),
 		ActivationIntervals: pool.ActivationIntervals.getAll(),
 		HeightIntervals:     pool.HeightIntervals.getAll(),
 		TxHashCategorys:     pool.TxHashCategory.getAll(),
+		Config:              pool.config,
 	}
-	remotes, err := json.Marshal(remotetxs)
+	txsData, err := pool.marshaler.Marshal(txsStorge)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(pool.config.PathRemote[category], remotes, 0664)
+	err = ioutil.WriteFile(path, txsData, 0664)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (pool *transactionPool) loadRemote(category txbasic.TransactionCategory, nofile bool, path string) {
-	if !nofile && path != "" {
-		if err := pool.LoadRemoteTxs(category); err != nil {
-			pool.log.Warnf("Failed to load remote transactions", "err", err)
+func (pool *transactionPool) LoadTxsData(path string) {
+	if path != "" {
+		if err := pool.loadTxsData(path); err != nil {
+			pool.log.Errorf("Failed to load transactions data", "err", err)
+		} else {
+			pool.log.Infof("loadTxsData from storage done")
 		}
+	} else {
+		pool.log.Errorf("Failed to load transactions data: config.PathTxsStorge is nil")
 	}
 }
-func (pool *transactionPool) LoadRemoteTxs(category txbasic.TransactionCategory) error {
-	data, err := ioutil.ReadFile(pool.config.PathRemote[category])
+func (pool *transactionPool) loadTxsData(path string) error {
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil
+		return err
 	}
-	remotetxs := &remoteTxs{}
-	err = json.Unmarshal(data, &remotetxs)
+	txsData := &TxsStorage{}
+	err = pool.marshaler.Unmarshal(data, &txsData)
 	if err != nil {
-		return nil
+		return err
 	}
 
-	for _, tx := range remotetxs.Txs {
-		pool.AddRemote(tx)
+	pool.config = txsData.Config
+	for _, cat := range txsData.Categorys {
+		pool.newTxListStructs(cat)
 	}
-	for txId, ActivationInterval := range remotetxs.ActivationIntervals {
+	pool.addTxs(txsData.TxsLocal, true)
+	pool.addTxs(txsData.TxsRemote, false)
+	for txId, ActivationInterval := range txsData.ActivationIntervals {
 		pool.ActivationIntervals.setTxActiv(txId, ActivationInterval)
 	}
-	for txId, height := range remotetxs.HeightIntervals {
+	for txId, height := range txsData.HeightIntervals {
 		pool.HeightIntervals.setTxHeight(txId, height)
 	}
-	for txId, TxHashCategory := range remotetxs.TxHashCategorys {
+	for txId, TxHashCategory := range txsData.TxHashCategorys {
 		pool.TxHashCategory.setHashCat(txId, TxHashCategory)
 	}
 	return nil

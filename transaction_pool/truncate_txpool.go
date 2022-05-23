@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"container/heap"
+	"sync/atomic"
 	"time"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -33,14 +34,18 @@ func (pool *transactionPool) truncatePendingByCategory(category txbasic.Transact
 	if len(greyAccounts) > 0 {
 		//The accounts with the most backlogged transactions are first dumped
 		f31 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-			pool.log.Tracef("Removed fairness-exceeding pending transaction", "txKey", txId)
+
+			if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
+				atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+				atomic.AddInt64(&pool.poolCount, -1)
+				pool.log.Tracef("Removed fairness-exceeding pending transaction", "txKey", txId)
+			}
+
 		}
 		for pendingSize > pool.config.MaxSizeOfPending && len(greyAccounts) > 0 {
 
 			bePunished := heap.Pop(&greyAccountsQueue).(*SizeAccountItem)
-			sizeCaps := pool.pendings.truncatePendingByCategoryFun3(f31, category, bePunished.accountAddr)
-			pool.sortedLists.removedPricedlistByCategory(category, sizeCaps)
+			pool.pendings.truncatePendingByCategoryFun3(f31, category, bePunished.accountAddr)
 			pendingSize -= uint64(bePunished.size)
 		}
 
@@ -61,22 +66,27 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 	f3 := func(category txbasic.TransactionCategory, key txbasic.TxID) *txbasic.Transaction {
 		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, key)
 	}
-	f4 := func(category txbasic.TransactionCategory, txId txbasic.TxID, tx *txbasic.Transaction) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId)
-		// Remove it from the list of sortedByPriced
-		pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
-		txRemoved := &eventhub.TxPoolEvent{
-			EvType: eventhub.TxPoolEVTypee_Removed,
-			Tx:     tx,
+	f4 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
+		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
+			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+			atomic.AddInt64(&pool.poolCount, -1)
+			txRemoved := &eventhub.TxPoolEvent{
+				EvType: eventhub.TxPoolEVTypee_Removed,
+				Tx:     txRm,
+			}
+			eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txRemoved)
 		}
-		eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txRemoved)
+
 	}
 	f5 := func(f51 func(txId txbasic.TxID, tx *txbasic.Transaction), tx *txbasic.Transaction, category txbasic.TransactionCategory, addr tpcrtypes.Address) {
 		pool.pendings.getTxListRemoveByAddrOfCategory(f51, tx, category, addr)
 	}
-	f511 := func(category txbasic.TransactionCategory, txid txbasic.TxID, tx *txbasic.Transaction) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txid)
-		pool.sortedLists.removedPricedlistByCategory(category, tx.Size())
+	f511 := func(category txbasic.TransactionCategory, txid txbasic.TxID) {
+		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txid); ok {
+			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+			atomic.AddInt64(&pool.poolCount, -1)
+		}
+
 	}
 	f512 := func(category txbasic.TransactionCategory, txId txbasic.TxID) *txbasic.Transaction {
 		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txId)
@@ -99,13 +109,9 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 }
 
 func (pool *transactionPool) TruncateTxPool() {
-
-	for category, _ := range pool.allTxsForLook.all {
-		pool.queues.removeAll(category)
-		pool.pendings.removeAll(category)
-		pool.allTxsForLook.removeAll(category)
-		pool.sortedLists.removeAll(category)
-	}
+	pool.queues = newQueuesMap()
+	pool.pendings = newPendingsMap()
+	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.txCache.Purge()
 	pool.log.Tracef("TransactionPool Truncated")
 

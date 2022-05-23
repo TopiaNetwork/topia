@@ -15,14 +15,19 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	keyLocals = make([]txbasic.TxID, 0)
 	keyRemotes = make([]txbasic.TxID, 0)
 	txLocals = make([]*txbasic.Transaction, 0)
@@ -52,21 +57,16 @@ func Test_transactionPool_truncateQueue(t *testing.T) {
 		_ = pool.AddTx(txlocal, true)
 		_ = pool.AddTx(txremote, false)
 	}
-	assert.Equal(t, 449, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 400, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 192, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 233, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 118, pool.allTxsForLook.getLocalCountByCategory(Category1))
+	assert.Equal(t, 117, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 400, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 192, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	pool.truncateQueueByCategory(Category1)
-	assert.Equal(t, 257, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 400, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-
-	assert.Equal(t, 400, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 233, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 118, pool.allTxsForLook.getLocalCountByCategory(Category1))
+	assert.Equal(t, 117, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
 }
 
@@ -74,19 +74,24 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	keyLocals = make([]txbasic.TxID, 0)
 	keyRemotes = make([]txbasic.TxID, 0)
 	txLocals = make([]*txbasic.Transaction, 0)
 	txRemotes = make([]*txbasic.Transaction, 0)
-	var fromlocal, fromremote tpcrtypes.Address
+	var fromlocal tpcrtypes.Address
 
 	for i := 1; i <= 400; i++ {
 		nonce := uint64(i)
@@ -111,28 +116,19 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 		txRemotes = append(txRemotes, txremote)
 		fromlocal = tpcrtypes.Address(txlocal.Head.FromAddr)
 		_ = pool.AddTx(txlocal, true)
-		assert.Equal(t, 1, pool.queues.getTxListByAddrOfCategory(Category1, fromlocal).txs.Len())
+		assert.Equal(t, 1, pool.queues.getLenTxsByAddrOfCategory(Category1, fromlocal))
 		_ = pool.AddTx(txremote, false)
-		fromremote = tpcrtypes.Address(txremote.Head.FromAddr)
 
-		_ = pool.turnTx(fromlocal, keylocal, txlocal)
-
-		_ = pool.turnTx(fromremote, keyremote, txremote)
 	}
-	assert.Equal(t, 449, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 449, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 400, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 192, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 233, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 118, pool.allTxsForLook.getLocalCountByCategory(Category1))
+	assert.Equal(t, 117, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	assert.Equal(t, 400, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 192, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
 	pool.truncatePendingByCategory(Category1)
-	assert.Equal(t, 449, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 449, len(pool.pendings.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 400, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 192, pool.allTxsForLook.all[Category1].RemoteCount())
-
-	assert.Equal(t, 400, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 192, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 2, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 233, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 118, pool.allTxsForLook.getLocalCountByCategory(Category1))
+	assert.Equal(t, 117, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
 }

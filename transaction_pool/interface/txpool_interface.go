@@ -12,10 +12,13 @@ import (
 const MOD_NAME = "TransactionPool"
 
 type PickTxType uint32
+
 const (
 	PickTransactionsFromPending PickTxType = iota
 	PickTransactionsSortedByGasPriceAndNonce
+	PickTransactionsSortedByGasPriceAndTime
 )
+
 type TxExpiredPolicy byte
 
 const (
@@ -26,16 +29,13 @@ const (
 )
 
 type TransactionPoolConfig struct {
-	NoRemoteFile    bool
-	NoConfigFile    bool
-	PathRemote      map[txbasic.TransactionCategory]string
-	PathConfig      string
+	PathTxsStorge   string
 	ReStoredDur     time.Duration
 	TxExpiredPolicy TxExpiredPolicy
 	TxCacheSize     int
 	GasPriceLimit   uint64
 	TxMaxSize       uint64
-	TxpoolMaxSize   uint64
+	TxPoolMaxSize   uint64
 
 	MaxSizeOfEachPendingAccount uint64 // Maximum size of executable transaction per account
 	MaxSizeOfPending            uint64 // Maximum size of executable transaction
@@ -51,23 +51,19 @@ type TransactionPoolConfig struct {
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
-	PathRemote: map[txbasic.TransactionCategory]string{
-		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json",
-		txbasic.TransactionCategory_Eth:             "savedtxs/Eth_remoteTransactions.json"},
-	PathConfig:      "configuration/txPoolConfigs.json",
+	PathTxsStorge:   "StorgeInfo/StorageTxsDataAndConfig.json",
 	ReStoredDur:     30 * time.Minute,
 	TxExpiredPolicy: TxExpiredTimeAndHeight,
 	GasPriceLimit:   1000, // 1000
+	TxCacheSize:     36000000,
 
-	TxCacheSize: 36000000,
+	TxMaxSize:     2 * 1024,
+	TxPoolMaxSize: 64 * 2 * 1024,
 
-	TxMaxSize:     4 * 32 * 1024,
-	TxpoolMaxSize: 8192 * 2 * 4 * 32 * 1024,
-
-	MaxSizeOfEachPendingAccount: 64 * 32 * 1024,
-	MaxSizeOfPending:            8192 * 32 * 1024,
-	MaxSizeOfEachQueueAccount:   64 * 32 * 1024,
-	MaxSizeOfQueue:              8192 * 2 * 32 * 1024,
+	MaxSizeOfEachPendingAccount: 2 * 1024,
+	MaxSizeOfPending:            16 * 1024,
+	MaxSizeOfEachQueueAccount:   2 * 1024,
+	MaxSizeOfQueue:              32 * 1024,
 
 	LifetimeForTx:         30 * time.Minute,
 	LifeHeight:            uint64(30 * 60),
@@ -83,17 +79,20 @@ func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
 	if conf.GasPriceLimit < 1 {
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
-	if conf.MaxSizeOfEachPendingAccount < 32*1024 {
+	if conf.MaxSizeOfEachPendingAccount < 2*1024 {
 		conf.MaxSizeOfEachQueueAccount = DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount
 	}
-	if conf.MaxSizeOfPending < 16*32*1024 {
+	if conf.MaxSizeOfPending < 32*1024 {
 		conf.MaxSizeOfPending = DefaultTransactionPoolConfig.MaxSizeOfPending
 	}
-	if conf.MaxSizeOfEachQueueAccount < 64*1024 {
+	if conf.MaxSizeOfEachQueueAccount < 2*1024 {
 		conf.MaxSizeOfEachPendingAccount = DefaultTransactionPoolConfig.MaxSizeOfEachQueueAccount
 	}
-	if conf.MaxSizeOfQueue < 32*64*1024 {
+	if conf.MaxSizeOfQueue < 64*1024 {
 		conf.MaxSizeOfQueue = DefaultTransactionPoolConfig.MaxSizeOfQueue
+	}
+	if conf.TxPoolMaxSize < 128*1024 {
+		conf.TxPoolMaxSize = DefaultTransactionPoolConfig.TxPoolMaxSize
 	}
 	if conf.LifetimeForTx < 1 {
 		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
@@ -101,11 +100,8 @@ func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
 	if conf.TxTTLTimeOfRepublic < 1 {
 		conf.TxTTLTimeOfRepublic = DefaultTransactionPoolConfig.TxTTLTimeOfRepublic
 	}
-	if conf.PathConfig == "" {
-		conf.PathConfig = DefaultTransactionPoolConfig.PathConfig
-	}
-	if conf.PathRemote == nil {
-		conf.PathRemote = DefaultTransactionPoolConfig.PathRemote
+	if conf.PathTxsStorge == "" {
+		conf.PathTxsStorge = DefaultTransactionPoolConfig.PathTxsStorge
 	}
 
 	return conf
@@ -120,7 +116,7 @@ type TransactionPool interface {
 
 	Reset(oldHead, newHead *tpchaintypes.BlockHead) error
 
-	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
+	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID, isLocal bool) error
 
 	Pending() ([]*txbasic.Transaction, error)
 

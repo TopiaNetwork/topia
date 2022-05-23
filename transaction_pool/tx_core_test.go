@@ -26,16 +26,16 @@ func init() {
 	newSizeAccountHeap = SizeAccountHeap{
 		&SizeAccountItem{
 			"a0001",
-			33,
+			33333,
 			0,
 		},
 		&SizeAccountItem{
 			"a0002",
-			11,
+			11111,
 			1,
 		}, &SizeAccountItem{
 			"a003",
-			22,
+			22222,
 			1,
 		},
 	}
@@ -109,7 +109,7 @@ func TestSizeAccountHeap_Len(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Less(t *testing.T) {
+func TestSizeAccountHeap_Less(t *testing.T) {
 	type args struct {
 		i int
 		j int
@@ -124,7 +124,7 @@ func TestCntAccountHeap_Less(t *testing.T) {
 		{name: "test for false", pq: newSizeAccountHeap,
 			args: args{0, 1}, want: false},
 		{name: "test for false", pq: newSizeAccountHeap,
-			args: args{1, 2}, want: false},
+			args: args{1, 2}, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestCntAccountHeap_Less(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Swap(t *testing.T) {
+func TestSizeAccountHeap_Swap(t *testing.T) {
 	type args struct {
 		i int
 		j int
@@ -161,7 +161,7 @@ func TestCntAccountHeap_Swap(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Push(t *testing.T) {
+func TestSizeAccountHeap_Push(t *testing.T) {
 	type args struct {
 		x interface{}
 	}
@@ -187,7 +187,7 @@ func TestCntAccountHeap_Push(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Pop(t *testing.T) {
+func TestSizeAccountHeap_Pop(t *testing.T) {
 	tests := []struct {
 		name string
 		pq   SizeAccountHeap
@@ -197,7 +197,7 @@ func TestCntAccountHeap_Pop(t *testing.T) {
 		{name: "pop test",
 			pq: newSizeAccountHeap,
 			want: &SizeAccountItem{"a003",
-				22,
+				22222,
 				-1}},
 	}
 	for _, tt := range tests {
@@ -251,22 +251,27 @@ func Test_transactionPool_AddLocals(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+
 	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, Tx1)
 	txs = append(txs, Tx2)
 	pool.AddLocals(txs)
-	assert.Equal(t, 1, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 2, pool.queues.getTxListByAddrOfCategory(Category1, From1).txs.Len())
-	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, pool.queues.getLenTxsByAddrOfCategory(Category1, From1))
+	assert.Equal(t, 1, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+
 }

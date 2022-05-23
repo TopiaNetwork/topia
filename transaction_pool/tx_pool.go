@@ -331,7 +331,7 @@ func (pool *transactionPool) addTxsLocked(txs []*txbasic.Transaction, local bool
 	return errs, dirtyAccounts
 }
 
-func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID, isLocal bool) error {
+func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error {
 	defer func(t0 time.Time) {
 		pool.log.Infof("Update transaction cost time:", time.Since(t0))
 	}(time.Now())
@@ -346,7 +346,7 @@ func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxI
 			pool.RemoveTxByKey(txKey)
 			txs := make([]*txbasic.Transaction, 0)
 			txs = append(txs, tx)
-			pool.addTxs(txs, isLocal)
+			pool.addTxs(txs, true)
 		}
 		return nil
 	default:

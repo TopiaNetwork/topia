@@ -80,11 +80,11 @@ func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolRes
 	pool.turnAddrTxsToPending(addrsNeedTurn)
 
 	if reset != nil {
-		for category := range pool.config.PathMapRemoteTxsByCategory {
+		for _, category := range pool.allTxsForLook.getAllCategory() {
 			pool.demoteUnexecutables(category) //demote transactions
 		}
 	}
-	for category := range pool.config.PathMapRemoteTxsByCategory {
+	for _, category := range pool.allTxsForLook.getAllCategory() {
 		pool.truncatePendingByCategory(category)
 		pool.truncateQueueByCategory(category)
 	}
@@ -139,7 +139,7 @@ func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 					"oldhead hash", tpchaintypes.BlockHash(oldBlockHead.Hash), "oldnum", oldBlockHeight,
 					"newhead hash", tpchaintypes.BlockHash(newBlockHead.Hash), "newnum", newBlockHeight)
 			} else {
-				for category := range pool.config.PathMapRemoteTxsByCategory {
+				for _, category := range pool.allTxsForLook.getAllCategory() {
 					curTxPoolTxs = append(curTxPoolTxs, pool.allTxsForLook.getAllTxsByCategory(category)...)
 				}
 				for add.GetHead().GetHeight() > rem.GetHead().GetHeight() {

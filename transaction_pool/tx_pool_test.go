@@ -333,13 +333,6 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Tran
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
 
-	if pool.config.PathConfigFile != "" {
-		pool.loadConfig(conf.PathConfigFile)
-	}
-	if pool.config.PathTxsInfoFile != "" {
-		pool.loadTxsInfo(pool.config.PathTxsInfoFile)
-	}
-
 	curBlock, err := pool.txServant.GetLatestBlock()
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
@@ -356,10 +349,9 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Tran
 	//	TxMsgSubProcessor.Validate)
 	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
 	pool.handler = poolHandler
-	for category := range pool.config.PathMapRemoteTxsByCategory {
-		pool.newTxListStructs(category)
-		pool.loadRemote(category, pool.config.PathMapRemoteTxsByCategory[category])
-	}
+
+	pool.LoadTxsData(pool.config.PathTxsStorge)
+
 	return pool
 
 }

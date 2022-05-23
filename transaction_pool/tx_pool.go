@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -303,14 +302,11 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local bool) []er
 	if len(news) == 0 {
 		return errs
 	}
-	fmt.Println("addTxs 001 txs", news)
 	// Process all the new transaction and merge any errors into the original slice
-	newErrs, dirtyAddrCache := pool.addTxsLocked(news, local)
-	fmt.Println("addTxs 002 newErrs,dirtyAddrCache", newErrs, dirtyAddrCache)
+	_, dirtyAddrCache := pool.addTxsLocked(news, local)
 
 	// Reorg the pool internals if needed and return
 	done := pool.requestTurnToPending(dirtyAddrCache)
-	fmt.Println("requestTurnToPending done")
 	<-done
 	return errs
 }
@@ -320,11 +316,9 @@ func (pool *transactionPool) addTxsLocked(txs []*txbasic.Transaction, local bool
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
 		replaced, err := pool.add(tx, local)
-		fmt.Println("addTxsLocked 001 replaced,err", replaced, err)
 		errs[i] = err
 		if err == nil && !replaced {
 			dirtyAccounts.addTx(tx)
-			fmt.Println("addTxsLocked 002 dirtyAccounts.flatten", dirtyAccounts.flatten())
 
 		}
 	}
@@ -561,7 +555,6 @@ func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced 
 
 // turnAccTxsToPending adds  account's transaction list to the pending.
 func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Address) {
-	fmt.Println("turnAddrTxsToPending 001 addrsNeedTurn", addrsNeedTurn)
 	var turnedTxs []*txbasic.Transaction
 	for _, addr := range addrsNeedTurn {
 		for _, category := range pool.allTxsForLook.getAllCategory() {
@@ -579,7 +572,6 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 				}
 			}
 			pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2)
-			fmt.Println("replaceExecutablesDropTooOld done")
 			ft0 := func(address tpcrtypes.Address) uint64 {
 				nonce, err := pool.txServant.GetNonce(address)
 				if err != nil {
@@ -617,7 +609,6 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 
 			}
 			pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft4, ft5, turnedTxs, category, addr)
-			fmt.Println("replaceExecutablesTurnTx done")
 
 			// Drop all transactions over the allowed limit
 			fl2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
@@ -629,7 +620,6 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 				}
 			}
 			pool.queues.replaceExecutablesDropOverLimit(fl2, pool.config.MaxSizeOfEachQueueAccount, category, addr)
-			fmt.Println("replaceExecutablesDropOverLimit done")
 
 			// Delete the entire queue entry if it became empty.
 			pool.queues.replaceExecutablesDeleteEmpty(category, addr)

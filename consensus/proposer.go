@@ -37,8 +37,9 @@ type consensusProposer struct {
 	proposeMaxInterval      time.Duration
 	blockMaxCyclePeriod     time.Duration
 	isProposing             uint32
-	lastProposeHeight       uint64 //the block height which self-proposer launched based on last time
-	lastProposeTimeStamp    time.Time
+	lastBlockHeight         uint64
+	lastProposeHeight       uint64    //the block height which self-proposer launched based on last time
+	newHeightStartTimeStamp time.Time // the timestamp of new block height
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -301,30 +302,31 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
-	if p.lastProposeHeight == 0 {
+	if p.lastProposeHeight == 0 || (addedBlock != nil && addedBlock.Head.Height > p.lastBlockHeight) {
+		p.lastBlockHeight = latestBlock.Head.Height
 		p.lastProposeHeight = latestBlock.Head.Height
-		p.lastProposeTimeStamp = time.Now()
+		p.newHeightStartTimeStamp = time.Now()
 	}
 
 	var proposeHeightNew uint64
-	elapsedTime := time.Since(p.lastProposeTimeStamp).Microseconds()
+	elapsedTime := time.Since(p.newHeightStartTimeStamp).Microseconds()
 	deltaHeight := uint64(elapsedTime)/uint64(p.blockMaxCyclePeriod.Microseconds()) + 1
 	/*if deltaHeight > 1 {
 		err = fmt.Errorf("Not synced and can't proposing block: lastProposeHeight %d, deltaHeight %d, latest height %d", p.lastProposeHeight, deltaHeight, latestBlock.Head.Height)
 		p.log.Warnf("%s", err.Error())
 		return err
 	}*/
+
 	proposeHeightNew = latestBlock.Head.Height + deltaHeight
 
 	if p.lastProposeHeight > 0 && p.lastProposeHeight >= proposeHeightNew {
 		stateVerPPMProp, lenPPMProp := p.currentPPMProp()
-		err = fmt.Errorf("Have launched proposing block at propose height %d, latest height %d, ppmProp: stateVer %d, len %d", p.lastProposeHeight, latestBlock.Head.Height, stateVerPPMProp, lenPPMProp)
+		err = fmt.Errorf("Have launched proposing block at propose height %d, latest height %d, last ProposeTimeStamp %s, ppmProp: stateVer %d,len %d，self node %s", p.lastProposeHeight, latestBlock.Head.Height, p.newHeightStartTimeStamp.String(), stateVerPPMProp, lenPPMProp, p.nodeID)
 		p.log.Warnf("%s", err.Error())
 		return err
 	}
 
 	p.lastProposeHeight = proposeHeightNew
-	p.lastProposeTimeStamp = time.Now()
 
 	pppProp, err := p.getAvailPPMProp(latestBlock.Head.Height)
 	if err != nil {

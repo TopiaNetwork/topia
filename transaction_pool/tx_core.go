@@ -1181,6 +1181,13 @@ func newAllTxsLookupMap() *allTxsLookupMap {
 	}
 	return allMap
 }
+func (alltxsmap *allTxsLookupMap) getAllCategory() []txbasic.TransactionCategory {
+	cats := make([]txbasic.TransactionCategory, 0)
+	for cat := range alltxsmap.all {
+		cats = append(cats, cat)
+	}
+	return cats
+}
 func (alltxsmap *allTxsLookupMap) removeAll(category txbasic.TransactionCategory) {
 	alltxsmap.Mu.Lock()
 	defer alltxsmap.Mu.Unlock()
@@ -1204,6 +1211,26 @@ func (alltxsmap *allTxsLookupMap) getAllSize() int64 {
 		size += alltxsmap.getSizeFromAllTxsLookupByCategory(category)
 	}
 	return size
+}
+
+func (alltxsmap *allTxsLookupMap) getAllTxs(isLocal bool) []*txbasic.Transaction {
+	txs := make([]*txbasic.Transaction, 0)
+	alltxsmap.Mu.RLock()
+	defer alltxsmap.Mu.RUnlock()
+	for _, txsLookup := range alltxsmap.all {
+		txsLookup.lock.RLock()
+		defer txsLookup.lock.RUnlock()
+		if isLocal {
+			for _, tx := range txsLookup.locals {
+				txs = append(txs, tx)
+			}
+		} else {
+			for _, tx := range txsLookup.remotes {
+				txs = append(txs, tx)
+			}
+		}
+	}
+	return txs
 }
 
 func (alltxsmap *allTxsLookupMap) getAllTxsByCategory(category txbasic.TransactionCategory) []*txbasic.Transaction {
@@ -1295,17 +1322,17 @@ func (alltxsmap *allTxsLookupMap) getLocalKeyTxFromAllTxsLookupByCategory(catego
 	}
 	return nil
 }
-func (alltxsmap *allTxsLookupMap) getTxFromKeyFromAllTxsLookupByCategory(category txbasic.TransactionCategory, txHash txbasic.TxID) *txbasic.Transaction {
+func (alltxsmap *allTxsLookupMap) getTxFromKeyFromAllTxsLookupByCategory(category txbasic.TransactionCategory, txID txbasic.TxID) *txbasic.Transaction {
 
 	if txlookup := alltxsmap.getAllTxsLookupByCategory(category); txlookup != nil {
 
 		txlookup.lock.RLock()
 		defer txlookup.lock.RUnlock()
 
-		if tx := txlookup.locals[txHash]; tx != nil {
+		if tx := txlookup.locals[txID]; tx != nil {
 			return tx
 		}
-		return txlookup.remotes[txHash]
+		return txlookup.remotes[txID]
 	}
 	return nil
 }

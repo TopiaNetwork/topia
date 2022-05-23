@@ -109,12 +109,6 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Transac
 	pool.queues = newQueuesMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
-	if pool.config.PathConfigFile != "" {
-		pool.loadConfig(conf.PathConfigFile)
-	}
-	if pool.config.PathTxsInfoFile != "" {
-		pool.loadTxsInfo(pool.config.PathTxsInfoFile)
-	}
 
 	curBlock, err := pool.txServant.GetLatestBlock()
 	if err != nil {
@@ -133,11 +127,7 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Transac
 	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
 	pool.handler = poolHandler
 
-	// ReorgAndTurnTxLoop and loopChanSelect need run before loadRemote txs
-	for category := range pool.config.PathMapRemoteTxsByCategory {
-		pool.newTxListStructs(category)
-		pool.loadRemote(category, pool.config.PathMapRemoteTxsByCategory[category])
-	}
+	pool.LoadTxsData(pool.config.PathTxsStorge)
 	return pool
 }
 
@@ -246,7 +236,7 @@ func (pool *transactionPool) Pending() ([]*txbasic.Transaction, error) {
 		pool.log.Infof("get Pending txs list cost time:", time.Since(t0))
 	}(time.Now())
 	TxList := make([]*txbasic.Transaction, 0)
-	for category := range pool.config.PathMapRemoteTxsByCategory {
+	for _, category := range pool.allTxsForLook.getAllCategory() {
 		TxList = append(TxList, pool.pendings.getTxsByCategory(category)...)
 	}
 	if len(TxList) == 0 {
@@ -273,7 +263,7 @@ func (pool *transactionPool) Queue() ([]*txbasic.Transaction, error) {
 		pool.log.Infof("get Queue txs, cost time:", time.Since(t0))
 	}(time.Now())
 	TxList := make([]*txbasic.Transaction, 0)
-	for category := range pool.config.PathMapRemoteTxsByCategory {
+	for _, category := range pool.allTxsForLook.getAllCategory() {
 		TxList = append(TxList, pool.queues.getTxsByCategory(category)...)
 	}
 	if len(TxList) == 0 {
@@ -574,7 +564,7 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 	fmt.Println("turnAddrTxsToPending 001 addrsNeedTurn", addrsNeedTurn)
 	var turnedTxs []*txbasic.Transaction
 	for _, addr := range addrsNeedTurn {
-		for category := range pool.config.PathMapRemoteTxsByCategory {
+		for _, category := range pool.allTxsForLook.getAllCategory() {
 			f1 := func(address tpcrtypes.Address) uint64 {
 				var nonce, err = pool.txServant.GetNonce(address)
 				if err != nil {
@@ -657,7 +647,6 @@ func (pool *transactionPool) Stop() {
 	pool.log.Info("TransactionPool stopped")
 }
 
-
 func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCategory) {
 	// Iterate over all accounts and demote any non-executable transactions
 	f1 := func(address tpcrtypes.Address) uint64 {
@@ -695,12 +684,12 @@ func (pool *transactionPool) PickTxs(txType txpooli.PickTxType) (txs []*txbasic.
 
 		return txs
 	case txpooli.PickTransactionsSortedByGasPriceAndNonce:
-		for category := range pool.config.PathMapRemoteTxsByCategory {
+		for _, category := range pool.allTxsForLook.getAllCategory() {
 			txs = append(txs, pool.CommitTxsByPriceAndNonce(category)...)
 		}
 		return txs
 	case txpooli.PickTransactionsSortedByGasPriceAndTime:
-		for category := range pool.config.PathMapRemoteTxsByCategory {
+		for _, category := range pool.allTxsForLook.getAllCategory() {
 			txs = append(txs, pool.CommitTxsByPriceAndTime(category)...)
 		}
 		return txs

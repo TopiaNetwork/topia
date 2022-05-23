@@ -96,7 +96,7 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 
 }
 
-func Test_transactionPool_SaveRemoteTxs(t *testing.T) {
+func Test_transactionPool_SaveTxsData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
@@ -111,27 +111,28 @@ func Test_transactionPool_SaveRemoteTxs(t *testing.T) {
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
 	pool.AddTx(TxR1, false)
 	pool.AddTx(TxR2, false)
 
-	if err := pool.SaveRemoteTxs(Category1); err != nil {
+	if err := pool.SaveTxsData(pool.config.PathTxsStorge); err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	data, err := ioutil.ReadFile(pool.config.PathMapRemoteTxsByCategory[Category1])
+	data, err := ioutil.ReadFile(pool.config.PathTxsStorge)
 	if err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	remotetxs := &remoteTxs{}
-	err = json.Unmarshal(data, &remotetxs)
+	txsdata := &TxsStorage{}
+	err = json.Unmarshal(data, &txsdata)
 	if err != nil {
 		t.Error("want", nil, "got", err)
 	}
 
-	for k, v := range remotetxs.Txs {
-		want := *pool.allTxsForLook.all[Category1].remotes[k]
-		got := *v
+	for _, v := range txsdata.TxsRemote {
+		txID, _ := v.TxID()
+		want := pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(Category1, txID)
+		got := v
 		if !reflect.DeepEqual(want, got) {
 			t.Error("want", want, "got", got)
 		}
@@ -139,7 +140,7 @@ func Test_transactionPool_SaveRemoteTxs(t *testing.T) {
 
 }
 
-func Test_transactionPool_LoadRemoteTxs(t *testing.T) {
+func Test_transactionPool_LoadTxsData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog

@@ -29,10 +29,7 @@ const (
 )
 
 type TransactionPoolConfig struct {
-	PathMapRemoteTxsByCategory map[txbasic.TransactionCategory]string
-	PathConfigFile             string
-	PathTxsInfoFile            string
-
+	PathTxsStorge   string
 	ReStoredDur     time.Duration
 	TxExpiredPolicy TxExpiredPolicy
 	TxCacheSize     int
@@ -54,10 +51,7 @@ type TransactionPoolConfig struct {
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
-	PathMapRemoteTxsByCategory: map[txbasic.TransactionCategory]string{
-		txbasic.TransactionCategory_Topia_Universal: "savedtxs/Topia_Universal_remoteTransactions.json"},
-	PathConfigFile:  "configuration/txPoolConfigs.json",
-	PathTxsInfoFile: "savedtxs/TxsInfo.json",
+	PathTxsStorge:   "StorgeInfo/StorageTxsDataAndConfig.json",
 	ReStoredDur:     30 * time.Minute,
 	TxExpiredPolicy: TxExpiredTimeAndHeight,
 	GasPriceLimit:   1000, // 1000
@@ -106,14 +100,8 @@ func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
 	if conf.TxTTLTimeOfRepublic < 1 {
 		conf.TxTTLTimeOfRepublic = DefaultTransactionPoolConfig.TxTTLTimeOfRepublic
 	}
-	if conf.PathConfigFile == "" {
-		conf.PathConfigFile = DefaultTransactionPoolConfig.PathConfigFile
-	}
-	if conf.PathMapRemoteTxsByCategory == nil {
-		conf.PathMapRemoteTxsByCategory = DefaultTransactionPoolConfig.PathMapRemoteTxsByCategory
-	}
-	if conf.PathTxsInfoFile == "" {
-		conf.PathTxsInfoFile = DefaultTransactionPoolConfig.PathTxsInfoFile
+	if conf.PathTxsStorge == "" {
+		conf.PathTxsStorge = DefaultTransactionPoolConfig.PathTxsStorge
 	}
 
 	return conf

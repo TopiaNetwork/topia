@@ -410,11 +410,13 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 	marshaler codec.Marshaler,
 	network tpnet.Network,
 	ledger ledger.Ledger) error {
-	if ok := scheduler.executeMutex.TryLockTimeout(1 * time.Second); !ok {
-		err := fmt.Errorf("A packedTxs is commiting, try later again")
-		scheduler.log.Errorf("%v", err)
-		return err
-	}
+	/*
+		if ok := scheduler.executeMutex.TryLockTimeout(60 * time.Second); !ok {
+			err := fmt.Errorf("A packedTxs is commiting, try later again")
+			scheduler.log.Errorf("%v", err)
+			return err
+		}*/
+	scheduler.executeMutex.Lock()
 	defer scheduler.executeMutex.Unlock()
 
 	scheduler.schedulerState.Store(uint32(SchedulerState_Commiting))

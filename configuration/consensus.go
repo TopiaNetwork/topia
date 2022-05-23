@@ -25,7 +25,7 @@ func DefConsensusConfiguration() *ConsensusConfiguration {
 		CrptyType:                tpcrtypes.CryptType_Ed25519,
 		ExecutionPrepareInterval: 500 * time.Millisecond,
 		ProposerBlockMaxInterval: 1000 * time.Millisecond,
-		BlockMaxCyclePeriod:      5000 * time.Millisecond,
+		BlockMaxCyclePeriod:      3000 * time.Millisecond,
 		MaxPrepareMsgCache:       50,
 	}
 }

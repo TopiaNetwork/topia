@@ -116,7 +116,7 @@ type TransactionPool interface {
 
 	Reset(oldHead, newHead *tpchaintypes.BlockHead) error
 
-	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID, isLocal bool) error
+	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
 
 	Pending() ([]*txbasic.Transaction, error)
 

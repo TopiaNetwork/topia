@@ -317,7 +317,8 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	proposeHeightNew = latestBlock.Head.Height + deltaHeight
 
 	if p.lastProposeHeight > 0 && p.lastProposeHeight >= proposeHeightNew {
-		err = fmt.Errorf("Have launched proposing block at propose height %d, latest height %d", p.lastProposeHeight, latestBlock.Head.Height)
+		stateVerPPMProp, lenPPMProp := p.currentPPMProp()
+		err = fmt.Errorf("Have launched proposing block at propose height %d, latest height %d, ppmProp: stateVer %d, len %d", p.lastProposeHeight, latestBlock.Head.Height, stateVerPPMProp, lenPPMProp)
 		p.log.Warnf("%s", err.Error())
 		return err
 	}
@@ -451,6 +452,19 @@ func (p *consensusProposer) createBlockHead(chainID tpchaintypes.ChainID, epoch 
 		StateRoot:       stateRoot,
 		TimeStamp:       uint64(time.Now().UnixNano()),
 	}, frontPPMProp.StateVersion, nil
+}
+
+func (p *consensusProposer) currentPPMProp() (uint64, int) {
+	p.syncPPMPropList.RLock()
+	defer p.syncPPMPropList.RUnlock()
+
+	frontEle := p.ppmPropList.Front()
+	if frontEle != nil {
+		frontPPMProp := frontEle.Value.(*PreparePackedMessageProp)
+		return frontPPMProp.StateVersion, p.ppmPropList.Len()
+	}
+
+	return 0, 0
 }
 
 func (p *consensusProposer) getAvailPPMProp(latestHeight uint64) (*PreparePackedMessageProp, error) {

@@ -10,7 +10,7 @@ import (
 	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
 	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
 	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_transaction"
-	handlers "github.com/TopiaNetwork/topia/api/web3/handlers"
+	"github.com/TopiaNetwork/topia/api/web3/handlers"
 	mocks2 "github.com/TopiaNetwork/topia/api/web3/mocks"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 )
 
 var Accounts = initAccount()
@@ -403,10 +404,12 @@ func TestWeb3Server(t *testing.T) {
 		AnyTimes()
 
 	config := web3.Web3ServerConfiguration{
-		HttpHost:  "localhost",
-		HttpPort:  "8080",
-		HttpsHost: "localhost",
-		HttpsPost: "8443",
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		HttpHost:     "localhost",
+		HttpPort:     "8080",
+		HttpsHost:    "localhost",
+		HttpsPost:    "8443",
 	}
 	web3.StartServer(config, servantMock)
 }

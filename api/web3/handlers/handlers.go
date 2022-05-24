@@ -13,8 +13,29 @@ import (
 	"github.com/TopiaNetwork/topia/currency"
 	"github.com/TopiaNetwork/topia/transaction/universal"
 	"math/big"
+	"reflect"
 	"strconv"
 )
+
+type HandlerService interface {
+	CallHandler(parmas interface{}) interface{}
+	ChainIdHandler(parmas interface{}) interface{}
+	EstimateGasHandler(parmas interface{}) interface{}
+	FeeHistoryHandler(parmas interface{}) interface{}
+	GasPriceHandler(parmas interface{}) interface{}
+	GetAccountsHandler(parmas interface{}) interface{}
+	GetBalanceHandler(parmas interface{}) interface{}
+	GetBlockByHashHandler(parmas interface{}) interface{}
+	GetBlockByNumberHandler(parmas interface{}) interface{}
+	GetBlockNumberHandler(parmas interface{}) interface{}
+	GetCodeHandler(parmas interface{}) interface{}
+	GetTransactionByHashHandler(parmas interface{}) interface{}
+	GetTransactionCountHandler(parmas interface{}) interface{}
+	GetTransactionReceiptHandler(parmas interface{}) interface{}
+	NetListeningHandler(parmas interface{}) interface{}
+	NetVersionHandler(parmas interface{}) interface{}
+	SendRawTransactionHandler(parmas interface{}) interface{}
+}
 
 type Handler struct {
 	Servant servant.APIServant
@@ -280,4 +301,162 @@ func (h *Handler) SendRawTransactionHandler(parmas interface{}) interface{} {
 		return types2.ErrorMessage(err)
 	}
 	return &types2.JsonrpcMessage{Result: enc}
+}
+
+func GetApis() []Api {
+	return []Api{
+		{
+			Method: "eth_getBalance",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &GetBalanceRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetBalanceHandler),
+			},
+		},
+		{
+			Method: "eth_getTransactionByHash",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &GetTransactionByHashRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetTransactionByHashHandler),
+			},
+		},
+		{
+			Method: "eth_getTransactionCount",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &GetTransactionCountRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetTransactionCountHandler),
+			},
+		},
+		{
+			Method: "eth_getCode",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &GetCodeRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetCodeHandler),
+			},
+		},
+		{
+			Method: "eth_getBlockByHash",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &GetBlockByHashRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetBlockByHashHandler),
+			},
+		},
+		{
+			Method: "eth_getBlockByNumber",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &GetBlockByNumberRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetBlockByNumberHandler),
+			},
+		},
+		{
+			Method: "eth_blockNumber",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &EmptyType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetBlockNumberHandler),
+			},
+		},
+		{
+			Method: "eth_call",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &CallRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.CallHandler),
+			},
+		},
+		{
+			Method: "eth_estimateGas",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &EstimateGasRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.EstimateGasHandler),
+			},
+		},
+		{
+			Method: "eth_getTransactionReceipt",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &GetTransactionReceiptRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetTransactionReceiptHandler),
+			},
+		},
+		{
+			Method: "eth_sendRawTransaction",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &SendRawTransactionRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.SendRawTransactionHandler),
+			},
+		},
+		{
+			Method: "eth_gasPrice",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &GasPriceRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GasPriceHandler),
+			},
+		},
+		{
+			Method: "eth_chainId",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &EmptyType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.ChainIdHandler),
+			},
+		},
+		{
+			Method: "eth_feeHistory",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &FeeHistoryRequestType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.FeeHistoryHandler),
+			},
+		},
+		{
+			Method: "net_version",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &EmptyType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.NetVersionHandler),
+			},
+		},
+		{
+			Method: "eth_accounts",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &EmptyType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.GetAccountsHandler),
+			},
+		},
+		{
+			Method: "net_listening",
+			Handler: &RequestHandler{
+				Param: getValueArray(&RequestType{
+					RequestType: &EmptyType{},
+				}),
+				Func: reflect.ValueOf(HandlerService.NetListeningHandler),
+			},
+		},
+	}
 }

@@ -10,6 +10,7 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"net/http"
+	"os"
 	"reflect"
 	"runtime/debug"
 	"time"
@@ -19,8 +20,10 @@ func HandlerWapper(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if pr := recover(); pr != nil {
-				fmt.Println("panic recover: %v", pr)
+				fmt.Fprintf(os.Stderr, "runtime error: %v\n", pr)
+				w.WriteHeader(http.StatusInternalServerError)
 				debug.PrintStack()
+				return
 			}
 		}()
 
@@ -47,15 +50,15 @@ func StartServer(config Web3ServerConfiguration, apiServant servant.APIServant) 
 	srv := &http.Server{
 		Addr:         httpAddr,
 		Handler:      nil,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  config.ReadTimeout,
+		WriteTimeout: config.WriteTimeout,
 	}
 	HttpsAddr := config.HttpsHost + ":" + config.HttpsPost
 	srvs := &http.Server{
 		Addr:         HttpsAddr,
 		Handler:      nil,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  config.ReadTimeout,
+		WriteTimeout: config.WriteTimeout,
 	}
 
 	go srvs.ListenAndServeTLS("../cert.pem", "../key.pem")
@@ -70,6 +73,7 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 
 	if len(req.Header) > w.MaxHeader && w.MaxHeader != 0 || len(reqBodyMsg.String()) > w.MaxBody && w.MaxBody != 0 {
 		res.WriteHeader(http.StatusInternalServerError)
+		res.Header().Set("X-Server-Time", time.Now().String())
 		return
 	}
 	log, _ := tplog.CreateMainLogger(tplogcmm.DebugLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
@@ -79,6 +83,7 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 		result = types2.ErrorMessage(&types2.InvalidRequestError{err.Error()})
 	} else if req.Method != "POST" {
 		res.WriteHeader(http.StatusMethodNotAllowed)
+		res.Header().Set("X-Server-Time", time.Now().String())
 		return
 	} else {
 		method := reqBodyMsg.Method
@@ -101,9 +106,11 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 	}
 	if result.Result == nil && result.Error == nil {
 		res.WriteHeader(http.StatusInternalServerError)
+		res.Header().Set("X-Server-Time", time.Now().String())
 		return
 	}
 	re := constructResult(result, *reqBodyMsg)
+	res.Header().Set("X-Server-Time", time.Now().String())
 	res.Write(re)
 }
 
@@ -115,12 +122,14 @@ type Web3Server struct {
 }
 
 type Web3ServerConfiguration struct {
-	MaxHeader int
-	MaxBody   int
-	HttpPort  string
-	HttpHost  string
-	HttpsPost string
-	HttpsHost string
+	MaxHeader    int
+	MaxBody      int
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	HttpPort     string
+	HttpHost     string
+	HttpsPost    string
+	HttpsHost    string
 }
 
 func (w *Web3Server) RegisterMethodHandler() {

@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCall(t *testing.T) {
@@ -138,10 +139,12 @@ func TestCall(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/", strings.NewReader(body))
 	res := httptest.NewRecorder()
 	config := web3.Web3ServerConfiguration{
-		HttpHost:  "",
-		HttpPort:  "8080",
-		HttpsHost: "",
-		HttpsPost: "8443",
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		HttpHost:     "",
+		HttpPort:     "8080",
+		HttpsHost:    "",
+		HttpsPost:    "8443",
 	}
 	w3s := web3.InitWeb3Server(config, servantMock)
 	w3s.ServeHttp(res, req)

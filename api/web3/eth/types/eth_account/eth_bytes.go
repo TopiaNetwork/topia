@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package common contains various helper functions.
-package types
+package eth_account
 
 import (
 	"encoding/hex"

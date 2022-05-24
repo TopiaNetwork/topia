@@ -5,11 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/TopiaNetwork/topia/api/mocks"
-	"github.com/TopiaNetwork/topia/api/servant"
 	"github.com/TopiaNetwork/topia/api/web3"
+	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
 	"github.com/TopiaNetwork/topia/api/web3/handlers"
-	"github.com/TopiaNetwork/topia/api/web3/types"
+	mocks2 "github.com/TopiaNetwork/topia/api/web3/mocks"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 	"github.com/golang/mock/gomock"
@@ -33,11 +33,10 @@ func TestSendRawTransaction(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	apiServant := servant.NewAPIServant()
-	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
-	txInterfaceMock.
+	servantMock := mocks2.NewMockAPIServant(ctrl)
+	servantMock.
 		EXPECT().
-		SendTransaction(gomock.Any(), gomock.Any()).
+		ForwardTxSync(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, tran *txbasic.Transaction) error {
 			var txUniversal txuni.TransactionUniversal
 			_ = json.Unmarshal(tran.GetData().GetSpecification(), &txUniversal)
@@ -94,17 +93,19 @@ func TestSendRawTransaction(t *testing.T) {
 		}).
 		AnyTimes()
 	config := web3.Web3ServerConfiguration{
-		Host: "",
-		Port: "8080",
+		HttpHost:  "",
+		HttpPort:  "8080",
+		HttpsHost: "",
+		HttpsPost: "8443",
 	}
-	w3s := web3.InitWeb3Server(config, apiServant, txInterfaceMock)
+	w3s := web3.InitWeb3Server(config, servantMock)
 
 	w3s.ServeHttp(res, req)
 	result, _ := io.ReadAll(res.Result().Body)
-	j := types.JsonrpcMessage{}
+	j := types2.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
 
-	hash := new(types.Hash)
+	hash := new(eth_account.Hash)
 	err := json.Unmarshal(j.Result, hash)
 	if err != nil {
 		t.Errorf("failed")

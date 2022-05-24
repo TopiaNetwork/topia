@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package eth_transaction
 
 import (
 	"errors"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
 	"github.com/TopiaNetwork/topia/codec"
 	solsha3 "github.com/miguelmota/go-solidity-sha3"
 	"math/big"
@@ -75,7 +76,7 @@ type TxData interface {
 	gasFeeCap() *big.Int
 	value() *big.Int
 	nonce() uint64
-	to() *Address
+	to() *eth_account.Address
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -131,7 +132,7 @@ func (tx *Transaction) setDecoded(inner TxData, size int) {
 	tx.inner = inner
 	tx.time = time.Now()
 	if size > 0 {
-		tx.size.Store(StorageSize(size))
+		tx.size.Store(eth_account.StorageSize(size))
 	}
 }
 
@@ -192,7 +193,7 @@ func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
-func (tx *Transaction) To() *Address {
+func (tx *Transaction) To() *eth_account.Address {
 	return copyAddressPtr(tx.inner.to())
 }
 
@@ -202,12 +203,12 @@ func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.inner.rawSignatureValues()
 }
 
-func (tx *Transaction) Hash() Hash {
+func (tx *Transaction) Hash() eth_account.Hash {
 	if hash := tx.hash.Load(); hash != nil {
-		return hash.(Hash)
+		return hash.(eth_account.Hash)
 	}
 
-	var h Hash
+	var h eth_account.Hash
 	if tx.Type() == LegacyTxType {
 		h = rlpHash([]interface{}{
 			tx.Nonce(),
@@ -235,27 +236,27 @@ func (tx *Transaction) Hash() Hash {
 	return h
 }
 
-func rlpHash(x interface{}) (h Hash) {
+func rlpHash(x interface{}) (h eth_account.Hash) {
 	marshaler := codec.CreateMarshaler(codec.CodecType_RLP)
 	msgByte, _ := marshaler.Marshal(x)
 	hash := solsha3.SoliditySHA3(msgByte)
-	var commonHash Hash
+	var commonHash eth_account.Hash
 	commonHash.SetBytes(hash)
 	return commonHash
 }
 
-func prefixedRlpHash(prefix byte, x interface{}) (h Hash) {
+func prefixedRlpHash(prefix byte, x interface{}) (h eth_account.Hash) {
 	marshaler := codec.CreateMarshaler(codec.CodecType_RLP)
 	msgByte, _ := marshaler.Marshal(x)
 	msgByte = concatByteSlices([]byte{prefix}, msgByte)
 	hash := solsha3.SoliditySHA3(msgByte)
-	var commonHash Hash
+	var commonHash eth_account.Hash
 	commonHash.SetBytes(hash)
 	return commonHash
 }
 
 // copyAddressPtr copies an address.
-func copyAddressPtr(a *Address) *Address {
+func copyAddressPtr(a *eth_account.Address) *eth_account.Address {
 	if a == nil {
 		return nil
 	}

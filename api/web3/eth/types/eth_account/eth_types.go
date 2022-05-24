@@ -14,22 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package eth_account
 
 import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
-	types "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
+	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
+	"golang.org/x/crypto/sha3"
 	"math/big"
 	"math/rand"
 	"reflect"
-	"strings"
-
-	"golang.org/x/crypto/sha3"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -71,7 +67,7 @@ func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 
 // Hex converts a hash to a hex string.
-func (h Hash) Hex() string { return types.Encode(h[:]) }
+func (h Hash) Hex() string { return types2.Encode(h[:]) }
 
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
@@ -117,17 +113,17 @@ func (h Hash) Format(s fmt.State, c rune) {
 
 // UnmarshalText parses a hash in hex syntax.
 func (h *Hash) UnmarshalText(input []byte) error {
-	return types.UnmarshalFixedText("Hash", input, h[:])
+	return types2.UnmarshalFixedText("Hash", input, h[:])
 }
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash) UnmarshalJSON(input []byte) error {
-	return types.UnmarshalFixedJSON(hashT, input, h[:])
+	return types2.UnmarshalFixedJSON(hashT, input, h[:])
 }
 
 // MarshalText returns the hex representation of h.
 func (h Hash) MarshalText() ([]byte, error) {
-	return types.Bytes(h[:]).MarshalText()
+	return types2.Bytes(h[:]).MarshalText()
 }
 
 // SetBytes sets the hash to the value of b.
@@ -187,7 +183,7 @@ type UnprefixedHash Hash
 
 // UnmarshalText decodes the hash from hex. The 0x prefix is optional.
 func (h *UnprefixedHash) UnmarshalText(input []byte) error {
-	return types.UnmarshalFixedUnprefixedText("UnprefixedHash", input, h[:])
+	return types2.UnmarshalFixedUnprefixedText("UnprefixedHash", input, h[:])
 }
 
 // MarshalText encodes the hash as hex.
@@ -308,17 +304,17 @@ func (a *Address) SetBytes(b []byte) {
 
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
-	return types.Bytes(a[:]).MarshalText()
+	return types2.Bytes(a[:]).MarshalText()
 }
 
 // UnmarshalText parses a hash in hex syntax.
 func (a *Address) UnmarshalText(input []byte) error {
-	return types.UnmarshalFixedText("Address", input, a[:])
+	return types2.UnmarshalFixedText("Address", input, a[:])
 }
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (a *Address) UnmarshalJSON(input []byte) error {
-	return types.UnmarshalFixedJSON(addressT, input, a[:])
+	return types2.UnmarshalFixedJSON(addressT, input, a[:])
 }
 
 // Scan implements Scanner for database/sql.
@@ -354,75 +350,76 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
-// UnprefixedAddress allows marshaling an Address without 0x prefix.
-type UnprefixedAddress Address
-
-// UnmarshalText decodes the address from hex. The 0x prefix is optional.
-func (a *UnprefixedAddress) UnmarshalText(input []byte) error {
-	return types.UnmarshalFixedUnprefixedText("UnprefixedAddress", input, a[:])
-}
-
-// MarshalText encodes the address as hex.
-func (a UnprefixedAddress) MarshalText() ([]byte, error) {
-	return []byte(hex.EncodeToString(a[:])), nil
-}
-
-// MixedcaseAddress retains the original string, which may or may not be
-// correctly checksummed
-type MixedcaseAddress struct {
-	addr     Address
-	original string
-}
-
-// NewMixedcaseAddress constructor (mainly for testing)
-func NewMixedcaseAddress(addr Address) MixedcaseAddress {
-	return MixedcaseAddress{addr: addr, original: addr.Hex()}
-}
-
-// NewMixedcaseAddressFromString is mainly meant for unit-testing
-func NewMixedcaseAddressFromString(hexaddr string) (*MixedcaseAddress, error) {
-	if !IsHexAddress(hexaddr) {
-		return nil, errors.New("invalid address")
-	}
-	a := FromHex(hexaddr)
-	return &MixedcaseAddress{addr: BytesToAddress(a), original: hexaddr}, nil
-}
-
-// UnmarshalJSON parses MixedcaseAddress
-func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
-	if err := types.UnmarshalFixedJSON(addressT, input, ma.addr[:]); err != nil {
-		return err
-	}
-	return json.Unmarshal(input, &ma.original)
-}
-
-// MarshalJSON marshals the original value
-func (ma *MixedcaseAddress) MarshalJSON() ([]byte, error) {
-	if strings.HasPrefix(ma.original, "0x") || strings.HasPrefix(ma.original, "0X") {
-		return json.Marshal(fmt.Sprintf("0x%s", ma.original[2:]))
-	}
-	return json.Marshal(fmt.Sprintf("0x%s", ma.original))
-}
-
-// Address returns the address
-func (ma *MixedcaseAddress) Address() Address {
-	return ma.addr
-}
-
-// String implements fmt.Stringer
-func (ma *MixedcaseAddress) String() string {
-	if ma.ValidChecksum() {
-		return fmt.Sprintf("%s [chksum ok]", ma.original)
-	}
-	return fmt.Sprintf("%s [chksum INVALID]", ma.original)
-}
-
-// ValidChecksum returns true if the address has valid checksum
-func (ma *MixedcaseAddress) ValidChecksum() bool {
-	return ma.original == ma.addr.Hex()
-}
-
-// Original returns the mixed-case input string
-func (ma *MixedcaseAddress) Original() string {
-	return ma.original
-}
+//
+//// UnprefixedAddress allows marshaling an Address without 0x prefix.
+//type UnprefixedAddress Address
+//
+//// UnmarshalText decodes the address from hex. The 0x prefix is optional.
+//func (a *UnprefixedAddress) UnmarshalText(input []byte) error {
+//	return types2.UnmarshalFixedUnprefixedText("UnprefixedAddress", input, a[:])
+//}
+//
+//// MarshalText encodes the address as hex.
+//func (a UnprefixedAddress) MarshalText() ([]byte, error) {
+//	return []byte(hex.EncodeToString(a[:])), nil
+//}
+//
+//// MixedcaseAddress retains the original string, which may or may not be
+//// correctly checksummed
+//type MixedcaseAddress struct {
+//	addr     Address
+//	original string
+//}
+//
+//// NewMixedcaseAddress constructor (mainly for testing)
+//func NewMixedcaseAddress(addr Address) MixedcaseAddress {
+//	return MixedcaseAddress{addr: addr, original: addr.Hex()}
+//}
+//
+//// NewMixedcaseAddressFromString is mainly meant for unit-testing
+//func NewMixedcaseAddressFromString(hexaddr string) (*MixedcaseAddress, error) {
+//	if !IsHexAddress(hexaddr) {
+//		return nil, errors.New("invalid address")
+//	}
+//	a := FromHex(hexaddr)
+//	return &MixedcaseAddress{addr: BytesToAddress(a), original: hexaddr}, nil
+//}
+//
+//// UnmarshalJSON parses MixedcaseAddress
+//func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
+//	if err := types2.UnmarshalFixedJSON(addressT, input, ma.addr[:]); err != nil {
+//		return err
+//	}
+//	return json.Unmarshal(input, &ma.original)
+//}
+//
+//// MarshalJSON marshals the original value
+//func (ma *MixedcaseAddress) MarshalJSON() ([]byte, error) {
+//	if strings.HasPrefix(ma.original, "0x") || strings.HasPrefix(ma.original, "0X") {
+//		return json.Marshal(fmt.Sprintf("0x%s", ma.original[2:]))
+//	}
+//	return json.Marshal(fmt.Sprintf("0x%s", ma.original))
+//}
+//
+//// Address returns the address
+//func (ma *MixedcaseAddress) Address() Address {
+//	return ma.addr
+//}
+//
+//// String implements fmt.Stringer
+//func (ma *MixedcaseAddress) String() string {
+//	if ma.ValidChecksum() {
+//		return fmt.Sprintf("%s [chksum ok]", ma.original)
+//	}
+//	return fmt.Sprintf("%s [chksum INVALID]", ma.original)
+//}
+//
+//// ValidChecksum returns true if the address has valid checksum
+//func (ma *MixedcaseAddress) ValidChecksum() bool {
+//	return ma.original == ma.addr.Hex()
+//}
+//
+//// Original returns the mixed-case input string
+//func (ma *MixedcaseAddress) Original() string {
+//	return ma.original
+//}

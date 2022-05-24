@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package eth_transaction
 
 import (
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
 	"math/big"
 )
 
@@ -27,8 +28,8 @@ type AccessList []AccessTuple
 
 // AccessTuple is the element type of an access list.
 type AccessTuple struct {
-	Address     Address `json:"address"        gencodec:"required"`
-	StorageKeys []Hash  `json:"storageKeys"    gencodec:"required"`
+	Address     eth_account.Address `json:"address"        gencodec:"required"`
+	StorageKeys []eth_account.Hash  `json:"storageKeys"    gencodec:"required"`
 }
 
 // StorageKeys returns the total number of storage keys in the access list.
@@ -42,15 +43,15 @@ func (al AccessList) StorageKeys() int {
 
 // AccessListTx is the data of EIP-2930 access list transactions.
 type AccessListTx struct {
-	ChainID    *big.Int   // destination chain ID
-	Nonce      uint64     // nonce of sender account
-	GasPrice   *big.Int   // wei per gas
-	Gas        uint64     // gas limit
-	To         *Address   `rlp:"nil"` // nil means contract creation
-	Value      *big.Int   // wei amount
-	Data       []byte     // contract invocation input data
-	AccessList AccessList // EIP-2930 access list
-	V, R, S    *big.Int   // signature values
+	ChainID    *big.Int             // destination chain ID
+	Nonce      uint64               // nonce of sender account
+	GasPrice   *big.Int             // wei per gas
+	Gas        uint64               // gas limit
+	To         *eth_account.Address `rlp:"nil"` // nil means contract creation
+	Value      *big.Int             // wei amount
+	Data       []byte               // contract invocation input data
+	AccessList AccessList           // EIP-2930 access list
+	V, R, S    *big.Int             // signature values
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -58,7 +59,7 @@ func (tx *AccessListTx) copy() TxData {
 	cpy := &AccessListTx{
 		Nonce: tx.Nonce,
 		To:    copyAddressPtr(tx.To),
-		Data:  CopyBytes(tx.Data),
+		Data:  eth_account.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
@@ -92,17 +93,17 @@ func (tx *AccessListTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *AccessListTx) txType() byte           { return AccessListTxType }
-func (tx *AccessListTx) chainID() *big.Int      { return tx.ChainID }
-func (tx *AccessListTx) accessList() AccessList { return tx.AccessList }
-func (tx *AccessListTx) data() []byte           { return tx.Data }
-func (tx *AccessListTx) gas() uint64            { return tx.Gas }
-func (tx *AccessListTx) gasPrice() *big.Int     { return tx.GasPrice }
-func (tx *AccessListTx) gasTipCap() *big.Int    { return tx.GasPrice }
-func (tx *AccessListTx) gasFeeCap() *big.Int    { return tx.GasPrice }
-func (tx *AccessListTx) value() *big.Int        { return tx.Value }
-func (tx *AccessListTx) nonce() uint64          { return tx.Nonce }
-func (tx *AccessListTx) to() *Address           { return tx.To }
+func (tx *AccessListTx) txType() byte             { return AccessListTxType }
+func (tx *AccessListTx) chainID() *big.Int        { return tx.ChainID }
+func (tx *AccessListTx) accessList() AccessList   { return tx.AccessList }
+func (tx *AccessListTx) data() []byte             { return tx.Data }
+func (tx *AccessListTx) gas() uint64              { return tx.Gas }
+func (tx *AccessListTx) gasPrice() *big.Int       { return tx.GasPrice }
+func (tx *AccessListTx) gasTipCap() *big.Int      { return tx.GasPrice }
+func (tx *AccessListTx) gasFeeCap() *big.Int      { return tx.GasPrice }
+func (tx *AccessListTx) value() *big.Int          { return tx.Value }
+func (tx *AccessListTx) nonce() uint64            { return tx.Nonce }
+func (tx *AccessListTx) to() *eth_account.Address { return tx.To }
 
 func (tx *AccessListTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

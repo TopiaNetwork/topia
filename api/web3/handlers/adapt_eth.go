@@ -1,12 +1,11 @@
-package eth
+package handlers
 
 import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/TopiaNetwork/topia/api/servant"
-	"github.com/TopiaNetwork/topia/api/web3/handlers"
-	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
 	"github.com/TopiaNetwork/topia/codec"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
@@ -166,7 +165,7 @@ func Hex2Dec(val string) uint64 {
 	}
 	return n
 }
-func FeeHistory(requestType *handlers.FeeHistoryRequestType, servant servant.APIServant) *handlers.FeeHistoryResponseType {
+func FeeHistory(requestType *FeeHistoryRequestType, servant servant.APIServant) *FeeHistoryResponseType {
 	lastBlock := Hex2Dec(requestType.BlockHeight[2:])
 	blockCount := requestType.BlockCount
 	percentiles := requestType.Percentile
@@ -224,7 +223,7 @@ func FeeHistory(requestType *handlers.FeeHistoryRequestType, servant servant.API
 	for i, _ := range BaseFee {
 		baseFeeStr[i] = (*hexutil.Big)(big.NewInt(0))
 	}
-	return &handlers.FeeHistoryResponseType{
+	return &FeeHistoryResponseType{
 		OldestBlock:  (*hexutil.Big)(new(big.Int).SetUint64(oldestBlock)),
 		Reward:       rewardStr,
 		BaseFee:      baseFeeStr,

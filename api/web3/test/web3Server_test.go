@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
-	"github.com/TopiaNetwork/topia/api/web3/handlers"
-	"github.com/TopiaNetwork/topia/api/web3/types"
+	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_transaction"
+	handlers "github.com/TopiaNetwork/topia/api/web3/handlers"
+	mocks2 "github.com/TopiaNetwork/topia/api/web3/mocks"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -32,11 +34,36 @@ func TestWeb3Server(t *testing.T) {
 
 	height := uint64(100)
 
-	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
-	txInterfaceMock.
+	servantMock := mocks2.NewMockAPIServant(ctrl)
+	servantMock.
 		EXPECT().
-		SendTransaction(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, tran *txbasic.Transaction) error {
+		ForwardTxSync(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, tran *txbasic.Transaction) (*txbasic.TransactionResult, error) {
+			resultUniversal := txuni.TransactionResultUniversal{
+				Version:   1,
+				TxHash:    GetHexByte("0x41597ee75a4de42f30930a1da4db24d932cc4ac688452ac7b0fe547df80b7716"),
+				GasUsed:   100_000,
+				ErrString: nil,
+				Status:    txuni.TransactionResultUniversal_OK,
+			}
+
+			marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+			txUniRSBytes, err := marshaler.Marshal(&resultUniversal)
+			if err != nil {
+
+			}
+
+			result := &txbasic.TransactionResult{
+				Head: &txbasic.TransactionResultHead{
+					Category: []byte(txbasic.TransactionCategory_Eth),
+					ChainID:  []byte(ChainId),
+					Version:  txbasic.Transaction_Eth_V1,
+				},
+				Data: &txbasic.TransactionResultData{
+					Specification: txUniRSBytes,
+				},
+			}
+
 			var txUniversal txuni.TransactionUniversal
 			_ = json.Unmarshal(tran.GetData().GetSpecification(), &txUniversal)
 			txUniversalHead := txUniversal.GetHead()
@@ -56,9 +83,9 @@ func TestWeb3Server(t *testing.T) {
 					fromAccount.SubBalance(value)
 					fromAccount.AddNonce()
 					toAccount.AddBalance(value)
-					return nil
+					return result, nil
 				} else {
-					return errors.New("not enough balance")
+					return result, errors.New("not enough balance")
 				}
 			case uint32(txuni.TransactionUniversalType_ContractInvoke):
 				from := handlers.AddPrefix(strings.ToLower(hex.EncodeToString(tran.GetHead().GetFromAddr())))
@@ -68,9 +95,9 @@ func TestWeb3Server(t *testing.T) {
 				if value.Cmp(fromAccount.GetBalance()) < 0 && fromAccount.GetCode() != nil {
 					fromAccount.SubBalance(value)
 					fromAccount.AddNonce()
-					return nil
+					return result, nil
 				} else {
-					return errors.New("not enough balance or code not exist")
+					return result, errors.New("not enough balance or code not exist")
 				}
 			case uint32(txuni.TransactionUniversalType_ContractDeploy):
 				from := handlers.AddPrefix(strings.ToLower(hex.EncodeToString(tran.GetHead().GetFromAddr())))
@@ -82,46 +109,47 @@ func TestWeb3Server(t *testing.T) {
 					fromAccount.SubBalance(value)
 					fromAccount.SetCode(code)
 					fromAccount.AddNonce()
-					return nil
+					return result, nil
 				} else {
-					return errors.New("not enough balance")
+					return result, errors.New("not enough balance")
 				}
 			default:
-				return errors.New("unknown txType")
+				return result, errors.New("unknown txType")
 			}
 		}).
 		AnyTimes()
 
-	servantMock := mocks.NewMockAPIServant(ctrl)
 	servantMock.
 		EXPECT().
 		ExecuteTxSim(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, tx *txbasic.Transaction) (*txbasic.TransactionResult, error) {
-			//resultUniversal := txuni.TransactionResultUniversal{
-			//	Version:   1,
-			//	TxHash:    GetHexByte("0x66121743b3eebd28626da9297f4e5a9ecc72aa97340513491824aa6ca4f21974"),
-			//	GasUsed:   100_000,
-			//	ErrString: nil,
-			//	Status:    txuni.TransactionResultUniversal_OK,
-			//	Data:      GetHexByte("0x66121743b3eebd28626da9297f4e5a9ecc72aa97340513491824aa6ca4f21974"),
-			//}
-
-			//marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
-			//txUniRSBytes, err := marshaler.Marshal(resultUniversal)
-			//if err != nil {
-			//
-			//}
 			resu, _ := hex.DecodeString("0000000000000000000000000000000000000000000000000000000000000000")
-			return &txbasic.TransactionResult{
+
+			resultUniversal := &txuni.TransactionResultUniversal{
+				Version:   1,
+				TxHash:    GetHexByte("0x66121743b3eebd28626da9297f4e5a9ecc72aa97340513491824aa6ca4f21974"),
+				GasUsed:   100_000,
+				ErrString: nil,
+				Status:    txuni.TransactionResultUniversal_OK,
+				Data:      resu,
+			}
+
+			marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+			txUniRSBytes, err := marshaler.Marshal(resultUniversal)
+			if err != nil {
+				fmt.Println(err)
+			}
+			aaa := &txbasic.TransactionResult{
 				Head: &txbasic.TransactionResultHead{
 					Category: []byte(txbasic.TransactionCategory_Eth),
 					ChainID:  []byte(ChainId),
 					Version:  txbasic.Transaction_Eth_V1,
 				},
 				Data: &txbasic.TransactionResultData{
-					Specification: resu,
+					Specification: txUniRSBytes,
 				},
-			}, nil
+			}
+			return aaa, nil
 		}).
 		AnyTimes()
 	servantMock.
@@ -242,13 +270,13 @@ func TestWeb3Server(t *testing.T) {
 		GetTransactionByHash(gomock.Any()).
 		DoAndReturn(func(txHashHex string) (*txbasic.Transaction, error) {
 			to, _ := hex.DecodeString("6fcd7b39e75619a68ab86a68b92d01134ef34ea3")
-			toAddr := types.Address{}
+			toAddr := eth_account.Address{}
 			toAddr.SetBytes(to)
 
 			rByte, _ := hex.DecodeString("fe4cd7376c6df62df3f8c60c6b82d90582c0b6922658d038665548eda98fc9f5")
 			sByte, _ := hex.DecodeString("08725bdf6cb82a27e4798cbcb70fa220e1d7459353ef1a2c716f8101f4c9c601")
 
-			ethLegacyTx := types.NewTx(&types.DynamicFeeTx{
+			ethLegacyTx := eth_transaction.NewTx(&eth_transaction.DynamicFeeTx{
 				ChainID:   big.NewInt(9),
 				Nonce:     0x0,
 				To:        &toAddr,
@@ -375,59 +403,61 @@ func TestWeb3Server(t *testing.T) {
 		AnyTimes()
 
 	config := web3.Web3ServerConfiguration{
-		Host: "",
-		Port: "8080",
+		HttpHost:  "localhost",
+		HttpPort:  "8080",
+		HttpsHost: "localhost",
+		HttpsPost: "8443",
 	}
-	web3.StartServer(config, servantMock, txInterfaceMock)
+	web3.StartServer(config, servantMock)
 }
 
-func initAccount() map[string]*types.Account {
+func initAccount() map[string]*types2.Account {
 	balance, _ := new(big.Int).SetString("1000000000000000000000", 10)
 
-	return map[string]*types.Account{
-		strings.ToLower("0x3F1B3C065aeE8cA34c47fa84aAC3024E95a2E6D9"): &types.Account{
+	return map[string]*types2.Account{
+		strings.ToLower("0x3F1B3C065aeE8cA34c47fa84aAC3024E95a2E6D9"): &types2.Account{
 			Addr:    []byte("0x3F1B3C065aeE8cA34c47fa84aAC3024E95a2E6D9"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,
 			Code:    nil,
 		},
-		strings.ToLower("0x6FCd7b39E75619A68Ab86a68B92d01134Ef34ea3"): &types.Account{
+		strings.ToLower("0x6FCd7b39E75619A68Ab86a68B92d01134Ef34ea3"): &types2.Account{
 			Addr:    []byte("0x6FCd7b39E75619A68Ab86a68B92d01134Ef34ea3"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,
 			Code:    nil,
 		},
-		strings.ToLower("0x825021c776Ea10fF688147063D7Ad96f05E232DA"): &types.Account{
+		strings.ToLower("0x825021c776Ea10fF688147063D7Ad96f05E232DA"): &types2.Account{
 			Addr:    []byte("0x825021c776Ea10fF688147063D7Ad96f05E232DA"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,
 			Code:    nil,
 		},
-		strings.ToLower("0x36Df1457573BC4947c4b2bf8C66e7f290e6C50e6"): &types.Account{
+		strings.ToLower("0x36Df1457573BC4947c4b2bf8C66e7f290e6C50e6"): &types2.Account{
 			Addr:    []byte("0x36Df1457573BC4947c4b2bf8C66e7f290e6C50e6"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,
 			Code:    nil,
 		},
-		strings.ToLower("0x141F79b9a561C775D76B8FC0a62ec85089d5f40D"): &types.Account{
+		strings.ToLower("0x141F79b9a561C775D76B8FC0a62ec85089d5f40D"): &types2.Account{
 			Addr:    []byte("0x141F79b9a561C775D76B8FC0a62ec85089d5f40D"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,
 			Code:    nil,
 		},
-		strings.ToLower("0x621d4e17CAd065De6B25c73B0c97ef81cFF5B1Ee"): &types.Account{
+		strings.ToLower("0x621d4e17CAd065De6B25c73B0c97ef81cFF5B1Ee"): &types2.Account{
 			Addr:    []byte("0x621d4e17CAd065De6B25c73B0c97ef81cFF5B1Ee"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,
 			Code:    nil,
 		},
-		strings.ToLower("0x047B52185ad4E9E695D3B077De8C155CE7b514D3"): &types.Account{
+		strings.ToLower("0x047B52185ad4E9E695D3B077De8C155CE7b514D3"): &types2.Account{
 			Addr:    []byte("0x047B52185ad4E9E695D3B077De8C155CE7b514D3"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,
 			Code:    nil,
 		},
-		strings.ToLower("0xC157Fdf20cDD376eFB537E0a40F64c87c4DEEDF6"): &types.Account{
+		strings.ToLower("0xC157Fdf20cDD376eFB537E0a40F64c87c4DEEDF6"): &types2.Account{
 			Addr:    []byte("0xC157Fdf20cDD376eFB537E0a40F64c87c4DEEDF6"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,

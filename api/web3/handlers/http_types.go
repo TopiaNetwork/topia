@@ -4,8 +4,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/TopiaNetwork/topia/api/web3/types"
-	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
+	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_transaction"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
 	secp "github.com/TopiaNetwork/topia/crypt/secp256"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
@@ -17,23 +19,23 @@ import (
 )
 
 type HandlerService interface {
-	CallHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	ChainIdHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	EstimateGasHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	FeeHistoryHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GasPriceHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetAccountsHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetBalanceHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetBlockByHashHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetBlockByNumberHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetBlockNumberHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetCodeHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetTransactionByHashHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetTransactionCountHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	GetTransactionReceiptHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	NetListeningHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	NetVersionHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
-	SendRawTransactionHandler(parmas interface{}, apiServant interface{}, txInterface interface{}) interface{}
+	CallHandler(parmas interface{}) interface{}
+	ChainIdHandler(parmas interface{}) interface{}
+	EstimateGasHandler(parmas interface{}) interface{}
+	FeeHistoryHandler(parmas interface{}) interface{}
+	GasPriceHandler(parmas interface{}) interface{}
+	GetAccountsHandler(parmas interface{}) interface{}
+	GetBalanceHandler(parmas interface{}) interface{}
+	GetBlockByHashHandler(parmas interface{}) interface{}
+	GetBlockByNumberHandler(parmas interface{}) interface{}
+	GetBlockNumberHandler(parmas interface{}) interface{}
+	GetCodeHandler(parmas interface{}) interface{}
+	GetTransactionByHashHandler(parmas interface{}) interface{}
+	GetTransactionCountHandler(parmas interface{}) interface{}
+	GetTransactionReceiptHandler(parmas interface{}) interface{}
+	NetListeningHandler(parmas interface{}) interface{}
+	NetVersionHandler(parmas interface{}) interface{}
+	SendRawTransactionHandler(parmas interface{}) interface{}
 }
 
 type RequestHandler struct {
@@ -222,8 +224,6 @@ func getValueArray(args interface{}) []reflect.Value {
 type RequestType struct {
 	Handler     HandlerService
 	RequestType interface{}
-	ApiServant  interface{}
-	TxInterface interface{}
 }
 type EmptyType struct{}
 
@@ -235,14 +235,14 @@ type CallResponseType struct {
 	Balance string `json:"balance"`
 }
 type TransactionArgs struct {
-	From                 *types.Address  `json:"from"`
-	To                   *types.Address  `json:"to"`
-	Gas                  *hexutil.Uint64 `json:"gas"`
-	GasPrice             *hexutil.Big    `json:"gasPrice"`
-	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
-	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
-	Value                *hexutil.Big    `json:"value"`
-	Nonce                *hexutil.Uint64 `json:"nonce"`
+	From                 *eth_account.Address `json:"from"`
+	To                   *eth_account.Address `json:"to"`
+	Gas                  *hexutil.Uint64      `json:"gas"`
+	GasPrice             *hexutil.Big         `json:"gasPrice"`
+	MaxFeePerGas         *hexutil.Big         `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big         `json:"maxPriorityFeePerGas"`
+	Value                *hexutil.Big         `json:"value"`
+	Nonce                *hexutil.Uint64      `json:"nonce"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -251,8 +251,8 @@ type TransactionArgs struct {
 	Input *hexutil.Bytes `json:"input"`
 
 	// Introduced by AccessListTxType transaction.
-	AccessList *types.AccessList `json:"accessList,omitempty"`
-	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+	AccessList *eth_transaction.AccessList `json:"accessList,omitempty"`
+	ChainID    *hexutil.Big                `json:"chainId,omitempty"`
 }
 
 type EstimateGasRequestType struct {
@@ -296,27 +296,27 @@ type GetBlockByHashRequestType struct {
 	Tx        bool
 }
 type GetBlockResponseType struct {
-	Number           *hexutil.Big   `json:"number"`
-	Hash             types.Hash     `json:"hash"`
-	ParentHash       types.Hash     `json:"parentHash"`
-	Nonce            []byte         `json:"nonce"`
-	MixHash          types.Hash     `json:"mixHash"`
-	Sha3Uncles       types.Hash     `json:"sha3Uncles"`
-	LogsBloom        []byte         `json:"logsBloom"`
-	StateRoot        types.Hash     `json:"stateRoot"`
-	Miner            types.Address  `json:"miner"`
-	Difficulty       *hexutil.Big   `json:"difficulty"`
-	ExtraData        []byte         `json:"extraData"`
-	Size             hexutil.Uint64 `json:"size"`
-	GasLimit         hexutil.Uint64 `json:"gasLimit"`
-	GasUsed          hexutil.Uint64 `json:"gasUsed"`
-	Timestamp        hexutil.Uint64 `json:"timestamp"`
-	TransactionsRoot types.Hash     `json:"transactionsRoot"`
-	ReceiptsRoot     types.Hash     `json:"receiptsRoot"`
-	BaseFeePerGas    *hexutil.Big   `json:"baseFeePerGas"`
-	Transactions     []interface{}  `json:"transactions"`
-	Uncles           []types.Hash   `json:"uncles"`
-	TotalDifficulty  *hexutil.Big   `json:"totalDifficulty"`
+	Number           *hexutil.Big        `json:"number"`
+	Hash             eth_account.Hash    `json:"hash"`
+	ParentHash       eth_account.Hash    `json:"parentHash"`
+	Nonce            []byte              `json:"nonce"`
+	MixHash          eth_account.Hash    `json:"mixHash"`
+	Sha3Uncles       eth_account.Hash    `json:"sha3Uncles"`
+	LogsBloom        []byte              `json:"logsBloom"`
+	StateRoot        eth_account.Hash    `json:"stateRoot"`
+	Miner            eth_account.Address `json:"miner"`
+	Difficulty       *hexutil.Big        `json:"difficulty"`
+	ExtraData        []byte              `json:"extraData"`
+	Size             hexutil.Uint64      `json:"size"`
+	GasLimit         hexutil.Uint64      `json:"gasLimit"`
+	GasUsed          hexutil.Uint64      `json:"gasUsed"`
+	Timestamp        hexutil.Uint64      `json:"timestamp"`
+	TransactionsRoot eth_account.Hash    `json:"transactionsRoot"`
+	ReceiptsRoot     eth_account.Hash    `json:"receiptsRoot"`
+	BaseFeePerGas    *hexutil.Big        `json:"baseFeePerGas"`
+	Transactions     []interface{}       `json:"transactions"`
+	Uncles           []eth_account.Hash  `json:"uncles"`
+	TotalDifficulty  *hexutil.Big        `json:"totalDifficulty"`
 }
 
 type GetBlockByNumberRequestType struct {
@@ -330,25 +330,25 @@ type GetCodeRequestType struct {
 }
 
 type EthRpcTransaction struct {
-	BlockHash        types.Hash      `json:"blockHash"`
-	BlockNumber      *hexutil.Big    `json:"blockNumber"`
-	From             types.Address   `json:"from"`
-	Gas              hexutil.Uint64  `json:"gas"`
-	GasPrice         *hexutil.Big    `json:"gasPrice"`
-	GasFeeCap        *hexutil.Big    `json:"maxFeePerGas,omitempty"`
-	GasTipCap        *hexutil.Big    `json:"maxPriorityFeePerGas,omitempty"`
-	Hash             types.Hash      `json:"hash"`
-	Input            hexutil.Bytes   `json:"input"`
-	Nonce            hexutil.Uint64  `json:"nonce"`
-	To               types.Address   `json:"to"`
-	TransactionIndex *hexutil.Uint64 `json:"transactionIndex"`
-	Value            *hexutil.Big    `json:"value"`
-	Type             hexutil.Uint64  `json:"type"`
-	Accesses         string          `json:"accessList,omitempty"`
-	ChainID          *hexutil.Big    `json:"chainId,omitempty"`
-	V                *hexutil.Big    `json:"v"`
-	R                *hexutil.Big    `json:"r"`
-	S                *hexutil.Big    `json:"s"`
+	BlockHash        eth_account.Hash    `json:"blockHash"`
+	BlockNumber      *hexutil.Big        `json:"blockNumber"`
+	From             eth_account.Address `json:"from"`
+	Gas              hexutil.Uint64      `json:"gas"`
+	GasPrice         *hexutil.Big        `json:"gasPrice"`
+	GasFeeCap        *hexutil.Big        `json:"maxFeePerGas,omitempty"`
+	GasTipCap        *hexutil.Big        `json:"maxPriorityFeePerGas,omitempty"`
+	Hash             eth_account.Hash    `json:"hash"`
+	Input            hexutil.Bytes       `json:"input"`
+	Nonce            hexutil.Uint64      `json:"nonce"`
+	To               eth_account.Address `json:"to"`
+	TransactionIndex *hexutil.Uint64     `json:"transactionIndex"`
+	Value            *hexutil.Big        `json:"value"`
+	Type             hexutil.Uint64      `json:"type"`
+	Accesses         string              `json:"accessList,omitempty"`
+	ChainID          *hexutil.Big        `json:"chainId,omitempty"`
+	V                *hexutil.Big        `json:"v"`
+	R                *hexutil.Big        `json:"r"`
+	S                *hexutil.Big        `json:"s"`
 }
 
 type GetTransactionByHashRequestType struct {
@@ -377,12 +377,12 @@ type GetTransactionByhashResponseType struct {
 }
 
 type GetTransactionCountRequestType struct {
-	Address types.Address
+	Address eth_account.Address
 	Height  string
 }
 
 type GetTransactionReceiptRequestType struct {
-	TxHash types.Hash
+	TxHash eth_account.Hash
 }
 type GetTransactionReceiptResponseType struct {
 	BlockHash         string      `json:"blockHash"`
@@ -407,7 +407,7 @@ type SendRawTransactionRequestType struct {
 type SendRawTransactionResponseType struct{}
 
 func ConstructTopiaTransaction(rawTransaction SendRawTransactionRequestType) (*txbasic.Transaction, error) {
-	tx := new(types.Transaction)
+	tx := new(eth_transaction.Transaction)
 	err := tx.UnmarshalBinary(rawTransaction.RawTransaction)
 	if err != nil {
 		return nil, errors.New("unmarshal rawTransaction error")
@@ -432,8 +432,8 @@ func ConstructTopiaTransaction(rawTransaction SendRawTransactionRequestType) (*t
 		return nil, errors.New("recover PubKey error")
 	}
 
-	var from types.Address
-	copy(from[:], types.Keccak256(pubKey[1:])[12:])
+	var from eth_account.Address
+	copy(from[:], eth_account.Keccak256(pubKey[1:])[12:])
 
 	var txType int
 	if tx.To() == nil && tx.Data() != nil {
@@ -466,7 +466,7 @@ func ConstructTopiaTransaction(rawTransaction SendRawTransactionRequestType) (*t
 
 		transactionHead := txbasic.TransactionHead{
 			Category:  []byte(txbasic.TransactionCategory_Eth),
-			ChainID:   types.Null,
+			ChainID:   types2.Null,
 			Version:   uint32(txbasic.Transaction_Eth_V1),
 			FromAddr:  from.Bytes(),
 			Nonce:     tx.Nonce(),
@@ -483,7 +483,7 @@ func ConstructTopiaTransaction(rawTransaction SendRawTransactionRequestType) (*t
 	case transfer:
 		transactionHead := txbasic.TransactionHead{
 			Category: []byte(txbasic.TransactionCategory_Eth),
-			ChainID:  types.Null,
+			ChainID:  types2.Null,
 			Version:  uint32(txbasic.Transaction_Eth_V1),
 			FromAddr: from.Bytes(),
 			Nonce:    tx.Nonce(),
@@ -543,7 +543,7 @@ func ConstructTopiaTransaction(rawTransaction SendRawTransactionRequestType) (*t
 
 		transactionHead := txbasic.TransactionHead{
 			Category: []byte(txbasic.TransactionCategory_Eth),
-			ChainID:  types.Null,
+			ChainID:  types2.Null,
 			Version:  uint32(txbasic.Transaction_Eth_V1),
 			FromAddr: from.Bytes(),
 			Nonce:    tx.Nonce(),
@@ -564,15 +564,15 @@ func ConstructTopiaTransaction(rawTransaction SendRawTransactionRequestType) (*t
 }
 func ComputeV(v *big.Int, txType byte, chainId *big.Int) *big.Int {
 	switch txType {
-	case types.LegacyTxType:
+	case eth_transaction.LegacyTxType:
 		if chainId.BitLen() == 0 {
 			v = new(big.Int).Sub(v, big.NewInt(27))
 		} else {
 			v = new(big.Int).Sub(v, big.NewInt(35))
 			v = new(big.Int).Sub(v, new(big.Int).Mul(big.NewInt(2), chainId))
 		}
-	case types.AccessListTxType:
-	case types.DynamicFeeTxType:
+	case eth_transaction.AccessListTxType:
+	case eth_transaction.DynamicFeeTxType:
 	}
 	return v
 }
@@ -617,7 +617,7 @@ func ConstructTransaction(call CallRequestType) *txbasic.Transaction {
 
 	transactionHead := txbasic.TransactionHead{
 		Category: []byte(txbasic.TransactionCategory_Eth),
-		ChainID:  types.Null,
+		ChainID:  types2.Null,
 		Version:  uint32(txbasic.Transaction_Eth_V1),
 		FromAddr: from,
 	}
@@ -638,7 +638,7 @@ func ConstructGasTransaction(call EstimateGasRequestType) *txbasic.Transaction {
 	}
 	transactionHead := txbasic.TransactionHead{
 		Category: []byte(txbasic.TransactionCategory_Eth),
-		ChainID:  types.Null,
+		ChainID:  types2.Null,
 		Version:  uint32(txbasic.Transaction_Eth_V1),
 		FromAddr: from,
 	}

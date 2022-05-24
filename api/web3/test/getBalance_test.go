@@ -2,10 +2,10 @@ package test
 
 import (
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
-	"github.com/TopiaNetwork/topia/api/web3/types"
-	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
+	mocks2 "github.com/TopiaNetwork/topia/api/web3/mocks"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
 	"github.com/golang/mock/gomock"
@@ -20,8 +20,7 @@ func TestGetBalance(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	servantMock := mocks.NewMockAPIServant(ctrl)
-	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
+	servantMock := mocks2.NewMockAPIServant(ctrl)
 	servantMock.
 		EXPECT().
 		GetBalance(gomock.Any(), gomock.Any()).
@@ -39,10 +38,12 @@ func TestGetBalance(t *testing.T) {
 	res := httptest.NewRecorder()
 
 	config := web3.Web3ServerConfiguration{
-		Host: "",
-		Port: "8080",
+		HttpHost:  "",
+		HttpPort:  "8080",
+		HttpsHost: "",
+		HttpsPost: "8443",
 	}
-	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s := web3.InitWeb3Server(config, servantMock)
 	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)

@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tpcmm "github.com/TopiaNetwork/topia/common"
-	"github.com/TopiaNetwork/topia/configuration"
-	"github.com/TopiaNetwork/topia/eventhub"
-	"github.com/TopiaNetwork/topia/ledger"
-	"github.com/TopiaNetwork/topia/state"
-	"time"
+	"sync"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/configuration"
+	"github.com/TopiaNetwork/topia/execution"
+	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
+	"github.com/TopiaNetwork/topia/state"
 )
 
 type BlockInfoSubProcessor interface {
@@ -23,19 +22,22 @@ type BlockInfoSubProcessor interface {
 }
 
 type blockInfoSubProcessor struct {
-	log       tplog.Logger
-	nodeID    string
-	marshaler codec.Marshaler
-	ledger    ledger.Ledger
-	config    *configuration.Configuration
+	log         tplog.Logger
+	nodeID      string
+	marshaler   codec.Marshaler
+	ledger      ledger.Ledger
+	scheduler   execution.ExecutionScheduler
+	config      *configuration.Configuration
+	syncProcess sync.RWMutex
 }
 
-func NewBlockInfoSubProcessor(log tplog.Logger, nodeID string, marshaler codec.Marshaler, ledger ledger.Ledger, config *configuration.Configuration) BlockInfoSubProcessor {
+func NewBlockInfoSubProcessor(log tplog.Logger, nodeID string, marshaler codec.Marshaler, ledger ledger.Ledger, scheduler execution.ExecutionScheduler, config *configuration.Configuration) BlockInfoSubProcessor {
 	return &blockInfoSubProcessor{
 		log:       log,
 		nodeID:    nodeID,
 		marshaler: marshaler,
 		ledger:    ledger,
+		scheduler: scheduler,
 		config:    config,
 	}
 }
@@ -70,13 +72,20 @@ func (bsp *blockInfoSubProcessor) checkAndParseSubData(subMsgBlockInfo *tpchaint
 
 func (bsp *blockInfoSubProcessor) Validate(ctx context.Context, isLocal bool, data []byte) tpnetmsg.ValidationResult {
 	if data == nil {
-		err := errors.New("Received blank block info pubsub message")
+		err := errors.New("Chain received blank pubsub data")
 		bsp.log.Errorf("%v", err)
 		return tpnetmsg.ValidationReject
 	}
 
+	var chainMsg tpchaintypes.ChainMessage
+	err := bsp.marshaler.Unmarshal(data, &chainMsg)
+	if err != nil {
+		bsp.log.Errorf("Received invalid chain msg: %v", err)
+		return tpnetmsg.ValidationReject
+	}
+
 	var blockInfo tpchaintypes.PubSubMessageBlockInfo
-	err := bsp.marshaler.Unmarshal(data, &blockInfo)
+	err = bsp.marshaler.Unmarshal(chainMsg.Data, &blockInfo)
 	if err != nil {
 		bsp.log.Errorf("Can't Unmarshal received block info pubsub message: %v", err)
 		return tpnetmsg.ValidationReject
@@ -97,12 +106,15 @@ func (bsp *blockInfoSubProcessor) Validate(ctx context.Context, isLocal bool, da
 }
 
 func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *tpchaintypes.PubSubMessageBlockInfo) error {
+	bsp.syncProcess.Lock()
+	defer bsp.syncProcess.Unlock()
+
 	block, blockRS, err := bsp.checkAndParseSubData(subMsgBlockInfo)
 	if err != nil {
 		return err
 	}
 
-	bsp.log.Infof("Process pubsub message: height=%d, result status %s", block.Head.Height, blockRS.Head.Status.String())
+	bsp.log.Infof("Process pubsub message: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
 
 	csStateRN := state.CreateCompositionStateReadonly(bsp.log, bsp.ledger)
 	latestBlock, err := csStateRN.GetLatestBlock()
@@ -113,66 +125,15 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	}
 	csStateRN.Stop()
 	if latestBlock.Head.Height >= block.Head.Height {
-		bsp.log.Warnf("Receive delay PubSubMessageBlockInfo: height=%d, latest block height=%d", block.Head.Height, latestBlock.Head.Height)
+		bsp.log.Warnf("Receive delay PubSubMessageBlockInfo: height=%d, latest block height=%d, self node %s", block.Head.Height, latestBlock.Head.Height, bsp.nodeID)
 		return nil
 	}
 
-	csState := state.GetStateBuilder().CreateCompositionState(bsp.log, bsp.nodeID, bsp.ledger, block.Head.Height)
-	if csState == nil {
-		err = fmt.Errorf("Nil csState and can't process pubsub message: height=%d", block.Head.Height)
-		return err
-	}
-
-	if csState.UpdateTakenUpState(state.TakenUpState_Busy) == state.TakenUpState_Busy {
-		err = fmt.Errorf("csState is busy and can't process pubsub message: height=%d", block.Head.Height)
-		return err
-	}
-	defer csState.UpdateTakenUpState(state.TakenUpState_Idle)
-
-	err = csState.SetLatestBlock(block)
+	err = bsp.scheduler.CommitBlock(ctx, block.Head.Height, block, blockRS, latestBlock, bsp.ledger, "ChainBlockSubscriber")
 	if err != nil {
-		bsp.log.Errorf("Save the latest block error: %v", err)
+		bsp.log.Errorf("Chain block subscriber CommitBlock err: %v, height %d, latest block %d, self node %s", err, block.Head.Height, latestBlock.Head.Height, bsp.nodeID)
 		return err
 	}
-	err = csState.SetLatestBlockResult(blockRS)
-	if err != nil {
-		bsp.log.Errorf("Save the latest block result error: %v", err)
-		return err
-	}
-
-	latestEpoch, err := csState.GetLatestEpoch()
-	if err != nil {
-		bsp.log.Errorf("Can't get latest epoch error: %v", err)
-		return err
-	}
-
-	var newEpoch *tpcmm.EpochInfo
-	deltaH := int(block.Head.Height) - int(latestEpoch.StartHeight)
-	if deltaH == int(bsp.config.CSConfig.EpochInterval) {
-		newEpoch = &tpcmm.EpochInfo{
-			Epoch:          latestEpoch.Epoch + 1,
-			StartTimeStamp: uint64(time.Now().UnixNano()),
-			StartHeight:    block.Head.Height,
-		}
-		err = csState.SetLatestEpoch(newEpoch)
-		if err != nil {
-			bsp.log.Errorf("Save the latest epoch error: %v", err)
-			return err
-		}
-	}
-
-	csState.Commit()
-	//ToDo Save new block and block result to block store
-
-	csState.UpdateCompSState(state.CompSState_Commited)
-
-	bsp.log.Infof("CompositionState changes to commited: state version %d, by sub block info, self node %s", csState.StateVersion(), bsp.nodeID)
-
-	if newEpoch != nil {
-		eventhub.GetEventHubManager().GetEventHub(bsp.nodeID).Trig(ctx, eventhub.EventName_EpochNew, newEpoch)
-	}
-
-	eventhub.GetEventHubManager().GetEventHub(bsp.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 
 	return nil
 }

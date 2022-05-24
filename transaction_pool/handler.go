@@ -5,7 +5,6 @@ import (
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tplog "github.com/TopiaNetwork/topia/log"
-	"github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type TransactionPoolHandler interface {
@@ -14,33 +13,21 @@ type TransactionPoolHandler interface {
 }
 
 type transactionPoolHandler struct {
-	log    tplog.Logger
-	txPool *transactionPool
+	log      tplog.Logger
+	txPool   *transactionPool
+	txMsgSub TxMessageSubProcessor
 }
 
-func NewTransactionPoolHandler(log tplog.Logger, txPool *transactionPool) *transactionPoolHandler {
+func NewTransactionPoolHandler(log tplog.Logger, txPool *transactionPool, txMsgSub TxMessageSubProcessor) *transactionPoolHandler {
 	return &transactionPoolHandler{
-		log:    log,
-		txPool: txPool,
+		log:      log,
+		txPool:   txPool,
+		txMsgSub: txMsgSub,
 	}
 }
 
-func (handler *transactionPoolHandler) ProcessTx(msg *TxMessage) error {
-	var tx *basic.Transaction
-	err := tx.Unmarshal(msg.Data)
-	if err != nil {
-		handler.log.Error("txmessage data error")
-		return err
-	}
-	if err := handler.txPool.ValidateTx(tx, false); err != nil {
-		return err
-	}
-	category := basic.TransactionCategory(tx.Head.Category)
-	handler.txPool.newTxListStructs(category)
-	if err := handler.txPool.AddTx(tx, false); err != nil {
-		return err
-	}
-	return nil
+func (handler *transactionPoolHandler) ProcessTx(ctx context.Context, msg *TxMessage) error {
+	return handler.txMsgSub.Process(ctx, msg)
 }
 
 func (handler *transactionPoolHandler) processBlockAddedEvent(ctx context.Context, data interface{}) error {

@@ -2,11 +2,13 @@ package state
 
 import (
 	"crypto/sha256"
-	"go.uber.org/atomic"
 	"math/big"
+	"sync"
 
 	"github.com/lazyledger/smt"
+	"go.uber.org/atomic"
 
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -14,7 +16,6 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
 	staetround "github.com/TopiaNetwork/topia/state/epoch"
@@ -30,13 +31,17 @@ type NodeNetWorkStateWapper interface {
 }
 
 type CompositionStateReadonly interface {
+	ChainID() tpchaintypes.ChainID
+
+	NetworkType() common.NetworkType
+
+	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
+
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
-	ChainID() tpchaintypes.ChainID
-
-	NetworkType() tpnet.NetworkType
+	GetAllAccounts() ([]*tpacc.Account, error)
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
@@ -54,6 +59,16 @@ type CompositionStateReadonly interface {
 
 	GetActiveValidatorIDs() ([]string, error)
 
+	GetInactiveNodeIDs() ([]string, error)
+
+	GetAllActiveExecutors() ([]*common.NodeInfo, error)
+
+	GetAllActiveProposers() ([]*common.NodeInfo, error)
+
+	GetAllActiveValidators() ([]*common.NodeInfo, error)
+
+	GetAllInactiveNodes() ([]*common.NodeInfo, error)
+
 	GetNodeWeight(nodeID string) (uint64, error)
 
 	GetDKGPartPubKeysForVerify() (map[string]string, error)
@@ -66,6 +81,8 @@ type CompositionStateReadonly interface {
 
 	GetLatestEpoch() (*common.EpochInfo, error)
 
+	CompSStateStore() tplgss.StateStore
+
 	StateRoot() ([]byte, error)
 
 	StateLatestVersion() (uint64, error)
@@ -73,6 +90,8 @@ type CompositionStateReadonly interface {
 	StateVersions() ([]uint64, error)
 
 	PendingStateStore() int32
+
+	SnapToMem(log tplog.Logger) CompositionState
 
 	Stop() error
 
@@ -100,16 +119,17 @@ type CompositionState interface {
 	stateaccount.AccountState
 	statechain.ChainState
 	statenode.NodeState
+	statenode.NodeInactiveState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
 	staetround.EpochState
 
+	CompSStateStore() tplgss.StateStore
+
 	StateVersion() uint64
 
 	CompSState() CompSState
-
-	TakenUpState() TakenUpState
 
 	StateRoot() ([]byte, error)
 
@@ -121,7 +141,11 @@ type CompositionState interface {
 
 	UpdateCompSState(state CompSState)
 
-	UpdateTakenUpState(state TakenUpState) TakenUpState
+	SnapToMem(log tplog.Logger) CompositionState
+
+	Lock()
+
+	Unlock()
 
 	Commit() error
 
@@ -146,7 +170,7 @@ type compositionState struct {
 	ledger       ledger.Ledger
 	stateVersion uint64
 	state        atomic.Uint32 //CompSState
-	takenUPState atomic.Uint32 //TakenUpState
+	sync         sync.RWMutex
 }
 
 type nodeNetWorkStateWapper struct {
@@ -185,7 +209,6 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion
 	}
 
 	compS.state.Store(uint32(CompSState_Idle))
-	compS.takenUPState.Store(uint32(TakenUpState_Idle))
 
 	return compS
 }
@@ -213,8 +236,47 @@ func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) Comp
 	}
 }
 
+func CreateCompositionStateMem(log tplog.Logger, compState CompositionStateReadonly) CompositionState {
+	stateStore, ledger, _ := ledger.CreateStateStoreMem(log)
+
+	inactiveState := statenode.NewNodeInactiveState(stateStore)
+	executorState := statenode.NewNodeExecutorState(stateStore)
+	proposerState := statenode.NewNodeProposerState(stateStore)
+	validatorState := statenode.NewNodeValidatorState(stateStore)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
+	compS := &compositionState{
+		log:                log,
+		stateVersion:       1,
+		ledger:             ledger,
+		StateStore:         stateStore,
+		AccountState:       stateaccount.NewAccountState(stateStore),
+		ChainState:         statechain.NewChainStore(stateStore, ledger),
+		NodeState:          nodeState,
+		NodeInactiveState:  inactiveState,
+		NodeExecutorState:  executorState,
+		NodeProposerState:  proposerState,
+		NodeValidatorState: validatorState,
+		EpochState:         staetround.NewRoundState(stateStore),
+	}
+
+	compS.state.Store(uint32(CompSState_Idle))
+
+	originStateStore := compState.CompSStateStore()
+	err := originStateStore.Clone(stateStore)
+	if err != nil {
+		log.Errorf("Can't clone orgin keys and values: %v", err)
+		return nil
+	}
+
+	return compS
+}
+
 func (cs *compositionState) PendingStateStore() int32 {
 	return cs.ledger.PendingStateStore()
+}
+
+func (cs *compositionState) CompSStateStore() tplgss.StateStore {
+	return cs.StateStore
 }
 
 func (cs *compositionState) StateRoot() ([]byte, error) {
@@ -287,16 +349,20 @@ func (cs *compositionState) CompSState() CompSState {
 	return CompSState(cs.state.Load())
 }
 
-func (cs *compositionState) TakenUpState() TakenUpState {
-	return TakenUpState(cs.state.Load())
-}
-
 func (cs *compositionState) UpdateCompSState(state CompSState) {
 	cs.state.Swap(uint32(state))
 }
 
-func (cs *compositionState) UpdateTakenUpState(state TakenUpState) TakenUpState {
-	return TakenUpState(cs.takenUPState.Swap(uint32(state)))
+func (cs *compositionState) SnapToMem(log tplog.Logger) CompositionState {
+	return CreateCompositionStateMem(log, cs)
+}
+
+func (cs *compositionState) Lock() {
+	cs.sync.Lock()
+}
+
+func (cs *compositionState) Unlock() {
+	cs.sync.Unlock()
 }
 
 func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() ([]string, error) {

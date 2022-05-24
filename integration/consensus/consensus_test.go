@@ -3,9 +3,16 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
+
+	"github.com/AsynkronIT/protoactor-go/actor"
+	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -14,19 +21,15 @@ import (
 	"github.com/TopiaNetwork/topia/consensus"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/eventhub"
+	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/integration/mock"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
-	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
-	"os"
-	"testing"
-	"time"
-
-	"github.com/AsynkronIT/protoactor-go/actor"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/state"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -52,8 +55,9 @@ type nodeParams struct {
 	mainLog         tplog.Logger
 	codecType       codec.CodecType
 	network         tpnet.Network
-	txPool          txpool.TransactionPool
+	txPool          txpooli.TransactionPool
 	ledger          ledger.Ledger
+	scheduler       execution.ExecutionScheduler
 	cs              consensus.Consensus
 	chain           chain.Chain
 	config          *tpconfig.Configuration
@@ -284,15 +288,17 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		l := createLedger(testMainLog, "./TestConsensus", backend.BackendType_Badger, i, nodeType)
 
-		network := tpnet.NewNetwork(context.Background(), testMainLog, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
+		network := tpnet.NewNetwork(context.Background(), testMainLog, config.NetConfig, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
 
 		txPool := mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
-		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, config)
+		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, codec.CodecType_PROTO, txPool)
 
-		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1)
+		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
+
+		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
 
 		var latestEpochInfo *tpcmm.EpochInfo
 		var latestBlock *tpchaintypes.Block
@@ -319,6 +325,8 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 			latestEpochInfo = config.Genesis.Epon
 			latestBlock = config.Genesis.Block
+
+			compState.AddAccount(tpacc.NativeContractAccount_Account)
 
 			l.UpdateState(tpcmm.LedgerState_Genesis)
 		} /*else {
@@ -348,6 +356,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			network:         network,
 			txPool:          txPool,
 			ledger:          l,
+			scheduler:       exeScheduler,
 			chain:           chain,
 			config:          newConfig,
 			sysActor:        sysActor,
@@ -375,6 +384,7 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 			nParams[i].network,
 			nParams[i].txPool,
 			nParams[i].ledger,
+			nParams[i].scheduler,
 			nParams[i].config,
 		)
 

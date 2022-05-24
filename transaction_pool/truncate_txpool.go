@@ -2,96 +2,117 @@ package transactionpool
 
 import (
 	"container/heap"
+	"sync/atomic"
 	"time"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/eventhub"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
-func (pool *transactionPool) truncatePendingByCategory(category basic.TransactionCategory) {
+func (pool *transactionPool) truncatePendingByCategory(category txbasic.TransactionCategory) {
 
-	pendingCnt := pool.pendings.truncatePendingByCategoryFun1(category)
-	if pendingCnt <= pool.config.PendingGlobalSegments {
+	pendingSize := pool.pendings.PendingSizeByCategory(category)
+	if pendingSize <= pool.config.MaxSizeOfPending {
 		return
 	}
 
 	// Assemble a spam order to penalize large transactors first
-	f21 := func(address tpcrtypes.Address) bool { return !pool.locals.contains(address) }
-	greyAccounts := pool.pendings.truncatePendingByCategoryFun2(category, f21, pool.config.PendingAccountSegments)
-	if len(greyAccounts) > 0 {
-		greyAccountsQueue := make(CntAccountHeap, len(greyAccounts))
-		i := 0
-		for accAddr, cnt := range greyAccounts {
-			greyAccountsQueue[i] = &CntAccountItem{
-				accountAddr: accAddr,
-				cnt:         cnt,
-				index:       i,
-			}
-			i++
-		}
-		heap.Init(&greyAccountsQueue)
+	greyAccounts := pool.pendings.truncatePendingByCategoryFun2(category, pool.config.MaxSizeOfEachPendingAccount)
 
+	greyAccountsQueue := make(SizeAccountHeap, len(greyAccounts))
+	i := 0
+	for accAddr, size := range greyAccounts {
+		greyAccountsQueue[i] = &SizeAccountItem{
+			accountAddr: accAddr,
+			size:        size,
+			index:       i,
+		}
+		i++
+	}
+	heap.Init(&greyAccountsQueue)
+	if len(greyAccounts) > 0 {
 		//The accounts with the most backlogged transactions are first dumped
-		f31 := func(category basic.TransactionCategory, txId string) {
-			pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
-			pool.log.Tracef("Removed fairness-exceeding pending transaction", "txKey", txId)
+		f31 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
+
+			if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
+				atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+				atomic.AddInt64(&pool.poolCount, -1)
+				pool.log.Tracef("Removed fairness-exceeding pending transaction", "txKey", txId)
+			}
+
 		}
-		for pendingCnt > pool.config.PendingGlobalSegments && len(greyAccounts) > 0 {
-			bePunished := heap.Pop(&greyAccountsQueue).(*CntAccountItem)
-			lenCaps := pool.pendings.truncatePendingByCategoryFun3(f31, category, bePunished.accountAddr)
-			pool.sortedLists.removedPricedlistByCategory(category, lenCaps)
+		for pendingSize > pool.config.MaxSizeOfPending && len(greyAccounts) > 0 {
+
+			bePunished := heap.Pop(&greyAccountsQueue).(*SizeAccountItem)
+			pool.pendings.truncatePendingByCategoryFun3(f31, category, bePunished.accountAddr)
+			pendingSize -= uint64(bePunished.size)
 		}
-		pendingCnt--
+
 	}
 
 }
 
 // truncateQueue drops the older transactions in the queue if the pool is above the global queue limit.
-func (pool *transactionPool) truncateQueueByCategory(category basic.TransactionCategory) {
-	queued := pool.queues.getStatsOfCategory(category)
-	if uint64(queued) <= pool.config.QueueMaxTxsGlobal {
+func (pool *transactionPool) truncateQueueByCategory(category txbasic.TransactionCategory) {
+	queueSize := pool.queues.getSizeOfCategory(category)
+	if uint64(queueSize) <= pool.config.MaxSizeOfQueue {
 		return
 	}
 	// Sort all accounts with queued transactions by heartbeat
-	f1 := func(address tpcrtypes.Address) bool {
-		return !pool.locals.contains(address)
-	}
-	f2 := func(string2 string) time.Time {
+	f2 := func(string2 txbasic.TxID) time.Time {
 		return pool.ActivationIntervals.getTxActivByKey(string2)
 	}
-	f3 := func(category basic.TransactionCategory, key string) *basic.Transaction {
+	f3 := func(category txbasic.TransactionCategory, key txbasic.TxID) *txbasic.Transaction {
 		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, key)
 	}
-	f4 := func(category basic.TransactionCategory, txId string) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId, pool.config.TxSegmentSize)
-		// Remove it from the list of sortedByPriced
-		pool.sortedLists.removedPricedlistByCategory(category, 1)
-		data := "txPool remove a " + string(category) + "tx,txHash is " + txId
-		eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxReceived, data)
+	f4 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
+		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
+			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+			atomic.AddInt64(&pool.poolCount, -1)
+			txRemoved := &eventhub.TxPoolEvent{
+				EvType: eventhub.TxPoolEVTypee_Removed,
+				Tx:     txRm,
+			}
+			eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txRemoved)
+		}
+
 	}
-	f5 := func(f51 func(txId string, tx *basic.Transaction), tx *basic.Transaction, category basic.TransactionCategory, addr tpcrtypes.Address) {
+	f5 := func(f51 func(txId txbasic.TxID, tx *txbasic.Transaction), tx *txbasic.Transaction, category txbasic.TransactionCategory, addr tpcrtypes.Address) {
 		pool.pendings.getTxListRemoveByAddrOfCategory(f51, tx, category, addr)
 	}
-	f511 := func(category basic.TransactionCategory, txid string) {
-		pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txid, pool.config.TxSegmentSize)
-		pool.sortedLists.removedPricedlistByCategory(category, 1)
+	f511 := func(category txbasic.TransactionCategory, txid txbasic.TxID) {
+		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txid); ok {
+			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+			atomic.AddInt64(&pool.poolCount, -1)
+		}
+
 	}
-	f512 := func(category basic.TransactionCategory, txId string) *basic.Transaction {
+	f512 := func(category txbasic.TransactionCategory, txId txbasic.TxID) *txbasic.Transaction {
 		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txId)
 	}
-	f513 := func(key string) {
+	f513 := func(key txbasic.TxID) {
 		pool.log.Errorf("Missing transaction in lookup set, please report the issue", "TxID", key)
 	}
-	f514 := func(txId string, category basic.TransactionCategory) {
+	f514 := func(txId txbasic.TxID, category txbasic.TransactionCategory) {
+
 		pool.ActivationIntervals.setTxActiv(txId, time.Now())
 		pool.TxHashCategory.setHashCat(txId, category)
 	}
-	f6 := func(txId string) {
+	f6 := func(txId txbasic.TxID) {
 		pool.ActivationIntervals.removeTxActiv(txId)
 		pool.TxHashCategory.removeHashCat(txId)
 	}
-	pool.queues.removeTxsForTruncateQueue(category, f1, f2, f3, f4, f5, f511, f512, f513, f514, f6,
-		queued, pool.config.QueueMaxTxsGlobal)
+	pool.queues.removeTxsForTruncateQueue(category, f2, f3, f4, f5, f511, f512, f513, f514, f6,
+		queueSize, pool.config.MaxSizeOfQueue)
+
+}
+
+func (pool *transactionPool) TruncateTxPool() {
+	pool.queues = newQueuesMap()
+	pool.pendings = newPendingsMap()
+	pool.allTxsForLook = newAllTxsLookupMap()
+	pool.txCache.Purge()
+	pool.log.Tracef("TransactionPool Truncated")
 
 }

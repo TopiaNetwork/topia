@@ -18,7 +18,7 @@ import (
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -72,8 +72,9 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	log tplog.Logger,
 	codecType codec.CodecType,
 	network tpnet.Network,
-	txPool txpool.TransactionPool,
+	txPool txpooli.TransactionPool,
 	ledger ledger.Ledger,
+	exeScheduler execution.ExecutionScheduler,
 	config *tpconfig.Configuration) Consensus {
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
@@ -100,8 +101,6 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	}
 
 	deliver := newMessageDeliver(consLog, nodeID, priKey, DeliverStrategy_Specifically, network, marshaler, cryptS, ledger)
-
-	exeScheduler := execution.NewExecutionScheduler(nodeID, log, config, txPool)
 
 	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, deliver, preprePackedMsgExeChan, preprePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
 	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, ledger, deliver)
@@ -251,7 +250,7 @@ func (cons *consensus) dispatch(actorCtx actor.Context, data []byte) {
 	var consMsg ConsensusMessage
 	err := cons.marshaler.Unmarshal(data, &consMsg)
 	if err != nil {
-		cons.log.Errorf("Consensus receive invalid data %v", data)
+		cons.log.Errorf("Consensus receive invalid data %v", err)
 		return
 	}
 

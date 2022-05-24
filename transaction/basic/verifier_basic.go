@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 type VerifyResult byte
@@ -19,10 +19,10 @@ const (
 	VerifyResult_Ignore
 )
 
-type TransactionVerifier func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TansactionServant) VerifyResult
+type TransactionVerifier func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult
 
 func TransactionChainIDVerifier() TransactionVerifier {
-	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TansactionServant) VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
 		tx := txI.(*TransactionHead)
 		chainID := txServant.ChainID()
 		if bytes.Compare(tx.ChainID, []byte(chainID)) != 0 {
@@ -35,7 +35,7 @@ func TransactionChainIDVerifier() TransactionVerifier {
 }
 
 func TransactionFromAddressVerifier() TransactionVerifier {
-	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TansactionServant) VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
 		tx := txI.(*TransactionHead)
 		fromAddr := tpcrtypes.NewFromBytes(tx.FromAddr)
 
@@ -50,7 +50,7 @@ func TransactionFromAddressVerifier() TransactionVerifier {
 				return VerifyResult_Reject
 			}
 
-			if isValid, _ := fromAddr.IsValid(tpnet.CurrentNetworkType, cryType); !isValid {
+			if isValid, _ := fromAddr.IsValid(tpcmm.CurrentNetworkType, cryType); !isValid {
 				log.Errorf("Invalid from address: %v", tx.FromAddr)
 				return VerifyResult_Reject
 			}
@@ -64,7 +64,7 @@ func TransactionFromAddressVerifier() TransactionVerifier {
 }
 
 func TransactionSignatureVerifier() TransactionVerifier {
-	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TansactionServant) VerifyResult {
+	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
 		tx := txI.(*Transaction)
 
 		cryType, err := tx.CryptType()
@@ -90,7 +90,7 @@ func TransactionSignatureVerifier() TransactionVerifier {
 	}
 }
 
-func ApplyTransactionVerifiers(ctx context.Context, log tplog.Logger, txT interface{}, txServant TansactionServant, verifiers ...TransactionVerifier) VerifyResult {
+func ApplyTransactionVerifiers(ctx context.Context, log tplog.Logger, txT interface{}, txServant TransactionServant, verifiers ...TransactionVerifier) VerifyResult {
 	vrResult := VerifyResult_Accept
 	for _, verifier := range verifiers {
 		vR := verifier(ctx, log, txT, txServant)

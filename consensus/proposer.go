@@ -37,7 +37,9 @@ type consensusProposer struct {
 	proposeMaxInterval      time.Duration
 	blockMaxCyclePeriod     time.Duration
 	isProposing             uint32
-	lastProposeHeight       uint64 //the block height which self-proposer launched based on last time
+	lastBlockHeight         uint64
+	lastProposeHeight       uint64    //the block height which self-proposer launched based on last time
+	newHeightStartTimeStamp time.Time // the timestamp of new block height
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -236,6 +238,12 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 					continue
 				}
 
+				err := p.dkgBls.Verify(voteMsg.BlockHead, voteMsg.Signature)
+				if err != nil {
+					p.log.Errorf("Received invalid vote message, state version %d, latest height %d, err %v, self node %s", voteMsg.StateVersion, p.voteCollector.latestHeight, err, p.nodeID)
+					continue
+				}
+
 				aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
 				if err != nil {
 					p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
@@ -300,21 +308,31 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
-	var proposeHeightNew uint64
-	blTime := time.Unix(0, int64(latestBlock.Head.TimeStamp))
-	elapsedTime := time.Since(blTime).Microseconds()
-	deltaHeight := uint64(elapsedTime)/uint64(p.blockMaxCyclePeriod.Microseconds()) + 1
-	if latestBlock.Head.Height > 1 {
-		proposeHeightNew = latestBlock.Head.Height + deltaHeight
-	} else {
-		proposeHeightNew = 2
+	if p.lastProposeHeight == 0 || (addedBlock != nil && addedBlock.Head.Height > p.lastBlockHeight) {
+		p.lastBlockHeight = latestBlock.Head.Height
+		p.lastProposeHeight = latestBlock.Head.Height
+		p.newHeightStartTimeStamp = time.Now()
 	}
 
+	var proposeHeightNew uint64
+	elapsedTime := time.Since(p.newHeightStartTimeStamp).Microseconds()
+	deltaHeight := uint64(elapsedTime)/uint64(p.blockMaxCyclePeriod.Microseconds()) + 1
+	/*if deltaHeight > 1 {
+		err = fmt.Errorf("Not synced and can't proposing block: lastProposeHeight %d, deltaHeight %d, latest height %d", p.lastProposeHeight, deltaHeight, latestBlock.Head.Height)
+		p.log.Warnf("%s", err.Error())
+		return err
+	}*/
+
+	proposeHeightNew = latestBlock.Head.Height + deltaHeight
+
 	if p.lastProposeHeight > 0 && p.lastProposeHeight >= proposeHeightNew {
-		err = fmt.Errorf("Have launched proposing block at propose height %d, latest height %d", p.lastProposeHeight, latestBlock.Head.Height)
-		p.log.Warnf("%v", err)
+		stateVerPPMProp, lenPPMProp := p.currentPPMProp()
+		err = fmt.Errorf("Have launched proposing block at propose height %d, latest height %d, last ProposeTimeStamp %s, ppmProp: stateVer %d,len %d，self node %s", p.lastProposeHeight, latestBlock.Head.Height, p.newHeightStartTimeStamp.String(), stateVerPPMProp, lenPPMProp, p.nodeID)
+		p.log.Warnf("%s", err.Error())
 		return err
 	}
+
+	p.lastProposeHeight = proposeHeightNew
 
 	pppProp, err := p.getAvailPPMProp(latestBlock.Head.Height)
 	if err != nil {
@@ -323,8 +341,6 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	}
 
 	p.log.Infof("Avail PPM prop state version %d", pppProp.StateVersion)
-
-	p.lastProposeHeight = proposeHeightNew
 
 	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock, proposeHeightNew)
 	if !canPropose {
@@ -444,6 +460,19 @@ func (p *consensusProposer) createBlockHead(chainID tpchaintypes.ChainID, epoch 
 		StateRoot:       stateRoot,
 		TimeStamp:       uint64(time.Now().UnixNano()),
 	}, frontPPMProp.StateVersion, nil
+}
+
+func (p *consensusProposer) currentPPMProp() (uint64, int) {
+	p.syncPPMPropList.RLock()
+	defer p.syncPPMPropList.RUnlock()
+
+	frontEle := p.ppmPropList.Front()
+	if frontEle != nil {
+		frontPPMProp := frontEle.Value.(*PreparePackedMessageProp)
+		return frontPPMProp.StateVersion, p.ppmPropList.Len()
+	}
+
+	return 0, 0
 }
 
 func (p *consensusProposer) getAvailPPMProp(latestHeight uint64) (*PreparePackedMessageProp, error) {

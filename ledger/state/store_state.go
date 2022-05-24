@@ -3,6 +3,7 @@ package state
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/TopiaNetwork/topia/ledger/backend"
@@ -34,6 +35,8 @@ type StateStore interface {
 	GetState(name string, key []byte) ([]byte, []byte, error)
 
 	GetAllState(name string) ([][]byte, [][]byte, [][]byte, error)
+
+	Clone(other StateStore) error
 
 	StateLatestVersion() (uint64, error)
 
@@ -180,6 +183,37 @@ func (m *stateStore) GetAllState(name string) ([][]byte, [][]byte, [][]byte, err
 	}
 
 	return nil, nil, nil, fmt.Errorf("Can't find the responding state store: name=%s", name)
+}
+
+func (m *stateStore) Clone(other StateStore) error {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	otherSS, ok := other.(*stateStore)
+	if !ok {
+		return fmt.Errorf("Expected Other is stateStore，actual %s", reflect.TypeOf(other).Name())
+	}
+	if otherSS.backendRW == nil {
+		return errors.New("Other is read only")
+	}
+
+	var dataIt tplgcmm.Iterator
+	var err error
+	if m.backendR != nil {
+		dataIt, err = m.backendR.Iterator(nil, nil)
+	} else {
+		dataIt, err = m.backendRW.Iterator(nil, nil)
+	}
+	if err != nil {
+		return err
+	}
+	defer dataIt.Close()
+
+	for dataIt.Next() {
+		otherSS.backendRW.Set(dataIt.Key(), dataIt.Value())
+	}
+
+	return nil
 }
 
 func (m *stateStore) StateLatestVersion() (uint64, error) {

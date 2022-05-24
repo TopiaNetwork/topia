@@ -77,7 +77,7 @@ func NewBackend(backendType BackendType, log tplog.Logger, path string, name str
 	case BackendType_Badger:
 		return badger.NewBadgerBackend(bLog, name, path, DefaultCacheSize)
 	case BackendType_Memdb:
-		return memdb.NewLMemBackend(bLog, name, path, DefaultCacheSize)
+		return memdb.NewMemDBBackend(bLog)
 	default:
 		bLog.Panicf("Invalid backend type %d", backendType)
 	}

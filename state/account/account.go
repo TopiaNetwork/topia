@@ -3,11 +3,11 @@ package account
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/TopiaNetwork/topia/currency"
 	"math/big"
 
-	"github.com/TopiaNetwork/topia/account"
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/currency"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
@@ -20,17 +20,23 @@ type AccountState interface {
 
 	IsAccountExist(addr tpcrtypes.Address) bool
 
-	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
+	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
-	AddAccount(acc *account.Account) error
+	GetAllAccounts() ([]*tpacc.Account, error)
+
+	AddAccount(acc *tpacc.Account) error
+
+	UpdateAccount(account *tpacc.Account) error
 
 	UpdateNonce(addr tpcrtypes.Address, nonce uint64) error
 
 	UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error
+
+	UpdateName(addr tpcrtypes.Address, name tpacc.AccountName) error
 }
 
 type accountState struct {
@@ -60,13 +66,13 @@ func (as *accountState) IsAccountExist(addr tpcrtypes.Address) bool {
 	return isExist
 }
 
-func (as *accountState) GetAccount(addr tpcrtypes.Address) (*account.Account, error) {
+func (as *accountState) GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error) {
 	accBytes, _, err := as.GetState(StateStore_Name, addr.Bytes())
 	if err != nil {
 		return nil, err
 	}
 
-	var acc account.Account
+	var acc tpacc.Account
 	err = json.Unmarshal(accBytes, &acc)
 	if err != nil {
 		return nil, err
@@ -90,14 +96,37 @@ func (as *accountState) GetBalance(addr tpcrtypes.Address, symbol currency.Token
 		return nil, err
 	}
 
-	if balVal, ok := acc.Balance[symbol]; ok {
+	if balVal, ok := acc.Balances[symbol]; ok {
 		return balVal, nil
 	}
 
 	return nil, fmt.Errorf("No responding symbol %s from addr %s", symbol, addr)
 }
 
-func (as *accountState) AddAccount(acc *account.Account) error {
+func (as *accountState) GetAllAccounts() ([]*tpacc.Account, error) {
+	keys, vals, _, err := as.GetAllState(StateStore_Name)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) != len(vals) {
+		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
+	}
+
+	var accs []*tpacc.Account
+	for _, val := range vals {
+		var acc tpacc.Account
+		err = json.Unmarshal(val, &acc)
+		if err != nil {
+			return nil, err
+		}
+		accs = append(accs, &acc)
+	}
+
+	return accs, nil
+}
+
+func (as *accountState) AddAccount(acc *tpacc.Account) error {
 	if as.IsAccountExist(acc.Addr) {
 		return fmt.Errorf("Have existed account from %s", acc.Addr)
 	}
@@ -110,6 +139,15 @@ func (as *accountState) AddAccount(acc *account.Account) error {
 	return as.Put(StateStore_Name, acc.Addr.Bytes(), accBytes)
 }
 
+func (as *accountState) UpdateAccount(account *tpacc.Account) error {
+	accBytes, err := json.Marshal(account)
+	if err != nil {
+		return err
+	}
+
+	return as.Update(StateStore_Name, account.Addr.Bytes(), accBytes)
+}
+
 func (as *accountState) UpdateNonce(addr tpcrtypes.Address, nonce uint64) error {
 	acc, err := as.GetAccount(addr)
 	if err != nil {
@@ -118,12 +156,7 @@ func (as *accountState) UpdateNonce(addr tpcrtypes.Address, nonce uint64) error 
 
 	acc.Nonce = nonce
 
-	accBytes, err := json.Marshal(acc)
-	if err != nil {
-		return err
-	}
-
-	return as.Update(StateStore_Name, acc.Addr.Bytes(), accBytes)
+	return as.UpdateAccount(acc)
 }
 
 func (as *accountState) UpdateBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol, value *big.Int) error {
@@ -132,16 +165,22 @@ func (as *accountState) UpdateBalance(addr tpcrtypes.Address, symbol currency.To
 		return err
 	}
 
-	if balVal, ok := acc.Balance[symbol]; ok {
+	if balVal, ok := acc.Balances[symbol]; ok {
 		balVal.Set(value)
 	} else {
-		acc.Balance[symbol] = value
+		acc.Balances[symbol] = value
 	}
 
-	accBytes, err := json.Marshal(acc)
+	return as.UpdateAccount(acc)
+}
+
+func (as *accountState) UpdateName(addr tpcrtypes.Address, name tpacc.AccountName) error {
+	acc, err := as.GetAccount(addr)
 	if err != nil {
 		return err
 	}
 
-	return as.Update(StateStore_Name, acc.Addr.Bytes(), accBytes)
+	acc.Name = name
+
+	return as.UpdateAccount(acc)
 }

@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"github.com/TopiaNetwork/topia/common"
 
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
@@ -25,6 +26,8 @@ type NodeExecutorState interface {
 	GetActiveExecutor(nodeID string) (*common.NodeInfo, error)
 
 	GetActiveExecutorsTotalWeight() (uint64, error)
+
+	GetAllActiveExecutors() ([]*common.NodeInfo, error)
 
 	addActiveExecutor(nodeInfo *common.NodeInfo) error
 
@@ -88,6 +91,33 @@ func (ns *nodeExecutorState) GetActiveExecutorsTotalWeight() (uint64, error) {
 	}
 
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
+}
+
+func (ns *nodeExecutorState) GetAllActiveExecutors() ([]*common.NodeInfo, error) {
+	keys, vals, _, err := ns.GetAllState(StateStore_Name_Exe)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) != len(vals) {
+		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
+	}
+
+	var nodes []*common.NodeInfo
+	for i, val := range vals {
+		if string(keys[i]) == TotalActiveExecutorNodeIDs_Key || string(keys[i]) == TotalActiveExecutorWeight_Key {
+			continue
+		}
+
+		var nodeInfo common.NodeInfo
+		err = json.Unmarshal(val, &nodeInfo)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, &nodeInfo)
+	}
+
+	return nodes, nil
 }
 
 func (ns *nodeExecutorState) addActiveExecutor(nodeInfo *common.NodeInfo) error {

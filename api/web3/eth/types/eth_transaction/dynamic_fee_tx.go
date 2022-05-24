@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package eth_transaction
 
 import (
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
 	"math/big"
 )
 
@@ -26,7 +27,7 @@ type DynamicFeeTx struct {
 	GasTipCap  *big.Int
 	GasFeeCap  *big.Int
 	Gas        uint64
-	To         *Address `rlp:"nil"` // nil means contract creation
+	To         *eth_account.Address `rlp:"nil"` // nil means contract creation
 	Value      *big.Int
 	Data       []byte
 	AccessList AccessList
@@ -42,7 +43,7 @@ func (tx *DynamicFeeTx) copy() TxData {
 	cpy := &DynamicFeeTx{
 		Nonce: tx.Nonce,
 		To:    copyAddressPtr(tx.To),
-		Data:  CopyBytes(tx.Data),
+		Data:  eth_account.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
@@ -80,17 +81,17 @@ func (tx *DynamicFeeTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *DynamicFeeTx) txType() byte           { return DynamicFeeTxType }
-func (tx *DynamicFeeTx) chainID() *big.Int      { return tx.ChainID }
-func (tx *DynamicFeeTx) accessList() AccessList { return tx.AccessList }
-func (tx *DynamicFeeTx) data() []byte           { return tx.Data }
-func (tx *DynamicFeeTx) gas() uint64            { return tx.Gas }
-func (tx *DynamicFeeTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
-func (tx *DynamicFeeTx) gasTipCap() *big.Int    { return tx.GasTipCap }
-func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.GasFeeCap }
-func (tx *DynamicFeeTx) value() *big.Int        { return tx.Value }
-func (tx *DynamicFeeTx) nonce() uint64          { return tx.Nonce }
-func (tx *DynamicFeeTx) to() *Address           { return tx.To }
+func (tx *DynamicFeeTx) txType() byte             { return DynamicFeeTxType }
+func (tx *DynamicFeeTx) chainID() *big.Int        { return tx.ChainID }
+func (tx *DynamicFeeTx) accessList() AccessList   { return tx.AccessList }
+func (tx *DynamicFeeTx) data() []byte             { return tx.Data }
+func (tx *DynamicFeeTx) gas() uint64              { return tx.Gas }
+func (tx *DynamicFeeTx) gasFeeCap() *big.Int      { return tx.GasFeeCap }
+func (tx *DynamicFeeTx) gasTipCap() *big.Int      { return tx.GasTipCap }
+func (tx *DynamicFeeTx) gasPrice() *big.Int       { return tx.GasFeeCap }
+func (tx *DynamicFeeTx) value() *big.Int          { return tx.Value }
+func (tx *DynamicFeeTx) nonce() uint64            { return tx.Nonce }
+func (tx *DynamicFeeTx) to() *eth_account.Address { return tx.To }
 
 func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

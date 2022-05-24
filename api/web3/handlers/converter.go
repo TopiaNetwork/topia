@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/TopiaNetwork/topia/api/servant"
-	"github.com/TopiaNetwork/topia/api/web3/types"
-	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
+	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_transaction"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	secp "github.com/TopiaNetwork/topia/crypt/secp256"
@@ -27,7 +29,7 @@ const (
 	SignatureLength = 64 + 1
 )
 
-func ConvertEthTransactionToTopiaTransaction(tx *types.Transaction) (*txbasic.Transaction, error) {
+func ConvertEthTransactionToTopiaTransaction(tx *eth_transaction.Transaction) (*txbasic.Transaction, error) {
 	var v, r, s *big.Int
 	v, r, s = tx.RawSignatureValues()
 
@@ -47,8 +49,8 @@ func ConvertEthTransactionToTopiaTransaction(tx *types.Transaction) (*txbasic.Tr
 	if err != nil {
 		return nil, errors.New("recover PubKey error")
 	}
-	var addr types.Address
-	copy(addr[:], types.Keccak256(pubKey[1:])[12:])
+	var addr eth_account.Address
+	copy(addr[:], eth_account.Keccak256(pubKey[1:])[12:])
 	from := tpcrtypes.NewFromBytes(addr.Bytes())
 
 	var txFunc int
@@ -78,9 +80,9 @@ func ConvertEthTransactionToTopiaTransaction(tx *types.Transaction) (*txbasic.Tr
 	}
 	txDataBytes, _ := marshaler.Marshal(txUni)
 	txHead := &txbasic.TransactionHead{
-		Category:  []byte(txbasic.TransactionCategory_Eth),
+		Category:  []byte(txbasic.TransactionCategory_Topia_Universal),
 		ChainID:   tx.ChainId().Bytes(),
-		Version:   uint32(txbasic.Transaction_Eth_V1),
+		Version:   uint32(txbasic.Transaction_Topia_Universal_V1),
 		FromAddr:  from.Bytes(),
 		Nonce:     tx.Nonce(),
 		Signature: sig,
@@ -132,7 +134,7 @@ func ConvertTopiaBlockToEthBlock(block *tpchaintypes.Block) *GetBlockResponseTyp
 	transactionHashs := block.GetData().GetTxs()
 	transactionHashString := make([]interface{}, 0)
 	for _, v := range transactionHashs {
-		var hash types.Hash
+		var hash eth_account.Hash
 		hash.SetBytes(v)
 		transactionHashString = append(transactionHashString, hash.Hex())
 	}
@@ -140,19 +142,19 @@ func ConvertTopiaBlockToEthBlock(block *tpchaintypes.Block) *GetBlockResponseTyp
 	gas := big.NewInt(10_000_000_000)
 	height := new(big.Int).SetUint64(block.GetHead().GetHeight())
 	baseFee := big.NewInt(0)
-	var blockHash types.Hash
+	var blockHash eth_account.Hash
 	blockHash.SetBytes(block.GetHead().GetHash())
-	var parentBlockHash types.Hash
+	var parentBlockHash eth_account.Hash
 	parentBlockHash.SetBytes(block.GetHead().GetParentBlockHash())
-	var stateRoot types.Hash
+	var stateRoot eth_account.Hash
 	stateRoot.SetBytes(block.GetHead().GetStateRoot())
-	var miner types.Address
+	var miner eth_account.Address
 	miner.SetBytes(block.GetHead().GetLauncher())
 	var gasUsed hexutil.Uint64
 	json.Unmarshal(block.GetHead().GetGasFees(), &gasUsed)
-	var txToor types.Hash
+	var txToor eth_account.Hash
 	txToor.SetBytes(block.GetHead().GetTxRoot())
-	var txReceiptRoot types.Hash
+	var txReceiptRoot eth_account.Hash
 	txReceiptRoot.SetBytes(block.GetHead().GetTxResultRoot())
 	result := &GetBlockResponseType{
 		Number:           (*hexutil.Big)(height),
@@ -177,7 +179,7 @@ func ConvertTopiaResultToEthReceipt(transactionResult txbasic.TransactionResult,
 	var resultData txuni.TransactionResultUniversal
 	var txHash []byte
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
-	if txbasic.TransactionCategory(transactionResult.GetHead().GetCategory()) == txbasic.TransactionCategory_Eth {
+	if txbasic.TransactionCategory(transactionResult.GetHead().GetCategory()) == txbasic.TransactionCategory_Topia_Universal {
 		_ = marshaler.Unmarshal(transactionResult.GetData().GetSpecification(), &resultData)
 		txHash = resultData.GetTxHash()
 	}
@@ -207,13 +209,13 @@ func ConvertTopiaResultToEthReceipt(transactionResult txbasic.TransactionResult,
 			"0000000000000000000000000000000000000000000000000000000000000000" +
 			"0000000000000000000000000000000000000000000000000000000000000000")
 
-	var blockH types.Hash
+	var blockH eth_account.Hash
 	blockH.SetBytes(block.GetHead().GetHash())
-	var tranH types.Hash
+	var tranH eth_account.Hash
 	tranH.SetBytes(txHash)
-	var from types.Address
+	var from eth_account.Address
 	from.SetBytes(transaction.GetHead().GetFromAddr())
-	var conAddr types.Address
+	var conAddr eth_account.Address
 	conAddr.SetBytes(resultData.GetData())
 	result := map[string]interface{}{
 		"blockHash":         blockH,
@@ -225,8 +227,8 @@ func ConvertTopiaResultToEthReceipt(transactionResult txbasic.TransactionResult,
 		"gasUsed":           hexutil.Uint64(resultData.GetGasUsed()),
 		"cumulativeGasUsed": hexutil.Uint64(resultData.GetGasUsed()),
 		"contractAddress":   conAddr,
-		"logs":              []*types.Address{},
-		"logsBloom":         types.BytesToBloom(bloom),
+		"logs":              []*eth_account.Address{},
+		"logsBloom":         types2.BytesToBloom(bloom),
 		"type":              hexutil.Uint(2),
 		"effectiveGasPrice": hexutil.Uint64(0),
 		"status":            hexutil.Uint(sta.Uint64()),
@@ -243,14 +245,14 @@ func TopiaTransactionToEthTransaction(tx txbasic.Transaction, apiServant servant
 	index := tx.GetHead().GetIndex()
 	height := new(big.Int).SetUint64(blockNumber)
 
-	var from types.Address
+	var from eth_account.Address
 	from.SetBytes(tx.Head.FromAddr)
-	var to types.Address
+	var to eth_account.Address
 	to.SetBytes(ToAddress(&tx).Bytes())
-	var hash types.Hash
+	var hash eth_account.Hash
 	hashByte, _ := tx.HashBytes()
 	hash.SetBytes(hashByte)
-	var blockHash types.Hash
+	var blockHash eth_account.Hash
 	blockHash.SetBytes(bh)
 	result := &EthRpcTransaction{
 		ChainID:          (*hexutil.Big)(chainIdBigInt),
@@ -280,7 +282,7 @@ func AddPrefix(s string) string {
 func ToAddress(tx *txbasic.Transaction) tpcrtypes.Address {
 	var toAddress tpcrtypes.Address
 	var targetData txuni.TransactionUniversalTransfer
-	if txbasic.TransactionCategory(tx.Head.Category) == txbasic.TransactionCategory_Eth {
+	if txbasic.TransactionCategory(tx.Head.Category) == txbasic.TransactionCategory_Topia_Universal {
 		var txData txuni.TransactionUniversal
 		_ = json.Unmarshal(tx.Data.Specification, &txData)
 		if txData.Head.Type == uint32(txuni.TransactionUniversalType_Transfer) {
@@ -296,7 +298,7 @@ func ToAddress(tx *txbasic.Transaction) tpcrtypes.Address {
 func GasPrice(tx *txbasic.Transaction) uint64 {
 	var gasPrice uint64
 	switch txbasic.TransactionCategory(tx.Head.Category) {
-	case txbasic.TransactionCategory_Eth:
+	case txbasic.TransactionCategory_Topia_Universal:
 		var txUniver txuni.TransactionUniversal
 		_ = json.Unmarshal(tx.Data.Specification, &txUniver)
 		gasPrice = txUniver.Head.GasPrice
@@ -308,7 +310,7 @@ func GasPrice(tx *txbasic.Transaction) uint64 {
 
 func GasLimit(tx *txbasic.Transaction) uint64 {
 	var gasLimit uint64
-	if txbasic.TransactionCategory(tx.Head.Category) == txbasic.TransactionCategory_Eth {
+	if txbasic.TransactionCategory(tx.Head.Category) == txbasic.TransactionCategory_Topia_Universal {
 		var txData txuni.TransactionUniversal
 		_ = json.Unmarshal(tx.Data.Specification, &txData)
 		gasLimit = txData.Head.GasLimit
@@ -330,7 +332,7 @@ func Nonce(tx *txbasic.Transaction) uint64 {
 
 func Value(tx *txbasic.Transaction) *big.Int {
 	var value *big.Int
-	if txbasic.TransactionCategory(tx.Head.Category) == txbasic.TransactionCategory_Eth {
+	if txbasic.TransactionCategory(tx.Head.Category) == txbasic.TransactionCategory_Topia_Universal {
 		var txData txuni.TransactionUniversal
 		_ = json.Unmarshal(tx.Data.Specification, &txData)
 		var txDataSpe txuni.TransactionUniversalTransfer

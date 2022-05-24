@@ -2,10 +2,10 @@ package test
 
 import (
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
-	"github.com/TopiaNetwork/topia/api/web3/types"
-	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
+	mocks2 "github.com/TopiaNetwork/topia/api/web3/mocks"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/golang/mock/gomock"
 	"io"
@@ -19,8 +19,7 @@ func TestEstimateGas(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	servantMock := mocks.NewMockAPIServant(controller)
-	txInterfaceMock := mocks.NewMockTxInterface(controller)
+	servantMock := mocks2.NewMockAPIServant(controller)
 	servantMock.
 		EXPECT().
 		EstimateGas(gomock.Any()).
@@ -45,10 +44,12 @@ func TestEstimateGas(t *testing.T) {
 	res := httptest.NewRecorder()
 
 	config := web3.Web3ServerConfiguration{
-		Host: "",
-		Port: "8080",
+		HttpHost:  "",
+		HttpPort:  "8080",
+		HttpsHost: "",
+		HttpsPost: "8443",
 	}
-	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s := web3.InitWeb3Server(config, servantMock)
 	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)

@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
+	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_transaction"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
 	"github.com/TopiaNetwork/topia/api/web3/handlers"
-	"github.com/TopiaNetwork/topia/api/web3/types"
-	hexutil "github.com/TopiaNetwork/topia/api/web3/types/hexutil"
+	mocks2 "github.com/TopiaNetwork/topia/api/web3/mocks"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
@@ -25,20 +27,19 @@ func TestCall(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	servantMock := mocks.NewMockAPIServant(controller)
-	txInterfaceMock := mocks.NewMockTxInterface(controller)
+	servantMock := mocks2.NewMockAPIServant(controller)
 	servantMock.
 		EXPECT().
 		GetTransactionByHash(gomock.Any()).
 		DoAndReturn(func(txHashHex string) (*txbasic.Transaction, error) {
 			to := []byte("0x6fcd7b39e75619a68ab86a68b92d01134ef34ea3")
-			toAddr := types.Address{}
+			toAddr := eth_account.Address{}
 			toAddr.SetBytes(to)
 
 			rByte, _ := hex.DecodeString("fe4cd7376c6df62df3f8c60c6b82d90582c0b6922658d038665548eda98fc9f5")
 			sByte, _ := hex.DecodeString("08725bdf6cb82a27e4798cbcb70fa220e1d7459353ef1a2c716f8101f4c9c601")
 
-			ethLegacyTx := types.NewTx(&types.DynamicFeeTx{
+			ethLegacyTx := eth_transaction.NewTx(&eth_transaction.DynamicFeeTx{
 				ChainID:   big.NewInt(3),
 				Nonce:     0x0,
 				To:        &toAddr,
@@ -137,15 +138,17 @@ func TestCall(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/", strings.NewReader(body))
 	res := httptest.NewRecorder()
 	config := web3.Web3ServerConfiguration{
-		Host: "",
-		Port: "8080",
+		HttpHost:  "",
+		HttpPort:  "8080",
+		HttpsHost: "",
+		HttpsPost: "8443",
 	}
-	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s := web3.InitWeb3Server(config, servantMock)
 	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)
 
-	j := types.JsonrpcMessage{}
+	j := types2.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
 
 	answer := new(hexutil.Bytes)

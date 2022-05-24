@@ -1,60 +1,28 @@
 package test
 
 import (
-	"encoding/hex"
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
-	"github.com/TopiaNetwork/topia/api/web3/handlers"
-	"github.com/TopiaNetwork/topia/api/web3/types"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types"
+	hexutil "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
+	mocks2 "github.com/TopiaNetwork/topia/api/web3/mocks"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	"github.com/golang/mock/gomock"
 	"io"
-	"math/big"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestGetTransactionByHash(t *testing.T) {
+func TestGetBlockNumber(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	servantMock := mocks.NewMockAPIServant(ctrl)
-	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
+	servantMock := mocks2.NewMockAPIServant(ctrl)
 	servantMock.
 		EXPECT().
-		GetTransactionByHash(gomock.Any()).
-		DoAndReturn(func(txHashHex string) (*txbasic.Transaction, error) {
-			to := []byte("0x6fcd7b39e75619a68ab86a68b92d01134ef34ea3")
-			toAddr := types.Address{}
-			toAddr.SetBytes(to)
-
-			rByte, _ := hex.DecodeString("fe4cd7376c6df62df3f8c60c6b82d90582c0b6922658d038665548eda98fc9f5")
-			sByte, _ := hex.DecodeString("08725bdf6cb82a27e4798cbcb70fa220e1d7459353ef1a2c716f8101f4c9c601")
-
-			ethLegacyTx := types.NewTx(&types.DynamicFeeTx{
-				ChainID:   big.NewInt(3),
-				Nonce:     0x0,
-				To:        &toAddr,
-				Value:     big.NewInt(0x38d7ea4c68000),
-				Gas:       0x5208,
-				GasFeeCap: big.NewInt(0x3ebd697803),
-				GasTipCap: big.NewInt(0x8c347c90),
-				V:         big.NewInt(0x1),
-				R:         new(big.Int).SetBytes(rByte),
-				S:         new(big.Int).SetBytes(sByte),
-			})
-			tx, _ := handlers.ConvertEthTransactionToTopiaTransaction(ethLegacyTx)
-			return tx, nil
-		}).
-		Times(1)
-
-	servantMock.
-		EXPECT().
-		GetBlockByTxHash(gomock.Any()).
-		DoAndReturn(func(txHashHex string) (*tpchaintypes.Block, error) {
+		GetLatestBlock().
+		DoAndReturn(func() (*tpchaintypes.Block, error) {
 			return &tpchaintypes.Block{
 				Head: &tpchaintypes.BlockHead{
 					ChainID:         []byte(ChainId),
@@ -85,34 +53,32 @@ func TestGetTransactionByHash(t *testing.T) {
 			}, nil
 		}).
 		Times(1)
-
 	body := `{
 		"jsonrpc":"2.0",
-		"method":"eth_getTransactionByHash",
-		"params":[
-			"0xeecab57a7ce01d5adf81b6266de37bd74d3bbd7d729b0e1ca35163d304549ee6"
-		],
-		"id":1
+		"method":"eth_blockNumber",
+		"params":[],
+		"id":83
 	}`
-	req := httptest.NewRequest("POST", "http://localhost:8080/", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "http://localhost:8080/home", strings.NewReader(body))
 	res := httptest.NewRecorder()
-
 	config := web3.Web3ServerConfiguration{
-		Host: "",
-		Port: "8080",
+		HttpHost:  "",
+		HttpPort:  "8080",
+		HttpsHost: "",
+		HttpsPost: "8443",
 	}
-	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s := web3.InitWeb3Server(config, servantMock)
 	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
-	ethTransaction := handlers.EthRpcTransaction{}
-	json.Unmarshal(j.Result, &ethTransaction)
 
-	if ethTransaction.Nonce != 0 {
+	ethBlock := new(hexutil.Uint64)
+	json.Unmarshal(j.Result, ethBlock)
+
+	if ethBlock.String() != "0xa" {
 		t.Errorf("failed")
 	}
-
 }

@@ -14,26 +14,27 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package eth_transaction
 
 import (
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
 	"math/big"
 )
 
 // LegacyTx is the transaction data of regular Ethereum transactions.
 type LegacyTx struct {
-	Nonce    uint64   // nonce of sender account
-	GasPrice *big.Int // wei per gas
-	Gas      uint64   // gas limit
-	To       *Address `rlp:"nil"` // nil means contract creation
-	Value    *big.Int // wei amount
-	Data     []byte   // contract invocation input data
-	V, R, S  *big.Int // signature values
+	Nonce    uint64               // nonce of sender account
+	GasPrice *big.Int             // wei per gas
+	Gas      uint64               // gas limit
+	To       *eth_account.Address `rlp:"nil"` // nil means contract creation
+	Value    *big.Int             // wei amount
+	Data     []byte               // contract invocation input data
+	V, R, S  *big.Int             // signature values
 }
 
 // NewTransaction creates an unsigned legacy transaction.
 // Deprecated: use NewTx instead.
-func NewTransaction(nonce uint64, to Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+func NewTransaction(nonce uint64, to eth_account.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
 	return NewTx(&LegacyTx{
 		Nonce:    nonce,
 		To:       &to,
@@ -61,7 +62,7 @@ func (tx *LegacyTx) copy() TxData {
 	cpy := &LegacyTx{
 		Nonce: tx.Nonce,
 		To:    copyAddressPtr(tx.To),
-		Data:  CopyBytes(tx.Data),
+		Data:  eth_account.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are initialized below.
 		Value:    new(big.Int),
@@ -89,17 +90,17 @@ func (tx *LegacyTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *LegacyTx) txType() byte           { return LegacyTxType }
-func (tx *LegacyTx) chainID() *big.Int      { return deriveChainId(tx.V) }
-func (tx *LegacyTx) accessList() AccessList { return nil }
-func (tx *LegacyTx) data() []byte           { return tx.Data }
-func (tx *LegacyTx) gas() uint64            { return tx.Gas }
-func (tx *LegacyTx) gasPrice() *big.Int     { return tx.GasPrice }
-func (tx *LegacyTx) gasTipCap() *big.Int    { return tx.GasPrice }
-func (tx *LegacyTx) gasFeeCap() *big.Int    { return tx.GasPrice }
-func (tx *LegacyTx) value() *big.Int        { return tx.Value }
-func (tx *LegacyTx) nonce() uint64          { return tx.Nonce }
-func (tx *LegacyTx) to() *Address           { return tx.To }
+func (tx *LegacyTx) txType() byte             { return LegacyTxType }
+func (tx *LegacyTx) chainID() *big.Int        { return deriveChainId(tx.V) }
+func (tx *LegacyTx) accessList() AccessList   { return nil }
+func (tx *LegacyTx) data() []byte             { return tx.Data }
+func (tx *LegacyTx) gas() uint64              { return tx.Gas }
+func (tx *LegacyTx) gasPrice() *big.Int       { return tx.GasPrice }
+func (tx *LegacyTx) gasTipCap() *big.Int      { return tx.GasPrice }
+func (tx *LegacyTx) gasFeeCap() *big.Int      { return tx.GasPrice }
+func (tx *LegacyTx) value() *big.Int          { return tx.Value }
+func (tx *LegacyTx) nonce() uint64            { return tx.Nonce }
+func (tx *LegacyTx) to() *eth_account.Address { return tx.To }
 
 func (tx *LegacyTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

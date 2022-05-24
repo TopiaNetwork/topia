@@ -3,10 +3,11 @@ package test
 import (
 	"encoding/hex"
 	"encoding/json"
-	"github.com/TopiaNetwork/topia/api/mocks"
 	"github.com/TopiaNetwork/topia/api/web3"
+	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
+	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
 	"github.com/TopiaNetwork/topia/api/web3/handlers"
-	"github.com/TopiaNetwork/topia/api/web3/types"
+	mocks2 "github.com/TopiaNetwork/topia/api/web3/mocks"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/golang/mock/gomock"
 	"io"
@@ -22,11 +23,11 @@ func GetHexByte(hash string) []byte {
 
 	hex, _ := hex.DecodeString(hash)
 	if len(hash) == 64 {
-		var hash types.Hash
+		var hash eth_account.Hash
 		hash.SetBytes(hex)
 		return hash.Bytes()
 	} else {
-		var addr types.Address
+		var addr eth_account.Address
 		addr.SetBytes(hex)
 		return addr.Bytes()
 	}
@@ -36,8 +37,7 @@ func TestGetBlockByHash(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	servantMock := mocks.NewMockAPIServant(ctrl)
-	txInterfaceMock := mocks.NewMockTxInterface(ctrl)
+	servantMock := mocks2.NewMockAPIServant(ctrl)
 	servantMock.
 		EXPECT().
 		GetBlockByHash(gomock.Any()).
@@ -86,15 +86,17 @@ func TestGetBlockByHash(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/", strings.NewReader(body))
 	res := httptest.NewRecorder()
 	config := web3.Web3ServerConfiguration{
-		Host: "",
-		Port: "8080",
+		HttpHost:  "",
+		HttpPort:  "8080",
+		HttpsHost: "",
+		HttpsPost: "8443",
 	}
-	w3s := web3.InitWeb3Server(config, servantMock, txInterfaceMock)
+	w3s := web3.InitWeb3Server(config, servantMock)
 	w3s.ServeHttp(res, req)
 
 	result, _ := io.ReadAll(res.Result().Body)
 
-	j := types.JsonrpcMessage{}
+	j := types2.JsonrpcMessage{}
 	json.Unmarshal(result, &j)
 
 	ethBlock := handlers.GetBlockResponseType{}

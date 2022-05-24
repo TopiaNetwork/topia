@@ -291,7 +291,14 @@ func (d *dkgCrypt) Verify(msg, sig []byte) error {
 		return err
 	}
 
-	return bls.Verify(d.suite, dkShare.Public(), msg, sig)
+	s := tbls.SigShare(sig)
+
+	i, err := s.Index()
+	if err != nil {
+		return err
+	}
+
+	return bls.Verify(d.suite, pubPolicy.Eval(i).V, msg, s.Value())
 }
 
 func (d *dkgCrypt) RecoverSig(msg []byte, sigs [][]byte) ([]byte, error) {

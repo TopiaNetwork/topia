@@ -25,6 +25,19 @@ func (m *Block) HashBytes() ([]byte, error) {
 	return hasher.Compute(string(blBytes)), nil
 }
 
+func (m *Block) BlockNum() BlockNum {
+	return BlockNum(m.Head.Height)
+}
+
+func (m *Block) BlockHash() (BlockHash, error) {
+	hashBytes, err := m.HashBytes()
+	if err != nil {
+		return "", err
+	}
+
+	return BlockHash(hex.EncodeToString(hashBytes)), nil
+}
+
 func (m *Block) HashHex() (string, error) {
 	hashBytes, err := m.HashBytes()
 	if err != nil {

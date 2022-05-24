@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"github.com/TopiaNetwork/topia/common"
 
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
@@ -25,6 +26,8 @@ type NodeInactiveState interface {
 	GetInactiveNode(nodeID string) (*common.NodeInfo, error)
 
 	GetInactiveNodesTotalWeight() (uint64, error)
+
+	GetAllInactiveNodes() ([]*common.NodeInfo, error)
 
 	AddInactiveNode(nodeInfo *common.NodeInfo) error
 
@@ -88,6 +91,33 @@ func (ns *nodeInactiveState) GetInactiveNodesTotalWeight() (uint64, error) {
 	}
 
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
+}
+
+func (ns *nodeInactiveState) GetAllInactiveNodes() ([]*common.NodeInfo, error) {
+	keys, vals, _, err := ns.GetAllState(StateStore_Name_NodeInactive)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) != len(vals) {
+		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
+	}
+
+	var nodes []*common.NodeInfo
+	for i, val := range vals {
+		if string(keys[i]) == TotalInactiveNodeIDs_Key || string(keys[i]) == TotalInactiveNodeWeight_Key {
+			continue
+		}
+
+		var nodeInfo common.NodeInfo
+		err = json.Unmarshal(val, &nodeInfo)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, &nodeInfo)
+	}
+
+	return nodes, nil
 }
 
 func (ns *nodeInactiveState) AddInactiveNode(nodeInfo *common.NodeInfo) error {

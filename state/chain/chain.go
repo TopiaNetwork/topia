@@ -2,12 +2,10 @@ package chain
 
 import (
 	"errors"
-
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 const StateStore_Name = "chain"
@@ -26,7 +24,7 @@ type LedgerStateUpdater interface {
 type ChainState interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() tpnet.NetworkType
+	NetworkType() tpcmm.NetworkType
 
 	GetChainRoot() ([]byte, error)
 
@@ -61,13 +59,13 @@ func (cs *chainState) ChainID() tpchaintypes.ChainID {
 	return tpchaintypes.ChainID(chainIDBytes)
 }
 
-func (cs *chainState) NetworkType() tpnet.NetworkType {
+func (cs *chainState) NetworkType() tpcmm.NetworkType {
 	netTypeBytes, _, err := cs.GetState(StateStore_Name, []byte(NetworkType_Key))
 	if err != nil {
-		return tpnet.NetworkType_Unknown
+		return tpcmm.NetworkType_Unknown
 	}
 
-	return tpnet.NetworkType(netTypeBytes[0])
+	return tpcmm.NetworkType(netTypeBytes[0])
 }
 
 func (cs *chainState) GetChainRoot() ([]byte, error) {

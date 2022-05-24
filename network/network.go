@@ -6,20 +6,11 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 
 	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/configuration"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/p2p"
-)
-
-var CurrentNetworkType = NetworkType_Testnet
-
-type NetworkType byte
-
-const (
-	NetworkType_Unknown NetworkType = iota
-	NetworkType_Mainnet
-	NetworkType_Testnet
 )
 
 type Network interface {
@@ -33,7 +24,7 @@ type Network interface {
 
 	SendWithResponse(ctx context.Context, protocolID string, moduleName string, data []byte) ([]message.SendResponse, error)
 
-	Subscribe(ctx context.Context, topic string, validators ...message.PubSubMessageValidator) error
+	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
 
 	UnSubscribe(topic string) error
 
@@ -42,6 +33,22 @@ type Network interface {
 	RegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler)
 
 	UnRegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler)
+
+	ConnectedPeers() []*tpnetcmn.RemotePeer
+
+	Connectedness(nodeID string) (tpnetcmn.Connectedness, error)
+
+	PubSubScores() []tpnetcmn.PubsubScore
+
+	NatState() (*tpnetcmn.NatInfo, error)
+
+	PeerDetailInfo(nodeID string) (*tpnetcmn.PeerDetail, error)
+
+	FindPeer(ctx context.Context, nodeID string) (string, error)
+
+	ConnectToNode(ctx context.Context, nodeNetAddr string) error
+
+	DisConnectWithNode(nodeID string) error
 
 	Start()
 
@@ -52,9 +59,9 @@ type network struct {
 	p2p *p2p.P2PService
 }
 
-func NewNetwork(ctx context.Context, log tplog.Logger, sysActor *actor.ActorSystem, endPoint string, seed string, netActiveNode tpnetcmn.NetworkActiveNode) Network {
+func NewNetwork(ctx context.Context, log tplog.Logger, config *configuration.NetworkConfiguration, sysActor *actor.ActorSystem, endPoint string, seed string, netActiveNode tpnetcmn.NetworkActiveNode) Network {
 	return &network{
-		p2p: p2p.NewP2PService(ctx, log, sysActor, endPoint, seed, netActiveNode),
+		p2p: p2p.NewP2PService(ctx, log, config, sysActor, endPoint, seed, netActiveNode),
 	}
 }
 
@@ -78,8 +85,8 @@ func (net *network) SendWithResponse(ctx context.Context, protocolID string, mod
 	return net.p2p.SendWithResponse(ctx, protocolID, moduleName, data)
 }
 
-func (net *network) Subscribe(ctx context.Context, topic string, validators ...message.PubSubMessageValidator) error {
-	return net.p2p.Subscribe(ctx, topic, validators...)
+func (net *network) Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error {
+	return net.p2p.Subscribe(ctx, topic, localIgnore, validators...)
 }
 
 func (net *network) UnSubscribe(topic string) error {
@@ -98,32 +105,42 @@ func (net *network) UnRegisterModule(moduleName string, pid *actor.PID, marshale
 	net.p2p.UnRegisterModule(moduleName, pid, marshaler)
 }
 
+func (net *network) ConnectedPeers() []*tpnetcmn.RemotePeer {
+	return net.p2p.ConnectedPeers()
+}
+
+func (net *network) Connectedness(nodeID string) (tpnetcmn.Connectedness, error) {
+	return net.p2p.Connectedness(nodeID)
+}
+
+func (net *network) PubSubScores() []tpnetcmn.PubsubScore {
+	return net.p2p.PubSubScores()
+}
+
+func (net *network) NatState() (*tpnetcmn.NatInfo, error) {
+	return net.p2p.NatState()
+}
+
+func (net *network) PeerDetailInfo(nodeID string) (*tpnetcmn.PeerDetail, error) {
+	return net.p2p.PeerDetailInfo(nodeID)
+}
+
+func (net *network) FindPeer(ctx context.Context, nodeID string) (string, error) {
+	return net.p2p.FindPeer(ctx, nodeID)
+}
+
+func (net *network) ConnectToNode(ctx context.Context, nodeNetAddr string) error {
+	return net.p2p.ConnectToNode(ctx, nodeNetAddr)
+}
+
+func (net *network) DisConnectWithNode(nodeID string) error {
+	return net.p2p.DisConnectWithNode(nodeID)
+}
+
 func (net *network) Start() {
 	net.p2p.Start()
 }
 
 func (net *network) Stop() {
 	net.p2p.Close()
-}
-
-func (n NetworkType) String() string {
-	switch n {
-	case NetworkType_Mainnet:
-		return "Mainnet"
-	case NetworkType_Testnet:
-		return "Testnet"
-	default:
-		return "Unknown"
-	}
-}
-
-func (n NetworkType) Value(netType byte) NetworkType {
-	switch netType {
-	case 'm':
-		return NetworkType_Mainnet
-	case 't':
-		return NetworkType_Testnet
-	default:
-		return NetworkType_Unknown
-	}
 }

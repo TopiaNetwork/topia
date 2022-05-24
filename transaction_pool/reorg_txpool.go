@@ -1,32 +1,34 @@
 package transactionpool
 
 import (
+	"fmt"
 	"math"
 	"time"
 
-	"github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type txPoolResetHeads struct {
-	oldBlockHead, newBlockHead *types.BlockHead
+	oldBlockHead, newBlockHead *tpchaintypes.BlockHead
 }
 
-func (pool *transactionPool) ReorgTxpoolLoop() {
+func (pool *transactionPool) ReorgAndTurnTxLoop() {
 	defer pool.wg.Done()
 	var (
 		currentDone   chan struct{} // non-nil while runReorg is active
 		nextDone      = make(chan struct{})
 		launchNextRun bool
 		reset         *txPoolResetHeads
-		dirtyAccounts *accountSet
+		accountsCache *accountCache
 	)
 	for {
 		if currentDone == nil && launchNextRun {
-			go pool.runReorgTxpool(nextDone, reset, dirtyAccounts)
+			go pool.runReorgTxpool(nextDone, reset, accountsCache)
 			currentDone, nextDone = nextDone, make(chan struct{})
 			launchNextRun = false
-			reset, dirtyAccounts = nil, nil
+			reset, accountsCache = nil, nil
 		}
 
 		select {
@@ -36,16 +38,16 @@ func (pool *transactionPool) ReorgTxpoolLoop() {
 			} else {
 				reset.newBlockHead = req.newBlockHead
 			}
-			launchNextRun = true
+			launchNextRun = true //start to reset tx
 			pool.chanReorgDone <- nextDone
-
-		case req := <-pool.chanReqPromote:
-			if dirtyAccounts == nil {
-				dirtyAccounts = req
+		case req := <-pool.chanReqTurn:
+			// Promote request: update address set if request is already pending.
+			if accountsCache == nil {
+				accountsCache = req
 			} else {
-				dirtyAccounts.merge(req)
+				accountsCache.merge(req)
 			}
-			launchNextRun = true
+			launchNextRun = true //start to turn txs for accountsCache
 			pool.chanReorgDone <- nextDone
 
 		case <-currentDone:
@@ -62,30 +64,33 @@ func (pool *transactionPool) ReorgTxpoolLoop() {
 	}
 }
 
-func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolResetHeads, dirtyAccounts *accountSet) {
-
+func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolResetHeads, accountCache *accountCache) {
 	defer close(done)
+
+	var addrsNeedTurn []tpcrtypes.Address
+	if accountCache != nil && reset == nil {
+		addrsNeedTurn = accountCache.flatten()
+	}
+	fmt.Println("runReorgTxpool addrsNeedTurn", addrsNeedTurn)
 	if reset != nil {
 		pool.Reset(reset.oldBlockHead, reset.newBlockHead)
+		// Reset needs turn all addresses to pending
+		addrsNeedTurn = pool.queues.getAllAddress()
 	}
+	pool.turnAddrTxsToPending(addrsNeedTurn)
 
 	if reset != nil {
-		for category, _ := range pool.allTxsForLook.getAll() {
+		for _, category := range pool.allTxsForLook.getAllCategory() {
 			pool.demoteUnexecutables(category) //demote transactions
-			if reset.newBlockHead != nil {
-				pool.sortedLists.ReheapForPricedlistByCategory(category)
-			}
-			pool.pendings.noncesForAddrTxListOfCategory(category)
 		}
 	}
-	for category, _ := range pool.allTxsForLook.getAll() {
+	for _, category := range pool.allTxsForLook.getAllCategory() {
 		pool.truncatePendingByCategory(category)
 		pool.truncateQueueByCategory(category)
 	}
-	pool.changesSinceReorg = 0 // Reset change counter
 }
 
-func (pool *transactionPool) requestReset(oldBlockHead *types.BlockHead, newBlockHead *types.BlockHead) chan struct{} {
+func (pool *transactionPool) requestReset(oldBlockHead *tpchaintypes.BlockHead, newBlockHead *tpchaintypes.BlockHead) chan struct{} {
 	select {
 	case pool.chanReqReset <- &txPoolResetHeads{oldBlockHead, newBlockHead}:
 		return <-pool.chanReorgDone
@@ -93,112 +98,108 @@ func (pool *transactionPool) requestReset(oldBlockHead *types.BlockHead, newBloc
 		return pool.chanReorgShutdown
 	}
 }
+func (pool *transactionPool) requestTurnToPending(cache *accountCache) chan struct{} {
+	select {
+	case pool.chanReqTurn <- cache:
+		return <-pool.chanReorgDone
+	case <-pool.chanReorgShutdown:
+		return pool.chanReorgShutdown
+	}
+}
 
-func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *types.BlockHead) error {
+func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.BlockHead) error {
 	defer func(t0 time.Time) {
 		pool.log.Infof("reset cost time: ", time.Since(t0))
 	}(time.Now())
-	var reInject []*basic.Transaction
-	if oldBlockHead != nil && types.BlockHash(oldBlockHead.Hash) != types.BlockHash(newBlockHead.Hash) {
 
+	var reinjectTxs []*txbasic.Transaction
+
+	if oldBlockHead != nil && tpchaintypes.BlockHash(oldBlockHead.Hash) != tpchaintypes.BlockHash(newBlockHead.ParentBlockHash) {
 		oldBlockHeight := oldBlockHead.GetHeight()
 		newBlockHeight := newBlockHead.GetHeight()
-
 		if depth := uint64(math.Abs(float64(oldBlockHeight) - float64(newBlockHeight))); depth > 64 {
 			pool.log.Debugf("Skipping deep transaction reorg,", "depth:", depth)
 		} else {
 
-			var discarded, included []*basic.Transaction
+			var curTxPoolTxs, packagedTx []*txbasic.Transaction
 			var (
-				rem = pool.query.GetBlock(types.BlockHash(oldBlockHead.Hash), oldBlockHead.Height)
-				add = pool.query.GetBlock(types.BlockHash(newBlockHead.Hash), newBlockHead.Height)
+				rem, _ = pool.txServant.GetBlockByNumber(tpchaintypes.BlockNum(oldBlockHead.Height))
+				add, _ = pool.txServant.GetBlockByNumber(tpchaintypes.BlockNum(newBlockHead.Height))
 			)
 			if rem == nil {
-
 				if newBlockHeight >= oldBlockHeight {
 
 					pool.log.Warnf("Transcation pool reset with missing oldhead",
-						"oldhead hash", types.BlockHash(oldBlockHead.Hash),
-						"newhead hash", types.BlockHash(newBlockHead.Hash))
+						"oldhead hash", tpchaintypes.BlockHash(oldBlockHead.Hash),
+						"newhead hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 					return nil
 				}
 
 				pool.log.Debugf("Skipping transaction reset caused by setHead",
-					"oldhead hash", types.BlockHash(oldBlockHead.Hash), "oldnum", oldBlockHeight,
-					"newhead hash", types.BlockHash(newBlockHead.Hash), "newnum", newBlockHeight)
+					"oldhead hash", tpchaintypes.BlockHash(oldBlockHead.Hash), "oldnum", oldBlockHeight,
+					"newhead hash", tpchaintypes.BlockHash(newBlockHead.Hash), "newnum", newBlockHeight)
 			} else {
-
-				for rem.Head.Height > add.Head.Height {
-
-					for _, tx := range rem.Data.Txs {
-						var txType *basic.Transaction
-						err := pool.marshaler.Unmarshal(tx, &txType)
-						if err != nil {
-							discarded = append(discarded, txType)
-						}
-					}
-					if rem = pool.query.GetBlock(types.BlockHash(rem.Head.ParentBlockHash), rem.Head.Height-1); rem == nil {
-						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldBlockHead.Height,
-							"hash", types.BlockHash(oldBlockHead.Hash))
-						return nil
-					}
+				for _, category := range pool.allTxsForLook.getAllCategory() {
+					curTxPoolTxs = append(curTxPoolTxs, pool.allTxsForLook.getAllTxsByCategory(category)...)
 				}
+				for add.GetHead().GetHeight() > rem.GetHead().GetHeight() {
 
-				for add.Head.Height > rem.Head.Height {
 					for _, tx := range add.Data.Txs {
-						var txType *basic.Transaction
+						var txType *txbasic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
-							included = append(included, txType)
+							pool.log.Errorf("Unmarshal tx error:", err)
 						}
+						packagedTx = append(packagedTx, txType)
+
 					}
-					if add = pool.query.GetBlock(types.BlockHash(add.Head.ParentBlockHash), add.Head.Height-1); add == nil {
+					if add, _ = pool.txServant.GetBlockByNumber(add.BlockNum() - 1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newBlockHead.Height,
-							"hash", types.BlockHash(newBlockHead.Hash))
+							"hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 						return ErrUnRooted
 					}
 				}
 
-				for types.BlockHash(rem.Head.Hash) != types.BlockHash(add.Head.Hash) {
-					for _, tx := range rem.Data.Txs {
-						var txType *basic.Transaction
-						err := pool.marshaler.Unmarshal(tx, &txType)
-						if err != nil {
-							discarded = append(discarded, txType)
-						}
-					}
-					if rem = pool.query.GetBlock(types.BlockHash(rem.Head.ParentBlockHash), rem.Head.Height-1); rem == nil {
-						pool.log.Errorf("UnRooted old chain seen by tx pool", "block", oldBlockHead.Height,
-							"hash", types.BlockHash(oldBlockHead.Hash))
-						return ErrUnRooted
-					}
+				for tpchaintypes.BlockHash(rem.GetHead().GetHash()) != tpchaintypes.BlockHash(add.GetHead().GetHash()) {
 					for _, tx := range add.Data.Txs {
-						var txType *basic.Transaction
+						var txType *txbasic.Transaction
 						err := pool.marshaler.Unmarshal(tx, &txType)
 						if err != nil {
-							included = append(included, txType)
+							pool.log.Errorf("Unmarshal tx error:", err)
 						}
+						packagedTx = append(packagedTx, txType)
 					}
-					if add = pool.query.GetBlock(types.BlockHash(add.Head.ParentBlockHash), add.Head.Height-1); add == nil {
+
+					if add, _ = pool.txServant.GetBlockByNumber(add.BlockNum() - 1); add == nil {
 						pool.log.Errorf("UnRooted new chain seen by tx pool", "block", newBlockHead.Height,
-							"hash", types.BlockHash(newBlockHead.Hash))
+							"hash", tpchaintypes.BlockHash(newBlockHead.Hash))
 						return ErrUnRooted
 					}
 				}
-
-				reInject = basic.TxDifference(discarded, included)
+				reinjectTxs = TxDifferenceList(curTxPoolTxs, packagedTx)
 			}
 		}
 	}
-	if newBlockHead == nil {
-		newBlockHead = pool.query.CurrentBlock().GetHead()
-	}
-	stateDb, err := pool.query.StateAt(types.BlockHash(newBlockHead.Hash))
-	if err != nil {
-		pool.log.Errorf("Failed to reset txPool state", "err", err)
-		return err
-	}
-	pool.curState = *stateDb
-	pool.log.Debugf("ReInjecting stale transactions", "count", len(reInject))
+	pool.addTxsLocked(reinjectTxs, false)
 	return nil
+}
+
+//TxDifferenceList Delete set B from set A, return the differenct transaction list
+func TxDifferenceList(a, b []*txbasic.Transaction) []*txbasic.Transaction {
+	keep := make([]*txbasic.Transaction, 0, len(a))
+
+	remove := make(map[txbasic.TxID]struct{})
+	for _, tx := range b {
+		txid, _ := tx.TxID()
+		remove[txid] = struct{}{}
+	}
+
+	for _, tx := range a {
+		txid, _ := tx.TxID()
+		if _, ok := remove[txid]; !ok {
+			keep = append(keep, tx)
+		}
+	}
+
+	return keep
 }

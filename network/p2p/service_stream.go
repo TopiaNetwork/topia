@@ -45,12 +45,12 @@ func (ps *P2PStreamService) handleIncomingStream(stream network.Stream) {
 		var streamMsg message.NetworkMessage
 		err := reader.ReadMsg(&streamMsg)
 		if err != nil {
-			ps.log.Errorf("failed to read message: %s and stream %s will be reset", err.Error(), stream.ID())
 			if err == io.EOF {
 				stream.Close()
 				ps.log.Debugf("close the stream: %s", stream.ID())
 				return
 			}
+			ps.log.Errorf("failed to read message: %s and stream %s will be reset", err.Error(), stream.ID())
 			stream.Reset()
 			return
 		}

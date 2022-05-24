@@ -10,16 +10,17 @@ import (
 )
 
 const (
-	EventName_TxReceived     = "TxReceived"
-	EventName_TxPrepared     = "TxPrepared"
-	EventName_TxRollbacked   = "TxRollbacked"
-	EventName_TxCommited     = "TxCommited"
-	EventName_BlockCreated   = "BlockCreated"
-	EventName_BlockCommited  = "BlockCommited"
-	EventName_BlockVerified  = "BlockVerified"
-	EventName_BlockConfirmed = "BlockConfirmed"
-	EventName_BlockAdded     = "BlockAdded"
-	EventName_EpochNew       = "EpochNew"
+	EventName_TxPoolChanged   = "TxPoolChanged"
+	EventName_TxPrepared      = "TxPrepared"
+	EventName_TxRollbacked    = "TxRollbacked"
+	EventName_TxCommited      = "TxCommited"
+	EventName_BlockCreated    = "BlockCreated"
+	EventName_BlockCommited   = "BlockCommited"
+	EventName_BlockVerified   = "BlockVerified"
+	EventName_BlockConfirmed  = "BlockConfirmed"
+	EventName_BlockAdded      = "BlockAdded"
+	EventName_EpochNew        = "EpochNew"
+	EventName_ContractInvoked = "ContractInvoked"
 )
 
 type EventTrigger interface {

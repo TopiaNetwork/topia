@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"sync"
 	"time"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -16,14 +16,14 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type consensusExecutor struct {
 	log                          tplog.Logger
 	nodeID                       string
 	priKey                       tpcrtypes.PrivateKey
-	txPool                       txpool.TransactionPool
+	txPool                       txpooli.TransactionPool
 	marshaler                    codec.Marshaler
 	ledger                       ledger.Ledger
 	exeScheduler                 execution.ExecutionScheduler
@@ -38,7 +38,7 @@ type consensusExecutor struct {
 func newConsensusExecutor(log tplog.Logger,
 	nodeID string,
 	priKey tpcrtypes.PrivateKey,
-	txPool txpool.TransactionPool,
+	txPool txpooli.TransactionPool,
 	marshaler codec.Marshaler,
 	ledger ledger.Ledger,
 	exeScheduler execution.ExecutionScheduler,
@@ -72,12 +72,12 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 			case perparePMExe := <-e.preparePackedMsgExeChan:
 				e.log.Infof("Received PreparePackedMessageExe from other executor, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 
-				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
+				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
 
 				waitCount := 1
 				for compState == nil {
 					e.log.Warnf("Can't CreateCompositionState when received new PreparePackedMessageExe, StateVersion %d, self node %s, waitCount %d", perparePMExe.StateVersion, e.nodeID, waitCount)
-					compState = state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion)
+					compState = state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
 					waitCount++
 					time.Sleep(50 * time.Millisecond)
 				}
@@ -97,14 +97,14 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 
 				var receivedTxList []*txbasic.Transaction
 				for i := 0; i < len(perparePMExe.Txs); i++ {
-					var tx *txbasic.Transaction
+					var tx txbasic.Transaction
 
 					err = e.marshaler.Unmarshal(perparePMExe.Txs[i], &tx)
 					if err != nil {
 						e.log.Errorf("Invalid tx from pepare packed msg exe: marshal err %v", err)
 						break
 					}
-					receivedTxList = append(receivedTxList, tx)
+					receivedTxList = append(receivedTxList, &tx)
 				}
 				if err != nil {
 					continue
@@ -173,7 +173,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 		for {
 			select {
 			case commitMsg := <-e.commitMsgChan:
-				e.log.Infof("Received commit message, StateVersion %d", commitMsg.StateVersion)
+				e.log.Infof("Received commit message, StateVersion %d, self node %s", commitMsg.StateVersion, e.nodeID)
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
 					defer csStateRN.Stop()
@@ -192,8 +192,13 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 					}
 
 					deltaHeight := int(bh.Height) - int(latestBlock.Head.Height)
+					if deltaHeight <= 0 {
+						err = fmt.Errorf("Received commit message is delayed, StateVersion %d, latest height %d", commitMsg.StateVersion, latestBlock.Head.Height)
+						e.log.Infof("%s", err.Error())
+						return err
+					}
 
-					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, deltaHeight, e.marshaler, e.ledger.GetBlockStore(), e.deliver.network)
+					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, deltaHeight, e.marshaler, e.deliver.network, e.ledger)
 					if err != nil {
 						e.log.Errorf("Commit packed tx err: %v", err)
 						return err
@@ -217,7 +222,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 
 func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 	if schedulerState := e.exeScheduler.State(); schedulerState != execution.SchedulerState_Idle {
-		err := fmt.Errorf("Execution scheduler state %s not idle", schedulerState.String())
+		err := fmt.Errorf("Execution scheduler state %s, self node %s", schedulerState.String(), e.nodeID)
 		e.log.Errorf("%v", err)
 		return false, nil, err
 	}
@@ -255,13 +260,17 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 		for {
 			select {
 			case <-timer.C:
+				prepareStart := time.Now()
 				isCan, vrfProof, _ := e.canPrepare()
 				if isCan {
 					e.log.Infof("Selected execution launcher %s can prepare", e.nodeID)
+					pStart := time.Now()
 					e.Prepare(ctx, vrfProof)
+					e.log.Infof("Prepare time: cost %d ms", time.Since(pStart).Milliseconds())
 				}
+				e.log.Infof("Prepare time total: isCan %v, cost %d ms", isCan, time.Since(prepareStart).Milliseconds())
 			case <-ctx.Done():
-				e.log.Info("Consensus executor exit prepare timre")
+				e.log.Info("Consensus executor exit prepare timer")
 				return
 			}
 		}
@@ -325,7 +334,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 	}
 
 	for i := 0; i < len(txList); i++ {
-		txBytes, _ := e.marshaler.Marshal(&txList[i])
+		txBytes, _ := e.marshaler.Marshal(txList[i])
 		exePPM.Txs = append(exePPM.Txs, txBytes)
 
 		txHashBytes, _ := txList[i].HashBytes()
@@ -356,7 +365,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		return err
 	}
 
-	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, maxStateVer+1)
+	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, maxStateVer+1, "executor_exepreparer")
 	if compState == nil {
 		err = fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", maxStateVer+1)
 		e.log.Errorf("%v", err)

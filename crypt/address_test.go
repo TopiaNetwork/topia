@@ -2,15 +2,14 @@ package crypt
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 func TestSecp256Addr(t *testing.T) {
@@ -24,11 +23,15 @@ func TestSecp256Addr(t *testing.T) {
 	addr, err := cytService.CreateAddress(pubKey)
 	assert.Equal(t, nil, err)
 
-	fmt.Println(addr)
+	t.Log(addr)
+
+	contractAddr := tpcrtypes.CreateUserContractAddress(addr, 10)
+
+	t.Log(contractAddr)
 
 	netType, err := addr.NetworkType()
 	assert.Equal(t, nil, err)
-	assert.Equal(t, tpnet.CurrentNetworkType, netType)
+	assert.Equal(t, tpcmm.CurrentNetworkType, netType)
 
 	cType, err := addr.CryptType()
 	assert.Equal(t, nil, err)
@@ -37,4 +40,19 @@ func TestSecp256Addr(t *testing.T) {
 	payload, err := addr.Payload()
 	assert.Equal(t, nil, err)
 	assert.Equal(t, tpcrtypes.AddressLen_Secp256, len(payload))
+}
+
+func TestNativeContractAddr(t *testing.T) {
+	addr := tpcrtypes.CreateNativeContractAddress(1)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(2)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(3)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(4)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(5)
+	t.Log(addr)
+	addr = tpcrtypes.CreateNativeContractAddress(100)
+	t.Log(addr)
 }

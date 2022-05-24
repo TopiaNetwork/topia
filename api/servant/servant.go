@@ -3,18 +3,18 @@ package servant
 import (
 	"context"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/currency"
 	"math/big"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type APIServant interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() tpnet.NetworkType
+	NetworkType() common.NetworkType
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
@@ -56,7 +56,7 @@ func (s *apiServant) ChainID() tpchaintypes.ChainID {
 	panic("implement me")
 }
 
-func (s *apiServant) NetworkType() tpnet.NetworkType {
+func (s *apiServant) NetworkType() common.NetworkType {
 	//TODO implement me
 	panic("implement me")
 }

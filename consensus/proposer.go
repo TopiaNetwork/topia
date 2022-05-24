@@ -238,6 +238,12 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 					continue
 				}
 
+				err := p.dkgBls.Verify(voteMsg.BlockHead, voteMsg.Signature)
+				if err != nil {
+					p.log.Errorf("Received invalid vote message, state version %d, latest height %d, err %v, self node %s", voteMsg.StateVersion, p.voteCollector.latestHeight, err, p.nodeID)
+					continue
+				}
+
 				aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
 				if err != nil {
 					p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)

@@ -1,19 +1,27 @@
 package configuration
 
-import "time"
+import (
+	tpcmm "github.com/TopiaNetwork/topia/common"
+	"time"
+)
 
 type PubSubConfiguration struct {
-	Bootstrapper          bool
+	ISSeedPeer            bool
 	DirectPeers           []string
 	IPColocationWhitelist []string
+}
+
+type SeedPeer struct {
+	Role          tpcmm.NodeRole
+	NetAddrString string
 }
 
 type ConnectionConfiguration struct {
 	HighWater      int
 	LowWater       int
 	DurationPrune  time.Duration
-	BootstrapPeers []string
-	ProtectedPeers []string
+	SeedPeers      []*SeedPeer
+	ProtectedPeers []string //peer id string
 }
 
 type NetworkConfiguration struct {
@@ -23,7 +31,7 @@ type NetworkConfiguration struct {
 
 func DefPubSubConfiguration() *PubSubConfiguration {
 	return &PubSubConfiguration{
-		Bootstrapper: false,
+		ISSeedPeer: false,
 	}
 }
 

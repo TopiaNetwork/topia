@@ -1,42 +1,167 @@
 package transactionpool
 
 import (
-	"math/big"
+	"context"
 
-	"github.com/TopiaNetwork/topia/account"
-	"github.com/TopiaNetwork/topia/chain/types"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/network/p2p"
+	tplog "github.com/TopiaNetwork/topia/log"
+	tpnet "github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/network/message"
+	"github.com/TopiaNetwork/topia/network/protocol"
+	"github.com/TopiaNetwork/topia/service"
+	"github.com/TopiaNetwork/topia/transaction"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
-type BlockAddedEvent struct{ Block *types.Block }
+const MaxUint64 = 1<<64 - 1
 
 type TransactionPoolServant interface {
-	CurrentBlock() *types.Block
-	GetBlock(hash types.BlockHash, num uint64) *types.Block
-	StateAt(root types.BlockHash) (*StatePoolDB, error)
-	SubChainHeadEvent(ch chan<- BlockAddedEvent) p2p.P2PPubSubService
-	GetMaxGasLimit() uint64
+	CurrentHeight() (uint64, error)
+	GetNonce(tpcrtypes.Address) (uint64, error)
+	GetLatestBlock() (*tpchaintypes.Block, error)
+	GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
+	GetBlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error)
+	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
+	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
+	UnSubscribe(topic string) error
 }
 
-type StatePoolDB struct {
-}
-
-func (st *StatePoolDB) GetAccount(addr tpcrtypes.Address) (*account.Account, error) {
-	acc := &account.Account{
-		Addr:     "",
-		Name:     "",
-		Nonce:    0,
-		Balances: nil,
+func newTransactionPoolServant(stateQueryService service.StateQueryService, blockService service.BlockService,
+	network tpnet.Network) TransactionPoolServant {
+	txpoolservant := &transactionPoolServant{
+		StateQueryService: stateQueryService,
+		BlockService:      blockService,
+		Network:           network,
 	}
-	return acc, nil
-}
-func (st *StatePoolDB) GetBalance(addr tpcrtypes.Address) *big.Int {
-	balance := big.NewInt(100000000)
-	return balance
+	return txpoolservant
 }
 
-func (st *StatePoolDB) GetNonce(addr tpcrtypes.Address) uint64 {
-	nonce := uint64(123456)
-	return nonce
+type transactionPoolServant struct {
+	service.StateQueryService
+	service.BlockService
+	tpnet.Network
+}
+
+func (servant *transactionPoolServant) CurrentHeight() (uint64, error) {
+	curBlock, err := servant.GetLatestBlock()
+	if err != nil {
+		return 0, err
+	}
+	curHeight := curBlock.Head.Height
+	return curHeight, nil
+}
+
+func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
+	if tx == nil {
+		return ErrTxIsNil
+	}
+	msg := &TxMessage{}
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+	data, err := marshaler.Marshal(tx)
+	if err != nil {
+		return err
+	}
+	msg.Data = data
+	sendData, err := msg.Marshal()
+	if err != nil {
+		return err
+	}
+	var toModuleName []string
+	toModuleName = append(toModuleName, txpooli.MOD_NAME)
+	servant.Network.Publish(ctx, toModuleName, protocol.SyncProtocolID_Msg, sendData)
+	return nil
+}
+
+func (servant *transactionPoolServant) Subscribe(ctx context.Context, topic string, localIgnore bool,
+	validators ...message.PubSubMessageValidator) error {
+	return servant.Network.Subscribe(ctx, topic, localIgnore, validators...)
+}
+func (servant *transactionPoolServant) UnSubscribe(topic string) error {
+	return servant.Network.UnSubscribe(topic)
+}
+
+type TxMessageSubProcessor interface {
+	Validate(ctx context.Context, isLocal bool, data []byte) message.ValidationResult
+	Process(ctx context.Context, subMsgTxMessage *TxMessage) error
+}
+
+var TxMsgSubProcessor TxMessageSubProcessor
+
+type txMessageSubProcessor struct {
+	txpool *transactionPool
+	log    tplog.Logger
+	nodeID string
+}
+
+func (msgSub *txMessageSubProcessor) GetLoger() tplog.Logger {
+	return msgSub.log
+}
+func (msgSub *txMessageSubProcessor) GetNodeID() string {
+	return msgSub.nodeID
+}
+
+func (msgSub *txMessageSubProcessor) Validate(ctx context.Context, isLocal bool, sendData []byte) message.ValidationResult {
+	if uint64(msgSub.txpool.Size()) > msgSub.txpool.config.TxPoolMaxSize {
+		return message.ValidationReject
+	}
+	msg := &TxMessage{}
+	msg.Unmarshal(sendData)
+	var tx *txbasic.Transaction
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+	err := marshaler.Unmarshal(msg.Data, &tx)
+	if err != nil {
+		return message.ValidationReject
+	}
+	if uint64(tx.Size()) > txpooli.DefaultTransactionPoolConfig.TxMaxSize {
+		msgSub.log.Errorf("transaction size is up to the TxMaxSize")
+		return message.ValidationReject
+	}
+	if tx.Head.Nonce > MaxUint64 {
+		msgSub.log.Errorf("transaction nonce is up to the MaxUint64")
+		return message.ValidationReject
+	}
+	if txpooli.DefaultTransactionPoolConfig.GasPriceLimit < GasLimit(tx) {
+		msgSub.log.Errorf("transaction gaslimit is up to GasPriceLimit")
+		return message.ValidationReject
+	}
+
+	if isLocal {
+		if uint64(tx.Size()) > txpooli.DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount {
+			return message.ValidationReject
+		}
+		return message.ValidationAccept
+	} else {
+		ac := transaction.CreatTransactionAction(tx)
+		verifyResult := ac.Verify(ctx, msgSub.GetLoger(), msgSub.GetNodeID(), nil)
+		switch verifyResult {
+		case txbasic.VerifyResult_Accept:
+			return message.ValidationAccept
+		case txbasic.VerifyResult_Ignore:
+			return message.ValidationIgnore
+		case txbasic.VerifyResult_Reject:
+			return message.ValidationReject
+		}
+	}
+	return message.ValidationAccept
+}
+func (msgSub *txMessageSubProcessor) Process(ctx context.Context, subMsgTxMessage *TxMessage) error {
+	var tx *txbasic.Transaction
+	txId, _ := tx.TxID()
+	err := tx.Unmarshal(subMsgTxMessage.Data)
+	if err != nil {
+		msgSub.log.Error("txmessage data error")
+		return err
+	}
+	category := txbasic.TransactionCategory(tx.Head.Category)
+	msgSub.txpool.newTxListStructs(category)
+
+	if err := msgSub.txpool.AddTx(tx, false); err != nil {
+		return err
+	}
+
+	msgSub.txpool.txCache.Add(txId, StateTxAdded)
+	return nil
 }

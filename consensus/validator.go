@@ -73,7 +73,8 @@ func (v *consensusValidator) canProcessForwardProposeMsg(ctx context.Context, ma
 
 	if v.propMsgCached != nil &&
 		bytes.Compare(propMsg.ChainID, v.propMsgCached.ChainID) == 0 &&
-		propMsg.Round == v.propMsgCached.Round {
+		propMsg.Round == v.propMsgCached.Round &&
+		propMsg.StateVersion == v.propMsgCached.StateVersion {
 		bhCached, err := v.propMsgCached.BlockHeadInfo()
 		if err != nil {
 			v.log.Errorf("Can't get cached propose msg bock head info: %v", err)
@@ -83,7 +84,7 @@ func (v *consensusValidator) canProcessForwardProposeMsg(ctx context.Context, ma
 		if new(big.Int).SetBytes(cachedMaxPri).Cmp(new(big.Int).SetBytes(maxPri)) < 0 {
 			v.propMsgCached = propMsg
 		} else {
-			v.log.Errorf("Received bigger pri poropose block and can't  forward to other validator: local proposer=%s, other proposer =%d", v.nodeID, string(bhCached.Proposer))
+			v.log.Errorf("Received bigger pri poropose block and can't forward to other validator: local proposer=%s, other proposer=%s", v.nodeID, string(bhCached.Proposer))
 			return false
 		}
 	} else {

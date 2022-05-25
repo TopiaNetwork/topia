@@ -53,7 +53,7 @@ func (md *messageDeliverMock) deliverResultValidateReqMessage(ctx context.Contex
 	panic("implement me")
 }
 
-func (md *messageDeliverMock) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error {
+func (md *messageDeliverMock) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage, err error) error {
 	//TODO implement me
 	panic("implement me")
 }

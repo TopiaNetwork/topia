@@ -35,7 +35,7 @@ func TestExecuteContract(t *testing.T) {
 
 	sParam := "testNode"
 
-	txServant := txbasic.NewTransactionServant(compState, compState)
+	txServant := txbasic.NewTransactionServant(compState, compState, nil, nil)
 
 	vmServant := tpvmmservice.NewVMServant(txServant, math.MaxUint64)
 

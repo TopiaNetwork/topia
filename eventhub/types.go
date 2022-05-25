@@ -11,8 +11,8 @@ const (
 )
 
 type TxPoolEvent struct {
-	evType TxPoolEVType
-	tx     *txbasic.Transaction
+	EvType TxPoolEVType
+	Tx     *txbasic.Transaction
 }
 
 func (te TxPoolEVType) String() string {

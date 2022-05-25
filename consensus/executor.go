@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"sync"
 	"time"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -16,14 +16,14 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type consensusExecutor struct {
 	log                          tplog.Logger
 	nodeID                       string
 	priKey                       tpcrtypes.PrivateKey
-	txPool                       txpool.TransactionPool
+	txPool                       txpooli.TransactionPool
 	marshaler                    codec.Marshaler
 	ledger                       ledger.Ledger
 	exeScheduler                 execution.ExecutionScheduler
@@ -38,7 +38,7 @@ type consensusExecutor struct {
 func newConsensusExecutor(log tplog.Logger,
 	nodeID string,
 	priKey tpcrtypes.PrivateKey,
-	txPool txpool.TransactionPool,
+	txPool txpooli.TransactionPool,
 	marshaler codec.Marshaler,
 	ledger ledger.Ledger,
 	exeScheduler execution.ExecutionScheduler,
@@ -173,7 +173,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 		for {
 			select {
 			case commitMsg := <-e.commitMsgChan:
-				e.log.Infof("Received commit message, StateVersion %d", commitMsg.StateVersion)
+				e.log.Infof("Received commit message, StateVersion %d, self node %s", commitMsg.StateVersion, e.nodeID)
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
 					defer csStateRN.Stop()
@@ -222,7 +222,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 
 func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 	if schedulerState := e.exeScheduler.State(); schedulerState != execution.SchedulerState_Idle {
-		err := fmt.Errorf("Execution scheduler state %s not idle", schedulerState.String())
+		err := fmt.Errorf("Execution scheduler state %s, self node %s", schedulerState.String(), e.nodeID)
 		e.log.Errorf("%v", err)
 		return false, nil, err
 	}
@@ -260,13 +260,17 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 		for {
 			select {
 			case <-timer.C:
+				prepareStart := time.Now()
 				isCan, vrfProof, _ := e.canPrepare()
 				if isCan {
 					e.log.Infof("Selected execution launcher %s can prepare", e.nodeID)
+					pStart := time.Now()
 					e.Prepare(ctx, vrfProof)
+					e.log.Infof("Prepare time: cost %d ms", time.Since(pStart).Milliseconds())
 				}
+				e.log.Infof("Prepare time total: isCan %v, cost %d ms", isCan, time.Since(prepareStart).Milliseconds())
 			case <-ctx.Done():
-				e.log.Info("Consensus executor exit prepare timre")
+				e.log.Info("Consensus executor exit prepare timer")
 				return
 			}
 		}

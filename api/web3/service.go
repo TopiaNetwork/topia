@@ -22,7 +22,6 @@ func HandlerWapper(f http.HandlerFunc) http.HandlerFunc {
 			if pr := recover(); pr != nil {
 				fmt.Fprintf(os.Stderr, "runtime error: %v\n", pr)
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Header().Set("X-Server-Time", time.Now().String())
 				debug.PrintStack()
 				return
 			}
@@ -33,6 +32,7 @@ func HandlerWapper(f http.HandlerFunc) http.HandlerFunc {
 		w.Header().Add("Access-Control-Allow-Credentials", "true")
 		w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("content-type", "application/json;charset=UTF-8")
+		w.Header().Set("X-Server-Time", time.Now().String())
 
 		f(w, r)
 	}

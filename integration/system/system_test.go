@@ -1,8 +1,9 @@
-package system_interaction
+package system
 
 import (
 	"context"
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/TopiaNetwork/topia/configuration"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -21,12 +22,14 @@ func TestBlockRequest(t *testing.T) {
 	ctx := context.Background()
 	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 
+	netConfig := configuration.GetConfiguration().NetConfig
+
 	sysActor1 := actor.NewActorSystem()
-	network1 := network.NewNetwork(ctx, testLog, sysActor1, "/ip4/127.0.0.1/tcp/41000", "topia1", nil)
+	network1 := network.NewNetwork(ctx, testLog, netConfig, sysActor1, "/ip4/127.0.0.1/tcp/41000", "topia1", nil)
 	testLog.Infof("network1 id=%s, addrs=%v", network1.ID(), network1.ListenAddr())
 
 	sysActor2 := actor.NewActorSystem()
-	network2 := network.NewNetwork(ctx, testLog, sysActor2, "/ip4/127.0.0.1/tcp/41001", "topia2", nil)
+	network2 := network.NewNetwork(ctx, testLog, netConfig, sysActor2, "/ip4/127.0.0.1/tcp/41001", "topia2", nil)
 	testLog.Infof("network1 id=%s, addrs=%v", network2.ID(), network2.ListenAddr())
 
 	err := network1.Connect(network2.ListenAddr())

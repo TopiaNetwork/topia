@@ -3,9 +3,15 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
+
+	"github.com/AsynkronIT/protoactor-go/actor"
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -19,16 +25,11 @@ import (
 	"github.com/TopiaNetwork/topia/integration/mock"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
-	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
-	"os"
-	"testing"
-	"time"
-
-	"github.com/AsynkronIT/protoactor-go/actor"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/state"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -54,7 +55,7 @@ type nodeParams struct {
 	mainLog         tplog.Logger
 	codecType       codec.CodecType
 	network         tpnet.Network
-	txPool          txpool.TransactionPool
+	txPool          txpooli.TransactionPool
 	ledger          ledger.Ledger
 	scheduler       execution.ExecutionScheduler
 	cs              consensus.Consensus
@@ -293,9 +294,9 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
-		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, txPool)
+		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, codec.CodecType_PROTO, txPool)
 
-		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, exeScheduler, config)
+		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
 
 		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
 

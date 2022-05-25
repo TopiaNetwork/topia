@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	txservant "github.com/TopiaNetwork/topia/transaction/basic"
 	"sync"
 	"time"
 
@@ -25,7 +24,8 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txservant "github.com/TopiaNetwork/topia/transaction/basic"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -64,11 +64,12 @@ type executionScheduler struct {
 	lastStateVersion *atomic.Uint64
 	exePackedTxsList *list.List
 	config           *configuration.Configuration
-	txPool           txpool.TransactionPool
+	marshaler        codec.Marshaler
+	txPool           txpooli.TransactionPool
 	syncCommitBlock  sync.RWMutex
 }
 
-func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, txPool txpool.TransactionPool) *executionScheduler {
+func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, codecType codec.CodecType, txPool txpooli.TransactionPool) *executionScheduler {
 	exeLog := tplog.CreateModuleLogger(logcomm.InfoLevel, MOD_NAME, log)
 	return &executionScheduler{
 		nodeID:           nodeID,
@@ -79,6 +80,7 @@ func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuratio
 		schedulerState:   atomic.NewUint32(uint32(SchedulerState_Idle)),
 		exePackedTxsList: list.New(),
 		config:           config,
+		marshaler:        codec.CreateMarshaler(codecType),
 		txPool:           txPool,
 	}
 }
@@ -131,7 +133,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 
 	exePackedTxs := newExecutionPackedTxs(scheduler.nodeID, txPacked, compState)
 
-	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txservant.NewTransactionServant(compState, compState))
+	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txservant.NewTransactionServant(compState, compState, scheduler.marshaler, scheduler.txPool.Size))
 	if err == nil {
 		compState.UpdateCompSState(state.CompSState_Normal)
 		scheduler.lastStateVersion.Store(txPacked.StateVersion)
@@ -139,8 +141,8 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 		scheduler.exePackedTxsList.PushBack(exePackedTxs)
 
 		for _, tx := range txPacked.TxList {
-			txHash, _ := tx.HashHex()
-			scheduler.txPool.RemoveTxByKey(txHash)
+			txID, _ := tx.TxID()
+			scheduler.txPool.RemoveTxByKey(txID)
 		}
 
 		if scheduler.exePackedTxsList.Len() >= int(scheduler.config.CSConfig.MaxPrepareMsgCache) {
@@ -408,11 +410,13 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 	marshaler codec.Marshaler,
 	network tpnet.Network,
 	ledger ledger.Ledger) error {
-	if ok := scheduler.executeMutex.TryLockTimeout(1 * time.Second); !ok {
-		err := fmt.Errorf("A packedTxs is commiting, try later again")
-		scheduler.log.Errorf("%v", err)
-		return err
-	}
+	/*
+		if ok := scheduler.executeMutex.TryLockTimeout(60 * time.Second); !ok {
+			err := fmt.Errorf("A packedTxs is commiting, try later again")
+			scheduler.log.Errorf("%v", err)
+			return err
+		}*/
+	scheduler.executeMutex.Lock()
 	defer scheduler.executeMutex.Unlock()
 
 	scheduler.schedulerState.Store(uint32(SchedulerState_Commiting))
@@ -495,8 +499,18 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 			return err
 		}
 
+		chainMsg := &tpchaintypes.ChainMessage{
+			MsgType: tpchaintypes.ChainMessage_BlockInfo,
+			Data:    pubsubBlockInfoBytes,
+		}
+		chainMsgBytes, err := marshaler.Marshal(chainMsg)
+		if err != nil {
+			scheduler.log.Errorf("Marshal chain msg err: stateVersion=%d, err=%v", stateVersion, err)
+			return err
+		}
+
 		go func() {
-			err := network.Publish(ctx, []string{tpchaintypes.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, pubsubBlockInfoBytes)
+			err := network.Publish(ctx, []string{tpchaintypes.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, chainMsgBytes)
 			if err != nil {
 				scheduler.log.Errorf("Publish block info err: stateVersion=%d, err=%v", stateVersion, err)
 			}

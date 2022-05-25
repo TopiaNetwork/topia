@@ -3,20 +3,22 @@ package execution
 import (
 	"context"
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
+	"math/rand"
+	"time"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger"
+	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	txuni "github.com/TopiaNetwork/topia/transaction/universal"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
-	"math/rand"
-	"time"
-
-	tplog "github.com/TopiaNetwork/topia/log"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txuni "github.com/TopiaNetwork/topia/transaction/universal"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type ExecutionForwarder interface {
@@ -31,7 +33,7 @@ type executionForwarder struct {
 	marshaler codec.Marshaler
 	network   tpnet.Network
 	ledger    ledger.Ledger
-	txPool    txpool.TransactionPool
+	txPool    txpooli.TransactionPool
 }
 
 func NewExecutionForwarder(nodeID string,
@@ -39,7 +41,7 @@ func NewExecutionForwarder(nodeID string,
 	marshaler codec.Marshaler,
 	network tpnet.Network,
 	ledger ledger.Ledger,
-	txPool txpool.TransactionPool) ExecutionForwarder {
+	txPool txpooli.TransactionPool) ExecutionForwarder {
 	return &executionForwarder{
 		nodeID:    nodeID,
 		log:       log,
@@ -55,10 +57,12 @@ func (forwarder executionForwarder) sendTx(ctx context.Context, tx *txbasic.Tran
 	compStateRN := state.CreateCompositionStateReadonly(forwarder.log, forwarder.ledger)
 	activeExecutors, _ := compStateRN.GetActiveExecutorIDs()
 
+	txID, _ := tx.TxID()
+
 	if tpcmm.IsContainString(forwarder.nodeID, activeExecutors) {
 		err := forwarder.txPool.AddTx(tx, true)
 		if err != nil {
-			forwarder.log.Errorf("Add local tx to pool err: %v", err)
+			forwarder.log.Errorf("Add local tx to pool err: txID %s %v", txID, err)
 			return err
 		}
 	} else {
@@ -66,13 +70,28 @@ func (forwarder executionForwarder) sendTx(ctx context.Context, tx *txbasic.Tran
 		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 		txBytes, err := forwarder.marshaler.Marshal(tx)
 		if err != nil {
-			forwarder.log.Errorf("Tx marshal err: err=%v", err)
+			forwarder.log.Errorf("Tx marshal err: txID %s %v", txID, err)
 			return err
 		}
 
-		err = forwarder.network.Send(ctx, tpnetprotoc.AsyncSendProtocolID, txpool.MOD_NAME, txBytes)
+		respList, err := forwarder.network.SendWithResponse(ctx, tpnetprotoc.ForwardExecute_SyncTx, tpchaintypes.MOD_NAME, txBytes)
 		if err != nil {
-			forwarder.log.Errorf("Send tx to executors err: err=%v", err)
+			forwarder.log.Errorf("Send tx to executors err: txID %s %v", txID, err)
+			return err
+		}
+
+		remoteNodes, _, respErrs := tpnetmsg.ParseSendResp(respList)
+		errCount := 0
+		for i, respErr := range respErrs {
+			if respErr == "" {
+				forwarder.log.Infof("Tx pool successfully add tx %s from %", txID, remoteNodes[i])
+			} else {
+				errCount++
+			}
+		}
+		if errCount == len(respErrs) {
+			err = fmt.Errorf("All executor can't add tx %s: %v", txID, respErrs)
+			forwarder.log.Errorf("%v", err)
 			return err
 		}
 	}

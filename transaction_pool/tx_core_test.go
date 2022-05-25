@@ -8,34 +8,34 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 var (
-	newCntAccountHeap CntAccountHeap
-	newCntAccountItem CntAccountItem
+	newSizeAccountHeap SizeAccountHeap
+	newSizeAccountItem SizeAccountItem
 )
 
 func init() {
-	newCntAccountItem = CntAccountItem{
+	newSizeAccountItem = SizeAccountItem{
 		"b0001",
 		5,
 		-1,
 	}
 
-	newCntAccountHeap = CntAccountHeap{
-		&CntAccountItem{
+	newSizeAccountHeap = SizeAccountHeap{
+		&SizeAccountItem{
 			"a0001",
-			33,
+			33333,
 			0,
 		},
-		&CntAccountItem{
+		&SizeAccountItem{
 			"a0002",
-			11,
+			11111,
 			1,
-		}, &CntAccountItem{
+		}, &SizeAccountItem{
 			"a003",
-			22,
+			22222,
 			1,
 		},
 	}
@@ -88,15 +88,15 @@ func Test_nonceHeap_Less(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Len(t *testing.T) {
+func TestSizeAccountHeap_Len(t *testing.T) {
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		want int
 	}{
 		// TODO: Add test cases.
 		{name: "test for CntAccountHeap_Len",
-			pq:   newCntAccountHeap,
+			pq:   newSizeAccountHeap,
 			want: 3,
 		},
 	}
@@ -109,22 +109,22 @@ func TestCntAccountHeap_Len(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Less(t *testing.T) {
+func TestSizeAccountHeap_Less(t *testing.T) {
 	type args struct {
 		i int
 		j int
 	}
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		args args
 		want bool
 	}{
 		// TODO: Add test cases.
-		{name: "test for false", pq: newCntAccountHeap,
+		{name: "test for false", pq: newSizeAccountHeap,
 			args: args{0, 1}, want: false},
-		{name: "test for false", pq: newCntAccountHeap,
-			args: args{1, 2}, want: false},
+		{name: "test for false", pq: newSizeAccountHeap,
+			args: args{1, 2}, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -135,18 +135,18 @@ func TestCntAccountHeap_Less(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Swap(t *testing.T) {
+func TestSizeAccountHeap_Swap(t *testing.T) {
 	type args struct {
 		i int
 		j int
 	}
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		args args
 	}{
 		// TODO: Add test cases.
-		{name: "test for swap", pq: newCntAccountHeap,
+		{name: "test for swap", pq: newSizeAccountHeap,
 			args: args{0, 1}},
 	}
 	for _, tt := range tests {
@@ -161,24 +161,24 @@ func TestCntAccountHeap_Swap(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Push(t *testing.T) {
+func TestSizeAccountHeap_Push(t *testing.T) {
 	type args struct {
 		x interface{}
 	}
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		args args
 	}{
 		// TODO: Add test cases.
 		{name: "heap_push",
-			pq:   newCntAccountHeap,
-			args: args{newCntAccountItem}},
+			pq:   newSizeAccountHeap,
+			args: args{newSizeAccountItem}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			want := tt.pq.Len() + 1
-			tt.pq.Push(&newCntAccountItem)
+			tt.pq.Push(&newSizeAccountItem)
 			got := tt.pq.Len()
 			if !assert.Equal(t, want, got) {
 				t.Error("want", want, "got", got)
@@ -187,17 +187,17 @@ func TestCntAccountHeap_Push(t *testing.T) {
 	}
 }
 
-func TestCntAccountHeap_Pop(t *testing.T) {
+func TestSizeAccountHeap_Pop(t *testing.T) {
 	tests := []struct {
 		name string
-		pq   CntAccountHeap
+		pq   SizeAccountHeap
 		want interface{}
 	}{
 		// TODO: Add test cases.
 		{name: "pop test",
-			pq: newCntAccountHeap,
-			want: &CntAccountItem{"a003",
-				22,
+			pq: newSizeAccountHeap,
+			want: &SizeAccountItem{"a003",
+				22222,
 				-1}},
 	}
 	for _, tt := range tests {
@@ -210,12 +210,12 @@ func TestCntAccountHeap_Pop(t *testing.T) {
 }
 
 func Test_txSortedMap_Get(t *testing.T) {
-	testitem := make(map[uint64]*basic.Transaction, 0)
+	testitem := make(map[uint64]*txbasic.Transaction, 0)
 	testitem[uint64(1)] = Tx1
 	type fields struct {
-		items map[uint64]*basic.Transaction
+		items map[uint64]*txbasic.Transaction
 		index *nonceHp
-		cache []*basic.Transaction
+		cache []*txbasic.Transaction
 	}
 	type args struct {
 		nonce uint64
@@ -224,7 +224,7 @@ func Test_txSortedMap_Get(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		want   *basic.Transaction
+		want   *txbasic.Transaction
 	}{
 		// TODO: Add test cases.
 		{"test get", fields{
@@ -250,25 +250,28 @@ func Test_txSortedMap_Get(t *testing.T) {
 func Test_transactionPool_AddLocals(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	servant := NewMockTransactionPoolServant(ctrl)
 	log := TpiaLog
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1))
-	pool.query = servant
+	stateService := NewMockStateQueryService(ctrl)
+	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
+	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+
+	blockService := NewMockBlockService(ctrl)
+	network := NewMockNetwork(ctrl)
+	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 0, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
-	txs := make([]*basic.Transaction, 0)
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+
+	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, Tx1)
 	txs = append(txs, Tx2)
 	pool.AddLocals(txs)
-	assert.Equal(t, 1, len(pool.queues.getAddrTxListOfCategory(Category1)))
-	assert.Equal(t, 2, pool.queues.getTxListByAddrOfCategory(Category1, From1).txs.Len())
-	assert.Equal(t, 0, len(pool.pendings.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
+	assert.Equal(t, 0, pool.queues.getLenTxsByAddrOfCategory(Category1, From1))
+	assert.Equal(t, 1, len(pool.pendings.getAddrTxListOfCategory(Category1)))
 	assert.Equal(t, 2, pool.allTxsForLook.getLocalCountByCategory(Category1))
-	assert.Equal(t, 0, pool.allTxsForLook.all[Category1].RemoteCount())
-	assert.Equal(t, 2, len(pool.sortedLists.Pricedlist[Category1].all.locals))
-	assert.Equal(t, 0, len(pool.sortedLists.Pricedlist[Category1].all.remotes))
+	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
+
 }

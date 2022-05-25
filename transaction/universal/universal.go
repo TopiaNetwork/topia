@@ -12,6 +12,12 @@ import (
 	"math/big"
 )
 
+type TransactionUniversalVersion uint32
+
+const (
+	TransactionUniversalVersion_v1 TransactionUniversalVersion = 1
+)
+
 type TransactionUniversalType uint32
 
 const (

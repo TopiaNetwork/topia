@@ -22,6 +22,7 @@ func HandlerWapper(f http.HandlerFunc) http.HandlerFunc {
 			if pr := recover(); pr != nil {
 				fmt.Fprintf(os.Stderr, "runtime error: %v\n", pr)
 				w.WriteHeader(http.StatusInternalServerError)
+				w.Header().Set("X-Server-Time", time.Now().String())
 				debug.PrintStack()
 				return
 			}
@@ -33,10 +34,6 @@ func HandlerWapper(f http.HandlerFunc) http.HandlerFunc {
 		w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("content-type", "application/json;charset=UTF-8")
 
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
 		f(w, r)
 	}
 }
@@ -73,7 +70,6 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 
 	if len(req.Header) > w.MaxHeader && w.MaxHeader != 0 || len(reqBodyMsg.String()) > w.MaxBody && w.MaxBody != 0 {
 		res.WriteHeader(http.StatusInternalServerError)
-		res.Header().Set("X-Server-Time", time.Now().String())
 		return
 	}
 	log, _ := tplog.CreateMainLogger(tplogcmm.DebugLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
@@ -83,7 +79,6 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 		result = types2.ErrorMessage(&types2.InvalidRequestError{err.Error()})
 	} else if req.Method != "POST" {
 		res.WriteHeader(http.StatusMethodNotAllowed)
-		res.Header().Set("X-Server-Time", time.Now().String())
 		return
 	} else {
 		method := reqBodyMsg.Method
@@ -106,11 +101,9 @@ func (w *Web3Server) ServeHttp(res http.ResponseWriter, req *http.Request) {
 	}
 	if result.Result == nil && result.Error == nil {
 		res.WriteHeader(http.StatusInternalServerError)
-		res.Header().Set("X-Server-Time", time.Now().String())
 		return
 	}
 	re := constructResult(result, *reqBodyMsg)
-	res.Header().Set("X-Server-Time", time.Now().String())
 	res.Write(re)
 }
 

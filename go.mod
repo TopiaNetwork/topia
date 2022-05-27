@@ -1,6 +1,6 @@
 module github.com/TopiaNetwork/topia
 
-go 1.17
+go 1.18
 
 require (
 	github.com/AsynkronIT/protoactor-go v0.0.0-20211217071430-1b4f403946c3
@@ -32,6 +32,8 @@ require (
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	go.uber.org/atomic v1.9.0
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e
+	golang.org/x/net v0.0.0-20211209124913-491a49abca63
+	launchpad.net/gommap v0.0.0-20121012075617-000000000015
 	lukechampine.com/frand v1.4.2
 )
 
@@ -165,7 +167,6 @@ require (
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.19.0 // indirect
 	golang.org/x/mod v0.5.1 // indirect
-	golang.org/x/net v0.0.0-20211209124913-491a49abca63 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220110181412-a018aaa089fe // indirect
 	golang.org/x/tools v0.1.8 // indirect
@@ -173,4 +174,5 @@ require (
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
 )

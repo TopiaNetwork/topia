@@ -18,6 +18,12 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
+type TestCacheData struct {
+	pubP kyber.Point
+	msg  []byte
+	sign []byte
+}
+
 type dkgCrypt struct {
 	log tplog.Logger
 	//index           uint32

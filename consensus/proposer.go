@@ -442,7 +442,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 
 func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 	go func() {
-		timer := time.NewTicker(p.proposeMaxInterval)
+		timer := time.NewTicker(p.blockMaxCyclePeriod)
 		defer timer.Stop()
 		for {
 			select {
@@ -570,6 +570,8 @@ func (p *consensusProposer) produceProposeBlock(chainID tpchaintypes.ChainID,
 		Epoch:         latestEpoch.Epoch,
 		Round:         latestBlock.Head.Height,
 		StateVersion:  stateVersion,
+		MaxPri:        newBlockHead.MaxPri,
+		Proposer:      newBlockHead.Proposer,
 		TxHashs:       ppmProp.TxHashs,
 		TxResultHashs: ppmProp.TxResultHashs,
 		BlockHead:     newBlockHeadBytes,

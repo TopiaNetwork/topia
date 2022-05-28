@@ -221,6 +221,7 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	if nodeInfo.Role&tpcmm.NodeRole_Proposer == tpcmm.NodeRole_Proposer || nodeInfo.Role&tpcmm.NodeRole_Validator == tpcmm.NodeRole_Validator {
 		if nodeInfo.Role&tpcmm.NodeRole_Proposer == tpcmm.NodeRole_Proposer {
+			cons.proposer.validator.updateLogger(cons.proposer.log)
 			cons.proposer.start(ctx)
 		}
 

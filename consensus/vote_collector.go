@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"bytes"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"sync"
 
@@ -39,6 +40,10 @@ func (vc *consensusVoteCollector) tryAggregateSignAndAddVote(vote *VoteMessage) 
 		for _, vote := range vc.votes {
 			sign := tpcmm.BytesCopy(vote.Signature)
 			signArr = append(signArr, sign)
+
+			if !bytes.Equal(vc.votes[0].BlockHead, vote.BlockHead) {
+				vc.log.Infof("Received not same vote %v, expected %v, self node %s", vc.votes[0].BlockHead, vc.votes[0].BlockHead)
+			}
 		}
 		msg := tpcmm.BytesCopy(vc.votes[0].BlockHead)
 		return vc.produceAggSign(msg, signArr)

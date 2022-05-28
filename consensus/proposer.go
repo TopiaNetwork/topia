@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -22,6 +23,10 @@ import (
 
 const defaultLeaderCount = int(3)
 
+var (
+	notReachVoteThresholdErr = errors.New("Haven't reached threshold at present")
+)
+
 type consensusProposer struct {
 	log                     tplog.Logger
 	nodeID                  string
@@ -38,8 +43,9 @@ type consensusProposer struct {
 	blockMaxCyclePeriod     time.Duration
 	isProposing             uint32
 	lastBlockHeight         uint64
-	lastProposeHeight       uint64    //the block height which self-proposer launched based on last time
-	newHeightStartTimeStamp time.Time // the timestamp of new block height
+	lastProposeHeight       uint64              //the block height which self-proposer launched based on last time
+	newHeightStartTimeStamp time.Time           // the timestamp of new block height
+	proposedRecord          map[uint64]struct{} //basic height map
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -73,6 +79,7 @@ func newConsensusProposer(log tplog.Logger,
 		proposeMaxInterval:      proposeMaxInterval,
 		blockMaxCyclePeriod:     blockMaxCyclePeriod,
 		isProposing:             0,
+		proposedRecord:          make(map[uint64]struct{}),
 		ppmPropList:             list.New(),
 		validator:               validator,
 	}
@@ -226,7 +233,36 @@ func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (
 	}, nil
 }
 
-func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
+func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, voteMsg *VoteMessage) error {
+	aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
+	if err != nil {
+		p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
+		return err
+	}
+
+	if aggSign == nil {
+		p.log.Debugf("%s", notReachVoteThresholdErr.Error())
+		return notReachVoteThresholdErr
+	}
+
+	commitMsg, err := p.produceCommitMsg(voteMsg, aggSign)
+	if err != nil {
+		p.log.Errorf("Can't produce commit message: %v", err)
+		return err
+	}
+
+	err = p.deliver.deliverCommitMessage(ctx, commitMsg)
+	if err != nil {
+		p.log.Errorf("Can't deliver commit message: %v", err)
+		return err
+	}
+
+	p.log.Infof("Deliver commit message successfully, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
+
+	return nil
+}
+
+func (p *consensusProposer) receiveVoteMessageStart(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -244,30 +280,10 @@ func (p *consensusProposer) receiveVoteMessagStart(ctx context.Context) {
 					continue
 				}
 
-				aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
+				err = p.aggSignDisposeWhenRecvVoteMsg(ctx, voteMsg)
 				if err != nil {
-					p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
 					continue
 				}
-
-				if aggSign == nil {
-					p.log.Debug("Haven't reached threshold at present")
-					continue
-				}
-
-				commitMsg, err := p.produceCommitMsg(voteMsg, aggSign)
-				if err != nil {
-					p.log.Errorf("Can't produce commit message: %v", err)
-					continue
-				}
-
-				err = p.deliver.deliverCommitMessage(ctx, commitMsg)
-				if err != nil {
-					p.log.Errorf("Can't deliver commit message: %v", err)
-					continue
-				}
-
-				p.log.Infof("Deliver commit message successfully, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
 
 				p.voteCollector.reset()
 
@@ -314,14 +330,15 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		p.newHeightStartTimeStamp = time.Now()
 	}
 
-	var proposeHeightNew uint64
-	elapsedTime := time.Since(p.newHeightStartTimeStamp).Microseconds()
-	deltaHeight := uint64(elapsedTime)/uint64(p.blockMaxCyclePeriod.Microseconds()) + 1
-	/*if deltaHeight > 1 {
-		err = fmt.Errorf("Not synced and can't proposing block: lastProposeHeight %d, deltaHeight %d, latest height %d", p.lastProposeHeight, deltaHeight, latestBlock.Head.Height)
+	if _, ok := p.proposedRecord[latestBlock.Head.Height]; ok {
+		err = fmt.Errorf("Have sucessfully proposed based on height %d, self node %s", latestBlock.Head.Height, p.nodeID)
 		p.log.Warnf("%s", err.Error())
 		return err
-	}*/
+	}
+
+	var proposeHeightNew uint64
+	elapsedTime := time.Since(p.newHeightStartTimeStamp).Milliseconds()
+	deltaHeight := uint64(elapsedTime)/uint64(p.blockMaxCyclePeriod.Milliseconds()) + 1
 
 	proposeHeightNew = latestBlock.Head.Height + deltaHeight
 
@@ -339,8 +356,13 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		p.log.Errorf("%v", err)
 		return err
 	}
+	p.log.Infof("Avail PPM prop state version %d, self node %s", pppProp.StateVersion, p.nodeID)
 
-	p.log.Infof("Avail PPM prop state version %d", pppProp.StateVersion)
+	if p.validator.existProposeMsg(csStateRN.ChainID(), latestBlock.Head.Height, pppProp.StateVersion, p.nodeID) {
+		err = fmt.Errorf("Have existed proposed block: state version %d, latest height %d, self node %s", pppProp.StateVersion, latestBlock.Head.Height, p.nodeID)
+		p.log.Warnf("%s", err.Error())
+		return err
+	}
 
 	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock, proposeHeightNew)
 	if !canPropose {
@@ -360,7 +382,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		return err
 	}
 
-	if can := p.validator.canProcessForwardProposeMsg(ctx, maxPri, proposeBlock); !can {
+	if ok, _ := p.validator.validateAndCollectProposeMsg(ctx, maxPri, p.nodeID, proposeBlock); !ok {
 		err = fmt.Errorf("Can't delive propose message: latest epoch=%d,latest height=%d", latestBlock.Head.Epoch, latestBlock.Head.Height)
 		p.log.Infof("%s", err.Error())
 		return err
@@ -382,12 +404,38 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 
 	p.voteCollector = newConsensusVoteCollector(p.log, latestBlock.Head.Height, p.dkgBls)
 
+	voteMsg, err := p.validator.produceVoteMsg(proposeBlock)
+	if err != nil {
+		p.log.Errorf("Can't produce vote msg: err=%v", err)
+		return err
+	}
+	sigData, pubKey, err := p.dkgBls.Sign(voteMsg.BlockHead)
+	if err != nil {
+		p.log.Errorf("DKG sign VoteMessage err: %v", err)
+		return err
+	}
+	voteMsg.Signature = sigData
+	voteMsg.PubKey = pubKey
+
+	err = p.aggSignDisposeWhenRecvVoteMsg(ctx, voteMsg)
+	if err != nil && err != notReachVoteThresholdErr {
+		return err
+	}
+
+	elapsedTime = time.Since(p.newHeightStartTimeStamp).Milliseconds()
+	if elapsedTime < 500 {
+		p.log.Infof("Need sleep before delivering proposed block at the epoch : sleep time %d ms, latest epoch=%d, latest height=%d, self node=%s", 500-elapsedTime, latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)
+		time.Sleep(time.Duration(500-elapsedTime) * time.Millisecond)
+	}
+
 	if err = p.deliver.deliverProposeMessage(ctx, proposeBlock); err != nil {
 		p.log.Errorf("Deliver propose message err: latest epoch =%d, latest height=%d, self node=%s, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)
 		return err
 	}
 
-	p.log.Infof("Propose block sucessfully: state version %d, propose Block height %d, self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
+	p.proposedRecord[latestBlock.Head.Height] = struct{}{}
+
+	p.log.Infof("Propose block successfully: state version %d, propose Block height %d, self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
 
 	return nil
 }
@@ -419,7 +467,7 @@ func (p *consensusProposer) start(ctx context.Context) {
 
 	p.receivePreparePackedMessagePropStart(ctx)
 
-	p.receiveVoteMessagStart(ctx)
+	p.receiveVoteMessageStart(ctx)
 }
 
 func (p *consensusProposer) createBlockHead(chainID tpchaintypes.ChainID, epoch uint64, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, stateRoot []byte, proposeHeight uint64) (*tpchaintypes.BlockHead, uint64, error) {

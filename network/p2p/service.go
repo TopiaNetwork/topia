@@ -683,7 +683,7 @@ func (p2p *P2PService) Send(ctx context.Context, protocolID string, moduleName s
 			defer func() {
 				wg.Done()
 				singleDuration := time.Since(startTime)
-				p2p.log.Debugf("Send time %d ms from peer %s to peer %s", singleDuration.Microseconds(), p2p.host.ID().String(), peerID.String())
+				p2p.log.Debugf("Send time %d ms from peer %s to peer %s", singleDuration.Milliseconds(), p2p.host.ID().String(), peerID.String())
 			}()
 
 			/*
@@ -733,7 +733,7 @@ func (p2p *P2PService) Send(ctx context.Context, protocolID string, moduleName s
 	wg.Wait()
 
 	dur := time.Since(startTime)
-	p2p.log.Infof("Finish sending request after %d ms", dur.Microseconds())
+	p2p.log.Infof("Finish sending request after %d ms", dur.Milliseconds())
 
 	return nil
 }
@@ -795,7 +795,7 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 		go func(peerID peer.ID) {
 			defer func() {
 				singleDuration := time.Since(startTime)
-				p2p.log.Debugf("Send time %d ms from peer %s to peer %s", singleDuration.Microseconds(), p2p.host.ID().String(), peerID.String())
+				p2p.log.Debugf("Send time %d ms from peer %s to peer %s", singleDuration.Milliseconds(), p2p.host.ID().String(), peerID.String())
 			}()
 
 			/*
@@ -876,7 +876,7 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 	}
 
 	dur := time.Since(startTime)
-	p2p.log.Debugf("received resp %d after %d ms", len(respCh), dur.Microseconds())
+	p2p.log.Debugf("received resp %d after %d ms", len(respCh), dur.Milliseconds())
 
 	return respList, nil
 }

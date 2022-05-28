@@ -433,7 +433,7 @@ func TestMultiRoleNodes(t *testing.T) {
 			activeProposers, _ := csStateRN.GetActiveProposerIDs()
 			activeValidators, _ := csStateRN.GetActiveValidatorIDs()
 
-			nodeP.mainLog.Infof("Curent active proposers %v and validators %v", activeProposers, activeValidators)
+			nodeP.mainLog.Infof("Current active proposers %v and validators %v", activeProposers, activeValidators)
 
 			latestEpochInfo, _ := csStateRN.GetLatestEpoch()
 

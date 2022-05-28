@@ -17,11 +17,12 @@ message ConsensusMessage {
     PrepareProp = 3;
     Propose = 4;
     ExeRSValidateReq = 5;
-    Vote    = 6;
-    Commit  = 7;
-    PartPubKey = 8;
-    DKGDeal = 9;
-    DKGDealResp = 10;
+    BestPropose = 6;
+    Vote    = 7;
+    Commit  = 8;
+    PartPubKey = 9;
+    DKGDeal = 10;
+    DKGDealResp = 11;
   }
   Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
   bytes Data = 2  [(gogoproto.jsontag) = "data"];
@@ -79,9 +80,11 @@ message ProposeMessage {
   bytes Signature              = 5  [(gogoproto.jsontag) = "signature"];
   bytes PubKey                 = 6  [(gogoproto.jsontag) = "pubKey"];
   uint64 StateVersion          = 7  [(gogoproto.jsontag) = "stateVersion"];
-  repeated bytes TxHashs       = 8  [(gogoproto.jsontag) = "txHashs"];
-  repeated bytes TxResultHashs = 9  [(gogoproto.jsontag) = "txResultHashs"];
-  bytes BlockHead              = 10 [(gogoproto.jsontag) = "blockHead"];
+  bytes  MaxPri                = 8  [(gogoproto.jsontag) = "maxPri"];
+  bytes Proposer               = 9  [(gogoproto.jsontag) = "proposer"];
+  repeated bytes TxHashs       = 10 [(gogoproto.jsontag) = "txHashs"];
+  repeated bytes TxResultHashs = 11 [(gogoproto.jsontag) = "txResultHashs"];
+  bytes BlockHead              = 12 [(gogoproto.jsontag) = "blockHead"];
 }
 
 message ExeResultValidateReqMessage {
@@ -95,6 +98,18 @@ message ExeResultValidateReqMessage {
   uint64 StateVersion          = 8  [(gogoproto.jsontag) = "stateVersion"];
   repeated bytes TxHashs       = 9  [(gogoproto.jsontag) = "txHashs"];
   repeated bytes TxResultHashs = 10 [(gogoproto.jsontag) = "txResultHashs"];
+}
+
+message BestProposeMessage {
+  bytes  ChainID      = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version      = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Epoch        = 3  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round        = 4  [(gogoproto.jsontag) = "epoch"];
+  bytes Signature     = 5  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey        = 6  [(gogoproto.jsontag) = "pubKey"];
+  uint64 StateVersion = 7  [(gogoproto.jsontag) = "stateVersion"];
+  bytes Proposer      = 8  [(gogoproto.jsontag) = "proposer"];
+  bytes PropMsgData   = 9  [(gogoproto.jsontag) = "proposer"];
 }
 
 message ExeResultValidateRespMessage {

@@ -49,6 +49,8 @@ type messageDeliverI interface {
 
 	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage, err error) error
 
+	deliverBestProposeMessage(ctx context.Context, msg *BestProposeMessage) error
+
 	deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error
 
 	deliverCommitMessage(ctx context.Context, msg *CommitMessage) error
@@ -459,6 +461,69 @@ func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Contex
 	}
 
 	return nil
+}
+
+func (md *messageDeliver) deliverBestProposeMessage(ctx context.Context, msg *BestProposeMessage) error {
+	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
+	defer csStateRN.Stop()
+
+	if msg == nil {
+		return errors.New("Nil ProposeMessage for delivering")
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+
+	ctxProposer := ctx
+	ctxValidator := ctx
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerActiveProposerIDs, err := csStateRN.GetActiveProposerIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
+			return err
+		}
+		peerActiveProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerActiveProposerIDs)
+
+		ctxProposer = context.WithValue(ctxProposer, tpnetcmn.NetContextKey_PeerList, peerActiveProposerIDs)
+
+		peerActiveValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
+		if err != nil {
+			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
+			return err
+		}
+		ctxValidator = context.WithValue(ctxValidator, tpnetcmn.NetContextKey_PeerList, peerActiveValidatorIDs)
+	}
+
+	sigData, err := md.cryptService.Sign(md.priKey, msg.PropMsgData)
+	if err != nil {
+		md.log.Errorf("Sign the best propose msg err: %v", err)
+		return err
+	}
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't get public key from private key: %v", err)
+		return err
+	}
+
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("ProposeMessage marshal err: %v", err)
+		return err
+	}
+	err = md.deliverSendCommon(ctxProposer, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_BestPropose, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send propose message to proposer network failed: err=%v", err)
+		return nil
+	}
+
+	err = md.deliverSendCommon(ctxValidator, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_BestPropose, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send propose message to validator network failed: err=%v", err)
+	}
+
+	return err
 }
 
 func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, error) {

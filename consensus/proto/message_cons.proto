@@ -108,8 +108,9 @@ message BestProposeMessage {
   bytes Signature     = 5  [(gogoproto.jsontag) = "signature"];
   bytes PubKey        = 6  [(gogoproto.jsontag) = "pubKey"];
   uint64 StateVersion = 7  [(gogoproto.jsontag) = "stateVersion"];
-  bytes Proposer      = 8  [(gogoproto.jsontag) = "proposer"];
-  bytes PropMsgData   = 9  [(gogoproto.jsontag) = "proposer"];
+  bytes  MaxPri       = 8  [(gogoproto.jsontag) = "maxPri"];
+  bytes Proposer      = 9  [(gogoproto.jsontag) = "proposer"];
+  bytes PropMsgData   = 10 [(gogoproto.jsontag) = "proposer"];
 }
 
 message ExeResultValidateRespMessage {

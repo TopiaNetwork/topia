@@ -241,6 +241,7 @@ func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 	}
 	if len(candInfo) != 1 {
 		err = fmt.Errorf("Invalid selected executor count: expected 1, actual %d", len(candInfo))
+		e.log.Errorf("%v", err)
 		return false, nil, err
 	}
 
@@ -263,14 +264,14 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 				prepareStart := time.Now()
 				isCan, vrfProof, _ := e.canPrepare()
 				if isCan {
-					e.log.Infof("Selected execution launcher %s can prepare", e.nodeID)
+					e.log.Infof("Selected execution launcher can prepare: self node %s", e.nodeID)
 					pStart := time.Now()
 					e.Prepare(ctx, vrfProof)
-					e.log.Infof("Prepare time: cost %d ms", time.Since(pStart).Milliseconds())
+					e.log.Infof("Prepare time: cost %d ms, self node %s", time.Since(pStart).Milliseconds(), e.nodeID)
 				}
-				e.log.Infof("Prepare time total: isCan %v, cost %d ms", isCan, time.Since(prepareStart).Milliseconds())
+				e.log.Infof("Prepare time total: isCan %v, cost %d ms, self node %s", isCan, time.Since(prepareStart).Milliseconds(), e.nodeID)
 			case <-ctx.Done():
-				e.log.Info("Consensus executor exit prepare timer")
+				e.log.Infof("Consensus executor exit prepare timer: self node %s", e.nodeID)
 				return
 			}
 		}

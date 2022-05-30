@@ -17,7 +17,7 @@ func TestSelect(t *testing.T) {
 
 	roleSel := newLeaderSelectorVRF(log, cryptService)
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 100; i++ {
 		canInfo1, _, err := roleSel.Select(RoleSelector_ExecutionLauncher, 1, priKey, servant, 1)
 		assert.Equal(t, nil, err)
 		assert.Equal(t, 1, len(canInfo1))

@@ -37,14 +37,16 @@ type candidateInfo struct {
 }
 
 type roleSelectorVRF struct {
-	log   tplog.Logger
-	crypt tpcrt.CryptService
+	log    tplog.Logger
+	nodeID string
+	crypt  tpcrt.CryptService
 }
 
-func newLeaderSelectorVRF(log tplog.Logger, crypt tpcrt.CryptService) *roleSelectorVRF {
+func newLeaderSelectorVRF(log tplog.Logger, nodeID string, crypt tpcrt.CryptService) *roleSelectorVRF {
 	return &roleSelectorVRF{
-		log:   log,
-		crypt: crypt,
+		log:    log,
+		nodeID: nodeID,
+		crypt:  crypt,
 	}
 }
 
@@ -119,7 +121,7 @@ func (selector *roleSelectorVRF) makeVRFHash(role RoleSelector, epoch uint64, ro
 	return hasher.Bytes()
 }
 
-func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64, height uint64, csProof *ConsensusProof, stateVersion uint64) ([]byte, error) {
+func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64, height uint64, csProofBytes []byte, stateVersion uint64) ([]byte, error) {
 	hasher := tpcmm.NewBlake2bHasher(0)
 
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, role); err != nil {
@@ -135,11 +137,7 @@ func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64
 		return nil, err
 	}
 
-	csProofBytes, err := csProof.Marshal()
-	if err != nil {
-		return nil, err
-	}
-	if _, err = hasher.Writer().Write(csProofBytes); err != nil {
+	if _, err := hasher.Writer().Write(csProofBytes); err != nil {
 		return nil, err
 	}
 
@@ -174,6 +172,8 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 	err := error(nil)
 	var totalActiveWeight uint64
 	var avtiveNodeID []string
+
+	selector.log.Infof("Enter Select: state version %d, self node %s", stateVersion, selector.nodeID)
 
 	switch role {
 	case RoleSelector_ExecutionLauncher:
@@ -226,8 +226,14 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		Height:          latestBlock.Head.Height,
 		AggSign:         latestBlock.Head.VoteAggSignature,
 	}
+	csProofBytes, err := csProof.Marshal()
+	if err != nil {
+		return nil, nil, err
+	}
 
-	vrfInputData, err := selector.getVrfInputData(role, eponInfo.Epoch, latestBlock.Head.Height, csProof, stateVersion)
+	selector.log.Infof("Vrf input data: role %s, epoch %d, state version %d, latest height %d, self node %s", role.String(), eponInfo.Epoch, stateVersion, latestBlock.Head.Height, selector.nodeID)
+
+	vrfInputData, err := selector.getVrfInputData(role, eponInfo.Epoch, latestBlock.Head.Height, csProofBytes, stateVersion)
 	if err != nil {
 		selector.log.Errorf("Can't get vrf inputing data: epoch=%d, height=%d, err=%v", eponInfo.Epoch, latestBlock.Head.Height, err)
 		return nil, nil, err

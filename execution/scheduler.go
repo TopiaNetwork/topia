@@ -172,7 +172,7 @@ func (scheduler *executionScheduler) MaxStateVersion(log tplog.Logger, ledger le
 	latestBlock, err := compStatRN.GetLatestBlock()
 	if err != nil {
 		scheduler.log.Errorf("Can't get the latest block: %v", err)
-		return 0, nil
+		return 0, err
 	}
 
 	maxStateVersion := latestBlock.Head.Height

@@ -5,6 +5,7 @@ import (
 	"github.com/TopiaNetwork/topia/chain/types"
 	tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
 	"github.com/TopiaNetwork/topia/transaction/basic"
+	"github.com/pkg/errors"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -18,6 +19,13 @@ import (
 
 const defaultMaxFileSize = 1 << 28        // 假设文件最大为 128M
 const defaultMemMapSize = 64 * (1 << 20)  // 内存映射大小64M
+
+
+type rangeScan struct {
+	startKey []byte
+	stopKey  []byte
+}
+
 
 type BlockStore interface {
 	CommitBlock(block *types.Block) error
@@ -94,35 +102,24 @@ func (store *blockStore) GetBlockByNumber(blockNum types.BlockNum) (*types.Block
 		return nil, err
 	}
 
-	item, err := DecodeDbItemHdr(buf)
-	if err != nil {
-		return nil, err
-	}
 
-	offset += DbItemHdrSize
-	if item.KeySize > 0 {
-		key := make([]byte, item.KeySize)
-		if _, err := df.File.ReadAt(key, offset); err != nil {
-			return nil, err
-		}
-		item.Key = key
-	}
-
-	offset += int64(item.KeySize)
-	if item.ValSize > 0 {
-		value := make([]byte, item.ValSize)
-		if _, err := df.File.ReadAt(value, offset); err != nil {
-			return nil, err
-		}
-		item.Val = value
-	}
-	return item, nil
+	//return item, nil
 
 }
 
+//获取block句柄
 func (store *blockStore) GetBlocksIterator(startBlockNum types.BlockNum) (tplgtypes.ResultsIterator, error) {
 	//TODO implement me
 	// panic("implement me")
+	//sKey := constructLevelKey(h.dbName, startKey)
+
+	itr := store.GetIterator(sKey, eKey)
+
+	if err := itr.Error(); err != nil {
+		itr.Release()
+		return nil, errors.Wrapf(err, "internal leveldb error while obtaining db iterator")
+	}
+	return &Iterator{h.dbName, itr}, nil
 
 
 }
@@ -130,9 +127,18 @@ func (store *blockStore) GetBlocksIterator(startBlockNum types.BlockNum) (tplgty
 func (store *blockStore) TxIDExists(txID basic.TxID) (bool, error) {
 	//TODO implement me
 	// panic("implement me")
-	if store.GetTransactionByID(){
-
+	rangeScan := getTxIDRangeScan(txID)
+	itr, err := store.GetBlocksIterator(rangeScan.startKey, rangeScan.stopKey)
+	if err != nil {
+		return false, err;
 	}
+	defer itr.Release()
+
+	present := itr.Next()
+	if err := itr.Error(); err != nil {
+		return false,err;
+	}
+	return present, nil
 
 }
 
@@ -159,15 +165,15 @@ func (store *blockStore) GetBlockByHash(blockHash []byte) (*types.Block, error) 
 func (store *blockStore) GetBlockByTxID(txID string) (*types.Block, error) {
 	//TODO implement me
 	// panic("implement me")
-	block, err := vledger.GetBlockByTxID(txID)
+	block, err := store.GetBlockByTxID(txID)
 	if err != nil {
 	}
 
 	bytes, err := protoutil.Marshal(block)
 	if err != nil {
-		return shim.Error(err.Error())
+		return Error(err.Error())
 	}
 
-	return shim.Success(bytes)
+	return Success(bytes)
 	
 }

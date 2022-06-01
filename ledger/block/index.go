@@ -75,12 +75,24 @@ func (bi *blockIndex) getBlockLocByHash(blockHash []byte) (*fileLocPointer, erro
 }
 
 func (index *blockIndex) getBlockLocByBlockNum(blockNum uint64) (*fileLocPointer, error) {
-	panic("implement me")
+	//panic("implement me")
+	b, err := index.db.Get(constructBlockNumKey(blockNum))
+	if err != nil {
+		return nil, err
+	}
+	if b == nil {
+		return nil, errors.Errorf("no such block number [%d] in index", blockNum)
+	}
+	blkLoc := &fileLocPointer{}
+	if err := blkLoc.unmarshal(b); err != nil {
+		return nil, err
+	}
+	return blkLoc, nil
 }
 
 func (index *blockIndex) getTxLoc(txID string) (*fileLocPointer, error) {
 	// panic("implement me")
-	v, _, err := index.getTxIDVal(txID)
+	v, _, err := index.getTxID(txID)
 	if err != nil {
 		return nil, err
 	}
@@ -97,11 +109,11 @@ func (index *blockIndex) getBlockLocByTxID(txID string) (*fileLocPointer, error)
 
 func (index *blockIndex) txIDExists(txID string) (bool, error) {
 	// panic("implement me")
-	
+
 }
 
 func (index *blockIndex) getTXLocByBlockNumTranNum(blockNum uint64, tranNum uint64) (*fileLocPointer, error) {
-	panic("implement me")
+	//panic("implement me")
 }
 
 func mmapSize(size int) (int, error) {

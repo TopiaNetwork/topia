@@ -21,6 +21,8 @@ type Ledger interface {
 
 	CreateStateStoreReadonly() (tplgss.StateStore, error)
 
+	CreateStateStoreReadonlyAt(version uint64) (tplgss.StateStore, error)
+
 	UpdateState(state tpcmm.LedgerState)
 
 	PendingStateStore() int32
@@ -66,6 +68,11 @@ func (l *ledger) CreateStateStore() (tplgss.StateStore, error) {
 func (l *ledger) CreateStateStoreReadonly() (tplgss.StateStore, error) {
 	bsLog := tplog.CreateModuleLogger(tplogcmm.InfoLevel, "StateStore", l.log)
 	return tplgss.NewStateStore(bsLog, l.backendStateDB, tplgss.Flag_ReadOnly), nil
+}
+
+func (l *ledger) CreateStateStoreReadonlyAt(version uint64) (tplgss.StateStore, error) {
+	bsLog := tplog.CreateModuleLogger(tplogcmm.InfoLevel, "StateStore", l.log)
+	return tplgss.NewStateStoreAt(bsLog, l.backendStateDB, tplgss.Flag_ReadOnly, version), nil
 }
 
 func (l *ledger) PendingStateStore() int32 {

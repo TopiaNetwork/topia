@@ -185,15 +185,13 @@ func NewNodeNetWorkStateWapper(log tplog.Logger, ledger ledger.Ledger) NodeNetWo
 	}
 }
 
-func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
-	stateStore, _ := ledger.CreateStateStore()
-
+func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64, stateStore tplgss.StateStore) *compositionState {
 	inactiveState := statenode.NewNodeInactiveState(stateStore)
 	executorState := statenode.NewNodeExecutorState(stateStore)
 	proposerState := statenode.NewNodeProposerState(stateStore)
 	validatorState := statenode.NewNodeValidatorState(stateStore)
 	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
-	compS := &compositionState{
+	return &compositionState{
 		log:                log,
 		stateVersion:       stateVersion,
 		ledger:             ledger,
@@ -207,7 +205,12 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion
 		NodeValidatorState: validatorState,
 		EpochState:         staetround.NewRoundState(stateStore),
 	}
+}
 
+func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
+	stateStore, _ := ledger.CreateStateStore()
+
+	compS := createCompositionStateWithStateStore(log, ledger, stateVersion, stateStore)
 	compS.state.Store(uint32(CompSState_Idle))
 
 	return compS
@@ -216,48 +219,19 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion
 func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) CompositionStateReadonly {
 	stateStore, _ := ledger.CreateStateStoreReadonly()
 
-	inactiveState := statenode.NewNodeInactiveState(stateStore)
-	executorState := statenode.NewNodeExecutorState(stateStore)
-	proposerState := statenode.NewNodeProposerState(stateStore)
-	validatorState := statenode.NewNodeValidatorState(stateStore)
-	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
-	return &compositionState{
-		log:                log,
-		ledger:             ledger,
-		StateStore:         stateStore,
-		AccountState:       stateaccount.NewAccountState(stateStore),
-		ChainState:         statechain.NewChainStore(stateStore, ledger),
-		NodeState:          nodeState,
-		NodeInactiveState:  inactiveState,
-		NodeExecutorState:  executorState,
-		NodeProposerState:  proposerState,
-		NodeValidatorState: validatorState,
-		EpochState:         staetround.NewRoundState(stateStore),
-	}
+	return createCompositionStateWithStateStore(log, ledger, 0, stateStore)
+}
+
+func CreateCompositionStateReadonlyAt(log tplog.Logger, ledger ledger.Ledger, version uint64) CompositionStateReadonly {
+	stateStore, _ := ledger.CreateStateStoreReadonlyAt(version)
+
+	return createCompositionStateWithStateStore(log, ledger, 0, stateStore)
 }
 
 func CreateCompositionStateMem(log tplog.Logger, compState CompositionStateReadonly) CompositionState {
 	stateStore, ledger, _ := ledger.CreateStateStoreMem(log)
 
-	inactiveState := statenode.NewNodeInactiveState(stateStore)
-	executorState := statenode.NewNodeExecutorState(stateStore)
-	proposerState := statenode.NewNodeProposerState(stateStore)
-	validatorState := statenode.NewNodeValidatorState(stateStore)
-	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
-	compS := &compositionState{
-		log:                log,
-		stateVersion:       1,
-		ledger:             ledger,
-		StateStore:         stateStore,
-		AccountState:       stateaccount.NewAccountState(stateStore),
-		ChainState:         statechain.NewChainStore(stateStore, ledger),
-		NodeState:          nodeState,
-		NodeInactiveState:  inactiveState,
-		NodeExecutorState:  executorState,
-		NodeProposerState:  proposerState,
-		NodeValidatorState: validatorState,
-		EpochState:         staetround.NewRoundState(stateStore),
-	}
+	compS := createCompositionStateWithStateStore(log, ledger, 1, stateStore)
 
 	compS.state.Store(uint32(CompSState_Idle))
 

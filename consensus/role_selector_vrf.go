@@ -130,16 +130,19 @@ func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, epoch); err != nil {
 		return nil, err
 	}
-	if err := binary.Write(hasher.Writer(), binary.BigEndian, height); err != nil {
-		return nil, err
-	}
+	/*
+		if err := binary.Write(hasher.Writer(), binary.BigEndian, height); err != nil {
+			return nil, err
+		}
+	*/
 	if err := binary.Write(hasher.Writer(), binary.BigEndian, stateVersion); err != nil {
 		return nil, err
 	}
-
-	if _, err := hasher.Writer().Write(csProofBytes); err != nil {
-		return nil, err
-	}
+	/*
+		if _, err := hasher.Writer().Write(csProofBytes); err != nil {
+			return nil, err
+		}
+	*/
 
 	return hasher.Bytes(), nil
 }
@@ -231,11 +234,11 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		return nil, nil, err
 	}
 
-	selector.log.Infof("Vrf input data: role %s, epoch %d, state version %d, latest height %d, self node %s", role.String(), eponInfo.Epoch, stateVersion, latestBlock.Head.Height, selector.nodeID)
+	selector.log.Infof("Vrf input data: role %s, epoch %d, state version %d, self node %s", role.String(), eponInfo.Epoch, stateVersion, selector.nodeID)
 
 	vrfInputData, err := selector.getVrfInputData(role, eponInfo.Epoch, latestBlock.Head.Height, csProofBytes, stateVersion)
 	if err != nil {
-		selector.log.Errorf("Can't get vrf inputing data: epoch=%d, height=%d, err=%v", eponInfo.Epoch, latestBlock.Head.Height, err)
+		selector.log.Errorf("Can't get vrf inputting data: epoch=%d, height=%d, err=%v", eponInfo.Epoch, latestBlock.Head.Height, err)
 		return nil, nil, err
 	}
 
@@ -244,7 +247,7 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		return nil, nil, err
 	}
 
-	vrfHash := selector.makeVRFHash(role, eponInfo.Epoch, latestBlock.Head.Height, vrfInputData)
+	vrfHash := selector.makeVRFHash(role, eponInfo.Epoch, stateVersion, vrfInputData)
 	seed := selector.hashToSeed(vrfHash)
 
 	for i := 0; i < count; i++ {

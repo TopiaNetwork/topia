@@ -152,11 +152,12 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					TxList:       receivedTxList,
 				}
 
+				e.log.Infof("Received packed txs begin to execute: state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 				_, err = e.exeScheduler.ExecutePackedTx(ctx, txPacked, compState)
 				if err != nil {
-					e.log.Errorf("Execute packed txs err from remote: %v, state version %d self node %s", err, txPacked.StateVersion, e.nodeID)
+					e.log.Errorf("Execute packed txs err from remote: %v, state version %d, self node %s", err, txPacked.StateVersion, e.nodeID)
 				}
-				e.log.Infof("Execute Packed tx successfully from remote, state version %d self node %s", perparePMExe.StateVersion, e.nodeID)
+				e.log.Infof("Execute Packed tx successfully from remote, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 				//go func(ctxdl context.Context) {
 				msg := &PreparePackedMessageExeIndication{
 					ChainID:      perparePMExe.ChainID,
@@ -294,11 +295,14 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 		for {
 			select {
 			case <-timer.C:
+				e.log.Infof("Prepare timer starts: self node %s", e.nodeID)
 				prepareStart := time.Now()
+				e.log.Infof("Prepare timer starts to get max state version: self node %s", e.nodeID)
 				maxStateVersion, err := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
 				if err != nil {
 					continue
 				}
+				e.log.Infof("Prepare timer gets max state version: maxStateVersion %d, self node %s", maxStateVersion, e.nodeID)
 				stateVersion := maxStateVersion + 1
 
 				e.log.Infof("Prepare timer: state version %d, self node %s", stateVersion, e.nodeID)
@@ -310,7 +314,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 
 				isCan, vrfProof, _ := e.canPrepare(stateVersion)
 				if isCan {
-					e.log.Infof("Selected execution launcher can prepare: state version%d, self node %s", stateVersion, e.nodeID)
+					e.log.Infof("Selected execution launcher can prepare: state version %d, self node %s", stateVersion, e.nodeID)
 					pStart := time.Now()
 					e.Prepare(ctx, vrfProof, stateVersion)
 					e.log.Infof("Prepare time: state version %d, cost %d ms, self node %s", stateVersion, time.Since(pStart).Milliseconds(), e.nodeID)
@@ -331,7 +335,6 @@ func (e *consensusExecutor) start(ctx context.Context) {
 }
 
 func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []*txbasic.Transaction, txResultList []txbasic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
-
 	if len(txList) != len(txResultList) {
 		err := fmt.Errorf("Mismatch tx list count %d and tx result count %d", len(txList), len(txResultList))
 		e.log.Errorf("%v", err)

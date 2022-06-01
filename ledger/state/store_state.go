@@ -81,6 +81,31 @@ func NewStateStore(log tplog.Logger, backendDB backend.Backend, flag Flag) State
 	}
 }
 
+func NewStateStoreAt(log tplog.Logger, backendDB backend.Backend, flag Flag, version uint64) StateStore {
+	if Flag_ReadOnly|Flag_WriteOnly == flag {
+		return &stateStore{
+			log:       log,
+			backend:   backendDB,
+			backendRW: backendDB.ReadWriter(),
+			storeMap:  make(map[string]*StateStoreComposition),
+		}
+	} else if Flag_ReadOnly == flag {
+		backendR, err := backendDB.ReaderAt(version)
+		if err != nil {
+			log.Panicf("%v", err)
+		}
+		return &stateStore{
+			log:      log,
+			backend:  backendDB,
+			backendR: backendR,
+			storeMap: make(map[string]*StateStoreComposition),
+		}
+	} else {
+		log.Panicf("Invalid state store flag")
+		return nil
+	}
+}
+
 func (m *stateStore) AddNamedStateStore(name string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()

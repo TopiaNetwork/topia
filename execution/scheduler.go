@@ -90,6 +90,7 @@ func (scheduler *executionScheduler) State() SchedulerState {
 }
 
 func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error) {
+	scheduler.log.Infof("Scheduler try to fetch the execution lock: state version %d, self node %s", txPacked.StateVersion, scheduler.nodeID)
 	if ok := scheduler.executeMutex.TryLockTimeout(10 * time.Second); !ok {
 		err := fmt.Errorf("A packedTxs is executing, try later again")
 		scheduler.log.Errorf("%v", err)
@@ -100,8 +101,12 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 	scheduler.schedulerState.Store(uint32(SchedulerState_Executing))
 	defer scheduler.schedulerState.Store(uint32(SchedulerState_Idle))
 
+	scheduler.log.Infof("Scheduler try to fetch the comp state lock: state version %d, self node %s", txPacked.StateVersion, scheduler.nodeID)
+
 	compState.Lock()
 	defer compState.Unlock()
+
+	scheduler.log.Infof("Scheduler begin to execute: state version %d, self node %s，txs'len %d", txPacked.StateVersion, scheduler.nodeID, scheduler.exePackedTxsList.Len())
 
 	if scheduler.exePackedTxsList.Len() != 0 {
 		exeTxsItem := scheduler.exePackedTxsList.Front()

@@ -152,11 +152,12 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					TxList:       receivedTxList,
 				}
 
+				e.log.Infof("Received packed txs begin to execute: state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 				_, err = e.exeScheduler.ExecutePackedTx(ctx, txPacked, compState)
 				if err != nil {
-					e.log.Errorf("Execute packed txs err from remote: %v, state version %d self node %s", err, txPacked.StateVersion, e.nodeID)
+					e.log.Errorf("Execute packed txs err from remote: %v, state version %d, self node %s", err, txPacked.StateVersion, e.nodeID)
 				}
-				e.log.Infof("Execute Packed tx successfully from remote, state version %d self node %s", perparePMExe.StateVersion, e.nodeID)
+				e.log.Infof("Execute Packed tx successfully from remote, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 				//go func(ctxdl context.Context) {
 				msg := &PreparePackedMessageExeIndication{
 					ChainID:      perparePMExe.ChainID,
@@ -313,7 +314,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 
 				isCan, vrfProof, _ := e.canPrepare(stateVersion)
 				if isCan {
-					e.log.Infof("Selected execution launcher can prepare: state version%d, self node %s", stateVersion, e.nodeID)
+					e.log.Infof("Selected execution launcher can prepare: state version %d, self node %s", stateVersion, e.nodeID)
 					pStart := time.Now()
 					e.Prepare(ctx, vrfProof, stateVersion)
 					e.log.Infof("Prepare time: state version %d, cost %d ms, self node %s", stateVersion, time.Since(pStart).Milliseconds(), e.nodeID)

@@ -33,6 +33,8 @@ type consensusExecutor struct {
 	commitMsgChan                chan *CommitMessage
 	cryptService                 tpcrt.CryptService
 	prepareInterval              time.Duration
+	syncPrepareMsgLaunched       sync.RWMutex
+	prepareMsgLunched            map[uint64]struct{} //Key: state version
 }
 
 func newConsensusExecutor(log tplog.Logger,
@@ -62,7 +64,31 @@ func newConsensusExecutor(log tplog.Logger,
 		commitMsgChan:                commitMsgChan,
 		cryptService:                 cryptService,
 		prepareInterval:              prepareInterval,
+		prepareMsgLunched:            make(map[uint64]struct{}),
 	}
+}
+
+func (e *consensusExecutor) prepareMsgLaunched(stateVersion uint64) bool {
+	e.syncPrepareMsgLaunched.Lock()
+	defer e.syncPrepareMsgLaunched.Unlock()
+
+	if _, ok := e.prepareMsgLunched[stateVersion]; ok {
+		return true
+	}
+
+	return false
+}
+
+func (e *consensusExecutor) notPrepareMsgLaunchedSet(stateVersion uint64) bool {
+	e.syncPrepareMsgLaunched.Lock()
+	defer e.syncPrepareMsgLaunched.Unlock()
+
+	if _, ok := e.prepareMsgLunched[stateVersion]; !ok {
+		e.prepareMsgLunched[stateVersion] = struct{}{}
+		return true
+	}
+
+	return false
 }
 
 func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Context) {
@@ -70,7 +96,12 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 		for {
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
-				e.log.Infof("Received PreparePackedMessageExe from other executor, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
+				if e.notPrepareMsgLaunchedSet(perparePMExe.StateVersion) {
+					e.log.Infof("Received PreparePackedMessageExe from other executor, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
+				} else {
+					e.log.Infof("Received PreparePackedMessageExe from other executor but existed, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
+					continue
+				}
 
 				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
 
@@ -220,7 +251,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 	}()
 }
 
-func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
+func (e *consensusExecutor) canPrepare(stateVersion uint64) (bool, []byte, error) {
 	if schedulerState := e.exeScheduler.State(); schedulerState != execution.SchedulerState_Idle {
 		err := fmt.Errorf("Execution scheduler state %s, self node %s", schedulerState.String(), e.nodeID)
 		e.log.Errorf("%v", err)
@@ -230,19 +261,22 @@ func (e *consensusExecutor) canPrepare() (bool, []byte, error) {
 	csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
 	defer csStateRN.Stop()
 
-	roleSelector := newLeaderSelectorVRF(e.log, e.cryptService)
+	roleSelector := newLeaderSelectorVRF(e.log, e.nodeID, e.cryptService)
 
-	maxStateVersion, _ := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
-
-	candInfo, vrfProof, err := roleSelector.Select(RoleSelector_ExecutionLauncher, maxStateVersion, e.priKey, csStateRN, 1)
+	e.log.Infof("Begin Select: state version %d, self node %s", stateVersion, e.nodeID)
+	candInfo, vrfProof, err := roleSelector.Select(RoleSelector_ExecutionLauncher, stateVersion, e.priKey, csStateRN, 1)
 	if err != nil {
 		e.log.Errorf("Select executor err: %v", err)
 		return false, nil, err
 	}
+	e.log.Infof("End Select: state version %d, self node %s", stateVersion, e.nodeID)
 	if len(candInfo) != 1 {
-		err = fmt.Errorf("Invalid selected executor count: expected 1, actual %d", len(candInfo))
+		err = fmt.Errorf("Invalid selected executor count: state version %d, expected 1, actual %d", stateVersion, len(candInfo))
+		e.log.Errorf("%v", err)
 		return false, nil, err
 	}
+
+	e.log.Infof("Selected launching node: state version %d, selected node %s, self node %s", stateVersion, candInfo[0].nodeID, e.nodeID)
 
 	if candInfo[0].nodeID == e.nodeID {
 		return true, vrfProof, nil
@@ -261,16 +295,29 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 			select {
 			case <-timer.C:
 				prepareStart := time.Now()
-				isCan, vrfProof, _ := e.canPrepare()
-				if isCan {
-					e.log.Infof("Selected execution launcher %s can prepare", e.nodeID)
-					pStart := time.Now()
-					e.Prepare(ctx, vrfProof)
-					e.log.Infof("Prepare time: cost %d ms", time.Since(pStart).Milliseconds())
+				maxStateVersion, err := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
+				if err != nil {
+					continue
 				}
-				e.log.Infof("Prepare time total: isCan %v, cost %d ms", isCan, time.Since(prepareStart).Milliseconds())
+				stateVersion := maxStateVersion + 1
+
+				e.log.Infof("Prepare timer: state version %d, self node %s", stateVersion, e.nodeID)
+
+				if e.prepareMsgLaunched(stateVersion) {
+					e.log.Infof("Have launched prepare message: state version %d, self node %s", stateVersion, e.nodeID)
+					continue
+				}
+
+				isCan, vrfProof, _ := e.canPrepare(stateVersion)
+				if isCan {
+					e.log.Infof("Selected execution launcher can prepare: state version%d, self node %s", stateVersion, e.nodeID)
+					pStart := time.Now()
+					e.Prepare(ctx, vrfProof, stateVersion)
+					e.log.Infof("Prepare time: state version %d, cost %d ms, self node %s", stateVersion, time.Since(pStart).Milliseconds(), e.nodeID)
+				}
+				e.log.Infof("Prepare time total: isCan %v, state version %d, cost %d ms, self node %s", isCan, stateVersion, time.Since(prepareStart).Milliseconds(), e.nodeID)
 			case <-ctx.Done():
-				e.log.Info("Consensus executor exit prepare timer")
+				e.log.Infof("Consensus executor exit prepare timer: self node %s", e.nodeID)
 				return
 			}
 		}
@@ -346,7 +393,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 	return exePPM, proposePPM, nil
 }
 
-func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error {
+func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateVersion uint64) error {
 	pendTxs, err := e.txPool.Pending()
 	if err != nil {
 		e.log.Errorf("Can't get pending txs: %v", err)
@@ -359,22 +406,17 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 	}
 
 	txRoot := txbasic.TxRoot(pendTxs)
-	maxStateVer, err := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
-	if err != nil {
-		e.log.Errorf("Can't get max state version: %v", err)
-		return err
-	}
 
-	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, maxStateVer+1, "executor_exepreparer")
+	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
 	if compState == nil {
-		err = fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", maxStateVer+1)
+		err = fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", stateVersion)
 		e.log.Errorf("%v", err)
 		return err
 	}
 
 	var packedTxs execution.PackedTxs
 
-	packedTxs.StateVersion = maxStateVer + 1
+	packedTxs.StateVersion = stateVersion
 	packedTxs.TxRoot = txRoot
 	packedTxs.TxList = append(packedTxs.TxList, pendTxs...)
 
@@ -427,6 +469,8 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte) error 
 		e.log.Errorf("Deliver prepare packed message to propose network failed: err=%v", err)
 		return err
 	}
+
+	e.notPrepareMsgLaunchedSet(stateVersion)
 
 	e.log.Infof("Deliver prepare packed message to propose network successfully: state version %d， self node %s", packedMsgProp.StateVersion, e.nodeID)
 

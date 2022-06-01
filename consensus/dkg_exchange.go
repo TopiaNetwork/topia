@@ -21,6 +21,7 @@ const (
 	PreparePackedExeIndicChannel_Size = 10
 	PreparePackedPropChannel_Size     = 10
 	ProposeChannel_Size               = 10
+	BestProposeChannel_Size           = 10
 
 	PartPubKeyChannel_Size  = 500
 	DealMSGChannel_Size     = 500

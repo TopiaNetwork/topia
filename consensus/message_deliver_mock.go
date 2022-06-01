@@ -58,6 +58,11 @@ func (md *messageDeliverMock) deliverResultValidateRespMessage(actorCtx actor.Co
 	panic("implement me")
 }
 
+func (md *messageDeliverMock) deliverBestProposeMessage(ctx context.Context, msg *BestProposeMessage) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (md *messageDeliverMock) deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error {
 	//TODO implement me
 	panic("implement me")

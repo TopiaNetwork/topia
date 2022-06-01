@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/codec"
 	"math/big"
+	"strconv"
 	"sync"
 	"time"
 
@@ -15,22 +17,31 @@ import (
 )
 
 type consensusValidator struct {
-	log               tplog.Logger
-	nodeID            string
-	proposeMsgChan    chan *ProposeMessage
-	ledger            ledger.Ledger
-	deliver           messageDeliverI
-	syncPropMsgCached sync.RWMutex
-	propMsgCached     *ProposeMessage
+	log                   tplog.Logger
+	nodeID                string
+	proposeMsgChan        chan *ProposeMessage
+	bestProposeMsgChan    chan *BestProposeMessage
+	ledger                ledger.Ledger
+	deliver               messageDeliverI
+	marshaler             codec.Marshaler
+	syncPropMsgCached     sync.RWMutex
+	propMsgCached         *ProposeMessage
+	syncBestPropMsgCached sync.RWMutex
+	bestPropMsgCached     *BestProposeMessage
+	syncpropMsgVoted      sync.RWMutex
+	propMsgVoted          map[string]struct{}
 }
 
-func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, ledger ledger.Ledger, deliver *messageDeliver) *consensusValidator {
+func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler) *consensusValidator {
 	return &consensusValidator{
-		log:            tplog.CreateSubModuleLogger("validator", log),
-		nodeID:         nodeID,
-		proposeMsgChan: proposeMsgChan,
-		ledger:         ledger,
-		deliver:        deliver,
+		log:                tplog.CreateSubModuleLogger("validator", log),
+		nodeID:             nodeID,
+		proposeMsgChan:     proposeMsgChan,
+		bestProposeMsgChan: bestProposeMsgChan,
+		ledger:             ledger,
+		deliver:            deliver,
+		marshaler:          marshaler,
+		propMsgVoted:       make(map[string]struct{}),
 	}
 }
 
@@ -42,9 +53,9 @@ func (v *consensusValidator) judgeLocalMaxPriBestForProposer(maxPri []byte, late
 	v.syncPropMsgCached.RLock()
 	defer v.syncPropMsgCached.RUnlock()
 
-	if v.propMsgCached != nil {
-		propMsg := v.propMsgCached
+	propMsg := v.propMsgCached
 
+	if propMsg != nil {
 		bhCached, err := propMsg.BlockHeadInfo()
 		if err != nil {
 			v.log.Errorf("Can't get cached propose msg bock head info: %v", err)
@@ -64,6 +75,193 @@ func (v *consensusValidator) judgeLocalMaxPriBestForProposer(maxPri []byte, late
 	return true, nil
 }
 
+func (v *consensusValidator) existProposeMsg(chainID tpchaintypes.ChainID, round uint64, stateVersion uint64, proposer string) bool {
+	v.syncPropMsgCached.RLock()
+	defer v.syncPropMsgCached.RUnlock()
+
+	propMsg := v.propMsgCached
+
+	if propMsg == nil {
+		return false
+	}
+
+	if chainID == tpchaintypes.ChainID(propMsg.ChainID) &&
+		round == propMsg.Round &&
+		stateVersion == propMsg.StateVersion &&
+		proposer == string(propMsg.Proposer) {
+
+		return true
+	}
+
+	return false
+}
+
+func (v *consensusValidator) broadcastBestProposeMsg(ctx context.Context) error {
+	v.syncPropMsgCached.RLock()
+	defer v.syncPropMsgCached.RUnlock()
+
+	propMsg := v.propMsgCached
+
+	if propMsg == nil {
+		return fmt.Errorf("Now propMsgCached nil and can't broadcast: self node %s", v.nodeID)
+	}
+
+	propMsgData, err := v.marshaler.Marshal(propMsg)
+	if err != nil {
+		return err
+	}
+
+	bestPropMsg := &BestProposeMessage{
+		ChainID:      propMsg.ChainID,
+		Version:      CONSENSUS_VER,
+		Epoch:        propMsg.Epoch,
+		Round:        propMsg.Round,
+		StateVersion: propMsg.StateVersion,
+		MaxPri:       propMsg.MaxPri,
+		Proposer:     propMsg.Proposer,
+		PropMsgData:  propMsgData,
+	}
+
+	err = v.deliver.deliverBestProposeMessage(ctx, bestPropMsg)
+	if err != nil {
+		v.log.Infof("Broadcast best propose message fail: state version %d, %v, self node %s", propMsg.StateVersion, err, v.nodeID)
+		return err
+	}
+
+	v.log.Infof("Broadcast best propose message successfully: state version %d, self node %s", propMsg.StateVersion, v.nodeID)
+
+	return nil
+}
+
+func (v *consensusValidator) produceVoteAndDeliver(ctx context.Context, propMsg *ProposeMessage) error {
+	haveVoted, propMsgKey := v.haveVoted(propMsg)
+	if haveVoted {
+		err := fmt.Errorf("Have voted received propose message: propMsgKey %s, self node %s", propMsgKey, v.nodeID)
+		v.log.Errorf("%v", err)
+		return err
+	}
+
+	if string(propMsg.Proposer) == v.nodeID {
+		err := fmt.Errorf("Self proposed block and ignore: self node %s", v.nodeID)
+		v.log.Warnf("%s", err.Error())
+		return err
+	}
+
+	voteMsg, err := v.produceVoteMsg(propMsg)
+	if err != nil {
+		v.log.Errorf("Can't produce vote msg: err=%v", err)
+		return err
+	}
+
+	waitCount := 1
+	for !v.deliver.isReady() && waitCount <= 10 {
+		v.log.Warnf("Message deliver not ready now for delivering vote message, wait 50ms, no. %d", waitCount)
+		time.Sleep(50 * time.Millisecond)
+		waitCount++
+	}
+	if waitCount > 10 {
+		err = fmt.Errorf("Finally nil dkgBls and can't deliver vote message, self node %s", v.nodeID)
+		v.log.Errorf("%v", err)
+		return err
+	}
+
+	v.log.Infof("Message deliver ready, state version %d self node %s", propMsg.StateVersion, v.nodeID)
+
+	if err = v.deliver.deliverVoteMessage(ctx, voteMsg, string(propMsg.Proposer)); err != nil {
+		v.log.Errorf("Consensus deliver vote message err: %v", err)
+		return err
+	}
+
+	v.addVotedPropMsg(propMsgKey)
+
+	v.log.Infof("Deliver vote message, state version %d, to proposer %s, self node %s", propMsg.StateVersion, string(propMsg.Proposer), v.nodeID)
+
+	return nil
+}
+
+func (v *consensusValidator) haveVoted(propMsg *ProposeMessage) (bool, string) {
+	v.syncpropMsgVoted.RLock()
+	defer v.syncpropMsgVoted.RUnlock()
+
+	pmKey := string(propMsg.ChainID) + "@" +
+		strconv.FormatUint(uint64(propMsg.Version), 10) + "@" +
+		strconv.FormatUint(propMsg.Epoch, 10) + "@" +
+		strconv.FormatUint(propMsg.Round, 10) + "@" +
+		strconv.FormatUint(propMsg.StateVersion, 10) + "@" +
+		string(propMsg.Proposer)
+	if _, ok := v.propMsgVoted[pmKey]; ok {
+		return true, pmKey
+	}
+
+	return false, pmKey
+}
+
+func (v *consensusValidator) addVotedPropMsg(propMsgKey string) {
+	v.syncpropMsgVoted.Lock()
+	defer v.syncpropMsgVoted.Unlock()
+
+	v.propMsgVoted[propMsgKey] = struct{}{}
+}
+
+func (v *consensusValidator) checkValidBestProposeMsg(bestPropMsg *BestProposeMessage) bool {
+	v.syncBestPropMsgCached.RLock()
+	defer v.syncBestPropMsgCached.RUnlock()
+
+	bestPropMsgCached := v.bestPropMsgCached
+	if bestPropMsgCached != nil &&
+		bytes.Compare(bestPropMsg.ChainID, bestPropMsgCached.ChainID) == 0 &&
+		bestPropMsg.Version == bestPropMsgCached.Version &&
+		bestPropMsg.Epoch == bestPropMsgCached.Epoch &&
+		bestPropMsg.Round == bestPropMsgCached.Round &&
+		bestPropMsg.StateVersion == bestPropMsgCached.StateVersion {
+		if bytes.Compare(bestPropMsg.Proposer, bestPropMsgCached.Proposer) == 0 {
+			v.log.Errorf("Have received best propose message from proposer %s", string(bestPropMsgCached.Proposer))
+			return false
+		}
+
+		if new(big.Int).SetBytes(bestPropMsg.MaxPri).Cmp(new(big.Int).SetBytes(bestPropMsgCached.MaxPri)) < 0 {
+			v.log.Errorf("Have received bigger pri of the best propose message and will discard new: received proposer %s, new prop proposer %s, self node %s", string(v.bestPropMsgCached.Proposer), string(bestPropMsg.Proposer), v.nodeID)
+			return false
+		}
+	}
+
+	return true
+}
+
+func (v *consensusValidator) receiveBestProposeMsgStart(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case bestPropMsg := <-v.bestProposeMsgChan:
+				if !v.checkValidBestProposeMsg(bestPropMsg) {
+					continue
+				}
+
+				v.log.Infof("Received the best propose message, state version %d, proposer %s, self node %s", bestPropMsg.StateVersion, string(bestPropMsg.Proposer), v.nodeID)
+
+				var propMsg ProposeMessage
+				err := v.marshaler.Unmarshal(bestPropMsg.PropMsgData, &propMsg)
+				if err != nil {
+					v.log.Errorf("Can't unmarshal bestPropMsg data: %v", err)
+					continue
+				}
+
+				err = v.produceVoteAndDeliver(ctx, &propMsg)
+				if err != nil {
+					v.log.Errorf("Produce vote and deliver err after received the best propose message: state version %d, err %v, self node %s", bestPropMsg.StateVersion, err, v.nodeID)
+					continue
+				}
+
+				v.syncBestPropMsgCached.Lock()
+				v.bestPropMsgCached = bestPropMsg
+				v.syncBestPropMsgCached.Unlock()
+			case <-ctx.Done():
+				v.log.Info("Validator receive best propose message exit")
+			}
+		}
+	}()
+}
+
 func (v *consensusValidator) collectProposeMsgTimerStart(ctx context.Context) {
 	go func(ctxSub context.Context) {
 		v.log.Infof("Begin collectProposeMsgTimerStart, self node %s", v.nodeID)
@@ -78,72 +276,17 @@ func (v *consensusValidator) collectProposeMsgTimerStart(ctx context.Context) {
 
 			propMsg := v.propMsgCached
 
-			bh, err := propMsg.BlockHeadInfo()
+			err := v.produceVoteAndDeliver(ctxSub, propMsg)
 			if err != nil {
-				v.log.Errorf("Can't get propose block head info in collectProposeMsgTimerStart: %v", err)
+				v.log.Errorf("Produce vote and deliver err after received propose message: state version %d, err %v, self node %s", propMsg.StateVersion, err, v.nodeID)
 				return
 			}
 
-			if string(bh.Proposer) == v.nodeID {
-				v.log.Warnf("Self proposed block and ignore: self node %s", v.nodeID)
-				return
-			}
-
-			voteMsg, err := v.produceVoteMsg(propMsg)
-			if err != nil {
-				v.log.Errorf("Can't produce vote msg: err=%v", err)
-				return
-			}
-
-			waitCount := 1
-			for !v.deliver.isReady() && waitCount <= 10 {
-				v.log.Warnf("Message deliver not ready now for delivering vote message, wait 50ms, no. %d", waitCount)
-				time.Sleep(50 * time.Millisecond)
-				waitCount++
-			}
-			if waitCount > 10 {
-				err = fmt.Errorf("Finally nil dkgBls and can't deliver vote message, self node %s", v.nodeID)
-				v.log.Errorf("%v", err)
-				return
-			}
-
-			v.log.Infof("Message deliver ready, state version %d self node %s", propMsg.StateVersion, v.nodeID)
-
-			if err = v.deliver.deliverVoteMessage(ctx, voteMsg, string(bh.Proposer)); err != nil {
-				v.log.Errorf("Consensus deliver vote message err: %v", err)
-				return
-			}
-
-			v.log.Infof("Deliver vote message, state version %d, to proposer %s, self node %s", propMsg.StateVersion, string(bh.Proposer), v.nodeID)
-		case <-ctx.Done():
-			v.log.Infof("collectProposeMsgTimerStart end: self node %s", v.nodeID)
+		case <-ctxSub.Done():
+			v.log.Infof("CollectProposeMsgTimerStart end: self node %s", v.nodeID)
 			return
 		}
 	}(ctx)
-}
-
-func (v *consensusValidator) existProposeMsg(chainID tpchaintypes.ChainID, round uint64, stateVersion uint64, proposer string) bool {
-	v.syncPropMsgCached.Lock()
-	defer v.syncPropMsgCached.Unlock()
-
-	if v.propMsgCached == nil {
-		return false
-	}
-
-	bhCached, err := v.propMsgCached.BlockHeadInfo()
-	if err != nil {
-		v.log.Errorf("Can't get cached propose msg bock head info: %v", err)
-		return false
-	}
-	if chainID == tpchaintypes.ChainID(v.propMsgCached.ChainID) &&
-		round == v.propMsgCached.Round &&
-		stateVersion == v.propMsgCached.StateVersion &&
-		proposer == string(bhCached.Proposer) {
-
-		return true
-	}
-
-	return false
 }
 
 func (v *consensusValidator) validateAndCollectProposeMsg(ctx context.Context, maxPri []byte, propProposer string, propMsg *ProposeMessage) (bool, bool) {
@@ -163,25 +306,21 @@ func (v *consensusValidator) validateAndCollectProposeMsg(ctx context.Context, m
 		bytes.Compare(propMsg.ChainID, v.propMsgCached.ChainID) == 0 &&
 		propMsg.Round == v.propMsgCached.Round &&
 		propMsg.StateVersion == v.propMsgCached.StateVersion {
-		bhCached, err := v.propMsgCached.BlockHeadInfo()
-		if err != nil {
-			v.log.Errorf("Can't get cached propose msg bock head info: %v", err)
-			return false, canCollectStart
-		}
-		if string(bhCached.Proposer) == propProposer {
+
+		if string(v.propMsgCached.Proposer) == propProposer {
 			v.log.Errorf("Same propose msg has existed from same proposer, so will discard: proposer %s, self node %s", propProposer, v.nodeID)
 			return false, canCollectStart
 		}
 
-		cachedMaxPri := bhCached.MaxPri
+		cachedMaxPri := v.propMsgCached.MaxPri
 		if new(big.Int).SetBytes(cachedMaxPri).Cmp(new(big.Int).SetBytes(maxPri)) < 0 {
 			v.propMsgCached = propMsg
-			if string(bhCached.Proposer) == v.nodeID {
+			if string(v.propMsgCached.Proposer) == v.nodeID {
 				canCollectStart = true
 			}
-			v.log.Infof("New prop pri bigger than cache: cache proposer %s, new prop proposer %s, self node %s", string(bhCached.Proposer), propProposer, v.nodeID)
+			v.log.Infof("New prop pri bigger than cache: cache proposer %s, new prop proposer %s, self node %s", string(v.propMsgCached.Proposer), propProposer, v.nodeID)
 		} else {
-			v.log.Errorf("Have received bigger pri propose block and can't process forward: received proposer %s, new prop proposer %s, self node %s", string(bhCached.Proposer), propProposer, v.nodeID)
+			v.log.Errorf("Have received bigger pri propose block and can't process forward: received proposer %s, new prop proposer %s, self node %s", string(v.propMsgCached.Proposer), propProposer, v.nodeID)
 			return false, canCollectStart
 		}
 	} else { //new propose message
@@ -194,7 +333,7 @@ func (v *consensusValidator) validateAndCollectProposeMsg(ctx context.Context, m
 	return true, canCollectStart
 }
 
-func (v *consensusValidator) start(ctx context.Context) {
+func (v *consensusValidator) receiveProposeMsgStart(ctx context.Context) {
 	go func() {
 		for {
 			select {
@@ -214,17 +353,11 @@ func (v *consensusValidator) start(ctx context.Context) {
 						return err
 					}
 
-					bh, err := propMsg.BlockHeadInfo()
-					if err != nil {
-						v.log.Errorf("Can't get propose block head info: %v", err)
-						return err
-					}
-
-					v.log.Infof("Received propose message, state version %d, latest height %d, epoch %d, proposer %s, self node %s", propMsg.StateVersion, latestBlock.Head.Height, propMsg.Epoch, string(bh.Proposer), v.nodeID)
+					v.log.Infof("Received propose message, state version %d, latest height %d, epoch %d, proposer %s, self node %s", propMsg.StateVersion, latestBlock.Head.Height, propMsg.Epoch, string(propMsg.Proposer), v.nodeID)
 
 					canCollectStart := false
 					ok := false
-					if ok, canCollectStart = v.validateAndCollectProposeMsg(ctx, bh.MaxPri, string(bh.Proposer), propMsg); !ok {
+					if ok, canCollectStart = v.validateAndCollectProposeMsg(ctx, propMsg.MaxPri, string(propMsg.Proposer), propMsg); !ok {
 						err = fmt.Errorf("Can't vote received propose msg: state version %d, self node %s", propMsg.StateVersion, v.nodeID)
 						v.log.Infof("%s", err.Error())
 						return err
@@ -257,4 +390,9 @@ func (v *consensusValidator) produceVoteMsg(msg *ProposeMessage) (*VoteMessage, 
 		StateVersion: msg.StateVersion,
 		BlockHead:    msg.BlockHead,
 	}, nil
+}
+
+func (v *consensusValidator) start(ctx context.Context) {
+	v.receiveProposeMsgStart(ctx)
+	v.receiveBestProposeMsgStart(ctx)
 }

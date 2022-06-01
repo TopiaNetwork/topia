@@ -30,7 +30,7 @@ func TestSelect(t *testing.T) {
 
 	t.Log("Node 2:")
 	for i := 0; i < 5; i++ {
-		canInfo1, _, err := roleSel.Select(RoleSelector_ExecutionLauncher, 1, priKey2, servant, 1)
+		canInfo1, _, err := roleSel.Select(RoleSelector_ExecutionLauncher, 2, priKey2, servant, 1)
 		assert.Equal(t, nil, err)
 		assert.Equal(t, 1, len(canInfo1))
 
@@ -39,7 +39,7 @@ func TestSelect(t *testing.T) {
 
 	t.Log("Node 3:")
 	for i := 0; i < 5; i++ {
-		canInfo1, _, err := roleSel.Select(RoleSelector_ExecutionLauncher, 2, priKey3, servant, 1)
+		canInfo1, _, err := roleSel.Select(RoleSelector_ExecutionLauncher, 3, priKey3, servant, 1)
 		assert.Equal(t, nil, err)
 		assert.Equal(t, 1, len(canInfo1))
 

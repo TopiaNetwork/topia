@@ -294,11 +294,14 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 		for {
 			select {
 			case <-timer.C:
+				e.log.Infof("Prepare timer starts: self node %s", e.nodeID)
 				prepareStart := time.Now()
+				e.log.Infof("Prepare timer starts to get max state version: self node %s", e.nodeID)
 				maxStateVersion, err := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
 				if err != nil {
 					continue
 				}
+				e.log.Infof("Prepare timer gets max state version: maxStateVersion %d, self node %s", maxStateVersion, e.nodeID)
 				stateVersion := maxStateVersion + 1
 
 				e.log.Infof("Prepare timer: state version %d, self node %s", stateVersion, e.nodeID)
@@ -331,7 +334,6 @@ func (e *consensusExecutor) start(ctx context.Context) {
 }
 
 func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []*txbasic.Transaction, txResultList []txbasic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
-
 	if len(txList) != len(txResultList) {
 		err := fmt.Errorf("Mismatch tx list count %d and tx result count %d", len(txList), len(txResultList))
 		e.log.Errorf("%v", err)

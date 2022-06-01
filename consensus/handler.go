@@ -28,6 +28,8 @@ type ConsensusHandler interface {
 
 	ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error
 
+	ProcessBestPropose(msg *BestProposeMessage) error
+
 	ProcessVote(msg *VoteMessage) error
 
 	ProcessCommit(msg *CommitMessage) error
@@ -50,6 +52,7 @@ type consensusHandler struct {
 	preprePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
 	preprePackedMsgPropChan     chan *PreparePackedMessageProp
 	proposeMsgChan              chan *ProposeMessage
+	bestProposeMsgChan          chan *BestProposeMessage
 	voteMsgChan                 chan *VoteMessage
 	commitMsgChan               chan *CommitMessage
 	blockAddedEpochCh           chan *tpchaintypes.Block
@@ -69,6 +72,7 @@ func NewConsensusHandler(log tplog.Logger,
 	preprePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
+	bestProposeMsgChan chan *BestProposeMessage,
 	voteMsgChan chan *VoteMessage,
 	commitMsgChan chan *CommitMessage,
 	blockAddedEpochCh chan *tpchaintypes.Block,
@@ -87,6 +91,7 @@ func NewConsensusHandler(log tplog.Logger,
 		preprePackedMsgExeIndicChan: preprePackedMsgExeIndicChan,
 		preprePackedMsgPropChan:     preprePackedMsgPropChan,
 		proposeMsgChan:              proposeMsgChan,
+		bestProposeMsgChan:          bestProposeMsgChan,
 		voteMsgChan:                 voteMsgChan,
 		commitMsgChan:               commitMsgChan,
 		blockAddedEpochCh:           blockAddedEpochCh,
@@ -196,6 +201,12 @@ func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Conte
 	}
 
 	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp, err)
+}
+
+func (handler *consensusHandler) ProcessBestPropose(msg *BestProposeMessage) error {
+	handler.bestProposeMsgChan <- msg
+
+	return nil
 }
 
 func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {

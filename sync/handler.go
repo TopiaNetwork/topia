@@ -28,35 +28,30 @@ type SyncHandler interface {
 
 	HandleStateResponse(msg *StateResponse) error
 
-	//
-	//HandleEpochRequest(msg *EpochRequest) error
-	//
-	//HandleEpochResponse(msg *EpochResponse) error
-	//
-	//HandleNodeRequest(msg *NodeRequest) error
-	//
-	//HandleNodeResponse(msg *NodeResponse) error
+	HandleEpochResponse(msg *EpochResponse) error
 
-	//HandleAccountRequest(msg *AccountRequest) error
-	//
-	//HandleAccountResponse(msg *AccountResponse) error
-	//
-	//HandleChainRequest(msg *ChainRequest) error
-	//
-	//HandleChainResponse(msg *ChainResponse) error
+	HandleNodeResponse(msg *NodeResponse) error
+
+	HandleChainResponse(msg *ChainResponse) error
+
+	HandleAccountResponse(msg *AccountResponse) error
 }
 
 type syncHandler struct {
-	log             tplog.Logger
-	ctx             context.Context
-	marshaler       codec.Marshaler
-	ledger          ledger.Ledger
-	HighestHeight   uint64
-	query           SyncServant
-	quitSync        chan struct{}
-	blockDownloader *BlockDownloader
-	epochDownloader *EpochDownloader
-	wg              sync.WaitGroup
+	log               tplog.Logger
+	ctx               context.Context
+	marshaler         codec.Marshaler
+	ledger            ledger.Ledger
+	HighestHeight     uint64
+	query             SyncServant
+	quitSync          chan struct{}
+	blockDownloader   *BlockDownloader
+	epochDownloader   *EpochDownloader
+	stateDownloader   *StateDownloader
+	nodeDownloader    *NodeDownloader
+	chainDownloader   *ChainDownloader
+	accountDownloader *AccountDownloader
+	wg                sync.WaitGroup
 }
 
 func NewSyncHandler(log tplog.Logger, ctx context.Context, marshaler codec.Marshaler, ledger ledger.Ledger,
@@ -213,7 +208,7 @@ func (sh *syncHandler) HandleStateRequest(msg *StateRequest) error {
 		return err
 	}
 
-	if curStateVersion > msg.StateVersion || msg.EpochRoot == nil {
+	if curStateVersion > msg.StateVersion || (msg.EpochRoot == nil && msg.NodeRoot == nil && msg.ChainRoot == nil && msg.AccountRoot == nil) {
 		//response the state for msg.StateVersion
 		stateByVersion := state.CreateCompositionStateReadonlyAt(sh.log, sh.ledger, msg.StateVersion)
 		tmpRoot, err := stateByVersion.StateRoot()
@@ -260,7 +255,7 @@ func (sh *syncHandler) HandleStateRequest(msg *StateRequest) error {
 			sh.query.Send(sh.ctx, protocol.SyncProtocolID_State, MOD_NAME, syncData)
 		}
 	} else if curStateVersion == msg.StateVersion {
-		if !bytes.Equal(curEpochRoot, msg.EpochRoot) {
+		if !bytes.Equal(curEpochRoot, msg.EpochRoot) && msg.EpochRoot != nil {
 			curEpochInfo, err := sh.query.GetLatestEpoch()
 			if err != nil {
 				return err
@@ -278,7 +273,7 @@ func (sh *syncHandler) HandleStateRequest(msg *StateRequest) error {
 			syncData, _ := sh.marshaler.Marshal(&syncMsg)
 			sh.query.Send(sh.ctx, protocol.SyncProtocolId_Epoch, MOD_NAME, syncData)
 		}
-		if !bytes.Equal(curNodeRoot, msg.NodeRoot) {
+		if !bytes.Equal(curNodeRoot, msg.NodeRoot) && msg.NodeRoot != nil {
 			tmpState := state.CreateCompositionStateReadonlyAt(sh.log, sh.ledger, msg.StateVersion)
 			data, _ := sh.marshaler.Marshal(tmpState)
 			nodeResponse := &NodeResponse{
@@ -295,7 +290,7 @@ func (sh *syncHandler) HandleStateRequest(msg *StateRequest) error {
 			sh.query.Send(sh.ctx, protocol.SyncProtocolId_Node, MOD_NAME, syncData)
 
 		}
-		if !bytes.Equal(curChainRoot, msg.ChainRoot) {
+		if !bytes.Equal(curChainRoot, msg.ChainRoot) && msg.ChainRoot != nil {
 			tmpState := state.CreateCompositionStateReadonlyAt(sh.log, sh.ledger, msg.StateVersion)
 			data, _ := sh.marshaler.Marshal(tmpState)
 			chainResponse := &ChainResponse{
@@ -311,21 +306,21 @@ func (sh *syncHandler) HandleStateRequest(msg *StateRequest) error {
 			syncData, _ := sh.marshaler.Marshal(&syncMsg)
 			sh.query.Send(sh.ctx, protocol.SyncProtocolId_Chain, MOD_NAME, syncData)
 		}
-		if !bytes.Equal(curAccountRoot, msg.AccountRoot) {
+		if !bytes.Equal(curAccountRoot, msg.AccountRoot) && msg.AccountRoot != nil {
 			tmpState := state.CreateCompositionStateReadonlyAt(sh.log, sh.ledger, msg.StateVersion)
 			data, _ := sh.marshaler.Marshal(tmpState)
-			AccountResponse := &AccountResponse{
+			accountResponse := &AccountResponse{
 				StateVersion: curStateVersion,
 				AccountRoot:  curAccountRoot,
 				StateData:    data,
 			}
-			dataResponse, _ := sh.marshaler.Marshal(chainResponse)
+			dataResponse, _ := sh.marshaler.Marshal(accountResponse)
 			syncMsg := SyncMessage{
-				MsgType: SyncMessage_ChainStateResponse,
+				MsgType: SyncMessage_AccountStateResponse,
 				Data:    dataResponse,
 			}
 			syncData, _ := sh.marshaler.Marshal(&syncMsg)
-			sh.query.Send(sh.ctx, protocol.SyncProtocolId_Chain, MOD_NAME, syncData)
+			sh.query.Send(sh.ctx, protocol.SyncProtocolId_Account, MOD_NAME, syncData)
 		}
 	}
 
@@ -333,38 +328,16 @@ func (sh *syncHandler) HandleStateRequest(msg *StateRequest) error {
 }
 
 func (sh *syncHandler) HandleStateResponse(msg *StateResponse) error {
+	curVersion, err := sh.query.StateLatestVersion()
+	if err != nil {
+		return err
+	}
 
+	if curVersion < msg.StateVersion {
+		sh.stateDownloader.chanFetchStateData <- msg.StateByVersion
+	}
+	return nil
 }
-
-//
-//func (sh *syncHandler) HandleEpochRequest(msg *EpochRequest) error {
-//	curEpochInfo, err := sh.query.GetLatestEpoch()
-//	if err != nil {
-//		return err
-//	}
-//	curEpoch := curEpochInfo.Epoch
-//	if curEpoch <= msg.Epoch {
-//		return nil
-//	} else {
-//		epochResponse := &EpochResponse{
-//			Epoch:          curEpochInfo.Epoch,
-//			StartTimeStamp: curEpochInfo.StartTimeStamp,
-//			StartHeight:    curEpochInfo.StartHeight,
-//		}
-//		data, err := sh.Marshaler.Marshal(epochResponse)
-//		if err != nil {
-//			return err
-//		}
-//		syncMsg := SyncMessage{
-//			MsgType: SyncMessage_BlockRequest,
-//			Data:    data,
-//		}
-//		syncData, _ := sh.Marshaler.Marshal(&syncMsg)
-//		sh.query.Send(sh.ctx, protocol.SyncProtocolId_Epoch, MOD_NAME, syncData)
-//
-//	}
-//	return nil
-//}
 
 func (sh *syncHandler) HandleEpochResponse(msg *EpochResponse) error {
 	curEponchInfo, err := sh.query.GetLatestEpoch()
@@ -372,7 +345,7 @@ func (sh *syncHandler) HandleEpochResponse(msg *EpochResponse) error {
 		return err
 	}
 	curEponch := curEponchInfo.Epoch
-	if curEponch < msg.Epoch {
+	if curEponch > msg.Epoch {
 		return nil
 	} else {
 		remoteEpoch := &common.EpochInfo{
@@ -385,53 +358,44 @@ func (sh *syncHandler) HandleEpochResponse(msg *EpochResponse) error {
 	return nil
 }
 
-//func (sh *syncHandler) HandleNodeRequest(msg *NodeRequest) error {
-//	curNodeStateVersion, err := sh.query.GetNodeLatestStateVersion()
-//	if err != nil {
-//		return err
-//	}
-//	if curNodeStateVersion <= msg.StateVersion {
-//		return nil
-//	} else {
-//		nodeState := sh.query.stat
-//
-//		nodeStateResponse := &NodeResponse{
-//			StateVersion:         msg.StateVersion,
-//			NodeState:            ,
-//			XXX_NoUnkeyedLiteral: struct{}{},
-//			XXX_unrecognized:     nil,
-//			XXX_sizecache:        0,
-//		}
-//		data, err := sh.Marshaler.Marshal(epochResponse)
-//		if err != nil {
-//			return err
-//		}
-//		syncMsg := SyncMessage{
-//			MsgType: SyncMessage_BlockRequest,
-//			Data:    data,
-//		}
-//		syncData, _ := sh.Marshaler.Marshal(&syncMsg)
-//		sh.query.Send(sh.ctx, protocol.SyncProtocolId_Epoch, MOD_NAME, syncData)
-//
-//	}
-//	return nil
-//}
-//
-//func (sh *syncHandler) HandleNodeResponse(msg *EpochResponse) error {
-//	curEponchInfo, err := sh.query.GetLatestEpoch()
-//	if err != nil {
-//		return err
-//	}
-//	curEponch := curEponchInfo.Epoch
-//	if curEponch <= msg.Epoch {
-//		return nil
-//	} else {
-//		remoteEpoch := &common.EpochInfo{
-//			Epoch:          msg.Epoch,
-//			StartTimeStamp: msg.StartTimeStamp,
-//			StartHeight:    msg.StartHeight,
-//		}
-//		sh.epochDownloader.chanFetchEpochInfo <- remoteEpoch
-//	}
-//	return nil
-//}
+func (sh *syncHandler) HandleNodeResponse(msg *NodeResponse) error {
+	curStateVersion, err := sh.query.StateLatestVersion()
+	if err != nil {
+		return err
+	}
+
+	if curStateVersion > msg.StateVersion {
+		return nil
+	} else {
+		sh.nodeDownloader.chanFetchNodeData <- msg.StateData
+	}
+	return nil
+}
+
+func (sh *syncHandler) HandleChainResponse(msg *ChainResponse) error {
+	curStateVersion, err := sh.query.StateLatestVersion()
+	if err != nil {
+		return err
+	}
+
+	if curStateVersion > msg.StateVersion {
+		return nil
+	} else {
+		sh.chainDownloader.chanFetchChainData <- msg.StateData
+	}
+	return nil
+}
+
+func (sh *syncHandler) HandleAccountResponse(msg *AccountResponse) error {
+	curStateVersion, err := sh.query.StateLatestVersion()
+	if err != nil {
+		return err
+	}
+
+	if curStateVersion > msg.StateVersion {
+		return nil
+	} else {
+		sh.accountDownloader.chanFetchAccountData <- msg.StateData
+	}
+	return nil
+}

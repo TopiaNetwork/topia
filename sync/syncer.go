@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
@@ -41,10 +40,10 @@ type syncer struct {
 	marshaler codec.Marshaler
 	ctx       context.Context
 
-	savedBlockHeights *common.IdBitmap
+	savedBlockHeights *IdBitmap
 
 	curBlockHeight     uint64
-	blockSyncQueue     *common.LockFreePriorityQueue
+	blockSyncQueue     *LockFreePriorityQueue
 	query              SyncServant
 	wg                 sync.WaitGroup
 	SyncHeartBeatTimer *time.Timer //Forced synchronization timer
@@ -75,6 +74,10 @@ func (sa *syncer) Marshaler() codec.Marshaler {
 	return sa.marshaler
 }
 
+func (sa *syncer) HandleHeartBeatRequest(msg *HeartBeatRequest) error {
+	return sa.handler.HandleHeartBeatRequest(msg)
+}
+
 func (sa *syncer) handleBlockRequest(msg *BlockRequest) error {
 	return sa.handler.HandleBlockRequest(msg)
 }
@@ -90,23 +93,21 @@ func (sa *syncer) handleStateResponse(msg *StateResponse) error {
 	return sa.handler.HandleStateResponse(msg)
 }
 
-//
-//func (sa *syncer) handleEpochRequest(msg *EpochRequest) error {
-//	return sa.handler.HandleEpochRequest(msg)
-//}
-//
 func (sa *syncer) handleEpochResponse(msg *EpochResponse) error {
 	return sa.handler.HandleEpochResponse(msg)
 }
 
-//
-//func (sa *syncer) handleNodeRequest(msg *NodeRequest) error {
-//	return sa.handler.HandleNodeRequest(msg)
-//}
-//
-//func (sa *syncer) handleNodeResponse(msg *NodeResponse) error {
-//	return sa.handler.HandleNodeResponse(msg)
-//}
+func (sa *syncer) handleNodeResponse(msg *NodeResponse) error {
+	return sa.handler.HandleNodeResponse(msg)
+}
+
+func (sa *syncer) handleChainResponse(msg *ChainResponse) error {
+	return sa.handler.HandleChainResponse(msg)
+}
+
+func (sa *syncer) handleAccountResponse(msg *AccountResponse) error {
+	return sa.handler.HandleAccountResponse(msg)
+}
 
 func (sa *syncer) Start(sysActor *actor.ActorSystem, network network.Network) error {
 	actorPID, err := CreateSyncActor(sa.level, sa.log, sysActor, sa)
@@ -119,9 +120,17 @@ func (sa *syncer) Start(sysActor *actor.ActorSystem, network network.Network) er
 
 	go sa.handler.blockDownloader.loopFetchBlocks()
 	go sa.handler.blockDownloader.loopDoBlockSync()
-
+	go sa.handler.stateDownloader.loopFetchStates()
+	go sa.handler.stateDownloader.loopDoStateSync()
 	go sa.handler.epochDownloader.loopFetchEpochs()
 	go sa.handler.epochDownloader.loopDoEpochSync()
+	go sa.handler.nodeDownloader.loopFetchNodes()
+	go sa.handler.nodeDownloader.loopDoNodeSync()
+	go sa.handler.chainDownloader.loopFetchChains()
+	go sa.handler.chainDownloader.loopDoChainSync()
+	go sa.handler.accountDownloader.loopFetchAccounts()
+	go sa.handler.accountDownloader.loopDoAccountSync()
+
 	return nil
 }
 
@@ -192,6 +201,15 @@ func (sa *syncer) dispatch(context context.Context, data []byte) {
 	}
 
 	switch syncMsg.MsgType {
+	case SyncMessage_HeartBeatRequest:
+		var msg HeartBeatRequest
+		err := sa.marshaler.Unmarshal(syncMsg.Data, &msg)
+		if err != nil {
+			sa.log.Errorf("Syncer unmarshal msg %d err %v", syncMsg.MsgType, err)
+			return
+		}
+		sa.HandleHeartBeatRequest(&msg)
+
 	case SyncMessage_BlockRequest:
 		var msg BlockRequest
 		err := sa.marshaler.Unmarshal(syncMsg.Data, &msg)
@@ -216,6 +234,14 @@ func (sa *syncer) dispatch(context context.Context, data []byte) {
 			return
 		}
 		sa.handleStateRequest(&msg)
+	case SyncMessage_StateResponse:
+		var msg StateResponse
+		err := sa.marshaler.Unmarshal(syncMsg.Data, &msg)
+		if err != nil {
+			sa.log.Errorf("Syncer unmarshal msg %d err %v", syncMsg.MsgType, err)
+			return
+		}
+		sa.handleStateResponse(&msg)
 	case SyncMessage_EpochResponse:
 		var msg EpochResponse
 		err := sa.marshaler.Unmarshal(syncMsg.Data, &msg)
@@ -224,14 +250,6 @@ func (sa *syncer) dispatch(context context.Context, data []byte) {
 			return
 		}
 		sa.handleEpochResponse(&msg)
-	case SyncMessage_NodeStateRequest:
-		var msg NodeRequest
-		err := sa.marshaler.Unmarshal(syncMsg.Data, &msg)
-		if err != nil {
-			sa.log.Errorf("Syncer unmarshal msg %d err %v", syncMsg.MsgType, err)
-			return
-		}
-		sa.handleNodeRequest(&msg)
 	case SyncMessage_NodeStateResponse:
 		var msg NodeResponse
 		err := sa.marshaler.Unmarshal(syncMsg.Data, &msg)
@@ -240,6 +258,14 @@ func (sa *syncer) dispatch(context context.Context, data []byte) {
 			return
 		}
 		sa.handleNodeResponse(&msg)
+	case SyncMessage_ChainStateResponse:
+		var msg ChainResponse
+		err := sa.marshaler.Unmarshal(syncMsg.Data, &msg)
+		if err != nil {
+			sa.log.Errorf("Syncer unmarshal msg %d err %v", syncMsg.MsgType, err)
+			return
+		}
+		sa.handleChainResponse(&msg)
 	default:
 		sa.log.Errorf("Syncer receive invalid msg %d", syncMsg.MsgType)
 		return

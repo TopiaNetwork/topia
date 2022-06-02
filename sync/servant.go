@@ -10,7 +10,7 @@ import (
 	"github.com/TopiaNetwork/topia/state/account"
 	"github.com/TopiaNetwork/topia/state/chain"
 	"github.com/TopiaNetwork/topia/state/epoch"
-	"github.com/TopiaNetwork/topia/state/node"
+	node2 "github.com/TopiaNetwork/topia/state/node"
 )
 
 type SyncServant interface {
@@ -33,7 +33,6 @@ type SyncServant interface {
 	GetRoundStateRoot() ([]byte, error) //epoch state root
 
 	GetNodeStateRoot() ([]byte, error) //node state root
-	GetNodeLatestStateVersion() (uint64, error)
 
 	Send(ctx context.Context, protocolID string, moduleName string, data []byte) error
 }
@@ -53,7 +52,7 @@ type syncServant struct {
 	account.AccountState
 	chainState chain.ChainState
 	epochState epoch.EpochState
-	node.NodeState
+	node2.NodeState
 	network.Network
 }
 

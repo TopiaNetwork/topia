@@ -7,7 +7,6 @@ import (
 	"github.com/TopiaNetwork/topia/common"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/network/protocol"
-	"github.com/TopiaNetwork/topia/state/node"
 	"time"
 )
 
@@ -32,17 +31,17 @@ func NewDownloader(log tplog.Logger, marshaler codec.Marshaler, ctx context.Cont
 
 type BlockDownloader struct {
 	*Downloader
-	savedBlockHeights *common.IdBitmap //save block height for block saved in queue
+	savedBlockHeights *IdBitmap //save block height for block saved in queue
 	chanFetchBlock    chan *tpchaintypes.Block
-	blockSyncQueue    *common.LockFreePriorityQueue //look free height sorted queue for blocks
+	blockSyncQueue    *LockFreePriorityQueue //look free height sorted queue for blocks
 
 }
 
 func NewBlockDownloader(log tplog.Logger, marshaler codec.Marshaler, ctx context.Context) *BlockDownloader {
 	downloader := &BlockDownloader{
 		Downloader:        NewDownloader(log, marshaler, ctx),
-		savedBlockHeights: new(common.IdBitmap),
-		blockSyncQueue:    common.NewLKQueue(),
+		savedBlockHeights: new(IdBitmap),
+		blockSyncQueue:    NewLKQueue(),
 	}
 	return downloader
 }
@@ -121,16 +120,16 @@ func (bd *BlockDownloader) loopDoBlockSync() {
 
 type EpochDownloader struct {
 	*Downloader
-	savedEpochs        *common.IdBitmap //save epochs for epochInfos saved in queue
+	savedEpochs        *IdBitmap //save epochs for epochInfos saved in queue
 	chanFetchEpochInfo chan *common.EpochInfo
-	epochInfoSyncQueue *common.LockFreePriorityQueue //look free height sorted queue for EpochInfos
+	epochInfoSyncQueue *LockFreePriorityQueue //look free height sorted queue for EpochInfos
 }
 
 func NewEpochDownloader(log tplog.Logger, marshaler codec.Marshaler, ctx context.Context) *EpochDownloader {
 	downloader := &EpochDownloader{
 		Downloader:         NewDownloader(log, marshaler, ctx),
-		savedEpochs:        new(common.IdBitmap),
-		epochInfoSyncQueue: common.NewLKQueue(),
+		savedEpochs:        new(IdBitmap),
+		epochInfoSyncQueue: NewLKQueue(),
 	}
 	return downloader
 }
@@ -185,13 +184,21 @@ func (ed *EpochDownloader) loopDoEpochSync() {
 		case <-ed.chanQuitSync:
 			return
 		case <-ed.requestInterval.C:
-
-			epochRequest := &EpochRequest{
-				Epoch: curEpoch,
+			curStateVersion, err := ed.servant.StateLatestVersion()
+			if err != nil {
+				ed.log.Errorf("get StateLatestVersion error: ", err)
+			}
+			curEpochRoot, err := ed.servant.GetRoundStateRoot()
+			if err != nil {
+				ed.log.Errorf("get GetRoundStateRoot error: ", err)
+			}
+			epochRequest := &StateRequest{
+				StateVersion: curStateVersion,
+				EpochRoot:    curEpochRoot,
 			}
 			data, _ := ed.marshaler.Marshal(epochRequest)
 			syncMsg := SyncMessage{
-				MsgType: SyncMessage_EpochRequest,
+				MsgType: SyncMessage_StateRequest,
 				Data:    data,
 			}
 
@@ -205,92 +212,58 @@ func (ed *EpochDownloader) loopDoEpochSync() {
 	}
 }
 
-type NodeStateDownloader struct {
+type StateDownloader struct {
 	*Downloader
-	savedVersions      *common.IdBitmap //save NodeState versions for nodeState saved in queue
-	chanFetchNodeState chan node.NodeState
-	NodeStateSyncQueue *common.LockFreePriorityQueue //look free height sorted queue for EpochInfos
+	savedVersions      *IdBitmap
+	chanFetchStateData chan []byte
+	stateSyncQueue     *LockFreePriorityQueue
 }
 
-func NewNodeStateDownloader(log tplog.Logger, marshaler codec.Marshaler, ctx context.Context) *NodeStateDownloader {
-	downloader := &NodeStateDownloader{
-		Downloader:         NewDownloader(log, marshaler, ctx),
-		savedVersions:      new(common.IdBitmap),
-		NodeStateSyncQueue: common.NewLKQueue(),
-	}
-	return downloader
+func (sd *StateDownloader) loopFetchStates() {
+
+}
+func (sd *StateDownloader) loopDoStateSync() {
+
 }
 
-func (nd *NodeStateDownloader) loopFetchNodeState() {
-	for {
-		select {
-		case v := <-nd.chanFetchNodeState:
-			version, _ := v.GetNodeLatestStateVersion()
-			if nd.savedVersions.Add(version) {
-				nd.NodeStateSyncQueue.Push(v, version)
-			}
-		case <-nd.chanQuitSync:
-			return
-		default:
-			continue
-		}
-	}
+type NodeDownloader struct {
+	*Downloader
+	savedVersions     *IdBitmap
+	chanFetchNodeData chan []byte
+	nodeSyncQueue     *LockFreePriorityQueue
 }
 
-func (nd *NodeStateDownloader) loopDoNodeStateSync() {
-	nd.requestInterval = time.NewTimer(RequestNodeStateInterval)
-	defer nd.requestInterval.Stop()
-	for {
-	getAgain:
-		version, err := nd.NodeStateSyncQueue.GetHeadPriority()
-		if err != nil || version == 0 {
-			goto getAgain
-		}
-		curNodeStateVersion, err := nd.servant.GetNodeLatestStateVersion()
-		if curNodeStateVersion == version {
-			nodeStateInterface := nd.NodeStateSyncQueue.PopHead()
-			nodeState := nodeStateInterface.(node.NodeState)
-			nodeStateVersion, _ := nodeState.GetNodeLatestStateVersion()
-			if nodeStateVersion > version {
-				nd.NodeStateSyncQueue.Push(nodeState, nodeStateVersion)
-			} else if nodeStateVersion < version {
-				goto getAgain
-			}
-			nd.savedVersions.Sub(curNodeStateVersion)
+func (nd *NodeDownloader) loopFetchNodes() {
 
-			nodeStateExec := func() {
-				//sync block to local
-			}
-			nodeStateExec()
-			nd.requestInterval.Reset(RequestNodeStateInterval)
-		} else if curNodeStateVersion > version {
-			nd.NodeStateSyncQueue.PopHead()
-			goto getAgain
-		}
+}
+func (nd *NodeDownloader) loopDoNodeSync() {
 
-		select {
-		case <-nd.chanQuitSync:
-			return
-		case <-nd.requestInterval.C:
+}
 
-			nodeStateRequest := &NodeRequest{
-				StateVersion:         curNodeStateVersion,
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     nil,
-				XXX_sizecache:        0,
-			}
-			data, _ := nd.marshaler.Marshal(nodeStateRequest)
-			syncMsg := SyncMessage{
-				MsgType: SyncMessage_NodeStateRequest,
-				Data:    data,
-			}
+type ChainDownloader struct {
+	*Downloader
+	savedVersions      *IdBitmap
+	chanFetchChainData chan []byte
+	chainSyncQueue     *LockFreePriorityQueue
+}
 
-			syncData, _ := nd.marshaler.Marshal(&syncMsg)
-			nd.servant.Send(nd.ctx, protocol.SyncProtocolID_Block, MOD_NAME, syncData)
-			nd.savedVersions.Sub(curNodeStateVersion)
-			nd.requestInterval.Reset(RequestNodeStateInterval)
-		default:
-			continue
-		}
-	}
+func (cd *ChainDownloader) loopFetchChains() {
+
+}
+func (cd *ChainDownloader) loopDoChainSync() {
+
+}
+
+type AccountDownloader struct {
+	*Downloader
+	savedVersions        *IdBitmap
+	chanFetchAccountData chan []byte
+	accountSyncQueue     *LockFreePriorityQueue
+}
+
+func (ad *AccountDownloader) loopFetchAccounts() {
+
+}
+func (ad *AccountDownloader) loopDoAccountSync() {
+
 }

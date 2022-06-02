@@ -1,4 +1,4 @@
-package common
+package sync
 
 import "sync/atomic"
 

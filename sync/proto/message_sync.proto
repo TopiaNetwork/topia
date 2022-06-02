@@ -18,14 +18,10 @@ message SyncMessage {
     BlockResponse = 3;
     StateRequest = 4;
     StateResponse = 5;
-    EpochRequest = 6;
-    EpochResponse = 7;
-    NodeStateRequest = 8;
-    NodeStateResponse = 9;
-    AccountStateRequest = 10;
-    AccountStateResponse = 11;
-    ChainStateRequest = 12;
-    ChainStateResponse = 13;
+    EpochResponse = 6;
+    NodeStateResponse = 7;
+    AccountStateResponse = 8;
+    ChainStateResponse = 9;
 
   };
 
@@ -85,5 +81,17 @@ message EpochResponse {
 message NodeResponse{
   uint64 StateVersion = 1 [(gogoproto.jsontag)  = "stateVersion"];
   bytes NodeRoot = 2 [(gogoproto.jsontag)  = "nodeRoot"];
+  bytes StateData = 3 [(gogoproto.jsontag)  = "stateData"];
+}
+
+message ChainResponse{
+  uint64 StateVersion = 1 [(gogoproto.jsontag)  = "stateVersion"];
+  bytes ChainRoot = 2 [(gogoproto.jsontag)  = "chainRoot"];
+  bytes StateData = 3 [(gogoproto.jsontag)  = "stateData"];
+}
+
+message AccountResponse{
+  uint64 StateVersion = 1 [(gogoproto.jsontag)  = "stateVersion"];
+  bytes AccountRoot = 2 [(gogoproto.jsontag)  = "accountRoot"];
   bytes StateData = 3 [(gogoproto.jsontag)  = "stateData"];
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
 	txfactory "github.com/TopiaNetwork/topia/transaction"
@@ -47,9 +48,9 @@ func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, tx
 
 		packedTxsRS.TxsResult = append(packedTxsRS.TxsResult, *txRS)
 	}
-	log.Infof("Execution of packed txs finish executing tx: state version %d, tx count %d, self node %s", ept.packedTxs.StateVersion, len(ept.packedTxs.TxList), ept.nodeID)
-
+	log.Infof("Execution of packed txs start generating tx rs root: state version %d, tx count %d, self node %s", ept.packedTxs.StateVersion, len(ept.packedTxs.TxList), ept.nodeID)
 	packedTxsRS.TxRSRoot = basic.TxResultRoot(packedTxsRS.TxsResult, ept.packedTxs.TxList)
+	log.Infof("Execution of packed txs finish generating tx rs root: state version %d, tx count %d, self node %s", ept.packedTxs.StateVersion, len(ept.packedTxs.TxList), ept.nodeID)
 
 	return &packedTxsRS, nil
 }

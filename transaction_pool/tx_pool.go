@@ -303,14 +303,11 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local bool) []er
 	if len(news) == 0 {
 		return errs
 	}
-	fmt.Println("addTxs 001 txs", news)
 	// Process all the new transaction and merge any errors into the original slice
-	newErrs, dirtyAddrCache := pool.addTxsLocked(news, local)
-	fmt.Println("addTxs 002 newErrs,dirtyAddrCache", newErrs, dirtyAddrCache)
+	_, dirtyAddrCache := pool.addTxsLocked(news, local)
 
 	// Reorg the pool internals if needed and return
 	done := pool.requestTurnToPending(dirtyAddrCache)
-	fmt.Println("requestTurnToPending done")
 	<-done
 	return errs
 }
@@ -320,18 +317,16 @@ func (pool *transactionPool) addTxsLocked(txs []*txbasic.Transaction, local bool
 	errs := make([]error, len(txs))
 	for i, tx := range txs {
 		replaced, err := pool.add(tx, local)
-		fmt.Println("addTxsLocked 001 replaced,err", replaced, err)
 		errs[i] = err
 		if err == nil && !replaced {
 			dirtyAccounts.addTx(tx)
-			fmt.Println("addTxsLocked 002 dirtyAccounts.flatten", dirtyAccounts.flatten())
 
 		}
 	}
 	return errs, dirtyAccounts
 }
 
-func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID, isLocal bool) error {
+func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error {
 	defer func(t0 time.Time) {
 		pool.log.Infof("Update transaction cost time:", time.Since(t0))
 	}(time.Now())
@@ -346,7 +341,7 @@ func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxI
 			pool.RemoveTxByKey(txKey)
 			txs := make([]*txbasic.Transaction, 0)
 			txs = append(txs, tx)
-			pool.addTxs(txs, isLocal)
+			pool.addTxs(txs, true)
 		}
 		return nil
 	default:
@@ -629,7 +624,6 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 				}
 			}
 			pool.queues.replaceExecutablesDropOverLimit(fl2, pool.config.MaxSizeOfEachQueueAccount, category, addr)
-			fmt.Println("replaceExecutablesDropOverLimit done")
 
 			// Delete the entire queue entry if it became empty.
 			pool.queues.replaceExecutablesDeleteEmpty(category, addr)

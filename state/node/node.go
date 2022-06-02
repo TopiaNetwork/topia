@@ -13,6 +13,8 @@ const StateStore_Name_Node = "node"
 type NodeState interface {
 	GetNodeStateRoot() ([]byte, error)
 
+	GetNodeLatestStateVersion() (uint64, error)
+
 	IsNodeExist(nodeID string) bool
 
 	GetAllConsensusNodeIDs() ([]string, error)
@@ -58,6 +60,9 @@ func NewNodeState(stateStore tplgss.StateStore, inactiveState NodeInactiveState,
 
 func (ns *nodeState) GetNodeStateRoot() ([]byte, error) {
 	return ns.Root(StateStore_Name_Node)
+}
+func (ns *nodeState) GetNodeLatestStateVersion() (uint64, error) {
+	return ns.StateLatestVersion()
 }
 
 func (ns *nodeState) IsNodeExist(nodeID string) bool {

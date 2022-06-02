@@ -15,6 +15,8 @@ type Service interface {
 
 	StateQueryService() StateQueryService
 
+	StateQueryServiceAt(version uint64) StateQueryService
+
 	NetworkService() NetworkService
 
 	BlockService() BlockService
@@ -69,7 +71,13 @@ func (s *service) SetTxPool(txPool txpooli.TransactionPool) {
 
 func (s *service) StateQueryService() StateQueryService {
 	var sqProxyObj stateQueryProxyObject
-	stateQueryProxy(s.log, s.ledger, &sqProxyObj)
+	stateQueryProxy(s.log, s.ledger, &sqProxyObj, nil)
+	return &sqProxyObj
+}
+
+func (s *service) StateQueryServiceAt(version uint64) StateQueryService {
+	var sqProxyObj stateQueryProxyObject
+	stateQueryProxy(s.log, s.ledger, &sqProxyObj, &version)
 	return &sqProxyObj
 }
 

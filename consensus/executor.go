@@ -499,12 +499,13 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 		e.log.Errorf("Execute state version %d packed txs err from local: %v", packedTxs.StateVersion, err)
 		return err
 	}
-	txRSRoot := txbasic.TxResultRoot(txsRS.TxsResult, packedTxs.TxList)
 
-	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
+	e.log.Infof("Executor starts making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
+	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txsRS.TxRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {
 		return err
 	}
+	e.log.Infof("Executor finishes making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
 
 	activeExecutors, _ := compState.GetActiveExecutorIDs()
 

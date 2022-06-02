@@ -546,7 +546,7 @@ func Test_transactionPool_UpdateTx(t *testing.T) {
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
 	//update failed for low gasprice
-	pool.UpdateTx(Tx3, Key1, true)
+	pool.UpdateTx(Tx3, Key1)
 	want := make([]txbasic.TxID, 0)
 	got := make([]txbasic.TxID, 0)
 	want = append(want, Key1)
@@ -557,7 +557,7 @@ func Test_transactionPool_UpdateTx(t *testing.T) {
 	}
 	assert.EqualValues(t, want, got)
 	//updated for higher gasprice
-	pool.UpdateTx(Tx4, Key2, true)
+	pool.UpdateTx(Tx4, Key2)
 	want = make([]txbasic.TxID, 0)
 	got = make([]txbasic.TxID, 0)
 	want = append(want, Key1)

@@ -129,3 +129,10 @@ func GenerateRandomNumber(start int, end int, count int) []int {
 
 	return nums
 }
+
+func MinUint64(x, y uint64) uint64 {
+	if x > y {
+		return y
+	}
+	return x
+}

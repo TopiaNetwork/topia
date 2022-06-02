@@ -91,6 +91,65 @@ func (e *consensusExecutor) notPrepareMsgLaunchedSet(stateVersion uint64) bool {
 	return false
 }
 
+func (e *consensusExecutor) UnmarshalTxsOfPreparePackedMessage(txs [][]byte) ([]*txbasic.Transaction, error) {
+	txSize := len(txs)
+	receivedTxList := make([]*txbasic.Transaction, txSize)
+	errRtn := error(nil)
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	forceExitCh := make(chan bool)
+	for i := 0; i < txSize; {
+		startIndex := i
+		endIndex := i + 500
+		if endIndex >= txSize {
+			endIndex = txSize
+		}
+
+		wg.Add(1)
+		go func(startI, endI int) {
+			defer wg.Done()
+
+			for m := startI; m < endI; m++ {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					var tx txbasic.Transaction
+					err := e.marshaler.Unmarshal(txs[m], &tx)
+					if err != nil {
+						err = fmt.Errorf("Invalid tx from prepare packed msg exe: marshal err %v", err)
+						e.log.Errorf("%v", err)
+						errRtn = err
+						forceExitCh <- true
+						return
+					}
+
+					receivedTxList[m] = &tx
+				}
+			}
+		}(startIndex, endIndex)
+
+		i = endIndex
+	}
+
+	var waitWG sync.WaitGroup
+	waitWG.Add(1)
+	go func() {
+		defer waitWG.Done()
+		if forceExit := <-forceExitCh; forceExit {
+			cancel()
+		}
+	}()
+
+	wg.Wait()
+
+	forceExitCh <- true
+
+	waitWG.Wait()
+
+	return receivedTxList, errRtn
+}
+
 func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Context) {
 	go func() {
 		for {
@@ -126,17 +185,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					//continue, tmp
 				}
 
-				var receivedTxList []*txbasic.Transaction
-				for i := 0; i < len(perparePMExe.Txs); i++ {
-					var tx txbasic.Transaction
-
-					err = e.marshaler.Unmarshal(perparePMExe.Txs[i], &tx)
-					if err != nil {
-						e.log.Errorf("Invalid tx from pepare packed msg exe: marshal err %v", err)
-						break
-					}
-					receivedTxList = append(receivedTxList, &tx)
-				}
+				receivedTxList, err := e.UnmarshalTxsOfPreparePackedMessage(perparePMExe.Txs)
 				if err != nil {
 					continue
 				}
@@ -383,15 +432,37 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		TxResultRoot:    txRSRoot,
 	}
 
-	for i := 0; i < len(txList); i++ {
-		txBytes, _ := e.marshaler.Marshal(txList[i])
-		exePPM.Txs = append(exePPM.Txs, txBytes)
+	var wg sync.WaitGroup
+	txSize := len(txList)
+	exePPM.Txs = make([][]byte, txSize)
+	proposePPM.TxHashs = make([][]byte, txSize)
+	proposePPM.TxResultHashs = make([][]byte, txSize)
+	for i := 0; i < txSize; {
+		startIndex := i
+		endIndex := i + 500
+		if endIndex >= txSize {
+			endIndex = txSize
+		}
 
-		txHashBytes, _ := txList[i].HashBytes()
-		txRSHashBytes, _ := txResultList[i].HashBytes()
-		proposePPM.TxHashs = append(proposePPM.TxHashs, txHashBytes)
-		proposePPM.TxResultHashs = append(proposePPM.TxResultHashs, txRSHashBytes)
+		wg.Add(1)
+		go func(startI, endI int) {
+			defer wg.Done()
+
+			for m := startI; m < endIndex; m++ {
+				txBytes, _ := e.marshaler.Marshal(txList[m])
+				txHashBytes, _ := txList[m].HashBytes()
+				txRSHashBytes, _ := txResultList[m].HashBytes()
+
+				exePPM.Txs[m] = txBytes
+				proposePPM.TxHashs[m] = txHashBytes
+				proposePPM.TxResultHashs[m] = txRSHashBytes
+			}
+		}(startIndex, endIndex)
+
+		i = endIndex
 	}
+
+	wg.Wait()
 
 	return exePPM, proposePPM, nil
 }
@@ -428,12 +499,13 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 		e.log.Errorf("Execute state version %d packed txs err from local: %v", packedTxs.StateVersion, err)
 		return err
 	}
-	txRSRoot := txbasic.TxResultRoot(txsRS.TxsResult, packedTxs.TxList)
 
-	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
+	e.log.Infof("Executor starts making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
+	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txsRS.TxRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {
 		return err
 	}
+	e.log.Infof("Executor finishes making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
 
 	activeExecutors, _ := compState.GetActiveExecutorIDs()
 

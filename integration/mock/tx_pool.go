@@ -26,7 +26,7 @@ type TransactionPoolMock struct {
 	nodeID       string
 	cryptService tpcrt.CryptService
 	sync         sync.RWMutex
-	pendingTxs   []txbasic.Transaction //tx hex hash -> Transaction
+	pendingTxs   map[txbasic.TxID]*txbasic.Transaction //tx hex hash -> Transaction
 }
 
 func (txm *TransactionPoolMock) PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error) {
@@ -76,6 +76,7 @@ func NewTransactionPoolMock(log tplog.Logger, nodeID string, cryptService tpcrt.
 		log:          log,
 		nodeID:       nodeID,
 		cryptService: cryptService,
+		pendingTxs:   make(map[txbasic.TxID]*txbasic.Transaction),
 	}
 
 	for i := 0; i < 5; i++ {
@@ -85,7 +86,9 @@ func NewTransactionPoolMock(log tplog.Logger, nodeID string, cryptService tpcrt.
 		tx := txuni.ConstructTransactionWithUniversalTransfer(log, cryptService, fromPriKey, fromPriKey, uint64(i+1), 200, 500, toAddr,
 			[]txuni.TargetItem{{currency.TokenSymbol_Native, big.NewInt(10)}})
 
-		txPool.pendingTxs = append(txPool.pendingTxs, *tx)
+		txID, _ := tx.TxID()
+
+		txPool.pendingTxs[txID] = tx
 	}
 
 	return txPool
@@ -100,12 +103,8 @@ func (txm *TransactionPoolMock) RemoveTxByKey(key txbasic.TxID) error {
 	txm.sync.Lock()
 	defer txm.sync.Unlock()
 
-	for i, tx := range txm.pendingTxs {
-		txHash, _ := tx.TxID()
-		if txHash == key {
-			txm.pendingTxs = append(txm.pendingTxs[:i], txm.pendingTxs[i+1:]...)
-			i--
-		}
+	if _, ok := txm.pendingTxs[key]; ok {
+		delete(txm.pendingTxs, key)
 	}
 
 	return nil
@@ -122,8 +121,10 @@ func (txm *TransactionPoolMock) Pending() ([]*txbasic.Transaction, error) {
 
 	newTxs := make([]*txbasic.Transaction, len(txm.pendingTxs))
 
-	for i, tx := range txm.pendingTxs {
-		newTxs[i] = &tx
+	i := 0
+	for _, tx := range txm.pendingTxs {
+		newTxs[i] = tx
+		i++
 	}
 
 	return newTxs, nil
@@ -163,7 +164,9 @@ func (txm *TransactionPoolMock) produceTxsTimer(ctx context.Context) {
 						tx := txuni.ConstructTransactionWithUniversalTransfer(txm.log, txm.cryptService, fromPriKey, fromPriKey, uint64(i+1), 200, 500, toAddr,
 							[]txuni.TargetItem{{currency.TokenSymbol_Native, big.NewInt(10)}})
 
-						txm.pendingTxs = append(txm.pendingTxs, *tx)
+						txID, _ := tx.TxID()
+
+						txm.pendingTxs[txID] = tx
 					}
 
 					return nil

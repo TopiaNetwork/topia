@@ -98,7 +98,7 @@ func getAllProxyObjectsSub(rv reflect.Value) []interface{} {
 	return out
 }
 
-func stateQueryProxy(log tplog.Logger, ledger ledger.Ledger, proxyObject interface{}) {
+func stateQueryProxy(log tplog.Logger, ledger ledger.Ledger, proxyObject interface{}, version *uint64) {
 	proxyObjs := GetProxyObjects(proxyObject)
 	for _, proxy := range proxyObjs {
 		proxyEle := reflect.ValueOf(proxy).Elem()
@@ -106,7 +106,12 @@ func stateQueryProxy(log tplog.Logger, ledger ledger.Ledger, proxyObject interfa
 			field := proxyEle.Type().Field(f)
 
 			proxyEle.Field(f).Set(reflect.MakeFunc(field.Type, func(args []reflect.Value) (results []reflect.Value) {
-				compStateRN := state.CreateCompositionStateReadonly(log, ledger)
+				var compStateRN state.CompositionStateReadonly
+				if version == nil {
+					compStateRN = state.CreateCompositionStateReadonly(log, ledger)
+				} else {
+					compStateRN = state.CreateCompositionStateReadonlyAt(log, ledger, *version)
+				}
 				defer compStateRN.Stop()
 
 				csRN := reflect.ValueOf(compStateRN)

@@ -34,12 +34,9 @@ func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, tx
 		StateVersion: ept.packedTxs.StateVersion,
 	}
 
-	log.Infof("Execution of packed txs begin to execute tx: state version %d, self node %s", ept.packedTxs.StateVersion, ept.nodeID)
-
-	for i, txItem := range ept.packedTxs.TxList {
-		log.Infof("Execution of packed txs begin to execute tx: state version %d, tx %d, self node %s", ept.packedTxs.StateVersion, i, ept.nodeID)
+	log.Infof("Execution of packed txs start executing tx: state version %d, tx count %d, self node %s", ept.packedTxs.StateVersion, len(ept.packedTxs.TxList), ept.nodeID)
+	for _, txItem := range ept.packedTxs.TxList {
 		txRS := txfactory.CreatTransactionAction(txItem).Execute(ctx, log, ept.nodeID, txServant)
-		log.Infof("Execution of packed txs finish executing tx: state version %d, tx %d, self node %s", ept.packedTxs.StateVersion, i, ept.nodeID)
 
 		if txRS == nil {
 			txHexHash, _ := txItem.HashHex()
@@ -50,6 +47,7 @@ func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, tx
 
 		packedTxsRS.TxsResult = append(packedTxsRS.TxsResult, *txRS)
 	}
+	log.Infof("Execution of packed txs finish executing tx: state version %d, tx count %d, self node %s", ept.packedTxs.StateVersion, len(ept.packedTxs.TxList), ept.nodeID)
 
 	packedTxsRS.TxRSRoot = basic.TxResultRoot(packedTxsRS.TxsResult, ept.packedTxs.TxList)
 

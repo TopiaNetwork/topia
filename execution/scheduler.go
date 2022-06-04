@@ -91,7 +91,7 @@ func (scheduler *executionScheduler) State() SchedulerState {
 
 func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error) {
 	scheduler.log.Infof("Scheduler try to fetch the execution lock: state version %d, self node %s", txPacked.StateVersion, scheduler.nodeID)
-	if ok := scheduler.executeMutex.TryLockTimeout(10 * time.Second); !ok {
+	if ok := scheduler.executeMutex.TryLockTimeout(60 * time.Second); !ok {
 		err := fmt.Errorf("A packedTxs is executing, try later again")
 		scheduler.log.Errorf("%v", err)
 		return nil, err
@@ -184,6 +184,10 @@ func (scheduler *executionScheduler) MaxStateVersion(log tplog.Logger, ledger le
 
 	if scheduler.exePackedTxsList.Len() > 0 {
 		exeTxsL := scheduler.exePackedTxsList.Back().Value.(*executionPackedTxs)
+		if latestBlock.Head.Height > exeTxsL.StateVersion() {
+			scheduler.log.Warnf("The latest height %d bigger than the latest state version %d", latestBlock.Head.Height, exeTxsL.StateVersion())
+			return maxStateVersion, nil
+		}
 		maxStateVersion = exeTxsL.StateVersion()
 	}
 

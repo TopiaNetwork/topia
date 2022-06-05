@@ -352,7 +352,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
-	if p.lastProposeHeight == 0 || (addedBlock != nil && addedBlock.Head.Height > p.lastBlockHeight) {
+	if p.lastProposeHeight == 0 || latestBlock.Head.Height > p.lastBlockHeight {
 		p.lastBlockHeight = latestBlock.Head.Height
 		p.lastProposeHeight = latestBlock.Head.Height
 		p.newHeightStartTimeStamp = time.Now()

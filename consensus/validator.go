@@ -308,19 +308,19 @@ func (v *consensusValidator) validateAndCollectProposeMsg(ctx context.Context, m
 		propMsg.StateVersion == v.propMsgCached.StateVersion {
 
 		if string(v.propMsgCached.Proposer) == propProposer {
-			v.log.Errorf("Same propose msg has existed from same proposer, so will discard: proposer %s, self node %s", propProposer, v.nodeID)
+			v.log.Errorf("Same propose msg has existed from same proposer, so will discard: state version %d, proposer %s, self node %s", propMsg.StateVersion, propProposer, v.nodeID)
 			return false, canCollectStart
 		}
 
 		cachedMaxPri := v.propMsgCached.MaxPri
 		if new(big.Int).SetBytes(cachedMaxPri).Cmp(new(big.Int).SetBytes(maxPri)) < 0 {
+			v.log.Infof("New prop pri bigger than cache: state version %d, cache proposer %s, new prop proposer %s, self node %s", propMsg.StateVersion, string(v.propMsgCached.Proposer), propProposer, v.nodeID)
 			v.propMsgCached = propMsg
 			if string(v.propMsgCached.Proposer) == v.nodeID {
 				canCollectStart = true
 			}
-			v.log.Infof("New prop pri bigger than cache: cache proposer %s, new prop proposer %s, self node %s", string(v.propMsgCached.Proposer), propProposer, v.nodeID)
 		} else {
-			v.log.Errorf("Have received bigger pri propose block and can't process forward: received proposer %s, new prop proposer %s, self node %s", string(v.propMsgCached.Proposer), propProposer, v.nodeID)
+			v.log.Errorf("Have received bigger pri propose block and can't process forward: state version %d, received proposer %s, new prop proposer %s, self node %s", propMsg.StateVersion, string(v.propMsgCached.Proposer), propProposer, v.nodeID)
 			return false, canCollectStart
 		}
 	} else { //new propose message

@@ -265,7 +265,7 @@ func (v *consensusValidator) receiveBestProposeMsgStart(ctx context.Context) {
 func (v *consensusValidator) collectProposeMsgTimerStart(ctx context.Context) {
 	go func(ctxSub context.Context) {
 		v.log.Infof("Begin collectProposeMsgTimerStart, self node %s", v.nodeID)
-		timer := time.NewTimer(2000 * time.Millisecond)
+		timer := time.NewTimer(500 * time.Millisecond)
 		defer timer.Stop()
 
 		select {

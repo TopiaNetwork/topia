@@ -69,6 +69,8 @@ func (builder *CompositionStateBuilder) createCompositionStateOfNode(log tplog.L
 			//compState.Lock()
 			//defer compState.Unlock()
 
+			log.Infof("CompositionState %d: input stateVersion %d, requester=%s, sVer=%d, self node %s", compState.StateVersion(), stateVersion, requester, sVer, compStateOfNode.nodeID)
+
 			if compState.CompSState() == CompSState_Commited {
 				delete(compStateOfNode.compStates, compState.StateVersion())
 				log.Infof("Delete CompositionState %d: input stateVersion %d, requester=%s, self node %s", compState.StateVersion(), stateVersion, requester, compStateOfNode.nodeID)
@@ -90,6 +92,7 @@ func (builder *CompositionStateBuilder) createCompositionStateOfNode(log tplog.L
 		}()
 	}
 
+	log.Infof("Avail CompositionState: input stateVersion %d, requester=%s, availCompStateCnt=%d, needCreation=%v, self node %s", stateVersion, requester, availCompStateCnt, needCreation, compStateOfNode.nodeID)
 	if availCompStateCnt >= MaxAvail_Count && needCreation {
 		log.Errorf("Can't create new CompositionState because of reaching max available value %d: availCompStateCnt %d, stateVersion %d, availCompStateVersions %v, requester=%s, self node %s",
 			MaxAvail_Count, availCompStateCnt, stateVersion, availCompStateVersions, requester, compStateOfNode.nodeID)

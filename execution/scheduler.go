@@ -353,17 +353,21 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 		scheduler.log.Errorf("Set latest block err when CommitBlock: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock set latest block: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	err = compState.SetLatestBlockResult(blockRS)
 	if err != nil {
 		scheduler.log.Errorf("Set latest block result err when CommitBlock: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock set latest block result: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	latestEpoch, err := compState.GetLatestEpoch()
 	if err != nil {
 		scheduler.log.Errorf("Can't get latest epoch error: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock get latest epoch: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	var newEpoch *tpcmm.EpochInfo
 	deltaH := int(block.Head.Height) - int(latestEpoch.StartHeight)

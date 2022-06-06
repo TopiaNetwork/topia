@@ -397,7 +397,7 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 	}
 	*/
 
-	scheduler.log.Infof("CommitBlock begins updating comp state: stateVersion %s, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+	scheduler.log.Infof("CommitBlock begins updating comp state: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	compState.UpdateCompSState(state.CompSState_Commited)
 

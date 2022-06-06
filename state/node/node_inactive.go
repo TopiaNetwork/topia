@@ -17,7 +17,7 @@ const (
 )
 
 type NodeInactiveState interface {
-	GetNodeInactiveStateRoot() ([]byte, error)
+	GetNodeInactiveRoot() ([]byte, error)
 
 	IsExistInactiveNode(nodeID string) bool
 
@@ -49,7 +49,7 @@ func NewNodeInactiveState(stateStore tplgss.StateStore) NodeInactiveState {
 	}
 }
 
-func (ns *nodeInactiveState) GetNodeInactiveStateRoot() ([]byte, error) {
+func (ns *nodeInactiveState) GetNodeInactiveRoot() ([]byte, error) {
 	return ns.Root(StateStore_Name_NodeInactive)
 }
 

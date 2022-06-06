@@ -11,7 +11,7 @@ import (
 const StateStore_Name_Node = "node"
 
 type NodeState interface {
-	GetNodeStateRoot() ([]byte, error)
+	GetNodeRoot() ([]byte, error)
 
 	IsNodeExist(nodeID string) bool
 
@@ -56,7 +56,7 @@ func NewNodeState(stateStore tplgss.StateStore, inactiveState NodeInactiveState,
 	}
 }
 
-func (ns *nodeState) GetNodeStateRoot() ([]byte, error) {
+func (ns *nodeState) GetNodeRoot() ([]byte, error) {
 	return ns.Root(StateStore_Name_Node)
 }
 

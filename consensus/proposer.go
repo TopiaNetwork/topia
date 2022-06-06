@@ -304,7 +304,7 @@ func (p *consensusProposer) bestProposeMsgTimerStart(ctx context.Context) contex
 	ctxControl, cancel := context.WithCancel(context.Background())
 	go func(ctxSub context.Context) {
 		p.log.Infof("Begin bestProposeMsgTimerStart, self node %s", p.nodeID)
-		timer := time.NewTimer(2 * p.blockMaxCyclePeriod)
+		timer := time.NewTimer(3 * p.blockMaxCyclePeriod)
 		defer timer.Stop()
 
 		select {
@@ -352,7 +352,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		}
 	}
 
-	if p.lastProposeHeight == 0 || (addedBlock != nil && addedBlock.Head.Height > p.lastBlockHeight) {
+	if p.lastProposeHeight == 0 || latestBlock.Head.Height > p.lastBlockHeight {
 		p.lastBlockHeight = latestBlock.Head.Height
 		p.lastProposeHeight = latestBlock.Head.Height
 		p.newHeightStartTimeStamp = time.Now()
@@ -367,6 +367,9 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	if _, ok := p.proposedRecord[latestBlock.Head.Height]; ok {
 		err = fmt.Errorf("Have sucessfully proposed based on height %d, self node %s", latestBlock.Head.Height, p.nodeID)
 		p.log.Warnf("%s", err.Error())
+		if time.Since(p.newHeightStartTimeStamp).Milliseconds() > 10*p.blockMaxCyclePeriod.Milliseconds() {
+			p.log.Warn("Must be time out")
+		}
 		return err
 	}
 
@@ -483,10 +486,12 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 		for {
 			select {
 			case addedBlock := <-p.blockAddedCh:
+				p.log.Infof("Proposer receives block added event: height %d, self node %s", addedBlock.Head.Height, p.nodeID)
 				if err := p.proposeBlockSpecification(ctx, addedBlock); err != nil {
 					continue
 				}
 			case <-timer.C:
+				p.log.Infof("Proposer propose time out: self node %s", p.nodeID)
 				if err := p.proposeBlockSpecification(ctx, nil); err != nil {
 					continue
 				}

@@ -35,6 +35,12 @@ type CompositionStateReadonly interface {
 
 	NetworkType() common.NetworkType
 
+	GetAccountRoot() ([]byte, error)
+
+	GetAccountProof(addr tpcrtypes.Address) ([]byte, error)
+
+	IsAccountExist(addr tpcrtypes.Address) bool
+
 	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
@@ -43,9 +49,31 @@ type CompositionStateReadonly interface {
 
 	GetAllAccounts() ([]*tpacc.Account, error)
 
+	GetChainRoot() ([]byte, error)
+
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
 	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
+
+	GetNodeRoot() ([]byte, error)
+
+	GetNodeExecutorRoot() ([]byte, error)
+
+	GetNodeProposerRoot() ([]byte, error)
+
+	GetNodeValidatorRoot() ([]byte, error)
+
+	GetNodeInactiveRoot() ([]byte, error)
+
+	IsNodeExist(nodeID string) bool
+
+	IsExistActiveExecutor(nodeID string) bool
+
+	IsExistActiveProposer(nodeID string) bool
+
+	IsExistActiveValidator(nodeID string) bool
+
+	IsExistInactiveNode(nodeID string) bool
 
 	GetAllConsensusNodeIDs() ([]string, error)
 
@@ -78,6 +106,8 @@ type CompositionStateReadonly interface {
 	GetActiveProposersTotalWeight() (uint64, error)
 
 	GetActiveValidatorsTotalWeight() (uint64, error)
+
+	GetEpochRoot() ([]byte, error)
 
 	GetLatestEpoch() (*common.EpochInfo, error)
 
@@ -266,37 +296,37 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 		return nil, err
 	}
 
-	inactiveRoot, err := cs.GetNodeInactiveStateRoot()
+	inactiveRoot, err := cs.GetNodeInactiveRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get inactive node state root: %v", err)
 		return nil, err
 	}
 
-	nodeRoot, err := cs.GetNodeStateRoot()
+	nodeRoot, err := cs.GetNodeRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get node state root: %v", err)
 		return nil, err
 	}
 
-	nodeExecutorRoot, err := cs.GetNodeExecutorStateRoot()
+	nodeExecutorRoot, err := cs.GetNodeExecutorRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get node executor state root: %v", err)
 		return nil, err
 	}
 
-	nodeProposerRoot, err := cs.GetNodeProposerStateRoot()
+	nodeProposerRoot, err := cs.GetNodeProposerRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get node proposer state root: %v", err)
 		return nil, err
 	}
 
-	nodeValidatorRoot, err := cs.GetNodeValidatorStateRoot()
+	nodeValidatorRoot, err := cs.GetNodeValidatorRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get node validator state root: %v", err)
 		return nil, err
 	}
 
-	roundRoot, err := cs.GetRoundStateRoot()
+	epochRoot, err := cs.GetEpochRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get epoch state root: %v", err)
 		return nil, err
@@ -310,7 +340,7 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 	tree.Update(nodeExecutorRoot, nodeExecutorRoot)
 	tree.Update(nodeProposerRoot, nodeProposerRoot)
 	tree.Update(nodeValidatorRoot, nodeValidatorRoot)
-	tree.Update(roundRoot, roundRoot)
+	tree.Update(epochRoot, epochRoot)
 
 	return tree.Root(), nil
 }

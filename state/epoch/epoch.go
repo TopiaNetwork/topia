@@ -14,7 +14,7 @@ const (
 )
 
 type EpochState interface {
-	GetRoundStateRoot() ([]byte, error)
+	GetEpochRoot() ([]byte, error)
 
 	GetLatestEpoch() (*tpcmm.EpochInfo, error)
 
@@ -32,7 +32,7 @@ func NewRoundState(stateStore tplgss.StateStore) EpochState {
 	}
 }
 
-func (es *epochState) GetRoundStateRoot() ([]byte, error) {
+func (es *epochState) GetEpochRoot() ([]byte, error) {
 	return es.Root(StateStore_Name_Epoch)
 }
 

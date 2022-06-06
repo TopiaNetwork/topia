@@ -17,7 +17,7 @@ const (
 )
 
 type NodeExecutorState interface {
-	GetNodeExecutorStateRoot() ([]byte, error)
+	GetNodeExecutorRoot() ([]byte, error)
 
 	IsExistActiveExecutor(nodeID string) bool
 
@@ -49,7 +49,7 @@ func NewNodeExecutorState(stateStore tplgss.StateStore) NodeExecutorState {
 	}
 }
 
-func (ns *nodeExecutorState) GetNodeExecutorStateRoot() ([]byte, error) {
+func (ns *nodeExecutorState) GetNodeExecutorRoot() ([]byte, error) {
 	return ns.Root(StateStore_Name_Exe)
 }
 

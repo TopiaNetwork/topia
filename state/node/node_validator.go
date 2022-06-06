@@ -17,7 +17,7 @@ const (
 )
 
 type NodeValidatorState interface {
-	GetNodeValidatorStateRoot() ([]byte, error)
+	GetNodeValidatorRoot() ([]byte, error)
 
 	IsExistActiveValidator(nodeID string) bool
 
@@ -49,7 +49,7 @@ func NewNodeValidatorState(stateStore tplgss.StateStore) NodeValidatorState {
 	}
 }
 
-func (ns *nodeValidatorState) GetNodeValidatorStateRoot() ([]byte, error) {
+func (ns *nodeValidatorState) GetNodeValidatorRoot() ([]byte, error) {
 	return ns.Root(StateStore_Name_Val)
 }
 

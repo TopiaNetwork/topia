@@ -1,7 +1,6 @@
 package state
 
 import (
-	"fmt"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"sync"
@@ -67,22 +66,10 @@ func (builder *CompositionStateBuilder) createCompositionStateOfNode(log tplog.L
 	var availCompStateVersions []uint64
 	for sVer, compState := range compStateOfNode.compStates {
 		func() {
-			compState.Lock()
-			defer compState.Unlock()
+			//compState.Lock()
+			//defer compState.Unlock()
 
 			if compState.CompSState() == CompSState_Commited {
-				if sVer == 3 {
-					csStateRN := CreateCompositionStateReadonly(log, ledger)
-					latestBlock, err := csStateRN.GetLatestBlock()
-					if err != nil {
-						err = fmt.Errorf("Can't get the latest block: %v", err)
-						csStateRN.Stop()
-					}
-					csStateRN.Stop()
-
-					log.Infof("latest block %d", latestBlock.Head.Height)
-				}
-
 				delete(compStateOfNode.compStates, compState.StateVersion())
 				log.Infof("Delete CompositionState %d: input stateVersion %d, requester=%s, self node %s", compState.StateVersion(), stateVersion, requester, compStateOfNode.nodeID)
 

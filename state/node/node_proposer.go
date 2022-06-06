@@ -17,7 +17,7 @@ const (
 )
 
 type NodeProposerState interface {
-	GetNodeProposerStateRoot() ([]byte, error)
+	GetNodeProposerRoot() ([]byte, error)
 
 	IsExistActiveProposer(nodeID string) bool
 
@@ -49,7 +49,7 @@ func NewNodeProposerState(stateStore tplgss.StateStore) NodeProposerState {
 	}
 }
 
-func (ns *nodeProposerState) GetNodeProposerStateRoot() ([]byte, error) {
+func (ns *nodeProposerState) GetNodeProposerRoot() ([]byte, error) {
 	return ns.Root(StateStore_Name_Prop)
 }
 

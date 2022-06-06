@@ -91,7 +91,7 @@ func (scheduler *executionScheduler) State() SchedulerState {
 
 func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error) {
 	scheduler.log.Infof("Scheduler try to fetch the execution lock: state version %d, self node %s", txPacked.StateVersion, scheduler.nodeID)
-	if ok := scheduler.executeMutex.TryLockTimeout(10 * time.Second); !ok {
+	if ok := scheduler.executeMutex.TryLockTimeout(60 * time.Second); !ok {
 		err := fmt.Errorf("A packedTxs is executing, try later again")
 		scheduler.log.Errorf("%v", err)
 		return nil, err
@@ -184,6 +184,10 @@ func (scheduler *executionScheduler) MaxStateVersion(log tplog.Logger, ledger le
 
 	if scheduler.exePackedTxsList.Len() > 0 {
 		exeTxsL := scheduler.exePackedTxsList.Back().Value.(*executionPackedTxs)
+		if latestBlock.Head.Height > exeTxsL.StateVersion() {
+			scheduler.log.Warnf("The latest height %d bigger than the latest state version %d", latestBlock.Head.Height, exeTxsL.StateVersion())
+			return maxStateVersion, nil
+		}
 		maxStateVersion = exeTxsL.StateVersion()
 	}
 
@@ -325,16 +329,24 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 	latestBlock *tpchaintypes.Block,
 	ledger ledger.Ledger,
 	requester string) error {
+	scheduler.log.Infof("Enter CommitBlock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	scheduler.syncCommitBlock.Lock()
 	defer scheduler.syncCommitBlock.Unlock()
+
+	scheduler.log.Infof("CommitBlock gets lock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	compState := state.GetStateBuilder().CreateCompositionState(scheduler.log, scheduler.nodeID, ledger, stateVersion, requester)
 	if compState == nil {
 		err := fmt.Errorf("Nil csState and can't commit block whose height %d, latest block height %d, self node %s", block.Head.Height, latestBlock.Head.Height, scheduler.nodeID)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock gets compState: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	compState.Lock()
 	defer compState.Unlock()
+
+	scheduler.log.Infof("CommitBlock gets compState lock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	err := compState.SetLatestBlock(block)
 	if err != nil {
@@ -368,11 +380,13 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 		}
 	}
 
+	scheduler.log.Infof("CommitBlock begins committing: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 	errCMMState := compState.Commit()
 	if errCMMState != nil {
 		scheduler.log.Errorf("Commit state version %d err: %v", compState.StateVersion(), errCMMState)
 		return errCMMState
 	}
+	scheduler.log.Infof("CommitBlock finished committing: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	/*ToDo Save new block and block result to block store
 	errCMMBlock := ledger.GetBlockStore().CommitBlock(block)
@@ -383,19 +397,9 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 	}
 	*/
 
+	scheduler.log.Infof("CommitBlock begins updating comp state: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	compState.UpdateCompSState(state.CompSState_Commited)
-
-	if stateVersion == 3 {
-		csStateRN := state.CreateCompositionStateReadonly(scheduler.log, ledger)
-		latestBlock, err := csStateRN.GetLatestBlock()
-		if err != nil {
-			err = fmt.Errorf("Can't get the latest block: %v", err)
-			csStateRN.Stop()
-		}
-		csStateRN.Stop()
-
-		scheduler.log.Infof("latest block %d", latestBlock.Head.Height)
-	}
 
 	scheduler.log.Infof("CompositionState changes to commited: state version %d, height %d, by %s, self node %s", compState.StateVersion(), block.Head.Height, requester, scheduler.nodeID)
 

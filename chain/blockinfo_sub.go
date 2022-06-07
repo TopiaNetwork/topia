@@ -117,6 +117,7 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	bsp.log.Infof("Process of pubsub message: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
 
 	csStateRN := state.CreateCompositionStateReadonly(bsp.log, bsp.ledger)
+	isExecutor := csStateRN.IsExistActiveExecutor(bsp.nodeID)
 	latestBlock, err := csStateRN.GetLatestBlock()
 	if err != nil {
 		err = fmt.Errorf("Can't get the latest block: %v, can't process pubsub message: height=%d", err, block.Head.Height)
@@ -130,7 +131,11 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	}
 
 	bsp.log.Infof("Process of pubsub message begins committing block: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
-	err = bsp.scheduler.CommitBlock(ctx, block.Head.Height, block, blockRS, latestBlock, bsp.ledger, "ChainBlockSubscriber")
+	cType := state.CompStateBuilderType_Full
+	if !isExecutor {
+		cType = state.CompStateBuilderType_Simple
+	}
+	err = bsp.scheduler.CommitBlock(ctx, block.Head.Height, block, blockRS, latestBlock, bsp.ledger, cType, "ChainBlockSubscriber")
 	if err != nil {
 		bsp.log.Errorf("Chain block subscriber CommitBlock err: %v, height %d, latest block %d, self node %s", err, block.Head.Height, latestBlock.Head.Height, bsp.nodeID)
 		return err

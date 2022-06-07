@@ -25,8 +25,8 @@ type epochState struct {
 	tplgss.StateStore
 }
 
-func NewRoundState(stateStore tplgss.StateStore) EpochState {
-	stateStore.AddNamedStateStore("epoch")
+func NewRoundState(stateStore tplgss.StateStore, cacheSize int) EpochState {
+	stateStore.AddNamedStateStore(StateStore_Name_Epoch, cacheSize)
 	return &epochState{
 		StateStore: stateStore,
 	}
@@ -37,7 +37,7 @@ func (es *epochState) GetEpochRoot() ([]byte, error) {
 }
 
 func (es *epochState) GetLatestEpoch() (*tpcmm.EpochInfo, error) {
-	latestEpochBytes, _, err := es.GetState(StateStore_Name_Epoch, []byte(LatestEpoch_Key))
+	latestEpochBytes, err := es.GetStateData(StateStore_Name_Epoch, []byte(LatestEpoch_Key))
 	if err != nil || latestEpochBytes == nil {
 		return nil, err
 	}

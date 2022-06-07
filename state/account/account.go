@@ -11,7 +11,7 @@ import (
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
-const StateStore_Name = "account"
+const StateStore_Name_Account = "account"
 
 type AccountState interface {
 	GetAccountRoot() ([]byte, error)
@@ -43,31 +43,31 @@ type accountState struct {
 	tplgss.StateStore
 }
 
-func NewAccountState(stateStore tplgss.StateStore) AccountState {
-	stateStore.AddNamedStateStore(StateStore_Name)
+func NewAccountState(stateStore tplgss.StateStore, cacheSize int) AccountState {
+	stateStore.AddNamedStateStore(StateStore_Name_Account, cacheSize)
 	return &accountState{
 		stateStore,
 	}
 }
 
 func (as *accountState) GetAccountRoot() ([]byte, error) {
-	return as.Root(StateStore_Name)
+	return as.Root(StateStore_Name_Account)
 }
 
 func (as *accountState) GetAccountProof(addr tpcrtypes.Address) ([]byte, error) {
-	_, proof, err := as.GetState(StateStore_Name, addr.Bytes())
+	_, proof, err := as.GetState(StateStore_Name_Account, addr.Bytes())
 
 	return proof, err
 }
 
 func (as *accountState) IsAccountExist(addr tpcrtypes.Address) bool {
-	isExist, _ := as.Exists(StateStore_Name, addr.Bytes())
+	isExist, _ := as.Exists(StateStore_Name_Account, addr.Bytes())
 
 	return isExist
 }
 
 func (as *accountState) GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error) {
-	accBytes, _, err := as.GetState(StateStore_Name, addr.Bytes())
+	accBytes, err := as.GetStateData(StateStore_Name_Account, addr.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (as *accountState) GetBalance(addr tpcrtypes.Address, symbol currency.Token
 }
 
 func (as *accountState) GetAllAccounts() ([]*tpacc.Account, error) {
-	keys, vals, _, err := as.GetAllState(StateStore_Name)
+	keys, vals, err := as.GetAllStateData(StateStore_Name_Account)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (as *accountState) AddAccount(acc *tpacc.Account) error {
 		return err
 	}
 
-	return as.Put(StateStore_Name, acc.Addr.Bytes(), accBytes)
+	return as.Put(StateStore_Name_Account, acc.Addr.Bytes(), accBytes)
 }
 
 func (as *accountState) UpdateAccount(account *tpacc.Account) error {
@@ -145,7 +145,7 @@ func (as *accountState) UpdateAccount(account *tpacc.Account) error {
 		return err
 	}
 
-	return as.Update(StateStore_Name, account.Addr.Bytes(), accBytes)
+	return as.Update(StateStore_Name_Account, account.Addr.Bytes(), accBytes)
 }
 
 func (as *accountState) UpdateNonce(addr tpcrtypes.Address, nonce uint64) error {

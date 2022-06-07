@@ -47,8 +47,8 @@ type nodeState struct {
 	NodeInactiveState
 }
 
-func NewNodeState(stateStore tplgss.StateStore, inactiveState NodeInactiveState, executorState NodeExecutorState, proposerState NodeProposerState, validatorState NodeValidatorState) NodeState {
-	stateStore.AddNamedStateStore(StateStore_Name_Node)
+func NewNodeState(stateStore tplgss.StateStore, inactiveState NodeInactiveState, executorState NodeExecutorState, proposerState NodeProposerState, validatorState NodeValidatorState, cacheSize int) NodeState {
+	stateStore.AddNamedStateStore(StateStore_Name_Node, cacheSize)
 	return &nodeState{
 		StateStore:         stateStore,
 		NodeInactiveState:  inactiveState,
@@ -100,7 +100,7 @@ func (ns *nodeState) GetAllConsensusNodeIDs() ([]string, error) {
 }
 
 func (ns *nodeState) GetNode(nodeID string) (*common.NodeInfo, error) {
-	nodeMetaInfoBytes, _, err := ns.GetState(StateStore_Name_Node, []byte(nodeID))
+	nodeMetaInfoBytes, err := ns.GetStateData(StateStore_Name_Node, []byte(nodeID))
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (ns *nodeState) GetDKGPartPubKeysForVerify() (map[string]string, error) {
 }
 
 func (ns *nodeState) UpdateWeight(nodeID string, weight uint64) error {
-	nodeMetaInfoBytes, _, err := ns.GetState(StateStore_Name_Node, []byte(nodeID))
+	nodeMetaInfoBytes, err := ns.GetStateData(StateStore_Name_Node, []byte(nodeID))
 	if err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func (ns *nodeState) UpdateWeight(nodeID string, weight uint64) error {
 }
 
 func (ns *nodeState) UpdateDKGPartPubKey(nodeID string, pubKey string) error {
-	nodeMetaInfoBytes, _, err := ns.GetState(StateStore_Name_Node, []byte(nodeID))
+	nodeMetaInfoBytes, err := ns.GetStateData(StateStore_Name_Node, []byte(nodeID))
 	if err != nil {
 		return err
 	}

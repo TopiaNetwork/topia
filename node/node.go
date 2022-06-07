@@ -36,6 +36,7 @@ type Node struct {
 	log       tplog.Logger
 	level     tplogcmm.LogLevel
 	sysActor  *actor.ActorSystem
+	role      string
 	marshaler codec.Marshaler
 	evHub     eventhub.EventHub
 	network   tpnet.Network
@@ -48,7 +49,7 @@ type Node struct {
 	service   service.Service
 }
 
-func NewNode(endPoint string, seed string) *Node {
+func NewNode(endPoint string, seed string, role string) *Node {
 	homeDir, _ := os.UserHomeDir()
 	chainRootPath := filepath.Join(homeDir, "topia")
 
@@ -91,6 +92,7 @@ func NewNode(endPoint string, seed string) *Node {
 		log:       mainLog,
 		level:     tplogcmm.InfoLevel,
 		sysActor:  sysActor,
+		role:      role,
 		marshaler: codec.CreateMarshaler(codec.CodecType_PROTO),
 		evHub:     evHub,
 		network:   network,
@@ -127,7 +129,11 @@ func (n *Node) Start() {
 	var latestEpochInfo *tpcmm.EpochInfo
 	var latestBlock *tpchaintypes.Block
 	if n.ledger.State() == tpcmm.LedgerState_Uninitialized {
-		compState := state.GetStateBuilder().CompositionState(n.network.ID(), 1)
+		cType := state.CompStateBuilderType_Full
+		if n.role != "executor" {
+			cType = state.CompStateBuilderType_Simple
+		}
+		compState := state.GetStateBuilder(cType).CompositionState(n.network.ID(), 1)
 		err = compState.SetLatestEpoch(n.config.Genesis.Epon)
 		if err != nil {
 			n.log.Panicf("Set latest epoch of genesis error: %v", err)

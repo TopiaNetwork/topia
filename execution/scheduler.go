@@ -50,7 +50,7 @@ type ExecutionScheduler interface {
 
 	ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error)
 
-	CommitBlock(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockRS *tpchaintypes.BlockResult, latestBlock *tpchaintypes.Block, ledger ledger.Ledger, requester string) error
+	CommitBlock(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockRS *tpchaintypes.BlockResult, latestBlock *tpchaintypes.Block, ledger ledger.Ledger, cType state.CompStateBuilderType, requester string) error
 
 	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, deltaHeight int, marshaler codec.Marshaler, network tpnet.Network, ledger ledger.Ledger) error
 }
@@ -328,6 +328,7 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 	blockRS *tpchaintypes.BlockResult,
 	latestBlock *tpchaintypes.Block,
 	ledger ledger.Ledger,
+	cType state.CompStateBuilderType,
 	requester string) error {
 	scheduler.log.Infof("Enter CommitBlock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
@@ -336,7 +337,7 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 
 	scheduler.log.Infof("CommitBlock gets lock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
-	compState := state.GetStateBuilder().CreateCompositionState(scheduler.log, scheduler.nodeID, ledger, stateVersion, requester)
+	compState := state.GetStateBuilder(cType).CreateCompositionState(scheduler.log, scheduler.nodeID, ledger, stateVersion, requester)
 	if compState == nil {
 		err := fmt.Errorf("Nil csState and can't commit block whose height %d, latest block height %d, self node %s", block.Head.Height, latestBlock.Head.Height, scheduler.nodeID)
 		return err
@@ -353,17 +354,21 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 		scheduler.log.Errorf("Set latest block err when CommitBlock: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock set latest block: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	err = compState.SetLatestBlockResult(blockRS)
 	if err != nil {
 		scheduler.log.Errorf("Set latest block result err when CommitBlock: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock set latest block result: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	latestEpoch, err := compState.GetLatestEpoch()
 	if err != nil {
 		scheduler.log.Errorf("Can't get latest epoch error: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock get latest epoch: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	var newEpoch *tpcmm.EpochInfo
 	deltaH := int(block.Head.Height) - int(latestEpoch.StartHeight)
@@ -480,7 +485,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 			return err
 		}
 
-		err = scheduler.CommitBlock(ctx, stateVersion, block, blockRS, latestBlock, ledger, "CommitPackedTx")
+		err = scheduler.CommitBlock(ctx, stateVersion, block, blockRS, latestBlock, ledger, state.CompStateBuilderType_Full, "CommitPackedTx")
 		if err != nil {
 			scheduler.log.Errorf("CommitBlock err: %v, stateVersion=%d, self node %s", err, stateVersion, scheduler.nodeID)
 			return err

@@ -30,10 +30,18 @@ func newStateData(name string, backendRW tplgcmm.DBReadWriter, cacheSize int) *s
 	}
 }
 
-func newStateDataReadonly(name string, backendR tplgcmm.DBReader) *stateData {
+func newStateDataReadonly(name string, backendR tplgcmm.DBReader, cacheSize int) *stateData {
+	cache := (*freecache.Cache)(nil)
+	if cacheSize > 0 {
+		cache = freecache.NewCache(cacheSize)
+	} else {
+		panic("CacheSize must be bigger than 0 when creating state data!")
+	}
+
 	return &stateData{
 		name:     name,
 		backendR: backendR,
+		cache:    cache,
 	}
 }
 
@@ -43,7 +51,12 @@ func (s *stateData) Get(key []byte) ([]byte, error) {
 	}
 
 	if s.backendR != nil {
-		return s.backendR.Get(key)
+		val, err := s.backendR.Get(key)
+		if err != nil {
+			s.addToCache(key, val)
+		}
+
+		return val, err
 	} else {
 		return s.backendRW.Get(key)
 	}

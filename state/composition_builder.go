@@ -149,24 +149,15 @@ func (creator *compositionStateCreatorSimple) createCompositionStateOfNode(log t
 
 	needCreation := true
 	var compStateRTN CompositionState
-	for sVer, compState := range compStateOfNode.compStates {
-		log.Infof("CompositionState %d: input stateVersion %d, requester=%s, sVer=%d, self node %s", compState.StateVersion(), stateVersion, requester, sVer, compStateOfNode.nodeID)
-
+	if compState, ok := compStateOfNode.compStates[stateVersion]; ok {
 		if compState.CompSState() == CompSState_Commited {
 			delete(compStateOfNode.compStates, compState.StateVersion())
-			log.Infof("Delete CompositionState %d: input stateVersion %d, requester=%s, self node %s", compState.StateVersion(), stateVersion, requester, compStateOfNode.nodeID)
-
-			if sVer == stateVersion {
-				log.Warnf("Existed CompositionState for stateVersion %d has been commited, so ignore subsequent disposing, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
-				compStateRTN = nil
-				needCreation = false
-			}
+			log.Infof("Delete CompositionState when found %d: input stateVersion %d, requester=%s, self node %s", compState.StateVersion(), stateVersion, requester, compStateOfNode.nodeID)
+			compStateRTN = nil
+			needCreation = false
 		} else {
-			if sVer == stateVersion {
-				log.Infof("Existed CompositionState for stateVersion %d, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
-				compStateRTN = compState
-				needCreation = false
-			}
+			compStateRTN = compState
+			needCreation = false
 		}
 	}
 
@@ -180,6 +171,35 @@ func (creator *compositionStateCreatorSimple) createCompositionStateOfNode(log t
 			log.Warnf("Have created CompositionState for stateVersion %d，so ignore the create request, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
 		}
 	}
+
+	go func() {
+		compStateOfNode.sync.Lock()
+		defer compStateOfNode.sync.Unlock()
+		//make sure that all committed comp states are deleted
+		for sVer, compState := range compStateOfNode.compStates {
+			log.Infof("CompositionState %d: input stateVersion %d, requester=%s, sVer=%d, self node %s", compState.StateVersion(), stateVersion, requester, sVer, compStateOfNode.nodeID)
+
+			if compState.CompSState() == CompSState_Commited {
+				delete(compStateOfNode.compStates, compState.StateVersion())
+				log.Infof("Delete CompositionState %d: input stateVersion %d, requester=%s, self node %s", compState.StateVersion(), stateVersion, requester, compStateOfNode.nodeID)
+
+				if sVer == stateVersion {
+					log.Warnf("Existed CompositionState for stateVersion %d has been commited, so ignore subsequent disposing, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+					compStateRTN = nil
+					needCreation = false
+				}
+			} else {
+				if sVer == stateVersion {
+					log.Infof("Existed CompositionState for stateVersion %d, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+					compStateRTN = compState
+					needCreation = false
+				}
+			}
+		}
+
+		log.Infof("All committed CompositionStates are deleted: input stateVersion %d, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+
+	}()
 
 	return compStateRTN
 }

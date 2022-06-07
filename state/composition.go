@@ -216,24 +216,24 @@ func NewNodeNetWorkStateWapper(log tplog.Logger, ledger ledger.Ledger) NodeNetWo
 }
 
 func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64, stateStore tplgss.StateStore) *compositionState {
-	inactiveState := statenode.NewNodeInactiveState(stateStore)
-	executorState := statenode.NewNodeExecutorState(stateStore)
-	proposerState := statenode.NewNodeProposerState(stateStore)
-	validatorState := statenode.NewNodeValidatorState(stateStore)
-	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
+	inactiveState := statenode.NewNodeInactiveState(stateStore, 1024*1024) // 1 Megabyte
+	executorState := statenode.NewNodeExecutorState(stateStore, 2*1024*1024)
+	proposerState := statenode.NewNodeProposerState(stateStore, 2*1024*1024)
+	validatorState := statenode.NewNodeValidatorState(stateStore, 2*1024*1024)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState, 1024*1024)
 	return &compositionState{
 		log:                log,
 		stateVersion:       stateVersion,
 		ledger:             ledger,
 		StateStore:         stateStore,
-		AccountState:       stateaccount.NewAccountState(stateStore),
-		ChainState:         statechain.NewChainStore(stateStore, ledger),
+		AccountState:       stateaccount.NewAccountState(stateStore, 1024*1024),
+		ChainState:         statechain.NewChainStore(stateStore, ledger, 1024*1024),
 		NodeState:          nodeState,
 		NodeInactiveState:  inactiveState,
 		NodeExecutorState:  executorState,
 		NodeProposerState:  proposerState,
 		NodeValidatorState: validatorState,
-		EpochState:         staetround.NewRoundState(stateStore),
+		EpochState:         staetround.NewRoundState(stateStore, 1024*1024),
 	}
 }
 

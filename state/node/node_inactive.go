@@ -42,8 +42,8 @@ type nodeInactiveState struct {
 	tplgss.StateStore
 }
 
-func NewNodeInactiveState(stateStore tplgss.StateStore) NodeInactiveState {
-	stateStore.AddNamedStateStore(StateStore_Name_NodeInactive)
+func NewNodeInactiveState(stateStore tplgss.StateStore, cacheSize int) NodeInactiveState {
+	stateStore.AddNamedStateStore(StateStore_Name_NodeInactive, cacheSize)
 	return &nodeInactiveState{
 		StateStore: stateStore,
 	}
@@ -58,7 +58,7 @@ func (ns *nodeInactiveState) IsExistInactiveNode(nodeID string) bool {
 }
 
 func (ns *nodeInactiveState) GetInactiveNodeIDs() ([]string, error) {
-	totolAEIdsBytes, _, err := ns.GetState(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeIDs_Key))
+	totolAEIdsBytes, err := ns.GetStateData(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeIDs_Key))
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (ns *nodeInactiveState) GetInactiveNode(nodeID string) (*common.NodeInfo, e
 }
 
 func (ns *nodeInactiveState) GetInactiveNodesTotalWeight() (uint64, error) {
-	totalAEWeightBytes, _, err := ns.GetState(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeWeight_Key))
+	totalAEWeightBytes, err := ns.GetStateData(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeWeight_Key))
 	if err != nil {
 		return 0, err
 	}
@@ -94,7 +94,7 @@ func (ns *nodeInactiveState) GetInactiveNodesTotalWeight() (uint64, error) {
 }
 
 func (ns *nodeInactiveState) GetAllInactiveNodes() ([]*common.NodeInfo, error) {
-	keys, vals, _, err := ns.GetAllState(StateStore_Name_NodeInactive)
+	keys, vals, err := ns.GetAllStateData(StateStore_Name_NodeInactive)
 	if err != nil {
 		return nil, err
 	}

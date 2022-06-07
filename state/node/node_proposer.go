@@ -42,8 +42,8 @@ type nodeProposerState struct {
 	tplgss.StateStore
 }
 
-func NewNodeProposerState(stateStore tplgss.StateStore) NodeProposerState {
-	stateStore.AddNamedStateStore(StateStore_Name_Prop)
+func NewNodeProposerState(stateStore tplgss.StateStore, cacheSize int) NodeProposerState {
+	stateStore.AddNamedStateStore(StateStore_Name_Prop, cacheSize)
 	return &nodeProposerState{
 		StateStore: stateStore,
 	}
@@ -81,7 +81,7 @@ func (ns *nodeProposerState) GetActiveProposer(nodeID string) (*common.NodeInfo,
 }
 
 func (ns *nodeProposerState) GetActiveProposersTotalWeight() (uint64, error) {
-	totalAEWeightBytes, _, err := ns.GetState(StateStore_Name_Prop, []byte(TotalActiveProposerWeight_Key))
+	totalAEWeightBytes, err := ns.GetStateData(StateStore_Name_Prop, []byte(TotalActiveProposerWeight_Key))
 	if err != nil {
 		return 0, err
 	}
@@ -94,7 +94,7 @@ func (ns *nodeProposerState) GetActiveProposersTotalWeight() (uint64, error) {
 }
 
 func (ns *nodeProposerState) GetAllActiveProposers() ([]*common.NodeInfo, error) {
-	keys, vals, _, err := ns.GetAllState(StateStore_Name_Prop)
+	keys, vals, err := ns.GetAllStateData(StateStore_Name_Prop)
 	if err != nil {
 		return nil, err
 	}

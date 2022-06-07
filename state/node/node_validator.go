@@ -42,8 +42,8 @@ type nodeValidatorState struct {
 	tplgss.StateStore
 }
 
-func NewNodeValidatorState(stateStore tplgss.StateStore) NodeValidatorState {
-	stateStore.AddNamedStateStore(StateStore_Name_Val)
+func NewNodeValidatorState(stateStore tplgss.StateStore, cacheSize int) NodeValidatorState {
+	stateStore.AddNamedStateStore(StateStore_Name_Val, cacheSize)
 	return &nodeValidatorState{
 		StateStore: stateStore,
 	}
@@ -58,7 +58,7 @@ func (ns *nodeValidatorState) IsExistActiveValidator(nodeID string) bool {
 }
 
 func (ns *nodeValidatorState) GetActiveValidatorIDs() ([]string, error) {
-	totolAEIdsBytes, _, err := ns.GetState(StateStore_Name_Val, []byte(TotalActiveValidatorNodeIDs_Key))
+	totolAEIdsBytes, err := ns.GetStateData(StateStore_Name_Val, []byte(TotalActiveValidatorNodeIDs_Key))
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (ns *nodeValidatorState) GetActiveValidator(nodeID string) (*common.NodeInf
 }
 
 func (ns *nodeValidatorState) GetActiveValidatorsTotalWeight() (uint64, error) {
-	totalAEWeightBytes, _, err := ns.GetState(StateStore_Name_Val, []byte(TotalActiveValidatorWeight_Key))
+	totalAEWeightBytes, err := ns.GetStateData(StateStore_Name_Val, []byte(TotalActiveValidatorWeight_Key))
 	if err != nil {
 		return 0, err
 	}
@@ -94,7 +94,7 @@ func (ns *nodeValidatorState) GetActiveValidatorsTotalWeight() (uint64, error) {
 }
 
 func (ns *nodeValidatorState) GetAllActiveValidators() ([]*common.NodeInfo, error) {
-	keys, vals, _, err := ns.GetAllState(StateStore_Name_Val)
+	keys, vals, err := ns.GetAllStateData(StateStore_Name_Val)
 	if err != nil {
 		return nil, err
 	}

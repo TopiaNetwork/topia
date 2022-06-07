@@ -16,7 +16,7 @@ func isNodeExist(stateStore tplgss.StateStore, name string, nodeID string) bool 
 }
 
 func getNode(stateStore tplgss.StateStore, name string, nodeID string) (*tpcmm.NodeInfo, error) {
-	nodeInfoBytes, _, err := stateStore.GetState(name, []byte(nodeID))
+	nodeInfoBytes, err := stateStore.GetStateData(name, []byte(nodeID))
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func addNode(stateStore tplgss.StateStore, name string, totalNodeIDsKey string, 
 }
 
 func updateTotalIDs(stateStore tplgss.StateStore, name string, totalIDsKey string, nodeID string, isRemove bool) error {
-	totolIdsBytes, _, err := stateStore.GetState(name, []byte(totalIDsKey))
+	totolIdsBytes, err := stateStore.GetStateData(name, []byte(totalIDsKey))
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func updateTotalIDs(stateStore tplgss.StateStore, name string, totalIDsKey strin
 }
 
 func updateTotalWeight(stateStore tplgss.StateStore, name string, totalWeightKey string, deltaWeight int64) error {
-	totalWeightBytes, _, err := stateStore.GetState(name, []byte(totalWeightKey))
+	totalWeightBytes, err := stateStore.GetStateData(name, []byte(totalWeightKey))
 	if err != nil {
 		return err
 	}

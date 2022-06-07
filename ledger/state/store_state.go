@@ -120,7 +120,7 @@ func (m *stateStore) AddNamedStateStore(name string, cacheSize int) error {
 
 	var ss *StateStoreComposition
 	if m.backendR != nil {
-		ss = newStateStoreCompositionReadOnly(m.log, m.backendR, name)
+		ss = newStateStoreCompositionReadOnly(m.log, m.backendR, name, cacheSize)
 	} else {
 		ss = newStateStoreComposition(m.log, m.backendRW, name, cacheSize)
 	}

@@ -47,11 +47,11 @@ func newStateStoreComposition(log tplog.Logger, backendRW tplgcmm.DBReadWriter, 
 	}
 }
 
-func newStateStoreCompositionReadOnly(log tplog.Logger, backendR tplgcmm.DBReader, name string) *StateStoreComposition {
+func newStateStoreCompositionReadOnly(log tplog.Logger, backendR tplgcmm.DBReader, name string, cacheSize int) *StateStoreComposition {
 	backendDBNamed := backend.NewBackendRPrefixed([]byte(name), backendR)
 
 	stateDataBackend := backend.NewBackendRPrefixed([]byte{stateDataPrefix}, backendDBNamed)
-	stateData := newStateDataReadonly(name, stateDataBackend)
+	stateData := newStateDataReadonly(name, stateDataBackend, cacheSize)
 
 	smtNodeDataBackend := backend.NewBackendRPrefixed([]byte{merkleNodePrefix}, backendDBNamed)
 	smtNodeValueBackend := backend.NewBackendRPrefixed([]byte{merkleValuePrefix}, backendDBNamed)

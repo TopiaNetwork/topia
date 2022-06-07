@@ -298,7 +298,14 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
 
-		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
+		cType := state.CompStateBuilderType_Full
+		if nodeType != "executor" {
+			cType = state.CompStateBuilderType_Simple
+			for i := 1; i <= 1000; i++ {
+				state.GetStateBuilder(cType).CreateCompositionState(testMainLog, network.ID(), l, uint64(i), "tester")
+			}
+		}
+		compState := state.GetStateBuilder(cType).CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
 
 		var latestEpochInfo *tpcmm.EpochInfo
 		var latestBlock *tpchaintypes.Block

@@ -1,14 +1,13 @@
 package state
 
 import (
-	"github.com/stretchr/testify/assert"
-	"testing"
-
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestMultiCompositionState(t *testing.T) {
@@ -18,7 +17,7 @@ func TestMultiCompositionState(t *testing.T) {
 
 	config := tpconfig.GetConfiguration()
 
-	compState := GetStateBuilder().CreateCompositionState(testLog, "", l, 1, "tester")
+	compState := GetStateBuilder(CompStateBuilderType_Full).CreateCompositionState(testLog, "", l, 1, "tester")
 
 	compState.SetLatestBlock(config.Genesis.Block)
 
@@ -28,9 +27,9 @@ func TestMultiCompositionState(t *testing.T) {
 
 	compState.Commit()
 
-	compState2 := GetStateBuilder().CreateCompositionState(testLog, "", l, 2, "tester")
+	compState2 := GetStateBuilder(CompStateBuilderType_Full).CreateCompositionState(testLog, "", l, 2, "tester")
 
-	compState3 := GetStateBuilder().CreateCompositionState(testLog, "", l, 3, "tester")
+	compState3 := GetStateBuilder(CompStateBuilderType_Full).CreateCompositionState(testLog, "", l, 3, "tester")
 
 	config.Genesis.Block.Head.Height = 2
 	compState2.SetLatestBlock(config.Genesis.Block)
@@ -53,6 +52,11 @@ func TestMultiCompositionState(t *testing.T) {
 	latestBlock, _ = compStateRN.GetLatestBlock()
 	compStateRN.Stop()
 	assert.Equal(t, uint64(3), latestBlock.Head.Height)
+
+	compStateRN = CreateCompositionStateReadonlyAt(testLog, l, 2)
+	latestBlock, _ = compStateRN.GetLatestBlock()
+	compStateRN.Stop()
+	assert.Equal(t, uint64(2), latestBlock.Head.Height)
 }
 
 func TestMemCompositionState(t *testing.T) {
@@ -62,7 +66,7 @@ func TestMemCompositionState(t *testing.T) {
 
 	config := tpconfig.GetConfiguration()
 
-	compState := GetStateBuilder().CreateCompositionState(testLog, "", l, 1, "tester")
+	compState := GetStateBuilder(CompStateBuilderType_Full).CreateCompositionState(testLog, "", l, 1, "tester")
 
 	compState.SetLatestBlock(config.Genesis.Block)
 
@@ -72,7 +76,7 @@ func TestMemCompositionState(t *testing.T) {
 
 	compState.Commit()
 
-	compState2 := GetStateBuilder().CreateCompositionState(testLog, "", l, 2, "tester")
+	compState2 := GetStateBuilder(CompStateBuilderType_Full).CreateCompositionState(testLog, "", l, 2, "tester")
 
 	compStateMem := CreateCompositionStateMem(testLog, compState2)
 

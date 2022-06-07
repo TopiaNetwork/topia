@@ -17,10 +17,29 @@ var once sync.Once
 const Wait_StateStore_Time = 50 //ms
 const MaxAvail_Count = 3
 
-func GetStateBuilder() *CompositionStateBuilder {
+type CompStateBuilderType byte
+
+const (
+	CompStateBuilderType_Unknown CompStateBuilderType = iota
+	CompStateBuilderType_Full
+	CompStateBuilderType_Simple
+)
+
+func GetStateBuilder(cType CompStateBuilderType) *CompositionStateBuilder {
 	once.Do(func() {
-		stateBuilder = &CompositionStateBuilder{
-			compStateOfNodes: make(map[string]*compositionStateOfNode),
+		switch cType {
+		case CompStateBuilderType_Full:
+			stateBuilder = &CompositionStateBuilder{
+				compositionStateCreator: &compositionStateCreatorFull{},
+				compStateOfNodes:        make(map[string]*compositionStateOfNode),
+			}
+		case CompStateBuilderType_Simple:
+			stateBuilder = &CompositionStateBuilder{
+				compositionStateCreator: &compositionStateCreatorSimple{},
+				compStateOfNodes:        make(map[string]*compositionStateOfNode),
+			}
+		default:
+			panic("Unknown cType")
 		}
 	})
 
@@ -34,7 +53,18 @@ type compositionStateOfNode struct {
 	compStates    map[uint64]CompositionState //StateVersion->CompositionState
 }
 
+type compositionStateCreator interface {
+	createCompositionStateOfNode(log tplog.Logger, compStateOfNode *compositionStateOfNode, ledger ledger.Ledger, stateVersion uint64, requester string) CompositionState
+}
+
+type compositionStateCreatorFull struct {
+}
+
+type compositionStateCreatorSimple struct {
+}
+
 type CompositionStateBuilder struct {
+	compositionStateCreator
 	sync             sync.RWMutex
 	compStateOfNodes map[string]*compositionStateOfNode //nodeID->compositionStateNode
 }
@@ -56,7 +86,7 @@ func (builder *CompositionStateBuilder) getCompositionStateOfNode(nodeID string)
 	return compStateOfNode
 }
 
-func (builder *CompositionStateBuilder) createCompositionStateOfNode(log tplog.Logger, compStateOfNode *compositionStateOfNode, ledger ledger.Ledger, stateVersion uint64, requester string) CompositionState {
+func (creator *compositionStateCreatorFull) createCompositionStateOfNode(log tplog.Logger, compStateOfNode *compositionStateOfNode, ledger ledger.Ledger, stateVersion uint64, requester string) CompositionState {
 	compStateOfNode.sync.Lock()
 	defer compStateOfNode.sync.Unlock()
 
@@ -68,6 +98,8 @@ func (builder *CompositionStateBuilder) createCompositionStateOfNode(log tplog.L
 		func() {
 			//compState.Lock()
 			//defer compState.Unlock()
+
+			log.Infof("CompositionState %d: input stateVersion %d, requester=%s, sVer=%d, self node %s", compState.StateVersion(), stateVersion, requester, sVer, compStateOfNode.nodeID)
 
 			if compState.CompSState() == CompSState_Commited {
 				delete(compStateOfNode.compStates, compState.StateVersion())
@@ -90,6 +122,7 @@ func (builder *CompositionStateBuilder) createCompositionStateOfNode(log tplog.L
 		}()
 	}
 
+	log.Infof("Avail CompositionState: input stateVersion %d, requester=%s, availCompStateCnt=%d, needCreation=%v, self node %s", stateVersion, requester, availCompStateCnt, needCreation, compStateOfNode.nodeID)
 	if availCompStateCnt >= MaxAvail_Count && needCreation {
 		log.Errorf("Can't create new CompositionState because of reaching max available value %d: availCompStateCnt %d, stateVersion %d, availCompStateVersions %v, requester=%s, self node %s",
 			MaxAvail_Count, availCompStateCnt, stateVersion, availCompStateVersions, requester, compStateOfNode.nodeID)
@@ -106,6 +139,67 @@ func (builder *CompositionStateBuilder) createCompositionStateOfNode(log tplog.L
 			log.Warnf("Have created CompositionState for stateVersion %d，so ignore the create request, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
 		}
 	}
+
+	return compStateRTN
+}
+
+func (creator *compositionStateCreatorSimple) createCompositionStateOfNode(log tplog.Logger, compStateOfNode *compositionStateOfNode, ledger ledger.Ledger, stateVersion uint64, requester string) CompositionState {
+	compStateOfNode.sync.Lock()
+	defer compStateOfNode.sync.Unlock()
+
+	needCreation := true
+	var compStateRTN CompositionState
+	if compState, ok := compStateOfNode.compStates[stateVersion]; ok {
+		if compState.CompSState() == CompSState_Commited {
+			delete(compStateOfNode.compStates, compState.StateVersion())
+			log.Infof("Delete CompositionState when found %d: input stateVersion %d, requester=%s, self node %s", compState.StateVersion(), stateVersion, requester, compStateOfNode.nodeID)
+			compStateRTN = nil
+			needCreation = false
+		} else {
+			compStateRTN = compState
+			needCreation = false
+		}
+	}
+
+	if needCreation {
+		if _, ok := compStateOfNode.createdRecord[stateVersion]; !ok {
+			compStateOfNode.createdRecord[stateVersion] = true
+			compStateRTN = CreateCompositionState(log, ledger, stateVersion)
+			compStateOfNode.compStates[stateVersion] = compStateRTN
+			log.Infof("Create new CompositionState for stateVersion %d，requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+		} else {
+			log.Warnf("Have created CompositionState for stateVersion %d，so ignore the create request, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+		}
+	}
+
+	go func() {
+		compStateOfNode.sync.Lock()
+		defer compStateOfNode.sync.Unlock()
+		//make sure that all committed comp states are deleted
+		for sVer, compState := range compStateOfNode.compStates {
+			log.Infof("CompositionState %d: input stateVersion %d, requester=%s, sVer=%d, self node %s", compState.StateVersion(), stateVersion, requester, sVer, compStateOfNode.nodeID)
+
+			if compState.CompSState() == CompSState_Commited {
+				delete(compStateOfNode.compStates, compState.StateVersion())
+				log.Infof("Delete CompositionState %d: input stateVersion %d, requester=%s, self node %s", compState.StateVersion(), stateVersion, requester, compStateOfNode.nodeID)
+
+				if sVer == stateVersion {
+					log.Warnf("Existed CompositionState for stateVersion %d has been commited, so ignore subsequent disposing, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+					compStateRTN = nil
+					needCreation = false
+				}
+			} else {
+				if sVer == stateVersion {
+					log.Infof("Existed CompositionState for stateVersion %d, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+					compStateRTN = compState
+					needCreation = false
+				}
+			}
+		}
+
+		log.Infof("All committed CompositionStates are deleted: input stateVersion %d, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+
+	}()
 
 	return compStateRTN
 }

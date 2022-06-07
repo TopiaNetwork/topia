@@ -27,7 +27,7 @@ func TestExecuteContract(t *testing.T) {
 	log, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
 	lg := ledger.NewLedger(".", "NCTest", log, backend.BackendType_Badger)
 
-	compState := state.GetStateBuilder().CreateCompositionState(log, "NCTest", lg, 1, "NCTest")
+	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(log, "NCTest", lg, 1, "NCTest")
 
 	addr := tpcrtypes.Address("TestAddr")
 	acc := tpacc.NewDefaultAccount("TestAddr")

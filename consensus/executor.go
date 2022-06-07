@@ -162,12 +162,12 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 					continue
 				}
 
-				compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
+				compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
 
 				waitCount := 1
 				for compState == nil {
 					e.log.Warnf("Can't CreateCompositionState when received new PreparePackedMessageExe, StateVersion %d, self node %s, waitCount %d", perparePMExe.StateVersion, e.nodeID, waitCount)
-					compState = state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
+					compState = state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, perparePMExe.StateVersion, "executor_exereceiver")
 					waitCount++
 					time.Sleep(50 * time.Millisecond)
 				}
@@ -481,7 +481,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 
 	txRoot := txbasic.TxRoot(pendTxs)
 
-	compState := state.GetStateBuilder().CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
+	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
 	if compState == nil {
 		err = fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", stateVersion)
 		e.log.Errorf("%v", err)

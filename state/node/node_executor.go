@@ -42,8 +42,8 @@ type nodeExecutorState struct {
 	tplgss.StateStore
 }
 
-func NewNodeExecutorState(stateStore tplgss.StateStore) NodeExecutorState {
-	stateStore.AddNamedStateStore(StateStore_Name_Exe)
+func NewNodeExecutorState(stateStore tplgss.StateStore, cacheSize int) NodeExecutorState {
+	stateStore.AddNamedStateStore(StateStore_Name_Exe, cacheSize)
 	return &nodeExecutorState{
 		StateStore: stateStore,
 	}
@@ -58,7 +58,7 @@ func (ns *nodeExecutorState) IsExistActiveExecutor(nodeID string) bool {
 }
 
 func (ns *nodeExecutorState) GetActiveExecutorIDs() ([]string, error) {
-	totolAEIdsBytes, _, err := ns.GetState(StateStore_Name_Exe, []byte(TotalActiveExecutorNodeIDs_Key))
+	totolAEIdsBytes, err := ns.GetStateData(StateStore_Name_Exe, []byte(TotalActiveExecutorNodeIDs_Key))
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (ns *nodeExecutorState) GetActiveExecutor(nodeID string) (*common.NodeInfo,
 }
 
 func (ns *nodeExecutorState) GetActiveExecutorsTotalWeight() (uint64, error) {
-	totalAEWeightBytes, _, err := ns.GetState(StateStore_Name_Exe, []byte(TotalActiveExecutorWeight_Key))
+	totalAEWeightBytes, err := ns.GetStateData(StateStore_Name_Exe, []byte(TotalActiveExecutorWeight_Key))
 	if err != nil {
 		return 0, err
 	}
@@ -94,7 +94,7 @@ func (ns *nodeExecutorState) GetActiveExecutorsTotalWeight() (uint64, error) {
 }
 
 func (ns *nodeExecutorState) GetAllActiveExecutors() ([]*common.NodeInfo, error) {
-	keys, vals, _, err := ns.GetAllState(StateStore_Name_Exe)
+	keys, vals, err := ns.GetAllStateData(StateStore_Name_Exe)
 	if err != nil {
 		return nil, err
 	}

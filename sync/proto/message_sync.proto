@@ -6,38 +6,19 @@ option go_package = "sync";
 option (gogoproto.stable_marshaler_all) = true;
 
 import "gogo.proto";
-import "chain/types/proto/block.proto";
-
-//protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.. --proto_path=./  --gofast_out=. ./proto/message_sync.proto
+import "block/types/proto/block.proto";
 
 message SyncMessage {
   enum SyncMessageType {
     Unknown = 0;
-    HeartBeatRequest = 1;
-    BlockRequest = 2;
-    BlockResponse = 3;
-    StateRequest = 4;
-    StateResponse = 5;
-    EpochResponse = 6;
-    NodeStateResponse = 7;
-    AccountStateResponse = 8;
-    ChainStateResponse = 9;
-
+    BlockRequest = 1;
+    BlockResponse = 2;
+    StatusRequest = 3;
+    StatusResponse = 4;
   };
 
   SyncMessageType MsgType  = 1  [(gogoproto.jsontag) = "msgType"];
   bytes Data = 2  [(gogoproto.jsontag) = "data"];
-}
-
-message HeartBeatRequest {
-  uint64 BlockHeight = 1 [(gogoproto.jsontag)  = "blockHeight"];
-  bytes StateRoot = 2 [(gogoproto.jsontag)  = "stateRoot"];
-  uint64 SateVersion = 3 [(gogoproto.jsontag)  = "stateRoot"];
-  bytes EpochRoot = 4 [(gogoproto.jsontag)  = "epochRoot"];
-  bytes NodeRoot = 5 [(gogoproto.jsontag)  = "nodeRoot"];
-  bytes ChainRoot = 6 [(gogoproto.jsontag)  = "chainRoot"];
-  bytes AccountRoot = 7 [(gogoproto.jsontag)  = "accountRoot"];
-
 }
 
 message BlockRequest {
@@ -54,44 +35,14 @@ message BlockResponse {
   Block block = 3  [(gogoproto.jsontag) = "block"];
 }
 
-message StateRequest {
-  uint64 StateVersion = 1  [(gogoproto.jsontag) = "stateVersion"];
-  bytes EpochRoot = 2 [(gogoproto.jsontag) = "epochRoot"];
-  bytes NodeRoot = 3 [(gogoproto.jsontag) = "nodeRoot"];
-  bytes ChainRoot = 4 [(gogoproto.jsontag) = "chainRoot"];
-  bytes AccountRoot = 5 [(gogoproto.jsontag) = "accountRoot"];
-
+message StatusRequest {
 
 }
 
-message StateResponse {
-  bytes StateRoot = 1 [(gogoproto.jsontag) = "stateRoot"];
-  uint64 StateVersion = 2 [(gogoproto.jsontag) = "stateVersion"];
-  bytes StateByVersion = 3 [(gogoproto.jsontag) = "StateByVersion"];
-  bytes EpochInfo = 4 [(gogoproto.jsontag) = "EpochInfo"];
+message StatusResponse {
+  uint64 HeightHighest = 1  [(gogoproto.jsontag) = "heightHighest"];
+  uint64 HeightLowest = 2  [(gogoproto.jsontag) = "heightLowest"];
 }
-
-
-message EpochResponse {
-  uint64 Epoch = 1 [(gogoproto.jsontag) = "epoch"];
-  uint64 StartTimeStamp = 2 [(gogoproto.jsontag) = "startTimeStamp"];
-  uint64 StartHeight = 3 [(gogoproto.jsontag) = "startHeight"];
-}
-
-message NodeResponse{
-  uint64 StateVersion = 1 [(gogoproto.jsontag)  = "stateVersion"];
-  bytes NodeRoot = 2 [(gogoproto.jsontag)  = "nodeRoot"];
-  bytes StateData = 3 [(gogoproto.jsontag)  = "stateData"];
-}
-
-message ChainResponse{
-  uint64 StateVersion = 1 [(gogoproto.jsontag)  = "stateVersion"];
-  bytes ChainRoot = 2 [(gogoproto.jsontag)  = "chainRoot"];
-  bytes StateData = 3 [(gogoproto.jsontag)  = "stateData"];
-}
-
-message AccountResponse{
-  uint64 StateVersion = 1 [(gogoproto.jsontag)  = "stateVersion"];
-  bytes AccountRoot = 2 [(gogoproto.jsontag)  = "accountRoot"];
-  bytes StateData = 3 [(gogoproto.jsontag)  = "stateData"];
-}
+    © 2022 GitHub, Inc.
+    Terms
+    Privacy

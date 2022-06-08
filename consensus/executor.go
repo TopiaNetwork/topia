@@ -27,6 +27,7 @@ type consensusExecutor struct {
 	marshaler                    codec.Marshaler
 	ledger                       ledger.Ledger
 	exeScheduler                 execution.ExecutionScheduler
+	epochService                 EpochService
 	deliver                      *messageDeliver
 	preparePackedMsgExeChan      chan *PreparePackedMessageExe
 	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
@@ -44,6 +45,7 @@ func newConsensusExecutor(log tplog.Logger,
 	marshaler codec.Marshaler,
 	ledger ledger.Ledger,
 	exeScheduler execution.ExecutionScheduler,
+	epochService EpochService,
 	deliver *messageDeliver,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
@@ -58,6 +60,7 @@ func newConsensusExecutor(log tplog.Logger,
 		marshaler:                    marshaler,
 		ledger:                       ledger,
 		exeScheduler:                 exeScheduler,
+		epochService:                 epochService,
 		deliver:                      deliver,
 		preparePackedMsgExeChan:      preprePackedMsgExeChan,
 		preparePackedMsgExeIndicChan: preparePackedMsgExeIndicChan,
@@ -301,20 +304,17 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 	}()
 }
 
-func (e *consensusExecutor) canPrepare(stateVersion uint64) (bool, []byte, error) {
+func (e *consensusExecutor) canPrepare(stateVersion uint64, latestBlock *tpchaintypes.Block) (bool, []byte, error) {
 	if schedulerState := e.exeScheduler.State(); schedulerState != execution.SchedulerState_Idle {
 		err := fmt.Errorf("Execution scheduler state %s, self node %s", schedulerState.String(), e.nodeID)
 		e.log.Errorf("%v", err)
 		return false, nil, err
 	}
 
-	csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
-	defer csStateRN.Stop()
-
 	roleSelector := newLeaderSelectorVRF(e.log, e.nodeID, e.cryptService)
 
 	e.log.Infof("Begin Select: state version %d, self node %s", stateVersion, e.nodeID)
-	candInfo, vrfProof, err := roleSelector.Select(RoleSelector_ExecutionLauncher, stateVersion, e.priKey, csStateRN, 1)
+	candInfo, vrfProof, err := roleSelector.Select(RoleSelector_ExecutionLauncher, stateVersion, e.priKey, latestBlock, e.epochService, 1)
 	if err != nil {
 		e.log.Errorf("Select executor err: %v", err)
 		return false, nil, err
@@ -344,31 +344,42 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 		for {
 			select {
 			case <-timer.C:
-				e.log.Infof("Prepare timer starts: self node %s", e.nodeID)
-				prepareStart := time.Now()
-				e.log.Infof("Prepare timer starts to get max state version: self node %s", e.nodeID)
-				maxStateVersion, err := e.exeScheduler.MaxStateVersion(e.log, e.ledger)
-				if err != nil {
-					continue
-				}
-				e.log.Infof("Prepare timer gets max state version: maxStateVersion %d, self node %s", maxStateVersion, e.nodeID)
-				stateVersion := maxStateVersion + 1
+				func() {
+					e.log.Infof("Prepare timer starts: self node %s", e.nodeID)
+					prepareStart := time.Now()
+					compStatRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
+					defer compStatRN.Stop()
 
-				e.log.Infof("Prepare timer: state version %d, self node %s", stateVersion, e.nodeID)
+					latestBlock, err := compStatRN.GetLatestBlock()
+					if err != nil {
+						e.log.Errorf("Can't get the latest block: %v, self node %s", err, e.nodeID)
+						return
+					}
 
-				if e.prepareMsgLaunched(stateVersion) {
-					e.log.Infof("Have launched prepare message: state version %d, self node %s", stateVersion, e.nodeID)
-					continue
-				}
+					e.log.Infof("Prepare timer starts to get max state version: self node %s", e.nodeID)
+					maxStateVersion, err := e.exeScheduler.MaxStateVersion(latestBlock)
+					if err != nil {
+						return
+					}
+					e.log.Infof("Prepare timer gets max state version: maxStateVersion %d, self node %s", maxStateVersion, e.nodeID)
+					stateVersion := maxStateVersion + 1
 
-				isCan, vrfProof, _ := e.canPrepare(stateVersion)
-				if isCan {
-					e.log.Infof("Selected execution launcher can prepare: state version %d, self node %s", stateVersion, e.nodeID)
-					pStart := time.Now()
-					e.Prepare(ctx, vrfProof, stateVersion)
-					e.log.Infof("Prepare time: state version %d, cost %d ms, self node %s", stateVersion, time.Since(pStart).Milliseconds(), e.nodeID)
-				}
-				e.log.Infof("Prepare time total: isCan %v, state version %d, cost %d ms, self node %s", isCan, stateVersion, time.Since(prepareStart).Milliseconds(), e.nodeID)
+					e.log.Infof("Prepare timer: state version %d, self node %s", stateVersion, e.nodeID)
+
+					if e.prepareMsgLaunched(stateVersion) {
+						e.log.Infof("Have launched prepare message: state version %d, self node %s", stateVersion, e.nodeID)
+						return
+					}
+
+					isCan, vrfProof, _ := e.canPrepare(stateVersion, latestBlock)
+					if isCan {
+						e.log.Infof("Selected execution launcher can prepare: state version %d, self node %s", stateVersion, e.nodeID)
+						pStart := time.Now()
+						e.Prepare(ctx, vrfProof, stateVersion)
+						e.log.Infof("Prepare time: state version %d, cost %d ms, self node %s", stateVersion, time.Since(pStart).Milliseconds(), e.nodeID)
+					}
+					e.log.Infof("Prepare time total: isCan %v, state version %d, cost %d ms, self node %s", isCan, stateVersion, time.Since(prepareStart).Milliseconds(), e.nodeID)
+				}()
 			case <-ctx.Done():
 				e.log.Infof("Consensus executor exit prepare timer: self node %s", e.nodeID)
 				return

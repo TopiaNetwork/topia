@@ -44,7 +44,7 @@ const (
 type ExecutionScheduler interface {
 	State() SchedulerState
 
-	MaxStateVersion(log tplog.Logger, ledger ledger.Ledger) (uint64, error)
+	MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error)
 
 	PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error)
 
@@ -167,18 +167,9 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 	return nil, err
 }
 
-func (scheduler *executionScheduler) MaxStateVersion(log tplog.Logger, ledger ledger.Ledger) (uint64, error) {
+func (scheduler *executionScheduler) MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error) {
 	scheduler.executeMutex.RLock()
 	defer scheduler.executeMutex.RUnlock()
-
-	compStatRN := state.CreateCompositionStateReadonly(log, ledger)
-	defer compStatRN.Stop()
-
-	latestBlock, err := compStatRN.GetLatestBlock()
-	if err != nil {
-		scheduler.log.Errorf("Can't get the latest block: %v", err)
-		return 0, err
-	}
 
 	maxStateVersion := latestBlock.Head.Height
 

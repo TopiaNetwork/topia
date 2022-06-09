@@ -93,6 +93,7 @@ func NewEpochService(log tplog.Logger,
 		exeScheduler:        exeScheduler,
 		ledger:              ledger,
 		dkgExchange:         dkgExchange,
+		activeNodeInfos:     anInfos,
 	}
 }
 

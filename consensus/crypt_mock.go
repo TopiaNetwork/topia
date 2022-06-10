@@ -21,6 +21,11 @@ func (cs *CryptServiceMock) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtypes
 	return tpcrtypes.PrivateKey(priKey), tpcrtypes.PublicKey(pubKey), err
 }
 
+func (cs *CryptServiceMock) GeneratePriPubKeyWithSeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (cs *CryptServiceMock) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	edPriKey := ed25519.PrivateKey(priKey)
 

@@ -301,9 +301,9 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 		cType := state.CompStateBuilderType_Full
 		if nodeType != "executor" {
 			cType = state.CompStateBuilderType_Simple
-			/*for i := 1; i <= 1000; i++ {
+			for i := 1; i <= 100; i++ {
 				state.GetStateBuilder(cType).CreateCompositionState(testMainLog, network.ID(), l, uint64(i), "tester")
-			}*/
+			}
 		}
 		compState := state.GetStateBuilder(cType).CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
 

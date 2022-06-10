@@ -237,7 +237,7 @@ func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger
 	}
 }
 
-func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
+func createCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
 	stateStore, _ := ledger.CreateStateStore()
 
 	compS := createCompositionStateWithStateStore(log, ledger, stateVersion, stateStore)

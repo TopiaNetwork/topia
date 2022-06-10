@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"math/big"
 	"sort"
 	"strings"
@@ -147,10 +148,10 @@ func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64
 	return hasher.Bytes(), nil
 }
 
-func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, csServant consensusServant) ([]*candidateInfo, error) {
+func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, epochService EpochService) ([]*candidateInfo, error) {
 	var canInfos []*candidateInfo
 	for _, nodeId := range avtiveNodeID {
-		nodeWeight, err := csServant.GetNodeWeight(nodeId)
+		nodeWeight, err := epochService.GetNodeWeight(nodeId)
 		if err != nil {
 			selector.log.Errorf("Can't get node weight: %v", err)
 			return nil, err
@@ -168,7 +169,8 @@ func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, csServ
 func (selector *roleSelectorVRF) Select(role RoleSelector,
 	stateVersion uint64,
 	priKey tpcrtypes.PrivateKey,
-	csServant consensusServant,
+	latestBlock *tpchaintypes.Block,
+	epochService EpochService,
 	count int) ([]*candidateInfo, []byte, error) {
 	thresholdVals := make([]uint64, count)
 
@@ -181,27 +183,13 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 	switch role {
 	case RoleSelector_ExecutionLauncher:
 		{
-			totalActiveWeight, err = csServant.GetActiveExecutorsTotalWeight()
-			if err != nil {
-				return nil, nil, err
-			}
-
-			avtiveNodeID, err = csServant.GetActiveExecutorIDs()
-			if err != nil {
-				return nil, nil, err
-			}
+			totalActiveWeight = epochService.GetActiveExecutorsTotalWeight()
+			avtiveNodeID = epochService.GetActiveExecutorIDs()
 		}
 	case RoleSelector_VoteCollector:
 		{
-			totalActiveWeight, err = csServant.GetActiveValidatorsTotalWeight()
-			if err != nil {
-				return nil, nil, err
-			}
-
-			avtiveNodeID, err = csServant.GetActiveValidatorIDs()
-			if err != nil {
-				return nil, nil, err
-			}
+			totalActiveWeight = epochService.GetActiveValidatorsTotalWeight()
+			avtiveNodeID = epochService.GetActiveValidatorIDs()
 		}
 	default:
 		return nil, nil, fmt.Errorf("Invalid role %s", role.String())
@@ -209,20 +197,12 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 
 	sort.Strings(avtiveNodeID)
 
-	canInfos, err := selector.getCandidateInfos(avtiveNodeID, csServant)
+	canInfos, err := selector.getCandidateInfos(avtiveNodeID, epochService)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	eponInfo, err := csServant.GetLatestEpoch()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	latestBlock, err := csServant.GetLatestBlock()
-	if err != nil {
-		return nil, nil, err
-	}
+	eponInfo := epochService.GetLatestEpoch()
 
 	csProof := &ConsensusProof{
 		ParentBlockHash: latestBlock.Head.ParentBlockHash,

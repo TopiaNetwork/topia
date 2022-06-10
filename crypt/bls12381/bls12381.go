@@ -46,6 +46,11 @@ func (c *CryptServiceBLS12381) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrty
 	return secRet, pubRet, nil
 }
 
+func (c *CryptServiceBLS12381) GeneratePriPubKeyWithSeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (c *CryptServiceBLS12381) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	var sec bls.SecretKey
 	if priKey == nil {

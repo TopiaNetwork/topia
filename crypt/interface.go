@@ -12,6 +12,8 @@ type CryptService interface {
 
 	GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error)
 
+	GeneratePriPubKeyWithSeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error)
+
 	ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error)
 
 	Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrtypes.Signature, error)

@@ -68,6 +68,11 @@ func (c *CryptServiceSecp256) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtyp
 	return seckey[:], pubkey[:], nil
 }
 
+func (c *CryptServiceSecp256) GeneratePriPubKeyWithSeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (c *CryptServiceSecp256) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	if len(priKey) != PrivateKeyBytes {
 		return nil, errors.New("secp256 ConvertToPublic input seckey incorrect")

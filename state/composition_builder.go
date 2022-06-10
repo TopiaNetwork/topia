@@ -1,8 +1,11 @@
 package state
 
 import (
+	"context"
 	"strconv"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/orcaman/concurrent-map"
 
@@ -19,7 +22,7 @@ var stateBuilderFull, stateBuilderSimple CompositionStateBuilder
 var onceFull, onceSimple sync.Once
 
 const Wait_StateStore_Time = 50 //ms
-const MaxAvail_Count = 3
+const MaxAvail_Count = 5
 
 type CompStateBuilderType byte
 
@@ -66,8 +69,10 @@ type compositionStateOfNodeFull struct {
 }
 
 type compositionStateOfNodeSimple struct {
-	nodeID     string
-	compStates cmap.ConcurrentMap //StateVersion->CompositionState
+	nodeID          string
+	isCreating      uint32
+	maxStateVersion uint64
+	compStates      cmap.ConcurrentMap //StateVersion->CompositionState
 }
 
 type CompositionStateBuilder interface {
@@ -176,17 +181,68 @@ func (bf *compositionStateBuilderFull) CompositionState(nodeID string, stateVers
 	return nil
 }
 
-func (bs *compositionStateBuilderSimple) getCompositionStateOfNode(nodeID string) *compositionStateOfNodeSimple {
+func (ns *compositionStateOfNodeSimple) maintainTimerStart(ctx context.Context, log tplog.Logger, ledger ledger.Ledger) {
+	go func() {
+		timer := time.NewTicker(1500 * time.Millisecond)
+		defer timer.Stop()
+		for {
+			select {
+			case <-timer.C:
+				var willRemoveKey []string
+				ns.compStates.IterCb(func(key string, v interface{}) {
+					compState := v.(CompositionState)
+					if compState.CompSState() == CompSState_Commited {
+						willRemoveKey = append(willRemoveKey, key)
+					}
+				})
+				for i, _ := range willRemoveKey {
+					ns.compStates.Remove(willRemoveKey[i])
+				}
+
+				if ns.compStates.Count() <= 0.6*100 {
+					func() {
+						for !atomic.CompareAndSwapUint32(&ns.isCreating, 0, 1) {
+							strInfo := "New compositionState is creating and maintainTimer will wait: " + ns.nodeID
+							log.Infof("%s", strInfo)
+							time.Sleep(100 * time.Millisecond)
+						}
+						defer func() {
+							ns.isCreating = 0
+						}()
+
+						maxStateVer := ns.maxStateVersion
+						for stateVer := maxStateVer + 1; stateVer <= maxStateVer+40; stateVer++ {
+							stateVerS := strconv.FormatUint(stateVer, 10)
+							compStateNew := createCompositionState(log, ledger, stateVer)
+							ns.compStates.Set(stateVerS, compStateNew)
+						}
+						ns.maxStateVersion = maxStateVer + 40
+					}()
+				}
+			case <-ctx.Done():
+				log.Infof("Maintain timer of compositionStateOfNodeSimple exit")
+			}
+		}
+	}()
+
+}
+
+func (bs *compositionStateBuilderSimple) getCompositionStateOfNode(nodeID string, log tplog.Logger, ledger ledger.Ledger) *compositionStateOfNodeSimple {
 	var compStateOfNode *compositionStateOfNodeSimple
 	if val, ok := bs.compStateOfNodes.Load(nodeID); ok {
 		compStateOfNode = val.(*compositionStateOfNodeSimple)
 	} else {
+		if ledger == nil {
+			return nil
+		}
+
 		compStateOfNode = &compositionStateOfNodeSimple{
 			nodeID:     nodeID,
 			compStates: cmap.New(),
 		}
-
 		bs.compStateOfNodes.Store(nodeID, compStateOfNode)
+
+		compStateOfNode.maintainTimerStart(context.Background(), log, ledger)
 	}
 
 	return compStateOfNode
@@ -209,22 +265,41 @@ func (bs *compositionStateBuilderSimple) createCompositionStateOfNode(log tplog.
 			}
 		}
 	} else {
-		compStateRTN = createCompositionState(log, ledger, stateVersion)
-		compStateOfNode.compStates.Set(stateVerS, compStateRTN)
-		log.Infof("Create new CompositionState for stateVersion %d，requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+		for !atomic.CompareAndSwapUint32(&compStateOfNode.isCreating, 0, 1) {
+			strInfo := "New compositionState is creating and createCompositionStateOfNode will wait: " + compStateOfNode.nodeID
+			log.Infof("%s", strInfo)
+			time.Sleep(50 * time.Millisecond)
+		}
+		defer func() {
+			compStateOfNode.isCreating = 0
+		}()
+
+		if val, ok := compStateOfNode.compStates.Get(stateVerS); ok {
+			return val.(CompositionState)
+		} else {
+			compStateRTN = createCompositionState(log, ledger, stateVersion)
+			compStateOfNode.compStates.Set(stateVerS, compStateRTN)
+
+			compStateOfNode.maxStateVersion = stateVersion
+
+			log.Infof("Create new CompositionState for stateVersion %d，requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+		}
 	}
 
 	return compStateRTN
 }
 
 func (bs *compositionStateBuilderSimple) CreateCompositionState(log tplog.Logger, nodeID string, ledger ledger.Ledger, stateVersion uint64, requester string) CompositionState {
-	compStateOfNode := bs.getCompositionStateOfNode(nodeID)
+	compStateOfNode := bs.getCompositionStateOfNode(nodeID, log, ledger)
 
 	return bs.createCompositionStateOfNode(log, compStateOfNode, ledger, stateVersion, requester)
 }
 
 func (bs *compositionStateBuilderSimple) CompositionState(nodeID string, stateVersion uint64) CompositionState {
-	compStateOfNode := bs.getCompositionStateOfNode(nodeID)
+	compStateOfNode := bs.getCompositionStateOfNode(nodeID, nil, nil)
+	if compStateOfNode == nil {
+		return nil
+	}
 
 	stateVerS := strconv.FormatUint(stateVersion, 10)
 	if val, ok := compStateOfNode.compStates.Get(stateVerS); ok {

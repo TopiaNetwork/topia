@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	tpacc "github.com/TopiaNetwork/topia/account"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
+	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -21,6 +21,7 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/execution"
+	"github.com/TopiaNetwork/topia/integration/mock"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -29,7 +30,6 @@ import (
 	"github.com/TopiaNetwork/topia/service"
 	"github.com/TopiaNetwork/topia/state"
 	"github.com/TopiaNetwork/topia/sync"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"github.com/TopiaNetwork/topia/wallet"
 )
@@ -85,7 +85,7 @@ func NewNode(rootPath string, endPoint string, seed string, role string) *Node {
 	config.CSConfig.InitDKGPrivKey = tpconfig.TestDatas[seed].InitDKGPrivKey
 	n.config = config
 
-	n.ledger = ledger.NewLedger(chainRootPath, "topia", mainLog, backend.BackendType_Badger)
+	n.ledger = ledger.NewLedger(chainRootPath, ledger.LedgerID(seed), mainLog, backend.BackendType_Badger)
 
 	n.network = tpnet.NewNetwork(ctx, mainLog, config.NetConfig, n.sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, n.ledger))
 
@@ -95,9 +95,9 @@ func NewNode(rootPath string, endPoint string, seed string, role string) *Node {
 
 	w := wallet.NewWallet(tplogcmm.InfoLevel, mainLog, chainRootPath)
 	service := service.NewService(nodeID, mainLog, codec.CodecType_PROTO, n.network, n.ledger, nil, w, config)
-	txPoolConf := txpooli.DefaultTransactionPoolConfig
-	n.txPool = txpool.NewTransactionPool(nodeID, ctx, txPoolConf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, service.StateQueryService(), service.BlockService(), n.network)
-
+	//txPoolConf := txpooli.DefaultTransactionPoolConfig
+	//n.txPool = txpool.NewTransactionPool(nodeID, ctx, txPoolConf, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, service.StateQueryService(), service.BlockService(), n.network)
+	n.txPool = mock.NewTransactionPoolMock(mainLog, nodeID, &consensus.CryptServiceMock{})
 	service.SetTxPool(n.txPool)
 	n.service = service
 

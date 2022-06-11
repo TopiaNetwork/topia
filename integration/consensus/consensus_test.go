@@ -310,7 +310,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 		var latestEpochInfo *tpcmm.EpochInfo
 		var latestBlock *tpchaintypes.Block
 		if l.State() == tpcmm.LedgerState_Uninitialized {
-			err = compState.SetLatestEpoch(config.Genesis.Epon)
+			err = compState.SetLatestEpoch(config.Genesis.Epoch)
 			if err != nil {
 				panic("Set latest epoch of genesis error: " + err.Error())
 				compState.Stop()
@@ -330,7 +330,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 				return nil
 			}
 
-			latestEpochInfo = config.Genesis.Epon
+			latestEpochInfo = config.Genesis.Epoch
 			latestBlock = config.Genesis.Block
 
 			compState.AddAccount(tpacc.NativeContractAccount_Account)

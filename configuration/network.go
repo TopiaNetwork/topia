@@ -1,8 +1,9 @@
 package configuration
 
 import (
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	"time"
+
+	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
 type PubSubConfiguration struct {

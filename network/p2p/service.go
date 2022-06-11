@@ -397,17 +397,32 @@ func (p2p *P2PService) getBootNodes(ctx context.Context) ([]string, []string, []
 	var bootNodesPropose []string
 	var bootNodesValidate []string
 
-	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES) != nil {
-		bootNodes = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES).([]string)
-	}
-	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_EXECUTE) != nil {
-		bootNodesExecute = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_EXECUTE).([]string)
-	}
-	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE) != nil {
-		bootNodesPropose = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE).([]string)
-	}
-	if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_VALIDATE) != nil {
-		bootNodesValidate = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE).([]string)
+	/*
+		if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES) != nil {
+			bootNodes = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES).([]string)
+		}
+		if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_EXECUTE) != nil {
+			bootNodesExecute = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_EXECUTE).([]string)
+		}
+		if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE) != nil {
+			bootNodesPropose = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE).([]string)
+		}
+		if ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_VALIDATE) != nil {
+			bootNodesValidate = ctx.Value(tpnetcmn.NetContextKey_BOOTNODES_PROPOSE).([]string)
+		}*/
+
+	for _, seedInfo := range p2p.config.Connection.SeedPeers {
+		bootNodes = append(bootNodes, seedInfo.NetAddrString)
+		switch seedInfo.Role {
+		case tpcmm.NodeRole_Executor:
+			bootNodesExecute = append(bootNodesExecute, seedInfo.NetAddrString)
+		case tpcmm.NodeRole_Proposer:
+			bootNodesPropose = append(bootNodesPropose, seedInfo.NetAddrString)
+		case tpcmm.NodeRole_Validator:
+			bootNodesValidate = append(bootNodesValidate, seedInfo.NetAddrString)
+		default:
+			p2p.log.Panicf("Invalid boot node role %d", seedInfo.Role)
+		}
 	}
 
 	return bootNodes, bootNodesExecute, bootNodesPropose, bootNodesValidate

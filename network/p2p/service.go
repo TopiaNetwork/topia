@@ -1009,6 +1009,10 @@ func (p2p *P2PService) Start() {
 	}()
 }
 
+func (p2p *P2PService) Ready() bool {
+	return len(p2p.ConnectedPeers()) >= len(p2p.config.Connection.SeedPeers)-1
+}
+
 func (p2p *P2PService) Close() {
 	for _, dhtService := range p2p.dhtServices {
 		dhtService.Close()

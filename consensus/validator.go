@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/TopiaNetwork/topia/codec"
+	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"strconv"
 	"sync"
@@ -28,11 +29,11 @@ type consensusValidator struct {
 	propMsgCached         *ProposeMessage
 	syncBestPropMsgCached sync.RWMutex
 	bestPropMsgCached     *BestProposeMessage
-	syncpropMsgVoted      sync.RWMutex
-	propMsgVoted          map[string]struct{}
+	propMsgVoted          *lru.Cache
 }
 
 func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler) *consensusValidator {
+	propMsgVoted, _ := lru.New(5)
 	return &consensusValidator{
 		log:                tplog.CreateSubModuleLogger("validator", log),
 		nodeID:             nodeID,
@@ -41,7 +42,7 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 		ledger:             ledger,
 		deliver:            deliver,
 		marshaler:          marshaler,
-		propMsgVoted:       make(map[string]struct{}),
+		propMsgVoted:       propMsgVoted,
 	}
 }
 
@@ -180,16 +181,13 @@ func (v *consensusValidator) produceVoteAndDeliver(ctx context.Context, propMsg 
 }
 
 func (v *consensusValidator) haveVoted(propMsg *ProposeMessage) (bool, string) {
-	v.syncpropMsgVoted.RLock()
-	defer v.syncpropMsgVoted.RUnlock()
-
 	pmKey := string(propMsg.ChainID) + "@" +
 		strconv.FormatUint(uint64(propMsg.Version), 10) + "@" +
 		strconv.FormatUint(propMsg.Epoch, 10) + "@" +
 		strconv.FormatUint(propMsg.Round, 10) + "@" +
 		strconv.FormatUint(propMsg.StateVersion, 10) + "@" +
 		string(propMsg.Proposer)
-	if _, ok := v.propMsgVoted[pmKey]; ok {
+	if ok := v.propMsgVoted.Contains(pmKey); ok {
 		return true, pmKey
 	}
 
@@ -197,10 +195,7 @@ func (v *consensusValidator) haveVoted(propMsg *ProposeMessage) (bool, string) {
 }
 
 func (v *consensusValidator) addVotedPropMsg(propMsgKey string) {
-	v.syncpropMsgVoted.Lock()
-	defer v.syncpropMsgVoted.Unlock()
-
-	v.propMsgVoted[propMsgKey] = struct{}{}
+	v.propMsgVoted.Add(propMsgKey, struct{}{})
 }
 
 func (v *consensusValidator) checkValidBestProposeMsg(bestPropMsg *BestProposeMessage) bool {

@@ -113,6 +113,11 @@ func (md *messageDeliverMock) deliverDKGDealRespMessage(ctx context.Context, msg
 	return nil
 }
 
+func (md *messageDeliverMock) setEpochService(epService EpochService) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (md *messageDeliverMock) updateDKGBls(dkgBls DKGBls) {
 	md.dkgBls = dkgBls
 }

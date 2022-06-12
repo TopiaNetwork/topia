@@ -394,5 +394,6 @@ func (v *consensusValidator) produceVoteMsg(msg *ProposeMessage) (*VoteMessage, 
 
 func (v *consensusValidator) start(ctx context.Context) {
 	v.receiveProposeMsgStart(ctx)
+
 	v.receiveBestProposeMsgStart(ctx)
 }

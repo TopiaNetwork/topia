@@ -2,6 +2,7 @@ package chain
 
 import (
 	"errors"
+	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -32,6 +33,10 @@ type ChainState interface {
 
 	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
 
+	SetChainID(chainID tpchaintypes.ChainID) error
+
+	SetNetworkType(netType tpcmm.NetworkType) error
+
 	SetLatestBlock(block *tpchaintypes.Block) error
 
 	SetLatestBlockResult(blockResult *tpchaintypes.BlockResult) error
@@ -52,7 +57,7 @@ func NewChainStore(stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater, c
 
 func (cs *chainState) ChainID() tpchaintypes.ChainID {
 	chainIDBytes, err := cs.GetStateData(StateStore_Name_Chain, []byte(ChainID_Key))
-	if err != nil {
+	if err != nil || chainIDBytes == nil {
 		return tpchaintypes.ChainID_Empty
 	}
 
@@ -61,7 +66,7 @@ func (cs *chainState) ChainID() tpchaintypes.ChainID {
 
 func (cs *chainState) NetworkType() tpcmm.NetworkType {
 	netTypeBytes, err := cs.GetStateData(StateStore_Name_Chain, []byte(NetworkType_Key))
-	if err != nil {
+	if err != nil || netTypeBytes == nil {
 		return tpcmm.NetworkType_Unknown
 	}
 
@@ -102,6 +107,24 @@ func (cs *chainState) GetLatestBlockResult() (*tpchaintypes.BlockResult, error) 
 	}
 
 	return &blockRS, nil
+}
+
+func (cs *chainState) SetChainID(chainID tpchaintypes.ChainID) error {
+	cID := cs.ChainID()
+	if cID != tpchaintypes.ChainID_Empty {
+		return fmt.Errorf("Have set chain id %s", cID)
+	}
+
+	return cs.Put(StateStore_Name_Chain, []byte(ChainID_Key), []byte(chainID))
+}
+
+func (cs *chainState) SetNetworkType(netType tpcmm.NetworkType) error {
+	nType := cs.NetworkType()
+	if nType != tpcmm.NetworkType_Unknown {
+		return fmt.Errorf("Have set net type %s", nType.String())
+	}
+
+	return cs.Put(StateStore_Name_Chain, []byte(ChainID_Key), []byte{byte(netType)})
 }
 
 func (cs *chainState) SetLatestBlock(block *tpchaintypes.Block) error {

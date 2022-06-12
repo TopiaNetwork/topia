@@ -2,20 +2,23 @@ package configuration
 
 import (
 	"encoding/json"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
 	"strings"
+
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
 type GenesisData struct {
+	ChainID     tpchaintypes.ChainID
 	NetType     tpcmm.NetworkType
-	Epon        *tpcmm.EpochInfo
+	Epoch       *tpcmm.EpochInfo
 	Block       *tpchaintypes.Block
 	BlockResult *tpchaintypes.BlockResult
+	GenesisNode []*tpcmm.NodeInfo
 }
 
 func (genesis *GenesisData) Save(fileFullName string) error {

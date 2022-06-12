@@ -13,6 +13,7 @@ const (
 	nodeCmdDes   = "Operate a node: start."
 )
 
+var rootPath string
 var endPoint string
 var seed string
 var role string
@@ -28,7 +29,7 @@ var nodeStartCmd = &cobra.Command{
 		// Parsing of the command line is done so silence cmd usage
 		cmd.SilenceUsage = true
 
-		n := tpnode.NewNode(endPoint, seed, role)
+		n := tpnode.NewNode(rootPath, endPoint, seed, role)
 		n.Start()
 		return nil
 	},
@@ -36,9 +37,10 @@ var nodeStartCmd = &cobra.Command{
 
 func startCmd() *cobra.Command {
 	flags := nodeStartCmd.PersistentFlags()
+	flags.StringVarP(&rootPath, "rootpath", "", "", "the node data root path")
 	flags.StringVarP(&endPoint, "endpoint", "", "/ip4/127.0.0.1/tcp/21000", "the node listening endpoint")
 	flags.StringVarP(&seed, "seed", "", "universal", "the network peer's seed for generating key")
-	flags.StringVarP(&role, "role", "", "executor", "the node role, you can input one of executor, proposer,validator, proposer_validator")
+	flags.StringVarP(&role, "role", "", "executor", "the node role, you can input one of executor,proposer,validator,proposer_validator")
 	return nodeStartCmd
 }
 

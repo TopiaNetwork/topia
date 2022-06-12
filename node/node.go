@@ -4,13 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
-
 	"github.com/AsynkronIT/protoactor-go/actor"
-
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -32,6 +26,11 @@ import (
 	"github.com/TopiaNetwork/topia/sync"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"github.com/TopiaNetwork/topia/wallet"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
 )
 
 type Node struct {
@@ -232,6 +231,12 @@ func (n *Node) Start() {
 	n.evHub.Start(n.sysActor)
 	n.network.Start()
 	n.consensus.Start(n.sysActor, n.latestEpoch.Epoch, n.latestEpoch.StartTimeStamp, n.latestBlock.Head.Height)
+	if n.role != "executor" {
+		for !n.network.Ready() {
+			time.Sleep(50 * time.Millisecond)
+		}
+		n.consensus.TriggerDKG(n.latestEpoch.Epoch)
+	}
 	n.txPool.Start(n.sysActor, n.network)
 	n.syncer.Start(n.sysActor, n.network)
 	n.chain.Start(n.sysActor, n.network)
@@ -242,6 +247,6 @@ func (n *Node) Start() {
 
 func (n *Node) Stop() {
 	n.consensus.Stop()
-	n.syncer.Stop()
+	//n.syncer.Stop()
 	n.network.Stop()
 }

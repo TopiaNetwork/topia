@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -43,9 +44,9 @@ type consensusProposer struct {
 	blockMaxCyclePeriod     time.Duration
 	isProposing             uint32
 	lastBlockHeight         uint64
-	lastProposeHeight       uint64                        //the block height which self-proposer launched based on last time
-	newHeightStartTimeStamp time.Time                     // the timestamp of new block height
-	proposedRecord          map[uint64]context.CancelFunc //basic height map
+	lastProposeHeight       uint64     //the block height which self-proposer launched based on last time
+	newHeightStartTimeStamp time.Time  // the timestamp of new block height
+	proposedRecord          *lru.Cache //height->context.CancelFunc
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -65,6 +66,8 @@ func newConsensusProposer(log tplog.Logger,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
 	validator *consensusValidator) *consensusProposer {
+	proposedRecord, _ := lru.New(5)
+
 	csProposer := &consensusProposer{
 		log:                     tplog.CreateSubModuleLogger("proposer", log),
 		nodeID:                  nodeID,
@@ -79,7 +82,7 @@ func newConsensusProposer(log tplog.Logger,
 		proposeMaxInterval:      proposeMaxInterval,
 		blockMaxCyclePeriod:     blockMaxCyclePeriod,
 		isProposing:             0,
-		proposedRecord:          make(map[uint64]context.CancelFunc),
+		proposedRecord:          proposedRecord,
 		ppmPropList:             list.New(),
 		validator:               validator,
 	}
@@ -285,7 +288,10 @@ func (p *consensusProposer) receiveVoteMessageStart(ctx context.Context) {
 				}
 
 				cancel := context.CancelFunc(nil)
-				cancel, _ = p.proposedRecord[p.lastBlockHeight]
+				cancelI, ok := p.proposedRecord.Get(p.lastBlockHeight)
+				if ok {
+					cancel = cancelI.(context.CancelFunc)
+				}
 				err = p.aggSignDisposeWhenRecvVoteMsg(ctx, voteMsg, cancel)
 				if err != nil {
 					continue
@@ -358,13 +364,14 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		p.newHeightStartTimeStamp = time.Now()
 
 		if p.lastBlockHeight > 1 {
-			if cancel, ok := p.proposedRecord[p.lastBlockHeight-1]; ok {
+			if cancelI, ok := p.proposedRecord.Get(p.lastBlockHeight - 1); ok {
+				cancel := cancelI.(context.CancelFunc)
 				cancel()
 			}
 		}
 	}
 
-	if _, ok := p.proposedRecord[latestBlock.Head.Height]; ok {
+	if ok := p.proposedRecord.Contains(latestBlock.Head.Height); ok {
 		err = fmt.Errorf("Have sucessfully proposed based on height %d, self node %s", latestBlock.Head.Height, p.nodeID)
 		p.log.Warnf("%s", err.Error())
 		if time.Since(p.newHeightStartTimeStamp).Milliseconds() > 10*p.blockMaxCyclePeriod.Milliseconds() {
@@ -455,7 +462,10 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	voteMsg.PubKey = pubKey
 
 	cancel := context.CancelFunc(nil)
-	cancel, _ = p.proposedRecord[p.lastBlockHeight]
+	cancelI, ok := p.proposedRecord.Get(p.lastBlockHeight)
+	if ok {
+		cancel = cancelI.(context.CancelFunc)
+	}
 	err = p.aggSignDisposeWhenRecvVoteMsg(ctx, voteMsg, cancel)
 	if err != nil && err != notReachVoteThresholdErr {
 		return err
@@ -472,7 +482,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		return err
 	}
 
-	p.proposedRecord[latestBlock.Head.Height] = p.bestProposeMsgTimerStart(ctx)
+	p.proposedRecord.Add(latestBlock.Head.Height, p.bestProposeMsgTimerStart(ctx))
 
 	p.log.Infof("Propose block successfully: state version %d, propose Block height %d, self node %s", proposeBlock.StateVersion, latestBlock.Head.Height+1, p.nodeID)
 

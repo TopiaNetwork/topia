@@ -52,6 +52,8 @@ type Network interface {
 
 	Start()
 
+	Ready() bool
+
 	Stop()
 }
 
@@ -139,6 +141,10 @@ func (net *network) DisConnectWithNode(nodeID string) error {
 
 func (net *network) Start() {
 	net.p2p.Start()
+}
+
+func (net *network) Ready() bool {
+	return net.p2p.Ready()
 }
 
 func (net *network) Stop() {

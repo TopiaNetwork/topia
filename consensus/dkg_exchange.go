@@ -354,7 +354,9 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 func (ex *dkgExchange) startLoop(ctx context.Context) {
 	ex.log.Info("Start DKG exchange loop")
 	ex.startSendDealLoop(ctx)
+
 	ex.startReceiveDealLoop(ctx)
+
 	ex.startReceiveDealRespLoop(ctx)
 }
 

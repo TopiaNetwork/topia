@@ -234,6 +234,7 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 		}
 
 		cons.validator.start(ctx)
+
 		cons.dkgEx.startLoop(ctx)
 
 		err = cons.dkgEx.updateDKGPartPubKeys(csStateRN)

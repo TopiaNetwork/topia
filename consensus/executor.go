@@ -341,6 +341,11 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 	go func() {
 		timer := time.NewTicker(e.prepareInterval)
 		defer timer.Stop()
+
+		for !e.deliver.deliverNetwork().Ready() {
+			time.Sleep(50 * time.Millisecond)
+		}
+
 		for {
 			select {
 			case <-timer.C:
@@ -390,8 +395,10 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 
 func (e *consensusExecutor) start(ctx context.Context) {
 	e.receivePreparePackedMessageExeStart(ctx)
-	e.prepareTimerStart(ctx)
+
 	e.receiveCommitMsgStart(ctx)
+
+	e.prepareTimerStart(ctx)
 }
 
 func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []*txbasic.Transaction, txResultList []txbasic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {

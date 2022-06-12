@@ -23,7 +23,7 @@ func TestMultiCompositionState(t *testing.T) {
 
 	compState.SetLatestBlockResult(config.Genesis.BlockResult)
 
-	compState.SetLatestEpoch(config.Genesis.Epon)
+	compState.SetLatestEpoch(config.Genesis.Epoch)
 
 	compState.Commit()
 
@@ -72,7 +72,7 @@ func TestMemCompositionState(t *testing.T) {
 
 	compState.SetLatestBlockResult(config.Genesis.BlockResult)
 
-	compState.SetLatestEpoch(config.Genesis.Epon)
+	compState.SetLatestEpoch(config.Genesis.Epoch)
 
 	compState.Commit()
 

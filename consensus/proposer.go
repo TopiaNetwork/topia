@@ -483,6 +483,11 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 	go func() {
 		timer := time.NewTicker(p.blockMaxCyclePeriod)
 		defer timer.Stop()
+		for !p.deliver.isReady() {
+			time.Sleep(50 * time.Millisecond)
+		}
+		p.log.Warnf("Proposer message deliver ready: self node %s", p.nodeID)
+
 		for {
 			select {
 			case addedBlock := <-p.blockAddedCh:
@@ -504,11 +509,11 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 }
 
 func (p *consensusProposer) start(ctx context.Context) {
-	p.proposeBlockStart(ctx)
-
 	p.receivePreparePackedMessagePropStart(ctx)
 
 	p.receiveVoteMessageStart(ctx)
+
+	p.proposeBlockStart(ctx)
 }
 
 func (p *consensusProposer) createBlockHead(chainID tpchaintypes.ChainID, epoch uint64, vrfProof []byte, maxPri []byte, frontPPMProp *PreparePackedMessageProp, latestBlock *tpchaintypes.Block, stateRoot []byte, proposeHeight uint64) (*tpchaintypes.BlockHead, uint64, error) {

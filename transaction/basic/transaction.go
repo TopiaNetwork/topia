@@ -120,9 +120,18 @@ func (m *Transaction) CryptType() (tpcrtypes.CryptType, error) {
 	return tpcrtypes.NewFromBytes(m.Head.FromAddr).CryptType()
 }
 
-func (m *Transaction) HashBytes() ([]byte, error) {
+func (m *Transaction) Bytes() ([]byte, error) {
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 	txBytes, err := marshaler.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return txBytes, nil
+}
+
+func (m *Transaction) HashBytes() ([]byte, error) {
+	txBytes, err := m.Bytes()
 	if err != nil {
 		return nil, err
 	}

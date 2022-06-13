@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -20,6 +19,7 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const defaultLeaderCount = int(3)
@@ -254,6 +254,14 @@ func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, v
 		return err
 	}
 
+	if p.validator.commitMsg.Contains(commitMsg.StateVersion) {
+		p.log.Warnf("Have received commit message and not need to commit message again: state version %d, self node %s", voteMsg.StateVersion, p.nodeID)
+		if cancel != nil {
+			cancel()
+		}
+		return nil
+	}
+
 	err = p.deliver.deliverCommitMessage(ctx, commitMsg)
 	if err != nil {
 		p.log.Errorf("Can't deliver commit message: %v", err)
@@ -274,6 +282,10 @@ func (p *consensusProposer) receiveVoteMessageStart(ctx context.Context) {
 		for {
 			select {
 			case voteMsg := <-p.voteMsgChan:
+				if p.validator.commitMsg.Contains(voteMsg.StateVersion) {
+					p.log.Infof("Have received commit message and the vote message will be discarded: state version %d, self node %s", voteMsg.StateVersion, p.nodeID)
+					continue
+				}
 				p.log.Infof("Received vote message, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
 
 				if voteMsg.StateVersion != (p.voteCollector.latestHeight + 1) {

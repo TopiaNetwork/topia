@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/eventhub"
 	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"strconv"
@@ -22,6 +23,7 @@ type consensusValidator struct {
 	nodeID                string
 	proposeMsgChan        chan *ProposeMessage
 	bestProposeMsgChan    chan *BestProposeMessage
+	commitMsgChan         chan *CommitMessage
 	ledger                ledger.Ledger
 	deliver               messageDeliverI
 	marshaler             codec.Marshaler
@@ -30,10 +32,12 @@ type consensusValidator struct {
 	syncBestPropMsgCached sync.RWMutex
 	bestPropMsgCached     *BestProposeMessage
 	propMsgVoted          *lru.Cache
+	commitMsg             *lru.Cache
 }
 
 func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler) *consensusValidator {
 	propMsgVoted, _ := lru.New(5)
+	commitMsg, _ := lru.New(5)
 	return &consensusValidator{
 		log:                tplog.CreateSubModuleLogger("validator", log),
 		nodeID:             nodeID,
@@ -43,6 +47,7 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 		deliver:            deliver,
 		marshaler:          marshaler,
 		propMsgVoted:       propMsgVoted,
+		commitMsg:          commitMsg,
 	}
 }
 
@@ -102,6 +107,11 @@ func (v *consensusValidator) broadcastBestProposeMsg(ctx context.Context) error 
 	defer v.syncPropMsgCached.RUnlock()
 
 	propMsg := v.propMsgCached
+
+	if v.commitMsg.Contains(propMsg.StateVersion) {
+		v.log.Infof("Have received commit message and not need to broadcast best propose message: state version %d, self node %s", propMsg.StateVersion, v.nodeID)
+		return nil
+	}
 
 	if propMsg == nil {
 		return fmt.Errorf("Now propMsgCached nil and can't broadcast: self node %s", v.nodeID)
@@ -228,6 +238,11 @@ func (v *consensusValidator) receiveBestProposeMsgStart(ctx context.Context) {
 		for {
 			select {
 			case bestPropMsg := <-v.bestProposeMsgChan:
+				if ok := v.commitMsg.Contains(bestPropMsg.StateVersion); ok {
+					v.log.Warnf("Validator have received commit message and best propose message will be discard: StateVersion %d, self node %s", bestPropMsg.StateVersion, v.nodeID)
+					continue
+				}
+
 				if !v.checkValidBestProposeMsg(bestPropMsg) {
 					continue
 				}
@@ -333,6 +348,10 @@ func (v *consensusValidator) receiveProposeMsgStart(ctx context.Context) {
 		for {
 			select {
 			case propMsg := <-v.proposeMsgChan:
+				if ok := v.commitMsg.Contains(propMsg.StateVersion); ok {
+					v.log.Warnf("Validator have received commit message and propose message will be discarded: StateVersion %d, self node %s", propMsg.StateVersion, v.nodeID)
+					continue
+				}
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
 					defer csStateRN.Stop()
@@ -387,8 +406,110 @@ func (v *consensusValidator) produceVoteMsg(msg *ProposeMessage) (*VoteMessage, 
 	}, nil
 }
 
+func (v *consensusValidator) constructBlockWithOnlyHead(blockHead *tpchaintypes.BlockHead) (*tpchaintypes.Block, error) {
+	dstBH, err := blockHead.DeepCopy(blockHead)
+	if err != nil {
+		err = fmt.Errorf("Block head deep copy err: %v", err)
+		return nil, err
+	}
+
+	blockData := &tpchaintypes.BlockData{
+		Version: blockHead.Version,
+	}
+
+	return &tpchaintypes.Block{
+		Head: dstBH,
+		Data: blockData,
+	}, nil
+}
+
+func (v *consensusValidator) receiveCommitMsgStart(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case commitMsg := <-v.commitMsgChan:
+				if ok, _ := v.commitMsg.ContainsOrAdd(commitMsg.StateVersion, struct{}{}); ok {
+					v.log.Warnf("Validator received the same state version commit message: StateVersion %d, self node %s", commitMsg.StateVersion, v.nodeID)
+					continue
+				}
+				v.log.Infof("Validator received commit message: StateVersion %d, self node %s", commitMsg.StateVersion, v.nodeID)
+
+				err := func() error {
+					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
+					defer csStateRN.Stop()
+
+					var bh tpchaintypes.BlockHead
+					err := v.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
+					if err != nil {
+						v.log.Errorf("Can't unmarshal received block head of commit message: %v", err)
+						return err
+					}
+
+					latestBlock, err := csStateRN.GetLatestBlock()
+					if err != nil {
+						v.log.Errorf("Can't get the latest block: %v", err)
+						return err
+					}
+
+					deltaHeight := int(bh.Height) - int(latestBlock.Head.Height)
+					if deltaHeight <= 0 {
+						err = fmt.Errorf("Received commit message is delayed, StateVersion %d, latest height %d", commitMsg.StateVersion, latestBlock.Head.Height)
+						v.log.Infof("%s", err.Error())
+						return err
+					}
+
+					compState := state.GetStateBuilder(state.CompStateBuilderType_Simple).CreateCompositionState(v.log, v.nodeID, v.ledger, commitMsg.StateVersion, "validator")
+					if compState == nil {
+						err := fmt.Errorf("Validator nil csState and can't commit block whose height %d, latest block height %d, self node %s", bh.Height, latestBlock.Head.Height, v.nodeID)
+						return err
+					}
+
+					compState.Lock()
+					defer compState.Unlock()
+
+					v.log.Infof("Validator gets compState lock: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, bh.Height, "validator", v.nodeID)
+
+					block, err := v.constructBlockWithOnlyHead(&bh)
+					if err != nil {
+						v.log.Errorf("Validator constructs block err: %v", err)
+						return err
+					}
+
+					err = compState.SetLatestBlock(block)
+					if err != nil {
+						v.log.Errorf("Set latest block err when CommitBlock: %v", err)
+						return err
+					}
+					v.log.Infof("Validator sets latest block: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
+
+					v.log.Infof("Validator begins committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
+					errCMMState := compState.Commit()
+					if errCMMState != nil {
+						v.log.Errorf("Validator commits state version %d err: %v", compState.StateVersion(), errCMMState)
+						return errCMMState
+					}
+					v.log.Infof("Validator finished committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
+
+					eventhub.GetEventHubManager().GetEventHub(v.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
+
+					return nil
+				}()
+
+				if err != nil {
+					continue
+				}
+			case <-ctx.Done():
+				v.log.Info("Validator receive commit message exit")
+			}
+		}
+
+	}()
+}
+
 func (v *consensusValidator) start(ctx context.Context) {
 	v.receiveProposeMsgStart(ctx)
 
 	v.receiveBestProposeMsgStart(ctx)
+
+	v.receiveCommitMsgStart(ctx)
 }

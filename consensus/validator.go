@@ -35,7 +35,7 @@ type consensusValidator struct {
 	commitMsg             *lru.Cache
 }
 
-func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler) *consensusValidator {
+func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, commitMsgChan chan *CommitMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler) *consensusValidator {
 	propMsgVoted, _ := lru.New(5)
 	commitMsg, _ := lru.New(5)
 	return &consensusValidator{
@@ -43,6 +43,7 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 		nodeID:             nodeID,
 		proposeMsgChan:     proposeMsgChan,
 		bestProposeMsgChan: bestProposeMsgChan,
+		commitMsgChan:      commitMsgChan,
 		ledger:             ledger,
 		deliver:            deliver,
 		marshaler:          marshaler,
@@ -423,6 +424,44 @@ func (v *consensusValidator) constructBlockWithOnlyHead(blockHead *tpchaintypes.
 	}, nil
 }
 
+func (v *consensusValidator) commitMsgDispose(ctx context.Context, bh *tpchaintypes.BlockHead, commitMsg *CommitMessage) error {
+	compState := state.GetStateBuilder(state.CompStateBuilderType_Simple).CreateCompositionState(v.log, v.nodeID, v.ledger, commitMsg.StateVersion, "validator")
+	if compState == nil {
+		err := fmt.Errorf("Validator nil csState and can't commit block whose height %d, self node %s", bh.Height, v.nodeID)
+		return err
+	}
+
+	compState.Lock()
+	defer compState.Unlock()
+
+	v.log.Infof("Validator gets compState lock: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, bh.Height, "validator", v.nodeID)
+
+	block, err := v.constructBlockWithOnlyHead(bh)
+	if err != nil {
+		v.log.Errorf("Validator constructs block err: %v", err)
+		return err
+	}
+
+	err = compState.SetLatestBlock(block)
+	if err != nil {
+		v.log.Errorf("Set latest block err when CommitBlock: %v", err)
+		return err
+	}
+	v.log.Infof("Validator sets latest block: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
+
+	v.log.Infof("Validator begins committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
+	errCMMState := compState.Commit()
+	if errCMMState != nil {
+		v.log.Errorf("Validator commits state version %d err: %v", compState.StateVersion(), errCMMState)
+		return errCMMState
+	}
+	v.log.Infof("Validator finished committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
+
+	eventhub.GetEventHubManager().GetEventHub(v.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
+
+	return nil
+}
+
 func (v *consensusValidator) receiveCommitMsgStart(ctx context.Context) {
 	go func() {
 		for {
@@ -458,41 +497,7 @@ func (v *consensusValidator) receiveCommitMsgStart(ctx context.Context) {
 						return err
 					}
 
-					compState := state.GetStateBuilder(state.CompStateBuilderType_Simple).CreateCompositionState(v.log, v.nodeID, v.ledger, commitMsg.StateVersion, "validator")
-					if compState == nil {
-						err := fmt.Errorf("Validator nil csState and can't commit block whose height %d, latest block height %d, self node %s", bh.Height, latestBlock.Head.Height, v.nodeID)
-						return err
-					}
-
-					compState.Lock()
-					defer compState.Unlock()
-
-					v.log.Infof("Validator gets compState lock: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, bh.Height, "validator", v.nodeID)
-
-					block, err := v.constructBlockWithOnlyHead(&bh)
-					if err != nil {
-						v.log.Errorf("Validator constructs block err: %v", err)
-						return err
-					}
-
-					err = compState.SetLatestBlock(block)
-					if err != nil {
-						v.log.Errorf("Set latest block err when CommitBlock: %v", err)
-						return err
-					}
-					v.log.Infof("Validator sets latest block: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
-
-					v.log.Infof("Validator begins committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
-					errCMMState := compState.Commit()
-					if errCMMState != nil {
-						v.log.Errorf("Validator commits state version %d err: %v", compState.StateVersion(), errCMMState)
-						return errCMMState
-					}
-					v.log.Infof("Validator finished committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
-
-					eventhub.GetEventHubManager().GetEventHub(v.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
-
-					return nil
+					return v.commitMsgDispose(ctx, &bh, commitMsg)
 				}()
 
 				if err != nil {

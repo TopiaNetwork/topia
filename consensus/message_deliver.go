@@ -581,19 +581,19 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 	exeCtx = context.WithValue(exeCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 	err = md.deliverSendCommon(exeCtx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send propose message to executor network failed: err=%v", err)
+		md.log.Errorf("Send commit message to executor network failed: err=%v", err)
 	}
 
 	propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.deliverSendCommon(propCtx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_PartPubKey, msgBytes)
+	err = md.deliverSendCommon(propCtx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send propose message to propose network failed: err=%v", err)
+		md.log.Errorf("Send commit message to propose network failed: err=%v", err)
 	}
 
 	ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.deliverSendCommon(propCtx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_PartPubKey, msgBytes)
+	err = md.deliverSendCommon(ValCtx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send propose message to validate network failed: err=%v", err)
+		md.log.Errorf("Send commit message to validate network failed: err=%v", err)
 	}
 
 	return err

@@ -211,19 +211,19 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 	}()
 }
 
-func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
+func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, *tpchaintypes.BlockHead, error) {
 	var blockHead tpchaintypes.BlockHead
 	err := p.marshaler.Unmarshal(msg.BlockHead, &blockHead)
 	if err != nil {
 		p.log.Errorf("Unmarshal block failed: %v", err)
-		return nil, err
+		return nil, nil, err
 	}
 	blockHead.VoteAggSignature = aggSign
 
 	newBlockHeadBytes, err := p.marshaler.Marshal(&blockHead)
 	if err != nil {
 		p.log.Errorf("Marshal block head failed: %v", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &CommitMessage{
@@ -233,7 +233,7 @@ func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (
 		Round:        msg.Round,
 		StateVersion: msg.StateVersion,
 		BlockHead:    newBlockHeadBytes,
-	}, nil
+	}, &blockHead, nil
 }
 
 func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, voteMsg *VoteMessage, cancel context.CancelFunc) error {
@@ -248,7 +248,7 @@ func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, v
 		return notReachVoteThresholdErr
 	}
 
-	commitMsg, err := p.produceCommitMsg(voteMsg, aggSign)
+	commitMsg, bh, err := p.produceCommitMsg(voteMsg, aggSign)
 	if err != nil {
 		p.log.Errorf("Can't produce commit message: %v", err)
 		return err
@@ -271,6 +271,8 @@ func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, v
 	if cancel != nil {
 		cancel()
 	}
+
+	p.validator.commitMsgDispose(ctx, bh, commitMsg)
 
 	p.log.Infof("Deliver commit message successfully, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
 

@@ -237,9 +237,13 @@ func (n *Node) Start() {
 		}
 		n.consensus.TriggerDKG(n.latestEpoch.Epoch)
 	}
-	n.txPool.Start(n.sysActor, n.network)
+
 	n.syncer.Start(n.sysActor, n.network)
-	n.chain.Start(n.sysActor, n.network)
+
+	if n.role == "executor" {
+		n.txPool.Start(n.sysActor, n.network)
+		n.chain.Start(n.sysActor, n.network)
+	}
 
 	fmt.Println("All services were started")
 	<-waitChannel

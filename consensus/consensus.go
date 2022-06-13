@@ -51,6 +51,7 @@ type Consensus interface {
 
 type consensus struct {
 	nodeID       string
+	nodeRole     tpcmm.NodeRole
 	log          tplog.Logger
 	level        tplogcmm.LogLevel
 	handler      ConsensusHandler
@@ -108,7 +109,7 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	epService := NewEpochService(consLog, nodeID, blockAddedEpochCh, epochNewCh, csConfig.EpochInterval, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
 
 	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, epService, deliver, preprePackedMsgExeChan, preprePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
-	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, bestProposeMsgChan, ledger, deliver, marshaler)
+	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, bestProposeMsgChan, commitMsgChan, ledger, deliver, marshaler)
 	proposer := newConsensusProposer(consLog, nodeID, priKey, preprePackedMsgPropChan, voteMsgChan, blockAddedProposerCh, cryptS, csConfig.ProposerBlockMaxInterval, csConfig.BlockMaxCyclePeriod, deliver, ledger, marshaler, validator)
 
 	deliver.setEpochService(epService)
@@ -213,13 +214,14 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 	csStateRN := state.CreateCompositionStateReadonly(cons.log, cons.ledger)
 	defer csStateRN.Stop()
+
 	nodeInfo, err := csStateRN.GetNode(cons.nodeID)
 	if err != nil {
 		cons.log.Panicf("Get node error: %v", err)
 		return err
 	}
-
-	cons.log.Infof("Self Node id=%s, role=%d, state=%d", nodeInfo.NodeID, nodeInfo.Role, nodeInfo.State)
+	cons.nodeRole = nodeInfo.Role
+	cons.log.Infof("Self Node id=%s, role=%s, state=%d", nodeInfo.NodeID, nodeInfo.Role.String(), nodeInfo.State)
 
 	cons.epochService.Start(ctx)
 

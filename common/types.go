@@ -22,7 +22,7 @@ const (
 	NodeRole_Unknown   NodeRole = 0x00
 	NodeRole_Executor           = 0x01
 	NodeRole_Proposer           = 0x02
-	NodeRole_Validator          = 0x40
+	NodeRole_Validator          = 0x04
 )
 
 var CurrentNetworkType = NetworkType_Testnet
@@ -54,6 +54,31 @@ func (n NetworkType) Value(netType byte) NetworkType {
 		return NetworkType_Testnet
 	default:
 		return NetworkType_Unknown
+	}
+}
+
+func (n NodeRole) String() string {
+	if n&NodeRole_Executor == NodeRole_Executor {
+		return "executor"
+	} else if n&NodeRole_Proposer == NodeRole_Proposer {
+		return "proposer"
+	} else if n&NodeRole_Validator == NodeRole_Validator {
+		return "validator"
+	} else {
+		return "Unknown"
+	}
+}
+
+func (n NodeRole) Value(role string) NodeRole {
+	switch role {
+	case "executor":
+		return NodeRole_Executor
+	case "proposer":
+		return NodeRole_Proposer
+	case "validator":
+		return NodeRole_Validator
+	default:
+		return NodeRole_Unknown
 	}
 }
 

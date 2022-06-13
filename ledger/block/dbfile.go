@@ -29,10 +29,6 @@ type TopiaFile struct {
 //	return newFileImpl(datafile)
 //}
 
-//func newDBMergeFile(basePath string) (*DBFile, error) {
-//	datafile := basePath + string(os.PathSeparator) + MERGE_FILE
-//	return newFileImpl(datafile)
-//}
 
 func newDataFile(block *types.Block) (*TopiaFile, error) {
 	filepath := path.Join(block.GetHash() ,".topia")
@@ -94,6 +90,7 @@ func (df *TopiaFile) Writedata(block *types.Block) error {
 		}
 		//fmt.Println("", i)
 	}
+	return  nil
 }
 
 //func (df *TopiaFile) ReadItem(offset int64) (*DbItem, error) {
@@ -112,7 +109,7 @@ func outSize(filepath string)(bool,error){
 		return false, err
 	}
 	if stat.Size() > 1000000 {
-		return false,nil
+		return true,nil
 	}
-	return true,nil
+	return false, nil
 }

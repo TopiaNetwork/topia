@@ -2,10 +2,10 @@ package block
 
 
 import (
-	"fmt"
+	//"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
 	"launchpad.net/gommap"
-	tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
+	//tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
 	"log"
 	"os"
 	"path"
@@ -50,7 +50,7 @@ func newDataFile(block *types.Block) (*TopiaFile, error) {
 }
 
 func newIndexFile(block *types.Block) (*TopiaFile, error) {
-	filepath := path.Join(block.GetHash() ,".index")
+	filepath := path.Join(block.HashHex() ,".index")
 
 	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
@@ -103,6 +103,7 @@ func (df *TopiaFile) Writedata(block *types.Block) error {
 //
 //
 //}
+
 func outSize(filepath string)(bool,error){
 	stat, err := os.Stat(filepath)
 	if err != nil {

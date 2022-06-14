@@ -29,6 +29,7 @@ var addressEncoding = base32.NewEncoding(encodeStd)
 
 var UndefAddress = Address("<empty>")
 
+// A Full address contains: netType(1 byte) + cryptType(1 byte) + payload(different size as different cryptType + checkSum(4 byte)
 type Address string
 
 func checksum(data []byte) []byte {
@@ -130,11 +131,17 @@ func NewAddress(cryptType CryptType, payload []byte) (Address, error) {
 }
 
 func NewFromString(addr string) Address {
+	_, _, _, err := decode(addr)
+	if err != nil {
+		return UndefAddress
+	}
+
 	return Address(addr)
 }
 
 func NewFromBytes(addr []byte) Address {
-	return Address(addr)
+	address, _ := NewAddress(CryptType(addr[0]), addr[1:])
+	return address
 }
 
 func (a Address) NetworkType() (tpcmm.NetworkType, error) {
@@ -171,20 +178,17 @@ func (a Address) HexString() (string, error) {
 	return string(a), nil
 }
 
-func (a Address) IsValid(netType tpcmm.NetworkType, cryptType CryptType) (bool, error) {
-	nType, cType, _, err := decode(string(a))
+func (a Address) IsValid(netType tpcmm.NetworkType) bool {
+	nType, _, _, err := decode(string(a))
 	if err != nil {
-		return false, err
+		return false
 	}
 
 	if nType != netType {
-		return false, fmt.Errorf("Invalid net type: expected %s, actual %s", netType.String(), nType.String())
-	}
-	if cType == cryptType {
-		return false, fmt.Errorf("Invalid crypt type: expected %d, actual %s", cryptType.String(), cType.String())
+		return false
 	}
 
-	return true, nil
+	return true
 }
 
 func (a Address) IsHexs() bool {
@@ -196,19 +200,6 @@ func (a Address) IsHexs() bool {
 	hexSize := len(t)
 
 	return (hexSize == 2*AddressLen_ETH || hexSize == 2*AddressLen_Secp256 || hexSize == AddressLen_BLS12381) && tpcmm.IsHex(t)
-}
-
-func (a Address) IsEth() bool {
-	t := string(a)
-	if tpcmm.Has0xPrefix(string(a)) {
-		t = string(a[2:])
-	}
-
-	if (len(t) == 2*AddressLen_ETH && tpcmm.IsHex(t)) || (len(t) == AddressLen_ETH) {
-		return true
-	}
-
-	return false
 }
 
 func (a Address) Payload() ([]byte, error) {
@@ -230,4 +221,17 @@ func (a Address) Bytes() []byte {
 
 func (a Address) IsPayable() bool {
 	return a != NativeContractAddr_Account
+}
+
+func IsEth(a string) bool {
+	t := a
+	if tpcmm.Has0xPrefix(a) {
+		t = a[2:]
+	}
+
+	if (len(t) == 2*AddressLen_ETH && tpcmm.IsHex(t)) || (len(t) == AddressLen_ETH) {
+		return true
+	}
+
+	return false
 }

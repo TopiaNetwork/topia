@@ -82,7 +82,7 @@ func NewTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey t
 		panic("Can't convert public key from fromPubKey: " + err.Error())
 	}
 
-	if txCategory == TransactionCategory_Eth && !txFromAddr.IsEth() {
+	if txCategory == TransactionCategory_Eth && !tpcrtypes.IsEth(string(txFromAddr)) {
 		panic("Tx from address is not eth")
 	}
 

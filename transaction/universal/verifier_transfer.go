@@ -14,13 +14,7 @@ func TransactionUniversalTransferTargetAddressVerifier() TransactionUniversalTra
 	return func(ctx context.Context, log tplog.Logger, txTr *TransactionUniversalTransfer, txServant TransactionUniversalServant) txbasic.VerifyResult {
 		targetAddr := txTr.TargetAddr
 
-		cryType, err := targetAddr.CryptType()
-		if err != nil {
-			log.Errorf("Can't get from address type: %v", err)
-			return txbasic.VerifyResult_Reject
-		}
-
-		if isValid, _ := targetAddr.IsValid(tpcmm.CurrentNetworkType, cryType); !isValid {
+		if isValid := targetAddr.IsValid(tpcmm.CurrentNetworkType); !isValid {
 			log.Errorf("Invalid target address: %v", txTr.TargetAddr)
 			return txbasic.VerifyResult_Reject
 		}

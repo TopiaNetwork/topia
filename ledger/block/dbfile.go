@@ -1,17 +1,11 @@
 package block
 
-
 import (
 	//"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
-	"launchpad.net/gommap"
-	//tplgtypes "github.com/TopiaNetwork/topia/ledger/types"
-	"log"
+
 	"os"
 	"path"
-	"syscall"
-	"encoding/json"
-
 	//"syscall"
 )
 
@@ -31,8 +25,9 @@ type TopiaFile struct {
 
 
 func newDataFile(block *types.Block) (*TopiaFile, error) {
-	filepath := path.Join(block.GetHash() ,".topia")
 
+	blockKey,_ := block.HashHex()
+	filepath := path.Join(blockKey ,".topia")
 	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return nil, err
@@ -50,7 +45,8 @@ func newDataFile(block *types.Block) (*TopiaFile, error) {
 }
 
 func newIndexFile(block *types.Block) (*TopiaFile, error) {
-	filepath := path.Join(block.HashHex() ,".index")
+	blockKey,_ := block.HashHex()
+	filepath := path.Join(blockKey ,".index")
 
 	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
@@ -68,30 +64,30 @@ func newIndexFile(block *types.Block) (*TopiaFile, error) {
 	}, nil
 }
 
-func (df *TopiaFile) Writedata(block *types.Block) error {
-
-	mmap, _ := gommap.MapAt(0,file.Fd(), 0,100,syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
-	defer mmap.UnsafeUnmap()
-
-
-	newFsConfigBytes, _ := json.Marshal(block)
-	//_, err = file.Seek(int64(len(newFsConfigBytes)), 1)
-	//if err != nil {
-	//	log.Fatal("Failed to seek")
-	//}
-	for i:=0;i<len(newFsConfigBytes);i++ {
-		mmap[i] = newFsConfigBytes[i]
-		mmap.Sync(syscall.MS_SYNC)
-
-		err = file.Sync()
-
-		if err != nil {
-			log.Fatal(err)
-		}
-		//fmt.Println("", i)
-	}
-	return  nil
-}
+//func (df *TopiaFile) Writedata(block *types.Block) error {
+//
+//	mmap, _ := gommap.MapAt(0,file.Fd(), 0,100,syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+//	defer mmap.UnsafeUnmap()
+//
+//
+//	newFsConfigBytes, _ := json.Marshal(block)
+//	//_, err = file.Seek(int64(len(newFsConfigBytes)), 1)
+//	//if err != nil {
+//	//	log.Fatal("Failed to seek")
+//	//}
+//	for i:=0;i<len(newFsConfigBytes);i++ {
+//		mmap[i] = newFsConfigBytes[i]
+//		mmap.Sync(syscall.MS_SYNC)
+//
+//		err = file.Sync()
+//
+//		if err != nil {
+//			log.Fatal(err)
+//		}
+//		//fmt.Println("", i)
+//	}
+//	return  nil
+//}
 
 //func (df *TopiaFile) ReadItem(offset int64) (*DbItem, error) {
 //	buf := make([]byte, DbItemHdrSize)
@@ -104,13 +100,13 @@ func (df *TopiaFile) Writedata(block *types.Block) error {
 //
 //}
 
-func outSize(filepath string)(bool,error){
+func outSize(filepath string)(bool){
 	stat, err := os.Stat(filepath)
 	if err != nil {
-		return false, err
+		return false
 	}
 	if stat.Size() > 1000000 {
-		return true,nil
+		return true
 	}
-	return false, nil
+	return false
 }

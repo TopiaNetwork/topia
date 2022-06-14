@@ -9,12 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
-	"unsafe"
+	//"unsafe"
 
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	"launchpad.net/gommap"
+	//"launchpad.net/gommap"
 )
 
 const defaultMaxFileSize = 1 << 28        // 假设文件最大为 128M

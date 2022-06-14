@@ -1,34 +1,56 @@
 package block
 
 import (
-	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/transaction/basic"
-	"reflect"
+	"fmt"
 	"testing"
+	//"reflecting"
+
+	//"fmt"
+	//"github.com/TopiaNetwork/topia/chain/types"
 )
 
 
+//struct block1{
+//
+//}
 
+//func init() {
+	//blockhead1 := types.BlockHead{
+	//	nil,
+	//	5,
+	//	1,
+	//	0,
+	//	1,
+	//	nil,
+	//	nil,
+	//	nil,
+	//	nil,
+	//	nil,
+	//	1,
+	//	nil,
+	//	nil,
+	//	1,
+	//	nil,
+	//	nil,
+	//	nil,
+	//	nil,
+	//	0,0,nil,nil,struct{}{} ,nil,0,
+	//}
 
+//}
 
-func init() {
-	newCntAccountItem = CntAccountItem{
-		"b0001",
-		5,
-		-1,
-	}
+func Test_outSize(t *testing.T) {
 
-
+	b := outSize("text.txt")
+	fmt.Printf("%t",b)
+	t.Log("hello world")
 
 }
 
-func TestoutSize(t *testing.T) {
-	tests := []struct {
-		name strin
-		want int
-	}
-}
 
+//func TestnewDataFile(t *testing.T) {
+//
+//}
 
 
 

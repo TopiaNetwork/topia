@@ -1,6 +1,6 @@
 module github.com/TopiaNetwork/topia
 
-go 1.18
+go 1.17
 
 require (
 	github.com/AsynkronIT/protoactor-go v0.0.0-20211217071430-1b4f403946c3
@@ -37,6 +37,8 @@ require (
 	launchpad.net/gommap v0.0.0-20121012075617-000000000015
 	lukechampine.com/frand v1.4.2
 )
+
+require github.com/lucas-clemente/quic-go v0.24.0 // indirect
 
 require (
 	github.com/Workiva/go-datastructures v1.0.53 // indirect
@@ -115,7 +117,7 @@ require (
 	github.com/libp2p/go-tcp-transport v0.4.0 // indirect
 	github.com/libp2p/go-ws-transport v0.5.0 // indirect
 	github.com/libp2p/go-yamux/v2 v2.3.0 // indirect
-	github.com/lucas-clemente/quic-go v0.24.0 // indirect
+	//github.com/lucas-clemente/quic-go v0.24.0 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.4 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.0 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect

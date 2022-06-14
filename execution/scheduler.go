@@ -268,7 +268,7 @@ func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler code
 		Version: blockHead.Version,
 	}
 	for i := 0; i < len(packedTxs.TxList); i++ {
-		txBytes, _ := packedTxs.TxList[i].HashBytes()
+		txBytes, _ := packedTxs.TxList[i].Bytes()
 		blockData.Txs = append(blockData.Txs, txBytes)
 	}
 

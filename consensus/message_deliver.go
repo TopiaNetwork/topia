@@ -562,16 +562,38 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 		return err
 	}
 
+	exeCtx := ctx
+	propCtx := ctx
+	ValCtx := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
 		peerIDs := md.epochService.GetActiveExecutorIDs()
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+		exeCtx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+
+		peerProposerIDs := md.epochService.GetActiveProposerIDs()
+		peerProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerProposerIDs)
+		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, peerProposerIDs)
+
+		peerValidatorIDs := md.epochService.GetActiveValidatorIDs()
+		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
 	}
 
-	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.deliverSendCommon(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+	exeCtx = context.WithValue(exeCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.deliverSendCommon(exeCtx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send propose message to executor network failed: err=%v", err)
+		md.log.Errorf("Send commit message to executor network failed: err=%v", err)
+	}
+
+	propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.deliverSendCommon(propCtx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send commit message to propose network failed: err=%v", err)
+	}
+
+	ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.deliverSendCommon(ValCtx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send commit message to validate network failed: err=%v", err)
 	}
 
 	return err

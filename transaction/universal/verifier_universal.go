@@ -17,13 +17,7 @@ func TransactionUniversalPayerAddressVerifier() TransactionUniversalVerifier {
 	return func(ctx context.Context, log tplog.Logger, nodeID string, txUni *TransactionUniversalWithHead, txUniServant TransactionUniversalServant) txbasic.VerifyResult {
 		payerAddr := tpcrtypes.NewFromBytes(txUni.Head.FeePayer)
 
-		fromAddrType, err := payerAddr.CryptType()
-		if err != nil {
-			log.Errorf("Can't get from address type: %v", err)
-			return txbasic.VerifyResult_Reject
-		}
-
-		if isValid, _ := payerAddr.IsValid(tpcmm.CurrentNetworkType, fromAddrType); !isValid {
+		if isValid := payerAddr.IsValid(tpcmm.CurrentNetworkType); !isValid {
 			log.Errorf("Invalid payer address: %v", txUni.Head.FeePayer)
 			return txbasic.VerifyResult_Reject
 		}

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-
 	tpcmm "github.com/TopiaNetwork/topia/common"
+
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -39,18 +39,12 @@ func TransactionFromAddressVerifier() TransactionVerifier {
 		tx := txI.(*TransactionHead)
 		fromAddr := tpcrtypes.NewFromBytes(tx.FromAddr)
 
-		fEth := fromAddr.IsEth()
+		fEth := tpcrtypes.IsEth(string(fromAddr))
 
 		if fEth && string(tx.Category) == TransactionCategory_Eth {
 			return VerifyResult_Accept
 		} else if !fEth {
-			cryType, err := fromAddr.CryptType()
-			if err != nil {
-				log.Errorf("Can't get from address type: %v", err)
-				return VerifyResult_Reject
-			}
-
-			if isValid, _ := fromAddr.IsValid(tpcmm.CurrentNetworkType, cryType); !isValid {
+			if isValid := fromAddr.IsValid(tpcmm.CurrentNetworkType); !isValid {
 				log.Errorf("Invalid from address: %v", tx.FromAddr)
 				return VerifyResult_Reject
 			}

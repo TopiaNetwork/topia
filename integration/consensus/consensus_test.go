@@ -380,7 +380,6 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
 		eventhub.GetEventHubManager().GetEventHub(nParams[i].nodeID).Start(nParams[i].sysActor)
-		nParams[i].chain.Start(nParams[i].sysActor, nParams[i].network)
 		cs := consensus.NewConsensus(
 			nParams[i].chainID,
 			nParams[i].nodeID,
@@ -399,7 +398,10 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 		nParams[i].cs = cs
 		css = append(css, cs)
 
-		nParams[i].txPool.Start(nParams[i].sysActor, nParams[i].network)
+		if nParams[i].nodeType == "executor" {
+			nParams[i].chain.Start(nParams[i].sysActor, nParams[i].network)
+			nParams[i].txPool.Start(nParams[i].sysActor, nParams[i].network)
+		}
 	}
 
 	return css

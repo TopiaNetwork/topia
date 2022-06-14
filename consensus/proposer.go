@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -20,6 +19,7 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const defaultLeaderCount = int(3)
@@ -211,19 +211,19 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 	}()
 }
 
-func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, error) {
+func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (*CommitMessage, *tpchaintypes.BlockHead, error) {
 	var blockHead tpchaintypes.BlockHead
 	err := p.marshaler.Unmarshal(msg.BlockHead, &blockHead)
 	if err != nil {
 		p.log.Errorf("Unmarshal block failed: %v", err)
-		return nil, err
+		return nil, nil, err
 	}
 	blockHead.VoteAggSignature = aggSign
 
 	newBlockHeadBytes, err := p.marshaler.Marshal(&blockHead)
 	if err != nil {
 		p.log.Errorf("Marshal block head failed: %v", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &CommitMessage{
@@ -233,7 +233,7 @@ func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (
 		Round:        msg.Round,
 		StateVersion: msg.StateVersion,
 		BlockHead:    newBlockHeadBytes,
-	}, nil
+	}, &blockHead, nil
 }
 
 func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, voteMsg *VoteMessage, cancel context.CancelFunc) error {
@@ -248,10 +248,18 @@ func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, v
 		return notReachVoteThresholdErr
 	}
 
-	commitMsg, err := p.produceCommitMsg(voteMsg, aggSign)
+	commitMsg, bh, err := p.produceCommitMsg(voteMsg, aggSign)
 	if err != nil {
 		p.log.Errorf("Can't produce commit message: %v", err)
 		return err
+	}
+
+	if p.validator.commitMsg.Contains(commitMsg.StateVersion) {
+		p.log.Warnf("Have received commit message and not need to commit message again: state version %d, self node %s", voteMsg.StateVersion, p.nodeID)
+		if cancel != nil {
+			cancel()
+		}
+		return nil
 	}
 
 	err = p.deliver.deliverCommitMessage(ctx, commitMsg)
@@ -264,6 +272,8 @@ func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, v
 		cancel()
 	}
 
+	p.validator.commitMsgDispose(ctx, bh, commitMsg)
+
 	p.log.Infof("Deliver commit message successfully, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
 
 	return nil
@@ -274,6 +284,10 @@ func (p *consensusProposer) receiveVoteMessageStart(ctx context.Context) {
 		for {
 			select {
 			case voteMsg := <-p.voteMsgChan:
+				if p.validator.commitMsg.Contains(voteMsg.StateVersion) {
+					p.log.Infof("Have received commit message and the vote message will be discarded: state version %d, self node %s", voteMsg.StateVersion, p.nodeID)
+					continue
+				}
 				p.log.Infof("Received vote message, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
 
 				if voteMsg.StateVersion != (p.voteCollector.latestHeight + 1) {

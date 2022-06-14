@@ -235,3 +235,34 @@ func IsEth(a string) bool {
 
 	return false
 }
+
+func TopiaAddressFromEth(a string) (Address, error) {
+	if len(a) < AddressLen_ETH {
+		return UndefAddress, fmt.Errorf("Invalid eth address len: %s", a)
+	}
+
+	t := a
+	tBytes := []byte(a)
+	if tpcmm.Has0xPrefix(a) {
+		t = a[2:]
+		if len(t)%2 == 1 {
+			t = "0" + t
+		}
+		tBytes, _ = hex.DecodeString(t)
+	}
+
+	return NewAddress(CryptType_Secp256, tBytes)
+}
+
+func EthAddressFromTopia(a Address) ([]byte, error) {
+	_, cType, pLoad, err := decode(string(a))
+	if err != nil {
+		return nil, err
+	}
+
+	if cType != CryptType_Secp256 {
+		return nil, fmt.Errorf("Invalid crypt address type: %s", cType.String())
+	}
+
+	return pLoad, nil
+}

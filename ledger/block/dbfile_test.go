@@ -43,7 +43,7 @@ func Test_outSize(t *testing.T) {
 
 	b := outSize("text.txt")
 	fmt.Printf("%t",b)
-	t.Log("hello world")
+	//t.Log("hello world")
 
 }
 

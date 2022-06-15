@@ -26,6 +26,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.4.0
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.26.1
+	github.com/snksoft/crc v1.1.0
 	github.com/spf13/cobra v1.3.0
 	github.com/stretchr/testify v1.7.0
 	github.com/subchen/go-trylock/v2 v2.0.0

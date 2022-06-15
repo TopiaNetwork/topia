@@ -33,7 +33,25 @@ type TopiaFile struct {
 	File   *os.File
 	Offset int
 }
+type TopiaData struct{
+	version int16
+	offset int16
+	size int16
+	crc int64
+	data *types.Block
+}
+type TopiaIndex struct{
+	version int16
+	position int16
+	offset int16
+}
 
+type TransIndex struct{
+	Version int16
+	Txid int64
+	BlockHeight int16
+	Offset int16
+}
 //func newTopiaFile(basePath string) (*TopiaFile, error) {
 //	datafile := basePath + string(os.PathSeparator) + DATA_FILE
 //	return newFileImpl(datafile)
@@ -177,6 +195,38 @@ func (df *TopiaFile) Writetrans(version int,txid string,blockheight int, offset 
 
 }
 
+func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, error) {
+
+
+	indexfilename := path.Join(filename ,".index")
+	file, err := os.OpenFile(indexfilename, os.O_RDWR, 0644)
+
+	//first index
+	indexmmap, _ := gommap.Map(file.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+
+	start := 0
+	end := len(indexmmap)
+	//二分查找
+	dataoffset,_ := binarySearch(start,end,indexmmap[0],indexmmap)
+
+	datafilename := path.Join(filename ,".topia")
+	filedata, err := os.OpenFile(datafilename, os.O_RDWR, 0644)
+	datammap, _ := gommap.Map(filedata.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+
+	block,_ := Decodeblock(datammap[0:dataoffset])
+	//item, err := Decodeblock(buf)
+	if block.Size() < 0{
+		return nil,err
+	}
+
+
+	if err != nil {
+		return nil, err
+	}
+	return block,err
+
+}
+
 func (df *TopiaFile) FindBlock(filename string) (*types.Block, error) {
 	//blockbyte,_ := json.Marshal(block)
 	//buf := make([]byte, len(blockbyte))
@@ -267,6 +317,9 @@ func Decodeblock(buf []byte) (*types.Block, error) {
 	return nil,nil
 }
 
+func Encodeblock(){
+
+}
 func binarySearch(start int, end int,blockid byte,mmap gommap.MMap)(int,bool){
 	//current := end / 2
 	//for end-start > 1 {

@@ -87,18 +87,32 @@ type blockStore struct {
 	//}
 //}
 
-//func (store *blockStore) GetBlockByNumber(blockNum types.BlockNum) (*types.Block, error) {
-//	//TODO implement me
-//	// panic("implement me")
-//	buf := make([]byte, *types.Block)
-//	if _, err := df.File.ReadAt(buf, offset); err != nil {
-//		return nil, err
-//	}
-//
-//
-//	//return item, nil
-//
-//}
+func (store *blockStore) GetBlockByNumber(blockNum types.BlockNum) (*types.Block, error) {
+	//TODO implement me
+	// panic("implement me")
+	buf := make([]byte, *types.Block)
+	if _, err := df.File.ReadAt(buf, offset); err != nil {
+		return nil, err
+	}
+
+
+	//return item, nil
+
+}
+func (store *blockStore) GetBlockByHash(blockHash []byte) (*types.Block, error) {
+	//TODO implement me
+	// panic("implement me")
+	if blockHash == nil {
+
+	}
+	block, err := store.fileMgr.retrieveBlockByHash(blockHash)
+	if err != nil {
+
+	}
+
+
+	return block,err
+}
 
 //获取block句柄
 //func (store *blockStore) GetBlocksIterator(startBlockNum types.BlockNum) (tplgtypes.ResultsIterator, error) {
@@ -140,20 +154,7 @@ type blockStore struct {
 //	txId, _ := tx.HashHex()
 //}
 //
-//func (store *blockStore) GetBlockByHash(blockHash []byte) (*types.Block, error) {
-//	//TODO implement me
-//	// panic("implement me")
-//	if blockHash == nil {
-//
-//	}
-//	block, err := store.fileMgr.retrieveBlockByHash(blockHash)
-//	if err != nil {
-//
-//	}
-//
-//
-//	return block,err
-//}
+
 //
 //func (store *blockStore) GetBlockByTxID(txID string) (*types.Block, error) {
 //	//TODO implement me

@@ -1,7 +1,10 @@
 package block
 
 import (
-	"encoding/binary"
+	//"bytes"
+	//"encoding/binary"
+	//"golang.org/x/tools/go/ssa"
+
 	//"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
 	"launchpad.net/gommap"
@@ -174,14 +177,28 @@ func (df *TopiaFile) Writetrans(version int,txid string,blockheight int, offset 
 
 }
 
-func (df *TopiaFile) ReadItem(block *types.Block) (*types.Block, error) {
-	blockbyte,_ := json.Marshal(block)
-	buf := make([]byte, len(blockbyte))
+func (df *TopiaFile) FindBlock(filename string) (*types.Block, error) {
+	//blockbyte,_ := json.Marshal(block)
+	//buf := make([]byte, len(blockbyte))
 
-	bufmap := gommap.Map(df.File.Fd(), gommap.PROT_READ, gommap.MAP_PRIVATE)
+	indexfilename := path.Join(filename ,".index")
+	file, err := os.OpenFile(indexfilename, os.O_RDWR, 0644)
 
-	item, err := Decodeblock(buf)
-	if item.Size() < 0{
+	//first index
+	indexmmap, _ := gommap.Map(file.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+
+	start := 0
+	end := len(indexmmap)
+	//二分查找
+	dataoffset,_ := binarySearch(start,end,indexmmap[0],indexmmap)
+
+	datafilename := path.Join(filename ,".topia")
+	filedata, err := os.OpenFile(datafilename, os.O_RDWR, 0644)
+	datammap, _ := gommap.Map(filedata.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+
+	block,_ := Decodeblock(datammap[0:dataoffset])
+	//item, err := Decodeblock(buf)
+	if block.Size() < 0{
 		return nil,err
 	}
 
@@ -189,7 +206,41 @@ func (df *TopiaFile) ReadItem(block *types.Block) (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+	return block,err
 
+}
+
+
+func (df *TopiaFile) findTrans(filename string) (*types.Block, error) {
+	//blockbyte,_ := json.Marshal(block)
+	//buf := make([]byte, len(blockbyte))
+
+	indexfilename := path.Join(filename ,".trans")
+	file, err := os.OpenFile(indexfilename, os.O_RDWR, 0644)
+
+	//first index
+	indexmmap, _ := gommap.Map(file.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+
+	start := 0
+	end := len(indexmmap)
+	//二分查找
+	dataoffset,_ := binarySearch(start,end,indexmmap[0],indexmmap)
+
+	datafilename := path.Join(filename ,".topia")
+	filedata, err := os.OpenFile(datafilename, os.O_RDWR, 0644)
+	datammap, _ := gommap.Map(filedata.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+
+	block,_ := Decodeblock(datammap[0:dataoffset])
+	//item, err := Decodeblock(buf)
+	if block.Size() < 0{
+		return nil,err
+	}
+
+
+	if err != nil {
+		return nil, err
+	}
+	return block,err
 
 }
 
@@ -215,6 +266,23 @@ func Decodeblock(buf []byte) (*types.Block, error) {
 	//return &types.Block{Head: ks, Data: vs}, nil
 	return nil,nil
 }
+
+func binarySearch(start int, end int,blockid byte,mmap gommap.MMap)(int,bool){
+	//current := end / 2
+	//for end-start > 1 {
+	//	compareWithCurrentWord := bytes.Compare(blockid,string(mmap[current]) )
+	//	compareWithCurrentWord == 0 {
+	//		return current, true
+	//		} else if compareWithCurrentWord < 0 {
+	//		end = current
+	//		current = (start + current) / 2
+	//		} else {
+	//		start = current
+	//		current = (current + end) / 2
+	//		     }
+	//	}
+	return end, false
+	}
 
 //func getFilename()(string){
 //

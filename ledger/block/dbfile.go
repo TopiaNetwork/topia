@@ -284,6 +284,7 @@ func binarySearch(start int, end int,blockid byte,mmap gommap.MMap)(int,bool){
 	return end, false
 	}
 
+
 //func getFilename()(string){
 //
 //}

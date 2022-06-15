@@ -132,7 +132,7 @@ func TestTopiaFile_Writetrans(t *testing.T) {
 }
 
 func TestTopiaFile_FindBlock(t *testing.T) {
-	
+
 }
 
 //func TestnewDataFile(t *testing.T) {

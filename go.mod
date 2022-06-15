@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/AsynkronIT/protoactor-go v0.0.0-20211217071430-1b4f403946c3
+	github.com/RoaringBitmap/roaring v1.2.1
 	github.com/TopiaNetwork/go-bls v0.0.1
 	github.com/TopiaNetwork/kyber/v3 v3.7.8
 	github.com/btcsuite/btcd v0.22.0-beta
@@ -24,7 +25,6 @@ require (
 	github.com/libp2p/go-libp2p-kbucket v0.4.7
 	github.com/libp2p/go-libp2p-pubsub v0.6.0
 	github.com/multiformats/go-multiaddr v0.4.0
-	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.26.1
 	github.com/snksoft/crc v1.1.0
 	github.com/spf13/cobra v1.3.0
@@ -39,7 +39,12 @@ require (
 	lukechampine.com/frand v1.4.2
 )
 
-require github.com/lucas-clemente/quic-go v0.24.0 // indirect
+require (
+	github.com/bits-and-blooms/bitset v1.2.0 // indirect
+	github.com/lucas-clemente/quic-go v0.24.0 // indirect
+	github.com/mschoch/smat v0.2.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+)
 
 require (
 	github.com/Workiva/go-datastructures v1.0.53 // indirect

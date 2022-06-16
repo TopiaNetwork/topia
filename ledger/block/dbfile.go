@@ -61,16 +61,21 @@ type TransIndex struct{
 func NewFile(block *types.Block,filetype int8) (*TopiaFile, error) {
 
 	blockKey,_ := block.HashHex()
+	filesize :=  10000000
 	filetypestr := ".topai"
 	switch filetype {
 	case 1:
 		filetypestr = ".index"
+		filesize = 1000000
 	case 2:
 		filetypestr = ".trans"
+		filesize = 5000000
 	}
 	filepath := path.Join(blockKey ,filetypestr)
 
 	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	file.Write(make([]byte, filesize))
+
 	if err != nil {
 		return nil, err
 	}
@@ -195,37 +200,37 @@ func (df *TopiaFile) Writetrans(version int,txid string,blockheight int, offset 
 
 }
 
-func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, error) {
-
-
-	indexfilename := path.Join(filename ,".index")
-	file, err := os.OpenFile(indexfilename, os.O_RDWR, 0644)
-
-	//first index
-	indexmmap, _ := gommap.Map(file.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
-
-	start := 0
-	end := len(indexmmap)
-	//二分查找
-	dataoffset,_ := binarySearch(start,end,indexmmap[0],indexmmap)
-
-	datafilename := path.Join(filename ,".topia")
-	filedata, err := os.OpenFile(datafilename, os.O_RDWR, 0644)
-	datammap, _ := gommap.Map(filedata.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
-
-	block,_ := Decodeblock(datammap[0:dataoffset])
-	//item, err := Decodeblock(buf)
-	if block.Size() < 0{
-		return nil,err
-	}
-
-
-	if err != nil {
-		return nil, err
-	}
-	return block,err
-
-}
+//func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, error) {
+//
+//
+//	indexfilename := path.Join(filename ,".index")
+//	file, err := os.OpenFile(indexfilename, os.O_RDWR, 0644)
+//
+//	//first index
+//	indexmmap, _ := gommap.Map(file.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+//
+//	start := 0
+//	end := len(indexmmap)
+//	//二分查找
+//	dataoffset,_ := binarySearch(start,end,indexmmap[0],indexmmap)
+//
+//	datafilename := path.Join(filename ,".topia")
+//	filedata, err := os.OpenFile(datafilename, os.O_RDWR, 0644)
+//	datammap, _ := gommap.Map(filedata.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+//
+//	block,_ := Decodeblock(datammap[0:dataoffset])
+//	//item, err := Decodeblock(buf)
+//	if block.Size() < 0{
+//		return nil,err
+//	}
+//
+//
+//	if err != nil {
+//		return nil, err
+//	}
+//	return block,err
+//
+//}
 
 func (df *TopiaFile) FindBlock(filename string) (*types.Block, error) {
 	//blockbyte,_ := json.Marshal(block)
@@ -294,7 +299,7 @@ func (df *TopiaFile) findTrans(filename string) (*types.Block, error) {
 
 }
 
-func outSize(filepath string)(bool){
+func OutSize(filepath string)(bool){
 	if FileNameOpening == ""{
 		return true
 	}

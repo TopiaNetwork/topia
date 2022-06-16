@@ -11,6 +11,22 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
+type ForkChoice interface {
+	BlockHeadChoice(bh1 *tpchaintypes.BlockHead, bh2 *tpchaintypes.BlockHead) (*tpchaintypes.BlockHead, error)
+
+	FindAncestor(chain1 []*tpchaintypes.Block, chain2 []*tpchaintypes.Block) (*tpchaintypes.Block, bool)
+
+	ChainChoiceAfterAncestor(chain1 []*tpchaintypes.Block, chain2 []*tpchaintypes.Block) ([]*tpchaintypes.Block, error)
+}
+
+func NewForChoice(log tplog.Logger, ledger ledger.Ledger, config *configuration.Configuration) ForkChoice {
+	return &forkChoice{
+		log:    log,
+		ledger: ledger,
+		config: config,
+	}
+}
+
 type forkChoice struct {
 	log    tplog.Logger
 	ledger ledger.Ledger

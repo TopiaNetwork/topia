@@ -15,6 +15,17 @@ func TestGeneratePriPubKey(t *testing.T) {
 	assert.Equal(t, nil, err, "GeneratePriPubKey err")
 }
 
+func TestGeneratePriPubKeyBySeed(t *testing.T) {
+	var c CryptServiceEd25519
+	seed := make([]byte, KeyGenSeedBytes)
+	_, err := rand.Read(seed)
+	assert.Equal(t, nil, err, "generate rand num err")
+	sec, pub, err := c.GeneratePriPubKeyBySeed(seed)
+	assert.Equal(t, PrivateKeyBytes, len(sec), "private key length err")
+	assert.Equal(t, PublicKeyBytes, len(pub), "public key length err")
+	assert.Equal(t, nil, err, "GeneratePriPubKey err")
+}
+
 func TestConvertToPublic(t *testing.T) {
 	var c CryptServiceEd25519
 	sec, pub, err := c.GeneratePriPubKey()

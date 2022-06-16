@@ -46,6 +46,18 @@ func (c *CryptServiceEd25519) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtyp
 	return sec, pub, nil
 }
 
+func (c *CryptServiceEd25519) GeneratePriPubKeyBySeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
+	if len(seed) != KeyGenSeedBytes {
+		return nil, nil, errors.New("input seed length err")
+	}
+
+	sec, pub, err := generateKeyPairFromSeed(seed)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sec, pub, nil
+}
+
 func (c *CryptServiceEd25519) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	if len(priKey) != PrivateKeyBytes {
 		return nil, errors.New("input invalid privateKey")
@@ -126,4 +138,12 @@ func ToCurve25519(sec tpcrtypes.PrivateKey, pub tpcrtypes.PublicKey) (curveSec [
 	}
 	curveSec, curvePub, err = toCurve25519(sec, pub)
 	return curveSec, curvePub, err
+}
+
+func StreamEncrypt(password []byte, msg []byte) (encryptedData []byte, err error) {
+	return streamEncrypt(password, msg)
+}
+
+func StreamDecrypt(password []byte, encryptedData []byte) (decryptedMsg []byte, err error) {
+	return streamDecrypt(password, encryptedData)
 }

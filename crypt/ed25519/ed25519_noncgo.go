@@ -39,6 +39,16 @@ func (c *CryptServiceEd25519) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtyp
 	return []byte(sec), []byte(pub), nil
 }
 
+func (c *CryptServiceEd25519) GeneratePriPubKeyBySeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
+	if len(seed) != KeyGenSeedBytes {
+		return nil, nil, errors.New("input seed length err")
+	}
+	sec := ed25519.NewKeyFromSeed(seed)
+	pub := make([]byte, PublicKeyBytes)
+	copy(pub, sec[32:])
+	return []byte(sec), pub, nil
+}
+
 func (c *CryptServiceEd25519) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	if len(priKey) != PrivateKeyBytes {
 		return nil, errors.New("input invalid PrivateKey")

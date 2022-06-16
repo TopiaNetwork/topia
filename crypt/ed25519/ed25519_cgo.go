@@ -4,16 +4,6 @@
 package ed25519
 
 /*
-#include <stdbool.h>
-bool intToBool(int i)
-{
-	if(i != 0){
-	return true;
-	} else {
-	return false;
-	}
-}
-
 #cgo CFLAGS: -DDEV_MODE=1 -DCONFIGURED=1
 #cgo CFLAGS: -I${SRCDIR}/libsodium/src/libsodium/include/sodium
 #cgo CFLAGS: -I${SRCDIR}/libsodium/src/libsodium/include/sodium/private
@@ -48,6 +38,8 @@ bool intToBool(int i)
 #include "./libsodium/src/libsodium/crypto_sign/ed25519/ref10/batchSupport.c"
 #include "./libsodium/src/libsodium/include/sodium/private/ed25519_ref10.h"
 #include "./libsodium/src/libsodium/crypto_sign/ed25519/ref10/open_bv_compat.c"
+#include "./libsodium/src/libsodium/crypto_secretstream/xchacha20poly1305/secretstream_xchacha20poly1305.c"
+#include "./libsodium/src/libsodium/crypto_core/hchacha20/core_hchacha20.c"
 enum {
 	sizeofPtr = sizeof(void*),
 	sizeofULongLong = sizeof(unsigned long long),
@@ -55,6 +47,7 @@ enum {
 */
 import "C"
 import (
+	"crypto/sha256"
 	"errors"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"unsafe"
@@ -63,7 +56,7 @@ import (
 func generateKeyPair() (sec []byte, pub []byte, err error) {
 	sec = make([]byte, PrivateKeyBytes)
 	pub = make([]byte, PublicKeyBytes)
-	if C.intToBool(C.crypto_sign_keypair((*C.uchar)(unsafe.Pointer(&pub[0])), (*C.uchar)(unsafe.Pointer(&sec[0])))) {
+	if C.crypto_sign_keypair((*C.uchar)(unsafe.Pointer(&pub[0])), (*C.uchar)(unsafe.Pointer(&sec[0]))) != 0 {
 		return nil, nil, errors.New("libsodium crypto_sign_keypair err")
 	}
 	return sec, pub, nil
@@ -81,10 +74,10 @@ func generateKeyPairFromSeed(seed []byte) (sec []byte, pub []byte, err error) {
 	}
 	sec = make([]byte, PrivateKeyBytes)
 	pub = make([]byte, PublicKeyBytes)
-	if C.intToBool(C.crypto_sign_seed_keypair(
+	if C.crypto_sign_seed_keypair(
 		(*C.uchar)(unsafe.Pointer(&pub[0])),
 		(*C.uchar)(unsafe.Pointer(&sec[0])),
-		(*C.uchar)(unsafe.Pointer(&seed[0])))) {
+		(*C.uchar)(unsafe.Pointer(&seed[0]))) != 0 {
 		return nil, nil, errors.New("libsodium crypto_sign_seed_keypair err")
 	}
 	return sec, pub, nil
@@ -105,12 +98,12 @@ func signDetached(sec []byte, msg []byte) (sig []byte, err error) {
 	}
 	sig = make([]byte, SignatureBytes)
 	var siglen C.ulonglong
-	if C.intToBool(C.crypto_sign_detached(
+	if C.crypto_sign_detached(
 		(*C.uchar)(unsafe.Pointer(&sig[0])),
 		&siglen,
 		(*C.uchar)(unsafe.Pointer(&msg[0])),
 		(C.ulonglong)(uint64(len(msg))),
-		(*C.uchar)(unsafe.Pointer(&sec[0])))) {
+		(*C.uchar)(unsafe.Pointer(&sec[0]))) != 0 {
 		return nil, errors.New("libsodium crypto_sign_detached err")
 	}
 	return sig, nil
@@ -120,11 +113,11 @@ func verifyDetached(pub []byte, msg []byte, sig []byte) (bool, error) {
 	if len(pub) != PublicKeyBytes || len(msg) == 0 || len(sig) != SignatureBytes {
 		return false, errors.New("input invalid argument")
 	}
-	if C.intToBool(C.crypto_sign_verify_detached(
+	if C.crypto_sign_verify_detached(
 		(*C.uchar)(unsafe.Pointer(&sig[0])),
 		(*C.uchar)(unsafe.Pointer(&msg[0])),
 		(C.ulonglong)(uint64(len(msg))),
-		(*C.uchar)(unsafe.Pointer(&pub[0])))) {
+		(*C.uchar)(unsafe.Pointer(&pub[0]))) != 0 {
 		return false, errors.New("verify failed")
 	}
 	return true, nil
@@ -176,4 +169,67 @@ func toCurve25519(sec []byte, pub []byte) (curveSec []byte, curvePub []byte, err
 	C.crypto_sign_ed25519_sk_to_curve25519((*C.uchar)(&curveSec[0]), (*C.uchar)(&sec[0]))
 	C.crypto_sign_ed25519_pk_to_curve25519((*C.uchar)(&curvePub[0]), (*C.uchar)(&pub[0]))
 	return curveSec, curvePub, nil
+}
+
+func streamEncrypt(password []byte, msg []byte) (encryptedData []byte, err error) {
+	if password == nil || msg == nil {
+		return nil, errors.New("StreamEncrypt input isn't valid argument")
+	}
+
+	var state C.crypto_secretstream_xchacha20poly1305_state
+	var header = make([]byte, C.crypto_secretstream_xchacha20poly1305_HEADERBYTES)
+
+	encryptedData = make([]byte, len(header)+len(msg)+C.crypto_secretstream_xchacha20poly1305_ABYTES)
+
+	key := sha256.Sum256(password)
+	C.crypto_secretstream_xchacha20poly1305_init_push(&state, (*C.uchar)(unsafe.Pointer(&header[0])), (*C.uchar)(unsafe.Pointer(&key[0])))
+
+	copy(encryptedData, header)
+
+	C.crypto_secretstream_xchacha20poly1305_push(
+		&state,
+		(*C.uchar)(unsafe.Pointer(&encryptedData[len(header)])),
+		nil,
+		(*C.uchar)(unsafe.Pointer(&msg[0])),
+		C.ulonglong(uint64(len(msg))),
+		nil,
+		0,
+		C.crypto_secretstream_xchacha20poly1305_TAG_FINAL)
+
+	return encryptedData, nil
+}
+
+func streamDecrypt(password []byte, encryptedData []byte) (decryptedMsg []byte, err error) {
+	if password == nil || encryptedData == nil {
+		return nil, errors.New("StreamDecrypt input isn't valid argument")
+	}
+	var state C.crypto_secretstream_xchacha20poly1305_state
+	var header = make([]byte, C.crypto_secretstream_xchacha20poly1305_HEADERBYTES)
+	copy(header, encryptedData[:C.crypto_secretstream_xchacha20poly1305_HEADERBYTES])
+	var tag uint8 //= C.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+
+	decryptedMsg = make([]byte, len(encryptedData)-C.crypto_secretstream_xchacha20poly1305_HEADERBYTES-C.crypto_secretstream_xchacha20poly1305_ABYTES)
+
+	key := sha256.Sum256(password)
+	if C.crypto_secretstream_xchacha20poly1305_init_pull(&state, (*C.uchar)(unsafe.Pointer(&header[0])), (*C.uchar)(unsafe.Pointer(&key[0]))) != 0 {
+		return nil, errors.New("StreamDecrypt init err: incomplete header")
+	}
+
+	if C.crypto_secretstream_xchacha20poly1305_pull(
+		&state,
+		(*C.uchar)(unsafe.Pointer(&decryptedMsg[0])),
+		nil,
+		(*C.uchar)(&tag),
+		(*C.uchar)(unsafe.Pointer(&encryptedData[len(header)])),
+		(C.ulonglong)(uint64(len(encryptedData)-len(header))),
+		nil,
+		0) != 0 {
+		return nil, errors.New("StreamDecrypt pull err")
+	}
+
+	if tag != C.crypto_secretstream_xchacha20poly1305_TAG_FINAL {
+		return nil, errors.New("tag state is not correct")
+	}
+
+	return decryptedMsg, nil
 }

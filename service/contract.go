@@ -64,14 +64,13 @@ func (cs *contractService) makeTransaction(fromAddr tpcrtypes.Address, payerAddr
 	if err != nil {
 		return nil, err
 	}
-	payerSignInfoBytes, _ := json.Marshal(&payerSignInfo)
 	txUniHead := &txuni.TransactionUniversalHead{
 		Version:           uint32(txuni.TransactionUniversalVersion_v1),
 		FeePayer:          []byte(payerAddr),
 		GasPrice:          gasPrice,
 		GasLimit:          gasLimit,
 		Type:              uint32(txUniType),
-		FeePayerSignature: payerSignInfoBytes,
+		FeePayerSignature: payerSignInfo.SignData,
 	}
 	txUniData := &txuni.TransactionUniversalData{Specification: txUniDataBytes}
 	txUni := &txuni.TransactionUniversal{
@@ -84,7 +83,7 @@ func (cs *contractService) makeTransaction(fromAddr tpcrtypes.Address, payerAddr
 	if err != nil {
 		return nil, err
 	}
-	txSignInfoBytes, _ := json.Marshal(&txSignInfo)
+
 	fromAcc, err := cs.stateQueryService.GetAccount(fromAddr)
 	if err != nil {
 		return nil, err
@@ -95,7 +94,7 @@ func (cs *contractService) makeTransaction(fromAddr tpcrtypes.Address, payerAddr
 		Version:   txbasic.Transaction_Topia_Universal_V1,
 		TimeStamp: uint64(time.Now().UnixNano()),
 		Nonce:     fromAcc.Nonce,
-		Signature: txSignInfoBytes,
+		Signature: txSignInfo.SignData,
 	}
 	txData := &txbasic.TransactionData{Specification: txDataBytes}
 

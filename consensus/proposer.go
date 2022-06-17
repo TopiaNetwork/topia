@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -218,7 +219,17 @@ func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (
 		p.log.Errorf("Unmarshal block failed: %v", err)
 		return nil, nil, err
 	}
-	blockHead.VoteAggSignature = aggSign
+
+	pubKey, err := p.dkgBls.PubKey()
+	if err != nil {
+		p.log.Errorf("Fetch dkg public key failed: %v", err)
+		return nil, nil, err
+	}
+	signInfo := tpcrtypes.SignatureInfo{
+		PublicKey: pubKey,
+		SignData:  aggSign,
+	}
+	blockHead.VoteAggSignature, _ = json.Marshal(&signInfo)
 
 	newBlockHeadBytes, err := p.marshaler.Marshal(&blockHead)
 	if err != nil {

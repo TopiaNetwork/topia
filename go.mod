@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/AsynkronIT/protoactor-go v0.0.0-20211217071430-1b4f403946c3
+	github.com/Gurpartap/async v0.0.0-20180927173644-4f7f499dd9ee
 	github.com/TopiaNetwork/go-bls v0.0.1
 	github.com/TopiaNetwork/kyber/v3 v3.7.8
 	github.com/btcsuite/btcd v0.22.0-beta
@@ -28,6 +29,7 @@ require (
 	github.com/libp2p/go-libp2p-swarm v0.9.0
 	github.com/miguelmota/go-solidity-sha3 v0.1.1
 	github.com/multiformats/go-multiaddr v0.4.0
+	github.com/orcaman/concurrent-map v0.0.0-20190107190726-7ed82d9cb717
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/cobra v1.3.0
 	github.com/stretchr/testify v1.7.0
@@ -147,7 +149,6 @@ require (
 	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
-	github.com/orcaman/concurrent-map v0.0.0-20190107190726-7ed82d9cb717 // indirect
 	github.com/philhofer/fwd v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

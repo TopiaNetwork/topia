@@ -5,7 +5,7 @@ package ed25519
 
 /*
 #include <stdbool.h>
-bool intToBool(int i)
+bool intToBoolED25519(int i)
 {
 	if(i != 0){
 	return true;
@@ -63,7 +63,7 @@ import (
 func generateKeyPair() (sec []byte, pub []byte, err error) {
 	sec = make([]byte, PrivateKeyBytes)
 	pub = make([]byte, PublicKeyBytes)
-	if C.intToBool(C.crypto_sign_keypair((*C.uchar)(unsafe.Pointer(&pub[0])), (*C.uchar)(unsafe.Pointer(&sec[0])))) {
+	if C.intToBoolED25519(C.crypto_sign_keypair((*C.uchar)(unsafe.Pointer(&pub[0])), (*C.uchar)(unsafe.Pointer(&sec[0])))) {
 		return nil, nil, errors.New("libsodium crypto_sign_keypair err")
 	}
 	return sec, pub, nil
@@ -81,7 +81,7 @@ func generateKeyPairFromSeed(seed []byte) (sec []byte, pub []byte, err error) {
 	}
 	sec = make([]byte, PrivateKeyBytes)
 	pub = make([]byte, PublicKeyBytes)
-	if C.intToBool(C.crypto_sign_seed_keypair(
+	if C.intToBoolED25519(C.crypto_sign_seed_keypair(
 		(*C.uchar)(unsafe.Pointer(&pub[0])),
 		(*C.uchar)(unsafe.Pointer(&sec[0])),
 		(*C.uchar)(unsafe.Pointer(&seed[0])))) {
@@ -105,7 +105,7 @@ func signDetached(sec []byte, msg []byte) (sig []byte, err error) {
 	}
 	sig = make([]byte, SignatureBytes)
 	var siglen C.ulonglong
-	if C.intToBool(C.crypto_sign_detached(
+	if C.intToBoolED25519(C.crypto_sign_detached(
 		(*C.uchar)(unsafe.Pointer(&sig[0])),
 		&siglen,
 		(*C.uchar)(unsafe.Pointer(&msg[0])),
@@ -120,7 +120,7 @@ func verifyDetached(pub []byte, msg []byte, sig []byte) (bool, error) {
 	if len(pub) != PublicKeyBytes || len(msg) == 0 || len(sig) != SignatureBytes {
 		return false, errors.New("input invalid argument")
 	}
-	if C.intToBool(C.crypto_sign_verify_detached(
+	if C.intToBoolED25519(C.crypto_sign_verify_detached(
 		(*C.uchar)(unsafe.Pointer(&sig[0])),
 		(*C.uchar)(unsafe.Pointer(&msg[0])),
 		(C.ulonglong)(uint64(len(msg))),

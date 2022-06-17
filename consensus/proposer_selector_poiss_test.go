@@ -13,6 +13,8 @@ func TestComputeVRF(t *testing.T) {
 
 	priKey, pubKey, _ := crypt.GeneratePriPubKey()
 
+	addr, _ := crypt.CreateAddress(pubKey)
+
 	selector := newProposerSelectorPoiss(crypt)
 
 	vrfInputData := "TestSelectProposer1"
@@ -21,7 +23,7 @@ func TestComputeVRF(t *testing.T) {
 	require.Equal(t, nil, err)
 	require.NotEqual(t, nil, vrfProof)
 
-	isOk, err := crypt.Verify(pubKey, []byte(vrfInputData), vrfProof)
+	isOk, err := crypt.Verify(addr, []byte(vrfInputData), vrfProof)
 	require.Equal(t, nil, err)
 	require.Equal(t, true, isOk)
 }
@@ -31,6 +33,8 @@ func TestSelectProposer(t *testing.T) {
 
 	priKey, pubKey, _ := crypt.GeneratePriPubKey()
 
+	addr, _ := crypt.CreateAddress(pubKey)
+
 	selector := newProposerSelectorPoiss(crypt)
 
 	vrfInputData := "TestSelectProposer1"
@@ -39,7 +43,7 @@ func TestSelectProposer(t *testing.T) {
 	require.Equal(t, nil, err)
 	require.NotEqual(t, nil, vrfProof)
 
-	isOk, err := crypt.Verify(pubKey, []byte(vrfInputData), vrfProof)
+	isOk, err := crypt.Verify(addr, []byte(vrfInputData), vrfProof)
 	require.Equal(t, nil, err)
 	require.Equal(t, true, isOk)
 

@@ -29,14 +29,17 @@ endif
 # allow users to pass additional flags via the conventional LDFLAGS variable
 LD_FLAGS += $(LDFLAGS)
 
-all: check build install
+all: check update build install
 .PHONY: all
 
 ###############################################################################
 ###                                Build Topia                         ###
 ###############################################################################
 
-build: $(BUILDDIR)/
+update:
+	git submodule update --init --recursive
+
+build: $(BUILDDIR)/ update
 	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_FLAGS) -tags '$(BUILD_TAGS)' -o $(BUILDDIR)/ ./runner/topia
 .PHONY: build
 

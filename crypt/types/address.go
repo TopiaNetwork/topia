@@ -13,7 +13,7 @@ const (
 	AddressLen_ETH      = 20 //20 bytes
 	AddressLen_Secp256  = 20 //20 bytes
 	AddressLen_BLS12381 = 48 //48 bytes
-	AddressLen_ED25519  = 20 //20 bytes
+	AddressLen_ED25519  = 32 //32 bytes
 )
 
 const (

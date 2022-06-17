@@ -9,7 +9,8 @@ import (
 type blockValidator struct {
 }
 
-func (v *blockValidator) validateBase(bh *tpchaintypes.BlockHead) {
+func (v *blockValidator) validateBase(bh *tpchaintypes.BlockHead) error {
+	return nil
 }
 
 func (v *blockValidator) ValidateHeader(bh *tpchaintypes.BlockHead) error {

@@ -1,6 +1,8 @@
 package consensus
 
 type DKGBls interface {
+	PubKey() ([]byte, error)
+
 	Sign(msg []byte) ([]byte, []byte, error) //Signature,PubKey
 
 	Verify(msg, sig []byte) error

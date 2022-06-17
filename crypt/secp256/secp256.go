@@ -86,7 +86,8 @@ func (c *CryptServiceSecp256) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcr
 }
 
 func (c *CryptServiceSecp256) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrtypes.Signature, error) {
-	if len(priKey) != PrivateKeyBytes || len(msg) != MsgBytes {
+	signMsg := tpcmm.NewBlake2bHasher(MsgBytes).Compute(string(msg))
+	if len(priKey) != PrivateKeyBytes || len(signMsg) != MsgBytes {
 		return nil, errors.New("secp256 Sign input invalid parameter")
 	}
 
@@ -97,16 +98,19 @@ func (c *CryptServiceSecp256) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpc
 	return serializedSig[:], nil
 }
 
-func (c *CryptServiceSecp256) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error) {
-	if len(pubKey) != PublicKeyBytes || len(msg) != MsgBytes || signData == nil {
+func (c *CryptServiceSecp256) Verify(addr tpcrtypes.Address, msg []byte, signData tpcrtypes.Signature) (bool, error) {
+	signMsg := tpcmm.NewBlake2bHasher(MsgBytes).Compute(string(msg))
+	if len(signMsg) != MsgBytes || signData == nil {
 		return false, errors.New("secp256 Verify input invalid parameter")
 	}
 
-	retBool, err := ecdsaVerify(ctx, pubKey, signData, msg)
+	pubKey, err := c.RecoverPublicKey(signMsg, signData)
+	addrGen, err := c.CreateAddress(pubKey)
 	if err != nil {
 		return false, err
 	}
-	return retBool, nil
+
+	return addrGen == addr, nil
 }
 
 func (c *CryptServiceSecp256) RecoverPublicKey(msg []byte, signData tpcrtypes.Signature) (tpcrtypes.PublicKey, error) {

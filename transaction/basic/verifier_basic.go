@@ -3,7 +3,6 @@ package basic
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -68,14 +67,7 @@ func TransactionSignatureVerifier() TransactionVerifier {
 		}
 
 		cryService, _ := txServant.GetCryptService(log, cryType)
-
-		var fromSign tpcrtypes.SignatureInfo
-		err = json.Unmarshal(tx.Head.Signature, &fromSign)
-		if err != nil {
-			log.Errorf("Can't unmarshal tx signature: %v", err)
-			return VerifyResult_Reject
-		}
-		if ok, err := cryService.Verify(fromSign.PublicKey, tx.Data.Specification, fromSign.SignData); !ok {
+		if ok, err := cryService.Verify(tpcrtypes.Address(tx.Head.FromAddr), tx.Data.Specification, tx.Head.Signature); !ok {
 			log.Errorf("Can't verify tx signature: %v", err)
 			return VerifyResult_Reject
 		}

@@ -2,8 +2,6 @@ package universal
 
 import (
 	"context"
-	"encoding/json"
-
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
@@ -88,24 +86,12 @@ func TransactionUniversalPayerSignatureVerifier() TransactionUniversalVerifier {
 
 		cryService, _ := txUniServant.GetCryptService(log, cryType)
 
-		var fromSign tpcrtypes.SignatureInfo
-		err = json.Unmarshal(txUni.Signature, &fromSign)
-		if err != nil {
-			log.Errorf("Can't unmarshal txUni signature: %v", err)
-			return txbasic.VerifyResult_Reject
-		}
-		if ok, err := cryService.Verify(fromSign.PublicKey, txUni.Data.Specification, fromSign.SignData); !ok {
+		if ok, err := cryService.Verify(tpcrtypes.Address(txUni.FromAddr), txUni.Data.Specification, txUni.Signature); !ok {
 			log.Errorf("Can't verify txUni signature: %v", err)
 			return txbasic.VerifyResult_Reject
 		}
 
-		var payerSign tpcrtypes.SignatureInfo
-		err = json.Unmarshal(txUni.Signature, &payerSign)
-		if err != nil {
-			log.Errorf("Can't unmarshal payer signature: %v", err)
-			return txbasic.VerifyResult_Reject
-		}
-		if ok, err := cryService.Verify(payerSign.PublicKey, txUni.Data.Specification, payerSign.SignData); !ok {
+		if ok, err := cryService.Verify(tpcrtypes.Address(txUni.Head.FeePayer), txUni.Data.Specification, txUni.Head.FeePayerSignature); !ok {
 			log.Errorf("Can't verify payer signature: %v", err)
 			return txbasic.VerifyResult_Reject
 		}

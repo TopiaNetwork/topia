@@ -14,7 +14,7 @@ message BlockHead {
   uint32 Version           = 2  [(gogoproto.jsontag) = "version"];
   uint64 Height            = 3  [(gogoproto.jsontag) = "height"];
   uint64 Epoch             = 4  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round             = 5  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round             = 5  [(gogoproto.jsontag) = "round"];
   bytes  ParentBlockHash   = 6  [(gogoproto.jsontag) = "parentBlockHash"];
   bytes  Launcher          = 7  [(gogoproto.jsontag) = "launcher"];
   bytes  Proposer          = 8  [(gogoproto.jsontag) = "proposer"];
@@ -26,7 +26,7 @@ message BlockHead {
   uint32 TxCount           = 14 [(gogoproto.jsontag) = "txCount"];
   bytes  TxRoot            = 15 [(gogoproto.jsontag) = "txRoot"];
   bytes  TxResultRoot      = 16 [(gogoproto.jsontag) = "txResultHash"];
-  bytes  StateRoot         = 17 [(gogoproto.jsontag) = "txResultHash"];
+  bytes  StateRoot         = 17 [(gogoproto.jsontag) = "stateRoot"];
   bytes  GasFees           = 18 [(gogoproto.jsontag) = "gasFees"];
   uint64 TimeStamp         = 19 [(gogoproto.jsontag) = "timeStamp"];
   uint64 ElapsedSpan       = 20 [(gogoproto.jsontag) = "elaspedSpan"]; //unit ms

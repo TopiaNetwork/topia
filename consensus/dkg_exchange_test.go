@@ -122,8 +122,8 @@ func TestDkgExchangeLoop(t *testing.T) {
 
 						signDataT, _, err := dkgEx.dkgCrypt.Sign(msg)
 						require.Equal(t, nil, err)
-						//err = dkgEx.dkgCrypt.Verify(msg, signDataT)
-						//require.Equal(t, nil, err)
+						err = dkgEx.dkgCrypt.Verify(msg, signDataT)
+						require.Equal(t, nil, err)
 
 						signData = append(signData, signDataT)
 
@@ -147,7 +147,7 @@ func TestDkgExchangeLoop(t *testing.T) {
 
 	sig, err := dkgExChangeMap[0].dkgCrypt.RecoverSig(msg, signData)
 	require.Equal(t, nil, err)
-	err = dkgExChangeMap[0].dkgCrypt.Verify(msg, sig)
+	err = dkgExChangeMap[0].dkgCrypt.VerifyAgg(msg, sig)
 	require.Equal(t, nil, err)
 
 	log.Info("All dkg finished")

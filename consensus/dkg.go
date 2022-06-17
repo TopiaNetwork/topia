@@ -307,6 +307,17 @@ func (d *dkgCrypt) Verify(msg, sig []byte) error {
 	return bls.Verify(d.suite, pubPolicy.Eval(i).V, msg, s.Value())
 }
 
+func (d *dkgCrypt) VerifyAgg(msg, sig []byte) error {
+	dkShare, err := d.dkGenerator.DistKeyShare()
+	if err != nil {
+		return err
+	}
+
+	pubPoly := share.NewPubPoly(d.suite, d.suite.Point().Base(), dkShare.Commitments())
+
+	return bls.Verify(d.suite, pubPoly.Commit(), msg, sig)
+}
+
 func (d *dkgCrypt) RecoverSig(msg []byte, sigs [][]byte) ([]byte, error) {
 	if d.dkGenerator == nil {
 		err := errors.New("Current state invalid and can't sign msg")

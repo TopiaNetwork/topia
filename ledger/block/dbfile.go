@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"encoding/binary"
-	"encoding/json"
+	//"encoding/json"
 
 
 	"github.com/TopiaNetwork/topia/chain/types"
@@ -59,24 +59,17 @@ type TransIndex struct{
 //}
 
 
-func NewFile(block *types.Block,filetype int8) (*TopiaFile, error) {
+func NewFile(block *types.Block) (*TopiaFile, error) {
 
 	//blockKey,_ := block.HashHex()
 	blockKey := block.GetHead().GetHeight()
 
 	fmt.Println("",blockKey)
 	filesize :=  FILE_SIZE
-	fileTypestr := ".topai"
-	//switch filetype {
-	//case 1:
-	//	filetypestr = ".index"
-	//	filesize = FILE_SIZE/2
-	//case 2:
-	//	filetypestr = ".trans"
-	//	filesize = FILE_SIZE/2
-	//}
+	fileTypestr := ".topia"
+
 	filepath := strconv.FormatInt(int64(blockKey), 10) + fileTypestr
-	fmt.Println("",filepath)
+	fmt.Println(filepath)
 	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	file.Write(make([]byte, filesize))
 
@@ -85,25 +78,19 @@ func NewFile(block *types.Block,filetype int8) (*TopiaFile, error) {
 	}
 	FileNameOpening = filepath
 
-	mmap, _ := gommap.Map(file.Fd(), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
-	defer mmap.UnsafeUnmap()
+	tp := TopiaFile{
+		Filetype: 0,
+		File:   file,
+		Offset: 0,
+	}
 
-	buf,_ := Encodeblock(block)
-	copy(mmap[:len(buf)],buf)
+	tp.Writedata(block)
 
-
-	//stat, err := os.Stat(filepath)
-	//if err != nil {
-	//	return nil, err
-	//}
 
 	NewIndexFile(block)
 
-	return &TopiaFile{
-		Filetype: filetype,
-		File:   file,
-		Offset: 0,
-	}, nil
+	NewTransFile(block)
+	return &tp, nil
 }
 
 
@@ -128,31 +115,76 @@ func NewIndexFile(block *types.Block) (*TopiaFile, error) {
 		Offset: 0,
 	}
 	//what's the version ?????
-	tp.Writeindex(88,77)
+	//索引是哪个版本的再哪确定
+	tp.Writeindex(88,0)
+
 
 	return &tp, nil
 }
 
-//func (df *TopiaFile) Readdata()
+func NewTransFile(block *types.Block) (*TopiaFile, error) {
+	blockKey := block.GetHead().GetHeight()
+	filepath := strconv.FormatInt(int64(blockKey), 10) + ".trans"
+
+	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	file.Write(make([]byte, FILE_SIZE))
+	if err != nil {
+		return nil, err
+	}
+
+	//stat, err := os.Stat(filepath)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	var tp  = TopiaFile{
+		Filetype: 2,
+		File:   file,
+		Offset: 0,
+	}
+
+	tp.Writetrans(block)
+
+	return &tp, nil
+}
+
+
 func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, error) {
 
 
 	//indexfilename := filename ,".index")
-	file, err := os.OpenFile(df.File.Name(), os.O_RDWR, 0644)
+	TraceIndex := strings.Index(df.File.Name(), ".")
+	StartBlock := df.File.Name()[:TraceIndex]
+	fileindex, err := os.OpenFile(StartBlock+".index", os.O_RDWR, 0644)
+
+	indexfile := TopiaFile{
+		1,
+		fileindex,
+		0,
+	}
+
 
 	//first index
-	indexmmap, _ := gommap.Map(file.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+	tpindex, _ := indexfile.Findindex(blockNum)
 
-	start := 0
-	end := len(indexmmap)
-	//二分查找
-	dataoffset,_ := binarySearch(start,end,indexmmap[0],indexmmap)
+	fmt.Println(tpindex)
 
-	datafilename := df.File.Name() + ".topia"
-	filedata, err := os.OpenFile(datafilename, os.O_RDWR, 0644)
+	dataoffset := tpindex.offset
+
+
+	filedata, err := os.OpenFile(df.File.Name(), os.O_RDWR, 0644)
 	datammap, _ := gommap.Map(filedata.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
 
-	block := Decodeblock(datammap[0:dataoffset])
+	version := int32(binary.BigEndian.Uint32(datammap[dataoffset:dataoffset + 4]))
+	fmt.Println(version)
+	offset := int16(binary.BigEndian.Uint16(datammap[dataoffset+4:dataoffset + 6]))
+	fmt.Println(offset)
+	size := int16(binary.BigEndian.Uint16(datammap[dataoffset+6:dataoffset + 8]))
+	fmt.Println(size)
+	crc := int64(binary.BigEndian.Uint64(datammap[dataoffset+8:dataoffset + 16]))
+	fmt.Println(crc)
+	block := Decodeblock(datammap[dataoffset+16:dataoffset + 16+ size])
+	fmt.Println(block)
 	//item, err := Decodeblock(buf)
 	if block.Size() < 0{
 		return nil,err
@@ -167,7 +199,8 @@ func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, e
 }
 
 func (df *TopiaFile) Writedata(block *types.Block) error {
-	versionbyte := Int32ToBytes(int32(block.GetData().Version))
+	versionbyte := Int32ToBytes(int32(block.GetHead().Version))
+	fmt.Println(versionbyte)
 	offsetbyte := Int16ToBytes(df.Offset)
 
 	mmap, _ := gommap.Map(df.File.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
@@ -177,6 +210,7 @@ func (df *TopiaFile) Writedata(block *types.Block) error {
 	buf,_ := Encodeblock(block)
 	ccittCrc := crc.CalculateCRC(crc.CCITT, buf)
 	crcbyte :=  Int64ToBytes(int64(ccittCrc))
+	fmt.Println(ccittCrc)
 	size := int16(len(buf))
 	sizebyte := Int16ToBytes(size)
 
@@ -184,53 +218,14 @@ func (df *TopiaFile) Writedata(block *types.Block) error {
 	copy(mmap[df.Offset+4:df.Offset+6],offsetbyte)
 	copy(mmap[df.Offset+6:df.Offset+8],sizebyte)
 	copy(mmap[df.Offset+8:df.Offset+16],crcbyte)
-	copy(mmap[df.Offset+16:df.Offset+16+size],crcbyte)
-
-
+	copy(mmap[df.Offset+16:df.Offset+16+size],buf)
 
 	_ = df.File.Sync()
 	df.Offset = df.Offset + 16 + size
 	return  nil
 }
 
-//func (df *TopiaFile) Writedata(block *types.Block) error {
-//	version,_ := json.Marshal(block.GetData().Version)
-//	offerbyte,_ := json.Marshal(df.Offset)
-//
-//	df.File.Write(version)
-//	df.File.Write(offerbyte)
-//
-//
-//
-//	mmap, _ := gommap.Map(df.File.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
-//	defer mmap.UnsafeUnmap()
-//
-//
-//	newFsConfigBytes, _ := json.Marshal(block)
-//	ccittCrc := crc.CalculateCRC(crc.CCITT, newFsConfigBytes)
-//	crcbyte,_ :=  json.Marshal(ccittCrc)
-//	size := len(newFsConfigBytes) + len(crcbyte) + 3
-//	sizebyte,_ := json.Marshal(size)
-//	df.File.Write(sizebyte)
-//
-//	j := 0
-//	for i:=0;i<len(newFsConfigBytes);i++{
-//		mmap[j] = newFsConfigBytes[i]
-//		mmap.Sync(syscall.MS_SYNC)
-//
-//		j++
-//	}
-//
-//	for i:=0;i<len(crcbyte);i++ {
-//		mmap[j+1] = crcbyte[i]
-//		mmap.Sync(syscall.MS_SYNC)
-//		j++
-//	}
-//
-//	_ = df.File.Sync()
-//	df.Offset += size
-//	return  nil
-//}
+
 
 func (df *TopiaFile) Findindex(blockNum types.BlockNum) (*TopiaIndex, error) {
 
@@ -284,27 +279,34 @@ func (df *TopiaFile) Writeindex(version int16,offset int16) error {
 
 }
 
-func (df *TopiaFile) Writetrans(version int16,txid string,blockheight int16, offset int16) error {
-	versionbyte,_ := json.Marshal(version)
-	txidbyte,_ := json.Marshal(txid)
-	blockheightbyte,_ := json.Marshal(blockheight)
-	offsetbyte,_ := json.Marshal(offset)
+//func (df *TopiaFile) Writetrans(version int16,txid string,blockheight int16, offset int16) error {
+func (df *TopiaFile) Writetrans(block *types.Block) error {
+	versionbyte := Int32ToBytes(int32(block.GetHead().Version))
+
+	//
+	txids := block.GetData().GetTxs()
+
+	blockKey := block.GetHead().GetHeight()
 
 
-
-	df.File.Write(versionbyte)
-	df.File.Write(txidbyte)
-	df.File.Write(blockheightbyte)
-	df.File.Write(offsetbyte)
-
-
+	versionint := int16(binary.BigEndian.Uint16(versionbyte))
+	fmt.Println(versionint)
 
 	mmap, _ := gommap.Map(df.File.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	defer mmap.UnsafeUnmap()
+	for txid := range txids {
 
+		copy(mmap[df.Offset:df.Offset+2], versionbyte)
+		copy(mmap[df.Offset+2:df.Offset+10],Int64ToBytes(int64(txid)))
+		copy(mmap[df.Offset+4:df.Offset+6], Int64ToBytes(int64(blockKey)))
+		//
+
+	}
 
 	_ = df.File.Sync()
-	Indexoffset = Indexoffset + 3
+	Indexoffset = Indexoffset + 6
+	df.Offset = df.Offset + 6
+
 	return  nil
 
 }
@@ -357,7 +359,7 @@ func (df *TopiaFile) findTrans(filename string) (*types.Block, error) {
 
 	start := 0
 	end := len(indexmmap)
-	//二分查找
+
 	dataoffset,_ := binarySearch(start,end,indexmmap[0],indexmmap)
 
 	datafilename := path.Join(filename ,".topia")

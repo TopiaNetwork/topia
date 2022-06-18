@@ -40,7 +40,7 @@ var blockhead1 = types.BlockHead{
 	20,
 }
 var blockdata = types.BlockData{
-	1,
+	6,
 	nil,
 	struct{}{},
 	nil,
@@ -84,7 +84,7 @@ func TestEncodeblock(t *testing.T) {
 }
 
 func TestNewFile(t *testing.T) {
-	topia,_ := NewFile(&block_all,0)
+	topia,_ := NewFile(&block_all)
 	fmt.Println("",topia)
 
 	//index,_ := NewFile(&block_all,1)
@@ -95,25 +95,26 @@ func TestNewFile(t *testing.T) {
 }
 
 //
-func TestReaddata(t *testing.T) {
-	filename := FilenameNow + ".topia"
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//func TestReaddata(t *testing.T) {
+//	filename := FilenameNow + ".topia"
+//	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//
+//	if err != nil{
+//		panic(err)
+//	}
+//
+//	var to = TopiaFile{
+//		1,
+//		file,
+//		1,
+//
+//	}
+//	err =to.Writedata(&block_all)
+//	if err != nil{
+//		panic(err)
+//	}
+//}
 
-	if err != nil{
-		panic(err)
-	}
-
-	var to = TopiaFile{
-		1,
-		file,
-		1,
-
-	}
-	err =to.Writedata(&block_all)
-	if err != nil{
-		panic(err)
-	}
-}
 //
 //func TestWritedata(t *testing.T) {
 //	file, err := os.OpenFile("test.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
@@ -146,7 +147,7 @@ func TestTopiaFile_Findindex(t *testing.T) {
 	var to = TopiaFile{
 		1,
 		file,
-		1,
+		0,
 
 	}
 	tpindex,_ :=to.Findindex(1817128)
@@ -195,18 +196,34 @@ func TestTopiaFile_Findindex(t *testing.T) {
 //	}
 //}
 //
-//func TestFindBlock(t *testing.T) {
-//
-//	k := reflect.TypeOf(blockhead1)
-//	v := reflect.ValueOf(blockhead1)
-//
-//	//for k,_  := range blockhead1{
-//	//	fmt.Println("",k)
-//	//}
-//	fmt.Println("",k)
-//	fmt.Println("",v)
-//}
-//
+func TestFindBlock(t *testing.T) {
+
+	//k := reflect.TypeOf(blockhead1)
+	//v := reflect.ValueOf(blockhead1)
+	//
+	//fmt.Println("",k)
+	//fmt.Println("",v)
+
+	filename := FilenameNow + ".topia"
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+
+	if err != nil{
+		panic(err)
+	}
+
+	var to = TopiaFile{
+		0,
+		file,
+		0,
+
+	}
+	tpdata,_ :=to.FindBlockbyNumber(1817128)
+	//if err != nil{
+	//	panic(err)
+	//}
+	fmt.Println(tpdata)
+}
+
 
 
 //func TestnewDataFile(t *testing.T) {

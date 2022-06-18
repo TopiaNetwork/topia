@@ -9,6 +9,13 @@ import "gogo.proto";
 
 //protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.  --gofast_out=. ./block.proto
 
+message ConsensusProof {
+  bytes  ParentBlockHash = 1  [(gogoproto.jsontag) = "parentBlockHash"];
+  uint64 Height          = 2  [(gogoproto.jsontag) = "height"];
+  bytes  AggSign         = 3  [(gogoproto.jsontag) = "aggSign"];
+}
+
+
 message BlockHead {
   bytes  ChainID           = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version           = 2  [(gogoproto.jsontag) = "version"];

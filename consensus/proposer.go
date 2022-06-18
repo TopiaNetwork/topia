@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/TopiaNetwork/topia/consensus/vrf"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -105,7 +106,7 @@ func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block, proposeHe
 		return nil, err
 	}
 
-	csProof := &ConsensusProof{
+	csProof := &tpchaintypes.ConsensusProof{
 		ParentBlockHash: block.Head.ParentBlockHash,
 		Height:          block.Head.Height,
 		AggSign:         block.Head.VoteAggSignature,
@@ -122,7 +123,7 @@ func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block, proposeHe
 }
 
 func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, latestBlock *tpchaintypes.Block, proposeHeight uint64) (bool, []byte, []byte, error) {
-	proposerSel := NewProposerSelector(ProposerSelectionType_Poiss, p.cryptService)
+	proposerSel := vrf.NewProposerSelector(vrf.ProposerSelectionType_Poiss, p.cryptService)
 
 	vrfData, err := p.getVrfInputData(latestBlock, proposeHeight)
 	if err != nil {
@@ -558,7 +559,7 @@ func (p *consensusProposer) createBlockHead(chainID tpchaintypes.ChainID, epoch 
 		return nil, 0, err
 	}
 
-	csProof := &ConsensusProof{
+	csProof := &tpchaintypes.ConsensusProof{
 		ParentBlockHash: latestBlock.Head.ParentBlockHash,
 		Height:          latestBlock.Head.Height,
 		AggSign:         latestBlock.Head.VoteAggSignature,

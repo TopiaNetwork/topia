@@ -1,4 +1,4 @@
-package consensus
+package vrf
 
 import (
 	"fmt"
@@ -17,6 +17,8 @@ const (
 
 type ProposerSelector interface {
 	ComputeVRF(priKey tpcrtypes.PrivateKey, data []byte) ([]byte, error)
+
+	VerifyVRF(addr tpcrtypes.Address, data []byte, vrfProof []byte) (bool, error)
 
 	SelectProposer(VRFProof []byte, weight *big.Int, totalWeight *big.Int) int64
 

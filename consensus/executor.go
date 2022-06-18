@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/consensus/vrf"
 	"sync"
 	"time"
 
@@ -311,24 +312,24 @@ func (e *consensusExecutor) canPrepare(stateVersion uint64, latestBlock *tpchain
 		return false, nil, err
 	}
 
-	roleSelector := newLeaderSelectorVRF(e.log, e.nodeID, e.cryptService)
+	roleSelector := vrf.NewLeaderSelectorVRF(e.log, e.nodeID, e.cryptService)
 
 	e.log.Infof("Begin Select: state version %d, self node %s", stateVersion, e.nodeID)
-	candInfo, vrfProof, err := roleSelector.Select(RoleSelector_ExecutionLauncher, stateVersion, e.priKey, latestBlock, e.epochService, 1)
+	candIDs, vrfProof, err := roleSelector.Select(vrf.RoleSelector_ExecutionLauncher, stateVersion, e.priKey, latestBlock, e.epochService, 1)
 	if err != nil {
 		e.log.Errorf("Select executor err: %v", err)
 		return false, nil, err
 	}
 	e.log.Infof("End Select: state version %d, self node %s", stateVersion, e.nodeID)
-	if len(candInfo) != 1 {
-		err = fmt.Errorf("Invalid selected executor count: state version %d, expected 1, actual %d", stateVersion, len(candInfo))
+	if len(candIDs) != 1 {
+		err = fmt.Errorf("Invalid selected executor count: state version %d, expected 1, actual %d", stateVersion, len(candIDs))
 		e.log.Errorf("%v", err)
 		return false, nil, err
 	}
 
-	e.log.Infof("Selected launching node: state version %d, selected node %s, self node %s", stateVersion, candInfo[0].nodeID, e.nodeID)
+	e.log.Infof("Selected launching node: state version %d, selected node %s, self node %s", stateVersion, candIDs[0], e.nodeID)
 
-	if candInfo[0].nodeID == e.nodeID {
+	if candIDs[0] == e.nodeID {
 		return true, vrfProof, nil
 	}
 

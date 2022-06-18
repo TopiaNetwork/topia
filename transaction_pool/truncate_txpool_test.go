@@ -9,18 +9,19 @@ import (
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	"github.com/TopiaNetwork/topia/transaction_pool/mock"
 )
 
 func Test_transactionPool_truncateQueue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -74,12 +75,12 @@ func Test_transactionPool_truncatePending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))

@@ -27,42 +27,60 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 type SyncMessage_SyncMessageType int32
 
 const (
-	SyncMessage_Unknown              SyncMessage_SyncMessageType = 0
-	SyncMessage_HeartBeatRequest     SyncMessage_SyncMessageType = 1
-	SyncMessage_BlockRequest         SyncMessage_SyncMessageType = 2
-	SyncMessage_BlockResponse        SyncMessage_SyncMessageType = 3
-	SyncMessage_StateRequest         SyncMessage_SyncMessageType = 4
-	SyncMessage_StateResponse        SyncMessage_SyncMessageType = 5
-	SyncMessage_EpochResponse        SyncMessage_SyncMessageType = 6
-	SyncMessage_NodeStateResponse    SyncMessage_SyncMessageType = 7
-	SyncMessage_AccountStateResponse SyncMessage_SyncMessageType = 8
-	SyncMessage_ChainStateResponse   SyncMessage_SyncMessageType = 9
+	SyncMessage_Unknown             SyncMessage_SyncMessageType = 0
+	SyncMessage_HeartBeatRequest    SyncMessage_SyncMessageType = 1
+	SyncMessage_BlockRequest        SyncMessage_SyncMessageType = 2
+	SyncMessage_BlockResponse       SyncMessage_SyncMessageType = 3
+	SyncMessage_StateRequest        SyncMessage_SyncMessageType = 4
+	SyncMessage_EpochResponse       SyncMessage_SyncMessageType = 5
+	SyncMessage_NodeIDsRequest      SyncMessage_SyncMessageType = 6
+	SyncMessage_NodeRequest         SyncMessage_SyncMessageType = 7
+	SyncMessage_NodeResponse        SyncMessage_SyncMessageType = 8
+	SyncMessage_AccountRequest      SyncMessage_SyncMessageType = 9
+	SyncMessage_AccountResponse     SyncMessage_SyncMessageType = 10
+	SyncMessage_AccountAddrsRequest SyncMessage_SyncMessageType = 11
+	SyncMessage_ChainRequest        SyncMessage_SyncMessageType = 12
+	SyncMessage_ChainResponse       SyncMessage_SyncMessageType = 13
+	SyncMessage_SyncInfoReaquest    SyncMessage_SyncMessageType = 14
+	SyncMessage_SyncInfoResponse    SyncMessage_SyncMessageType = 15
 )
 
 var SyncMessage_SyncMessageType_name = map[int32]string{
-	0: "Unknown",
-	1: "HeartBeatRequest",
-	2: "BlockRequest",
-	3: "BlockResponse",
-	4: "StateRequest",
-	5: "StateResponse",
-	6: "EpochResponse",
-	7: "NodeStateResponse",
-	8: "AccountStateResponse",
-	9: "ChainStateResponse",
+	0:  "Unknown",
+	1:  "HeartBeatRequest",
+	2:  "BlockRequest",
+	3:  "BlockResponse",
+	4:  "StateRequest",
+	5:  "EpochResponse",
+	6:  "NodeIDsRequest",
+	7:  "NodeRequest",
+	8:  "NodeResponse",
+	9:  "AccountRequest",
+	10: "AccountResponse",
+	11: "AccountAddrsRequest",
+	12: "ChainRequest",
+	13: "ChainResponse",
+	14: "SyncInfoReaquest",
+	15: "SyncInfoResponse",
 }
 
 var SyncMessage_SyncMessageType_value = map[string]int32{
-	"Unknown":              0,
-	"HeartBeatRequest":     1,
-	"BlockRequest":         2,
-	"BlockResponse":        3,
-	"StateRequest":         4,
-	"StateResponse":        5,
-	"EpochResponse":        6,
-	"NodeStateResponse":    7,
-	"AccountStateResponse": 8,
-	"ChainStateResponse":   9,
+	"Unknown":             0,
+	"HeartBeatRequest":    1,
+	"BlockRequest":        2,
+	"BlockResponse":       3,
+	"StateRequest":        4,
+	"EpochResponse":       5,
+	"NodeIDsRequest":      6,
+	"NodeRequest":         7,
+	"NodeResponse":        8,
+	"AccountRequest":      9,
+	"AccountResponse":     10,
+	"AccountAddrsRequest": 11,
+	"ChainRequest":        12,
+	"ChainResponse":       13,
+	"SyncInfoReaquest":    14,
+	"SyncInfoResponse":    15,
 }
 
 func (x SyncMessage_SyncMessageType) String() string {
@@ -150,13 +168,14 @@ func (m *SyncMessage) GetData() []byte {
 }
 
 type HeartBeatRequest struct {
-	BlockHeight          uint64   `protobuf:"varint,1,opt,name=BlockHeight,proto3" json:"blockHeight"`
-	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
-	SateVersion          uint64   `protobuf:"varint,3,opt,name=SateVersion,proto3" json:"stateRoot"`
-	EpochRoot            []byte   `protobuf:"bytes,4,opt,name=EpochRoot,proto3" json:"epochRoot"`
-	NodeRoot             []byte   `protobuf:"bytes,5,opt,name=NodeRoot,proto3" json:"nodeRoot"`
-	ChainRoot            []byte   `protobuf:"bytes,6,opt,name=ChainRoot,proto3" json:"chainRoot"`
-	AccountRoot          []byte   `protobuf:"bytes,7,opt,name=AccountRoot,proto3" json:"accountRoot"`
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	BlockHeight          uint64   `protobuf:"varint,2,opt,name=BlockHeight,proto3" json:"blockHeight"`
+	StateRoot            []byte   `protobuf:"bytes,3,opt,name=StateRoot,proto3" json:"stateRoot"`
+	SateVersion          uint64   `protobuf:"varint,4,opt,name=SateVersion,proto3" json:"stateRoot"`
+	EpochRoot            []byte   `protobuf:"bytes,5,opt,name=EpochRoot,proto3" json:"epochRoot"`
+	NodeRoot             []byte   `protobuf:"bytes,6,opt,name=NodeRoot,proto3" json:"nodeRoot"`
+	ChainRoot            []byte   `protobuf:"bytes,7,opt,name=ChainRoot,proto3" json:"chainRoot"`
+	AccountRoot          []byte   `protobuf:"bytes,8,opt,name=AccountRoot,proto3" json:"accountRoot"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -190,6 +209,13 @@ func (m *HeartBeatRequest) XXX_DiscardUnknown() {
 }
 
 var xxx_messageInfo_HeartBeatRequest proto.InternalMessageInfo
+
+func (m *HeartBeatRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
 
 func (m *HeartBeatRequest) GetBlockHeight() uint64 {
 	if m != nil {
@@ -241,7 +267,8 @@ func (m *HeartBeatRequest) GetAccountRoot() []byte {
 }
 
 type BlockRequest struct {
-	Height               uint64   `protobuf:"varint,1,opt,name=Height,proto3" json:"height"`
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	Height               uint64   `protobuf:"varint,2,opt,name=Height,proto3" json:"height"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -276,6 +303,13 @@ func (m *BlockRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_BlockRequest proto.InternalMessageInfo
 
+func (m *BlockRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
 func (m *BlockRequest) GetHeight() uint64 {
 	if m != nil {
 		return m.Height
@@ -284,9 +318,11 @@ func (m *BlockRequest) GetHeight() uint64 {
 }
 
 type BlockResponse struct {
-	Height               uint64                 `protobuf:"varint,1,opt,name=Height,proto3" json:"height"`
-	Code                 BlockResponse_RespCode `protobuf:"varint,2,opt,name=Code,proto3,enum=proto.BlockResponse_RespCode" json:"code"`
-	Block                *proto1.Block          `protobuf:"bytes,3,opt,name=block,proto3" json:"block"`
+	NodeID               []byte                 `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	Height               uint64                 `protobuf:"varint,2,opt,name=Height,proto3" json:"height"`
+	Code                 BlockResponse_RespCode `protobuf:"varint,3,opt,name=Code,proto3,enum=proto.BlockResponse_RespCode" json:"code"`
+	BlockHash            []byte                 `protobuf:"bytes,4,opt,name=BlockHash,proto3" json:"blockHash"`
+	Block                *proto1.Block          `protobuf:"bytes,5,opt,name=block,proto3" json:"block"`
 	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
 	XXX_unrecognized     []byte                 `json:"-"`
 	XXX_sizecache        int32                  `json:"-"`
@@ -321,6 +357,13 @@ func (m *BlockResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_BlockResponse proto.InternalMessageInfo
 
+func (m *BlockResponse) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
 func (m *BlockResponse) GetHeight() uint64 {
 	if m != nil {
 		return m.Height
@@ -335,6 +378,13 @@ func (m *BlockResponse) GetCode() BlockResponse_RespCode {
 	return BlockResponse_OK
 }
 
+func (m *BlockResponse) GetBlockHash() []byte {
+	if m != nil {
+		return m.BlockHash
+	}
+	return nil
+}
+
 func (m *BlockResponse) GetBlock() *proto1.Block {
 	if m != nil {
 		return m.Block
@@ -343,11 +393,12 @@ func (m *BlockResponse) GetBlock() *proto1.Block {
 }
 
 type StateRequest struct {
-	StateVersion         uint64   `protobuf:"varint,1,opt,name=StateVersion,proto3" json:"stateVersion"`
-	EpochRoot            []byte   `protobuf:"bytes,2,opt,name=EpochRoot,proto3" json:"epochRoot"`
-	NodeRoot             []byte   `protobuf:"bytes,3,opt,name=NodeRoot,proto3" json:"nodeRoot"`
-	ChainRoot            []byte   `protobuf:"bytes,4,opt,name=ChainRoot,proto3" json:"chainRoot"`
-	AccountRoot          []byte   `protobuf:"bytes,5,opt,name=AccountRoot,proto3" json:"accountRoot"`
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateVersion         uint64   `protobuf:"varint,2,opt,name=StateVersion,proto3" json:"stateVersion"`
+	EpochRoot            []byte   `protobuf:"bytes,3,opt,name=EpochRoot,proto3" json:"epochRoot"`
+	NodeRoot             []byte   `protobuf:"bytes,4,opt,name=NodeRoot,proto3" json:"nodeRoot"`
+	ChainRoot            []byte   `protobuf:"bytes,5,opt,name=ChainRoot,proto3" json:"chainRoot"`
+	AccountRoot          []byte   `protobuf:"bytes,6,opt,name=AccountRoot,proto3" json:"accountRoot"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -381,6 +432,13 @@ func (m *StateRequest) XXX_DiscardUnknown() {
 }
 
 var xxx_messageInfo_StateRequest proto.InternalMessageInfo
+
+func (m *StateRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
 
 func (m *StateRequest) GetStateVersion() uint64 {
 	if m != nil {
@@ -417,77 +475,14 @@ func (m *StateRequest) GetAccountRoot() []byte {
 	return nil
 }
 
-type StateResponse struct {
-	StateRoot            []byte   `protobuf:"bytes,1,opt,name=StateRoot,proto3" json:"stateRoot"`
-	StateVersion         uint64   `protobuf:"varint,2,opt,name=StateVersion,proto3" json:"stateVersion"`
-	StateByVersion       []byte   `protobuf:"bytes,3,opt,name=StateByVersion,proto3" json:"StateByVersion"`
-	EpochInfo            []byte   `protobuf:"bytes,4,opt,name=EpochInfo,proto3" json:"EpochInfo"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *StateResponse) Reset()         { *m = StateResponse{} }
-func (m *StateResponse) String() string { return proto.CompactTextString(m) }
-func (*StateResponse) ProtoMessage()    {}
-func (*StateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_eb29ea826754e922, []int{5}
-}
-func (m *StateResponse) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *StateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	b = b[:cap(b)]
-	n, err := m.MarshalToSizedBuffer(b)
-	if err != nil {
-		return nil, err
-	}
-	return b[:n], nil
-}
-func (m *StateResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StateResponse.Merge(m, src)
-}
-func (m *StateResponse) XXX_Size() int {
-	return m.Size()
-}
-func (m *StateResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_StateResponse.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_StateResponse proto.InternalMessageInfo
-
-func (m *StateResponse) GetStateRoot() []byte {
-	if m != nil {
-		return m.StateRoot
-	}
-	return nil
-}
-
-func (m *StateResponse) GetStateVersion() uint64 {
-	if m != nil {
-		return m.StateVersion
-	}
-	return 0
-}
-
-func (m *StateResponse) GetStateByVersion() []byte {
-	if m != nil {
-		return m.StateByVersion
-	}
-	return nil
-}
-
-func (m *StateResponse) GetEpochInfo() []byte {
-	if m != nil {
-		return m.EpochInfo
-	}
-	return nil
-}
-
 type EpochResponse struct {
-	Epoch                uint64   `protobuf:"varint,1,opt,name=Epoch,proto3" json:"epoch"`
-	StartTimeStamp       uint64   `protobuf:"varint,2,opt,name=StartTimeStamp,proto3" json:"startTimeStamp"`
-	StartHeight          uint64   `protobuf:"varint,3,opt,name=StartHeight,proto3" json:"startHeight"`
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	EpochRoot            []byte   `protobuf:"bytes,4,opt,name=EpochRoot,proto3" json:"epochRoot"`
+	Epoch                uint64   `protobuf:"varint,5,opt,name=Epoch,proto3" json:"epoch"`
+	StartTimeStamp       uint64   `protobuf:"varint,6,opt,name=StartTimeStamp,proto3" json:"startTimeStamp"`
+	StartHeight          uint64   `protobuf:"varint,7,opt,name=StartHeight,proto3" json:"startHeight"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -497,7 +492,7 @@ func (m *EpochResponse) Reset()         { *m = EpochResponse{} }
 func (m *EpochResponse) String() string { return proto.CompactTextString(m) }
 func (*EpochResponse) ProtoMessage()    {}
 func (*EpochResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_eb29ea826754e922, []int{6}
+	return fileDescriptor_eb29ea826754e922, []int{5}
 }
 func (m *EpochResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -522,6 +517,34 @@ func (m *EpochResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_EpochResponse proto.InternalMessageInfo
 
+func (m *EpochResponse) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *EpochResponse) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
+func (m *EpochResponse) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *EpochResponse) GetEpochRoot() []byte {
+	if m != nil {
+		return m.EpochRoot
+	}
+	return nil
+}
+
 func (m *EpochResponse) GetEpoch() uint64 {
 	if m != nil {
 		return m.Epoch
@@ -543,10 +566,221 @@ func (m *EpochResponse) GetStartHeight() uint64 {
 	return 0
 }
 
+type NodeIDsRequest struct {
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	NodeRoot             []byte   `protobuf:"bytes,4,opt,name=NodeRoot,proto3" json:"nodeRoot"`
+	NodeIDsData          []byte   `protobuf:"bytes,5,opt,name=NodeIDsData,proto3" json:"nodeIDsData"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *NodeIDsRequest) Reset()         { *m = NodeIDsRequest{} }
+func (m *NodeIDsRequest) String() string { return proto.CompactTextString(m) }
+func (*NodeIDsRequest) ProtoMessage()    {}
+func (*NodeIDsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_eb29ea826754e922, []int{6}
+}
+func (m *NodeIDsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *NodeIDsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *NodeIDsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NodeIDsRequest.Merge(m, src)
+}
+func (m *NodeIDsRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *NodeIDsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_NodeIDsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_NodeIDsRequest proto.InternalMessageInfo
+
+func (m *NodeIDsRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *NodeIDsRequest) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
+func (m *NodeIDsRequest) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *NodeIDsRequest) GetNodeRoot() []byte {
+	if m != nil {
+		return m.NodeRoot
+	}
+	return nil
+}
+
+func (m *NodeIDsRequest) GetNodeIDsData() []byte {
+	if m != nil {
+		return m.NodeIDsData
+	}
+	return nil
+}
+
+type NodeRequest struct {
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	NodeRoot             []byte   `protobuf:"bytes,4,opt,name=NodeRoot,proto3" json:"nodeRoot"`
+	NodeIDsData          []byte   `protobuf:"bytes,5,opt,name=NodeIDsData,proto3" json:"nodeIDsData"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *NodeRequest) Reset()         { *m = NodeRequest{} }
+func (m *NodeRequest) String() string { return proto.CompactTextString(m) }
+func (*NodeRequest) ProtoMessage()    {}
+func (*NodeRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_eb29ea826754e922, []int{7}
+}
+func (m *NodeRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *NodeRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *NodeRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NodeRequest.Merge(m, src)
+}
+func (m *NodeRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *NodeRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_NodeRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_NodeRequest proto.InternalMessageInfo
+
+func (m *NodeRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *NodeRequest) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
+func (m *NodeRequest) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *NodeRequest) GetNodeRoot() []byte {
+	if m != nil {
+		return m.NodeRoot
+	}
+	return nil
+}
+
+func (m *NodeRequest) GetNodeIDsData() []byte {
+	if m != nil {
+		return m.NodeIDsData
+	}
+	return nil
+}
+
+type NodeSegRequest struct {
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateVersion         uint64   `protobuf:"varint,2,opt,name=StateVersion,proto3" json:"stateVersion"`
+	FragmentNum          uint64   `protobuf:"varint,3,opt,name=FragmentNum,proto3" json:"fragmentNum"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *NodeSegRequest) Reset()         { *m = NodeSegRequest{} }
+func (m *NodeSegRequest) String() string { return proto.CompactTextString(m) }
+func (*NodeSegRequest) ProtoMessage()    {}
+func (*NodeSegRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_eb29ea826754e922, []int{8}
+}
+func (m *NodeSegRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *NodeSegRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *NodeSegRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NodeSegRequest.Merge(m, src)
+}
+func (m *NodeSegRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *NodeSegRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_NodeSegRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_NodeSegRequest proto.InternalMessageInfo
+
+func (m *NodeSegRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *NodeSegRequest) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *NodeSegRequest) GetFragmentNum() uint64 {
+	if m != nil {
+		return m.FragmentNum
+	}
+	return 0
+}
+
 type NodeResponse struct {
-	StateVersion         uint64   `protobuf:"varint,1,opt,name=StateVersion,proto3" json:"stateVersion"`
-	NodeRoot             []byte   `protobuf:"bytes,2,opt,name=NodeRoot,proto3" json:"nodeRoot"`
-	StateData            []byte   `protobuf:"bytes,3,opt,name=StateData,proto3" json:"stateData"`
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	NodeRoot             []byte   `protobuf:"bytes,4,opt,name=NodeRoot,proto3" json:"nodeRoot"`
+	NodesData            []byte   `protobuf:"bytes,5,opt,name=NodesData,proto3" json:"nodesData"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -556,7 +790,7 @@ func (m *NodeResponse) Reset()         { *m = NodeResponse{} }
 func (m *NodeResponse) String() string { return proto.CompactTextString(m) }
 func (*NodeResponse) ProtoMessage()    {}
 func (*NodeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_eb29ea826754e922, []int{7}
+	return fileDescriptor_eb29ea826754e922, []int{9}
 }
 func (m *NodeResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -581,6 +815,20 @@ func (m *NodeResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_NodeResponse proto.InternalMessageInfo
 
+func (m *NodeResponse) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *NodeResponse) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
 func (m *NodeResponse) GetStateVersion() uint64 {
 	if m != nil {
 		return m.StateVersion
@@ -595,17 +843,74 @@ func (m *NodeResponse) GetNodeRoot() []byte {
 	return nil
 }
 
-func (m *NodeResponse) GetStateData() []byte {
+func (m *NodeResponse) GetNodesData() []byte {
 	if m != nil {
-		return m.StateData
+		return m.NodesData
 	}
 	return nil
 }
 
+type ChainRequest struct {
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateVersion         uint64   `protobuf:"varint,2,opt,name=StateVersion,proto3" json:"stateVersion"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ChainRequest) Reset()         { *m = ChainRequest{} }
+func (m *ChainRequest) String() string { return proto.CompactTextString(m) }
+func (*ChainRequest) ProtoMessage()    {}
+func (*ChainRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_eb29ea826754e922, []int{10}
+}
+func (m *ChainRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ChainRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *ChainRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChainRequest.Merge(m, src)
+}
+func (m *ChainRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *ChainRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChainRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ChainRequest proto.InternalMessageInfo
+
+func (m *ChainRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *ChainRequest) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
 type ChainResponse struct {
-	StateVersion         uint64   `protobuf:"varint,1,opt,name=StateVersion,proto3" json:"stateVersion"`
-	ChainRoot            []byte   `protobuf:"bytes,2,opt,name=ChainRoot,proto3" json:"chainRoot"`
-	StateData            []byte   `protobuf:"bytes,3,opt,name=StateData,proto3" json:"stateData"`
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	ChainRoot            []byte   `protobuf:"bytes,4,opt,name=ChainRoot,proto3" json:"chainRoot"`
+	ChainID              string   `protobuf:"bytes,5,opt,name=ChainID,proto3" json:"chainID"`
+	NetworkType          []byte   `protobuf:"bytes,6,opt,name=NetworkType,proto3" json:"networkType"`
+	LatestHeight         uint64   `protobuf:"varint,7,opt,name=LatestHeight,proto3" json:"latestHeight"`
+	LatestBlock          []byte   `protobuf:"bytes,8,opt,name=LatestBlock,proto3" json:"latestBlock"`
+	LatestBlockResult    []byte   `protobuf:"bytes,9,opt,name=LatestBlockResult,proto3" json:"latestBlockResult"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -615,7 +920,7 @@ func (m *ChainResponse) Reset()         { *m = ChainResponse{} }
 func (m *ChainResponse) String() string { return proto.CompactTextString(m) }
 func (*ChainResponse) ProtoMessage()    {}
 func (*ChainResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_eb29ea826754e922, []int{8}
+	return fileDescriptor_eb29ea826754e922, []int{11}
 }
 func (m *ChainResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -640,6 +945,20 @@ func (m *ChainResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ChainResponse proto.InternalMessageInfo
 
+func (m *ChainResponse) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *ChainResponse) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
 func (m *ChainResponse) GetStateVersion() uint64 {
 	if m != nil {
 		return m.StateVersion
@@ -654,17 +973,122 @@ func (m *ChainResponse) GetChainRoot() []byte {
 	return nil
 }
 
-func (m *ChainResponse) GetStateData() []byte {
+func (m *ChainResponse) GetChainID() string {
 	if m != nil {
-		return m.StateData
+		return m.ChainID
+	}
+	return ""
+}
+
+func (m *ChainResponse) GetNetworkType() []byte {
+	if m != nil {
+		return m.NetworkType
+	}
+	return nil
+}
+
+func (m *ChainResponse) GetLatestHeight() uint64 {
+	if m != nil {
+		return m.LatestHeight
+	}
+	return 0
+}
+
+func (m *ChainResponse) GetLatestBlock() []byte {
+	if m != nil {
+		return m.LatestBlock
+	}
+	return nil
+}
+
+func (m *ChainResponse) GetLatestBlockResult() []byte {
+	if m != nil {
+		return m.LatestBlockResult
+	}
+	return nil
+}
+
+type AccountRequest struct {
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	AccountRoot          []byte   `protobuf:"bytes,4,opt,name=AccountRoot,proto3" json:"accountRoot"`
+	AccountAddrsData     []byte   `protobuf:"bytes,5,opt,name=AccountAddrsData,proto3" json:"accountAddrsData"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *AccountRequest) Reset()         { *m = AccountRequest{} }
+func (m *AccountRequest) String() string { return proto.CompactTextString(m) }
+func (*AccountRequest) ProtoMessage()    {}
+func (*AccountRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_eb29ea826754e922, []int{12}
+}
+func (m *AccountRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *AccountRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *AccountRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AccountRequest.Merge(m, src)
+}
+func (m *AccountRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *AccountRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_AccountRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AccountRequest proto.InternalMessageInfo
+
+func (m *AccountRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *AccountRequest) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
+func (m *AccountRequest) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *AccountRequest) GetAccountRoot() []byte {
+	if m != nil {
+		return m.AccountRoot
+	}
+	return nil
+}
+
+func (m *AccountRequest) GetAccountAddrsData() []byte {
+	if m != nil {
+		return m.AccountAddrsData
 	}
 	return nil
 }
 
 type AccountResponse struct {
-	StateVersion         uint64   `protobuf:"varint,1,opt,name=StateVersion,proto3" json:"stateVersion"`
-	AccountRoot          []byte   `protobuf:"bytes,2,opt,name=AccountRoot,proto3" json:"accountRoot"`
-	StateData            []byte   `protobuf:"bytes,3,opt,name=StateData,proto3" json:"stateData"`
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	AccountRoot          []byte   `protobuf:"bytes,4,opt,name=AccountRoot,proto3" json:"accountRoot"`
+	AccountsData         []byte   `protobuf:"bytes,5,opt,name=AccountsData,proto3" json:"accountsData"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -674,7 +1098,7 @@ func (m *AccountResponse) Reset()         { *m = AccountResponse{} }
 func (m *AccountResponse) String() string { return proto.CompactTextString(m) }
 func (*AccountResponse) ProtoMessage()    {}
 func (*AccountResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_eb29ea826754e922, []int{9}
+	return fileDescriptor_eb29ea826754e922, []int{13}
 }
 func (m *AccountResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -699,6 +1123,20 @@ func (m *AccountResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_AccountResponse proto.InternalMessageInfo
 
+func (m *AccountResponse) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *AccountResponse) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
 func (m *AccountResponse) GetStateVersion() uint64 {
 	if m != nil {
 		return m.StateVersion
@@ -713,9 +1151,242 @@ func (m *AccountResponse) GetAccountRoot() []byte {
 	return nil
 }
 
-func (m *AccountResponse) GetStateData() []byte {
+func (m *AccountResponse) GetAccountsData() []byte {
 	if m != nil {
-		return m.StateData
+		return m.AccountsData
+	}
+	return nil
+}
+
+type AccountAddrsRequest struct {
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	StateRoot            []byte   `protobuf:"bytes,2,opt,name=StateRoot,proto3" json:"stateRoot"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	AccountRoot          []byte   `protobuf:"bytes,4,opt,name=AccountRoot,proto3" json:"accountRoot"`
+	AccountAddrsData     []byte   `protobuf:"bytes,5,opt,name=AccountAddrsData,proto3" json:"accountAddrsData"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *AccountAddrsRequest) Reset()         { *m = AccountAddrsRequest{} }
+func (m *AccountAddrsRequest) String() string { return proto.CompactTextString(m) }
+func (*AccountAddrsRequest) ProtoMessage()    {}
+func (*AccountAddrsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_eb29ea826754e922, []int{14}
+}
+func (m *AccountAddrsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *AccountAddrsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *AccountAddrsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AccountAddrsRequest.Merge(m, src)
+}
+func (m *AccountAddrsRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *AccountAddrsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_AccountAddrsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AccountAddrsRequest proto.InternalMessageInfo
+
+func (m *AccountAddrsRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *AccountAddrsRequest) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
+func (m *AccountAddrsRequest) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *AccountAddrsRequest) GetAccountRoot() []byte {
+	if m != nil {
+		return m.AccountRoot
+	}
+	return nil
+}
+
+func (m *AccountAddrsRequest) GetAccountAddrsData() []byte {
+	if m != nil {
+		return m.AccountAddrsData
+	}
+	return nil
+}
+
+type SyncInfoRequest struct {
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	Height               uint64   `protobuf:"varint,2,opt,name=Height,proto3" json:"height"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SyncInfoRequest) Reset()         { *m = SyncInfoRequest{} }
+func (m *SyncInfoRequest) String() string { return proto.CompactTextString(m) }
+func (*SyncInfoRequest) ProtoMessage()    {}
+func (*SyncInfoRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_eb29ea826754e922, []int{15}
+}
+func (m *SyncInfoRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *SyncInfoRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *SyncInfoRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncInfoRequest.Merge(m, src)
+}
+func (m *SyncInfoRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *SyncInfoRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SyncInfoRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SyncInfoRequest proto.InternalMessageInfo
+
+func (m *SyncInfoRequest) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *SyncInfoRequest) GetHeight() uint64 {
+	if m != nil {
+		return m.Height
+	}
+	return 0
+}
+
+func (m *SyncInfoRequest) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+type SyncInfoResponse struct {
+	NodeID               []byte   `protobuf:"bytes,1,opt,name=NodeID,proto3" json:"nodeID"`
+	Height               uint64   `protobuf:"varint,2,opt,name=Height,proto3" json:"stateVersion"`
+	StateVersion         uint64   `protobuf:"varint,3,opt,name=StateVersion,proto3" json:"stateVersion"`
+	StateRoot            []byte   `protobuf:"bytes,4,opt,name=StateRoot,proto3" json:"stateRoot"`
+	AccountRoot          []byte   `protobuf:"bytes,5,opt,name=AccountRoot,proto3" json:"accountRoot"`
+	ChainRoot            []byte   `protobuf:"bytes,6,opt,name=ChainRoot,proto3" json:"chainRoot"`
+	NodeRoot             []byte   `protobuf:"bytes,7,opt,name=NodeRoot,proto3" json:"nodeRoot"`
+	EpochRoot            []byte   `protobuf:"bytes,8,opt,name=EpochRoot,proto3" json:"epochRoot"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SyncInfoResponse) Reset()         { *m = SyncInfoResponse{} }
+func (m *SyncInfoResponse) String() string { return proto.CompactTextString(m) }
+func (*SyncInfoResponse) ProtoMessage()    {}
+func (*SyncInfoResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_eb29ea826754e922, []int{16}
+}
+func (m *SyncInfoResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *SyncInfoResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *SyncInfoResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncInfoResponse.Merge(m, src)
+}
+func (m *SyncInfoResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *SyncInfoResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SyncInfoResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SyncInfoResponse proto.InternalMessageInfo
+
+func (m *SyncInfoResponse) GetNodeID() []byte {
+	if m != nil {
+		return m.NodeID
+	}
+	return nil
+}
+
+func (m *SyncInfoResponse) GetHeight() uint64 {
+	if m != nil {
+		return m.Height
+	}
+	return 0
+}
+
+func (m *SyncInfoResponse) GetStateVersion() uint64 {
+	if m != nil {
+		return m.StateVersion
+	}
+	return 0
+}
+
+func (m *SyncInfoResponse) GetStateRoot() []byte {
+	if m != nil {
+		return m.StateRoot
+	}
+	return nil
+}
+
+func (m *SyncInfoResponse) GetAccountRoot() []byte {
+	if m != nil {
+		return m.AccountRoot
+	}
+	return nil
+}
+
+func (m *SyncInfoResponse) GetChainRoot() []byte {
+	if m != nil {
+		return m.ChainRoot
+	}
+	return nil
+}
+
+func (m *SyncInfoResponse) GetNodeRoot() []byte {
+	if m != nil {
+		return m.NodeRoot
+	}
+	return nil
+}
+
+func (m *SyncInfoResponse) GetEpochRoot() []byte {
+	if m != nil {
+		return m.EpochRoot
 	}
 	return nil
 }
@@ -728,64 +1399,92 @@ func init() {
 	proto.RegisterType((*BlockRequest)(nil), "proto.BlockRequest")
 	proto.RegisterType((*BlockResponse)(nil), "proto.BlockResponse")
 	proto.RegisterType((*StateRequest)(nil), "proto.StateRequest")
-	proto.RegisterType((*StateResponse)(nil), "proto.StateResponse")
 	proto.RegisterType((*EpochResponse)(nil), "proto.EpochResponse")
+	proto.RegisterType((*NodeIDsRequest)(nil), "proto.NodeIDsRequest")
+	proto.RegisterType((*NodeRequest)(nil), "proto.NodeRequest")
+	proto.RegisterType((*NodeSegRequest)(nil), "proto.NodeSegRequest")
 	proto.RegisterType((*NodeResponse)(nil), "proto.NodeResponse")
+	proto.RegisterType((*ChainRequest)(nil), "proto.ChainRequest")
 	proto.RegisterType((*ChainResponse)(nil), "proto.ChainResponse")
+	proto.RegisterType((*AccountRequest)(nil), "proto.AccountRequest")
 	proto.RegisterType((*AccountResponse)(nil), "proto.AccountResponse")
+	proto.RegisterType((*AccountAddrsRequest)(nil), "proto.AccountAddrsRequest")
+	proto.RegisterType((*SyncInfoRequest)(nil), "proto.SyncInfoRequest")
+	proto.RegisterType((*SyncInfoResponse)(nil), "proto.SyncInfoResponse")
 }
 
 func init() { proto.RegisterFile("proto/message_sync.proto", fileDescriptor_eb29ea826754e922) }
 
 var fileDescriptor_eb29ea826754e922 = []byte{
-	// 747 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x56, 0x4d, 0x6f, 0xd3, 0x4a,
-	0x14, 0xed, 0x38, 0xce, 0xd7, 0xd8, 0x6d, 0xdd, 0x51, 0xdf, 0x53, 0x54, 0xbd, 0xc6, 0x95, 0x57,
-	0x95, 0x9e, 0x68, 0x44, 0x60, 0x05, 0x2b, 0x5c, 0x90, 0x5a, 0x95, 0xb6, 0xd2, 0xb4, 0xb0, 0x60,
-	0x83, 0x5c, 0x77, 0x48, 0xa2, 0x12, 0x4f, 0x88, 0xa7, 0x42, 0xf9, 0x27, 0x48, 0x2c, 0x58, 0xf2,
-	0x37, 0x58, 0xb2, 0x44, 0x62, 0x83, 0x8a, 0x64, 0xa1, 0xb0, 0xf3, 0x5f, 0x60, 0x83, 0xe6, 0x8e,
-	0x1d, 0x7f, 0xb0, 0x48, 0x42, 0x57, 0xf6, 0x9c, 0x7b, 0xee, 0xd5, 0xf5, 0xb9, 0xe7, 0x4e, 0x82,
-	0x5b, 0xa3, 0x31, 0x17, 0xbc, 0x33, 0x64, 0x61, 0xe8, 0xf5, 0xd8, 0xcb, 0x70, 0x12, 0xf8, 0x7b,
-	0x00, 0x91, 0x2a, 0x3c, 0xb6, 0x70, 0x8f, 0xf7, 0xb8, 0x82, 0xb6, 0xb6, 0xfd, 0xbe, 0x37, 0x08,
-	0x3a, 0x62, 0x32, 0x62, 0x61, 0x47, 0x25, 0x5e, 0xbc, 0xe6, 0xfe, 0x95, 0x0a, 0x3b, 0x5f, 0x35,
-	0x6c, 0x9c, 0x4d, 0x02, 0xff, 0x58, 0x15, 0x23, 0x87, 0xb8, 0x7e, 0x1c, 0xf6, 0xce, 0x27, 0x23,
-	0xd6, 0x42, 0x3b, 0x68, 0x77, 0xad, 0xeb, 0x28, 0xe2, 0x5e, 0x8e, 0x94, 0x7f, 0x97, 0x4c, 0xd7,
-	0x88, 0x23, 0xbb, 0x3e, 0x54, 0x69, 0x34, 0xcd, 0x27, 0xff, 0x61, 0xfd, 0xb1, 0x27, 0xbc, 0x96,
-	0xb6, 0x83, 0x76, 0x4d, 0xb7, 0x11, 0x47, 0xb6, 0x7e, 0xe9, 0x09, 0x8f, 0x02, 0xea, 0xdc, 0x20,
-	0xbc, 0x5e, 0xaa, 0x43, 0x0c, 0x5c, 0x7f, 0x16, 0x5c, 0x05, 0xfc, 0x6d, 0x60, 0xad, 0x90, 0x4d,
-	0x6c, 0x1d, 0x30, 0x6f, 0x2c, 0x5c, 0xe6, 0x09, 0xca, 0xde, 0x5c, 0xb3, 0x50, 0x58, 0x88, 0x58,
-	0xd8, 0x74, 0x65, 0xfb, 0x29, 0xa2, 0x91, 0x0d, 0xbc, 0x9a, 0x20, 0xe1, 0x88, 0x07, 0x21, 0xb3,
-	0x2a, 0x92, 0x74, 0x26, 0x3c, 0xc1, 0x52, 0x92, 0x2e, 0x49, 0x09, 0x92, 0x90, 0xaa, 0x12, 0x7a,
-	0x32, 0xe2, 0x7e, 0x7f, 0x06, 0xd5, 0xc8, 0x3f, 0x78, 0xe3, 0x84, 0x5f, 0xb2, 0x22, 0xb3, 0x4e,
-	0x5a, 0x78, 0xf3, 0x91, 0xef, 0xf3, 0xeb, 0x40, 0x14, 0x23, 0x0d, 0xf2, 0x2f, 0x26, 0xfb, 0x52,
-	0xde, 0x22, 0xde, 0x74, 0x6e, 0xb4, 0x3f, 0x9b, 0x27, 0x77, 0xb1, 0x01, 0x8d, 0x1e, 0xb0, 0x41,
-	0xaf, 0x2f, 0x40, 0x5e, 0xdd, 0x5d, 0x8f, 0x23, 0xdb, 0xb8, 0xc8, 0x60, 0x9a, 0xe7, 0x90, 0xff,
-	0x71, 0x53, 0x95, 0xe6, 0x5c, 0x24, 0x3a, 0xae, 0xc6, 0x91, 0xdd, 0x0c, 0x53, 0x90, 0x66, 0x71,
-	0xd2, 0xc1, 0xc6, 0x99, 0x27, 0xd8, 0x73, 0x36, 0x0e, 0x07, 0x3c, 0x68, 0x55, 0xa0, 0x7e, 0x89,
-	0x9e, 0x67, 0xc8, 0xea, 0x4a, 0x01, 0x59, 0x5d, 0xcf, 0xaa, 0xb3, 0x14, 0xa4, 0x59, 0x9c, 0xec,
-	0xe2, 0x86, 0xd4, 0x06, 0xb8, 0x55, 0xe0, 0x9a, 0x71, 0x64, 0x37, 0x82, 0x04, 0xa3, 0xb3, 0xa8,
-	0x2c, 0x0b, 0xa2, 0x00, 0xb5, 0x96, 0x95, 0xf5, 0x53, 0x90, 0x66, 0x71, 0x29, 0x4a, 0xa2, 0x2d,
-	0xd0, 0xeb, 0x40, 0x07, 0x51, 0xbc, 0x0c, 0xa6, 0x79, 0x8e, 0xd3, 0x2d, 0x5a, 0x80, 0x38, 0xb8,
-	0x56, 0x90, 0x14, 0xc7, 0x91, 0x5d, 0xeb, 0x2b, 0x35, 0x93, 0x88, 0xf3, 0x09, 0x95, 0x5c, 0xb2,
-	0x48, 0x16, 0x79, 0x88, 0xf5, 0x7d, 0x7e, 0xc9, 0x40, 0xf9, 0xb5, 0xee, 0x76, 0xb2, 0x09, 0x85,
-	0x3a, 0x7b, 0xf2, 0x45, 0x92, 0x94, 0xc1, 0x7d, 0x29, 0x02, 0x24, 0x91, 0x3b, 0xb8, 0x0a, 0x73,
-	0x85, 0x41, 0x18, 0x5d, 0x33, 0x9f, 0xed, 0x36, 0xe3, 0xc8, 0x56, 0x61, 0xaa, 0x1e, 0x8e, 0x8d,
-	0x1b, 0x69, 0x29, 0x52, 0xc3, 0xda, 0xe9, 0x91, 0xb5, 0x22, 0xf7, 0xe1, 0xe4, 0xd4, 0x7d, 0x7a,
-	0xba, 0x7f, 0x64, 0x21, 0xe7, 0x17, 0x2a, 0xba, 0x9a, 0xdc, 0x4f, 0xce, 0xe9, 0xc0, 0xd5, 0x77,
-	0x58, 0x71, 0x64, 0x9b, 0x61, 0x0e, 0xa7, 0x05, 0x56, 0x71, 0xe8, 0xda, 0x12, 0x43, 0xaf, 0x2c,
-	0x3e, 0x74, 0x7d, 0xb9, 0xa1, 0x57, 0x17, 0x18, 0xfa, 0x77, 0x54, 0xda, 0xe0, 0xe2, 0x6e, 0xa0,
-	0x39, 0xbb, 0x51, 0xd6, 0x4a, 0x5b, 0x48, 0xab, 0x07, 0x78, 0x0d, 0xce, 0xee, 0x24, 0xbf, 0x54,
-	0xa6, 0x4b, 0xe2, 0xc8, 0x2e, 0x45, 0x68, 0xe9, 0x3c, 0xd3, 0xf9, 0x30, 0x78, 0xc5, 0xf3, 0x82,
-	0xcc, 0x40, 0x9a, 0xbd, 0x3a, 0x1f, 0x50, 0xe9, 0x32, 0x22, 0x36, 0xae, 0x02, 0x90, 0x4c, 0x15,
-	0xfc, 0xa2, 0x46, 0xa4, 0xf0, 0xa4, 0xb7, 0xb1, 0x38, 0x1f, 0x0c, 0xe5, 0x85, 0x35, 0x1c, 0x25,
-	0xdf, 0x04, 0xbd, 0x85, 0x85, 0x08, 0x2d, 0x31, 0xa5, 0xfe, 0x80, 0x24, 0x0b, 0x50, 0xc9, 0x6e,
-	0xa2, 0x30, 0x83, 0x69, 0x9e, 0xe3, 0xbc, 0x47, 0xd8, 0x84, 0x61, 0xa7, 0x0d, 0xfe, 0x9d, 0xfb,
-	0xf2, 0x86, 0xd2, 0xe6, 0x19, 0x0a, 0x32, 0xe1, 0x27, 0xa4, 0x52, 0x1a, 0xaf, 0x04, 0x69, 0x16,
-	0x07, 0xfd, 0x94, 0xbd, 0x6e, 0xd7, 0x5e, 0xc1, 0xc5, 0xda, 0x1c, 0x17, 0x2f, 0xd5, 0xe1, 0x47,
-	0x84, 0xd7, 0x53, 0x3f, 0xdf, 0xae, 0xc7, 0xd2, 0xf2, 0x68, 0xf3, 0x97, 0x67, 0xa9, 0x4e, 0xdd,
-	0xad, 0xcf, 0xd3, 0x36, 0xfa, 0x32, 0x6d, 0xa3, 0x6f, 0xd3, 0x36, 0xfa, 0x31, 0x6d, 0xa3, 0x77,
-	0x3f, 0xdb, 0x2b, 0x2f, 0x74, 0xf9, 0x2f, 0xe3, 0xa2, 0x06, 0x77, 0xd8, 0xbd, 0xdf, 0x01, 0x00,
-	0x00, 0xff, 0xff, 0xd9, 0x9c, 0x8a, 0x4e, 0x82, 0x08, 0x00, 0x00,
+	// 1085 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe4, 0x57, 0x41, 0x6b, 0x1b, 0x47,
+	0x14, 0xf6, 0xae, 0x56, 0x2b, 0x69, 0x56, 0x96, 0xd6, 0x93, 0x94, 0x0a, 0xd3, 0x68, 0xc3, 0x42,
+	0xc1, 0x10, 0x6a, 0x63, 0x37, 0xa7, 0xf6, 0xd2, 0xac, 0xdd, 0x12, 0x91, 0xc4, 0x86, 0x51, 0x9a,
+	0x43, 0x2f, 0x65, 0xbc, 0x9a, 0x48, 0xc6, 0xd2, 0xae, 0xaa, 0x19, 0x13, 0x74, 0xec, 0xbd, 0x50,
+	0x7a, 0xeb, 0xa5, 0xf4, 0xb7, 0xf4, 0x16, 0xe8, 0xa5, 0xd0, 0x4b, 0x4f, 0x4b, 0x71, 0x6f, 0x4b,
+	0x2f, 0x85, 0x9e, 0x7a, 0x28, 0x65, 0x66, 0x76, 0x35, 0xb3, 0xab, 0x52, 0xc9, 0x4d, 0x02, 0x0e,
+	0x39, 0x49, 0xf3, 0xbd, 0x6f, 0xde, 0xcc, 0x7e, 0xef, 0xcd, 0xbc, 0x37, 0xa0, 0x33, 0x9d, 0xc5,
+	0x2c, 0xde, 0x9b, 0x10, 0x4a, 0xf1, 0x90, 0x7c, 0x4e, 0xe7, 0x51, 0xb8, 0x2b, 0x20, 0x58, 0x15,
+	0x3f, 0xdb, 0x60, 0x18, 0x0f, 0x63, 0x09, 0x6d, 0xdf, 0x0a, 0x47, 0xf8, 0x2c, 0xda, 0x63, 0xf3,
+	0x29, 0xa1, 0x7b, 0x72, 0xe2, 0xe9, 0x38, 0x0e, 0xcf, 0xa5, 0xd9, 0xff, 0xa1, 0x02, 0x9c, 0xfe,
+	0x3c, 0x0a, 0x1f, 0x49, 0x67, 0xb0, 0x07, 0x6a, 0x8f, 0xe8, 0xf0, 0xf1, 0x7c, 0x4a, 0x3a, 0xc6,
+	0x6d, 0x63, 0xa7, 0x75, 0xe0, 0x4b, 0xe2, 0xae, 0x46, 0xd2, 0xff, 0x73, 0x66, 0xe0, 0xa4, 0x89,
+	0x57, 0x9b, 0xc8, 0x69, 0x28, 0x9f, 0x0f, 0xdf, 0x01, 0xd6, 0x11, 0x66, 0xb8, 0x63, 0xde, 0x36,
+	0x76, 0x9a, 0x41, 0x3d, 0x4d, 0x3c, 0x6b, 0x80, 0x19, 0x46, 0x02, 0xf5, 0x9f, 0x9b, 0xa0, 0x5d,
+	0xf2, 0x03, 0x1d, 0x50, 0xfb, 0x34, 0x3a, 0x8f, 0xe2, 0x67, 0x91, 0xbb, 0x01, 0x6f, 0x02, 0xf7,
+	0x3e, 0xc1, 0x33, 0x16, 0x10, 0xcc, 0x10, 0xf9, 0xe2, 0x82, 0x50, 0xe6, 0x1a, 0xd0, 0x05, 0xcd,
+	0x80, 0x6f, 0x3f, 0x47, 0x4c, 0xb8, 0x05, 0x36, 0x33, 0x84, 0x4e, 0xe3, 0x88, 0x12, 0xb7, 0xc2,
+	0x49, 0x7d, 0x86, 0x19, 0xc9, 0x49, 0x16, 0x27, 0x7d, 0x3c, 0x8d, 0xc3, 0xd1, 0x82, 0x54, 0x85,
+	0x10, 0xb4, 0x8e, 0xe3, 0x01, 0xe9, 0x1d, 0xd1, 0x9c, 0x66, 0xc3, 0x36, 0x70, 0x38, 0x96, 0x03,
+	0x35, 0xee, 0x49, 0x02, 0xd9, 0xb4, 0x3a, 0x9f, 0x76, 0x2f, 0x0c, 0xe3, 0x8b, 0x68, 0xb1, 0xa9,
+	0x06, 0xbc, 0x01, 0xda, 0x0b, 0x2c, 0x23, 0x02, 0xf8, 0x36, 0xb8, 0x91, 0x81, 0xf7, 0x06, 0x83,
+	0xd9, 0x62, 0x11, 0x87, 0xfb, 0x3c, 0xe4, 0x31, 0xc9, 0x91, 0x26, 0xdf, 0x5d, 0x86, 0x64, 0xb3,
+	0x37, 0xf9, 0xd7, 0x73, 0x75, 0x7a, 0xd1, 0xd3, 0x18, 0x11, 0x2c, 0x89, 0xad, 0x22, 0x9a, 0x71,
+	0xdb, 0xfe, 0xdf, 0xe6, 0xb2, 0x54, 0xd0, 0x07, 0xb6, 0xfc, 0x3c, 0x11, 0xc7, 0x66, 0x00, 0xd2,
+	0xc4, 0xb3, 0x23, 0x81, 0xa0, 0xcc, 0x02, 0xf7, 0x81, 0x23, 0xa4, 0xbb, 0x4f, 0xce, 0x86, 0x23,
+	0x26, 0x02, 0x65, 0x05, 0xed, 0x34, 0xf1, 0x9c, 0x53, 0x05, 0x23, 0x9d, 0x03, 0xef, 0x80, 0x86,
+	0x94, 0x36, 0x8e, 0x59, 0xa7, 0x22, 0x3c, 0x6f, 0xa6, 0x89, 0xd7, 0xa0, 0x39, 0x88, 0x94, 0x1d,
+	0xee, 0x01, 0xa7, 0x8f, 0x19, 0x79, 0x42, 0x66, 0xf4, 0x2c, 0x8e, 0x3a, 0x96, 0xf0, 0x5f, 0xa2,
+	0xeb, 0x0c, 0xee, 0x5d, 0x86, 0x89, 0x7b, 0xaf, 0x2a, 0xef, 0x24, 0x07, 0x91, 0xb2, 0xc3, 0x1d,
+	0x50, 0x17, 0xb1, 0xe1, 0x5c, 0x5b, 0x70, 0x9b, 0x69, 0xe2, 0xd5, 0xa3, 0x0c, 0x43, 0x0b, 0x2b,
+	0x77, 0x2b, 0xf5, 0xe5, 0xd4, 0x9a, 0x72, 0x1b, 0xe6, 0x20, 0x52, 0x76, 0x2e, 0x4a, 0x1e, 0x4c,
+	0x4e, 0xaf, 0x0b, 0xba, 0x10, 0x05, 0x2b, 0x18, 0xe9, 0x1c, 0xff, 0x49, 0x31, 0x29, 0xd7, 0xd2,
+	0xde, 0x07, 0x76, 0x41, 0x76, 0xc1, 0x19, 0x49, 0xc5, 0x33, 0x8b, 0xff, 0x8d, 0x59, 0xca, 0xed,
+	0x97, 0xe5, 0x19, 0x7e, 0x08, 0xac, 0xc3, 0x78, 0x40, 0x44, 0x04, 0x5b, 0x07, 0xb7, 0xb2, 0x33,
+	0x5e, 0x58, 0x6b, 0x97, 0xff, 0xe1, 0x24, 0x79, 0x74, 0x43, 0x2e, 0xa6, 0x98, 0xc4, 0xe5, 0x94,
+	0x29, 0x81, 0xe9, 0x48, 0x04, 0x35, 0x93, 0xf3, 0x34, 0x07, 0x91, 0xb2, 0xc3, 0xf7, 0x40, 0x55,
+	0xe0, 0x22, 0x9c, 0xce, 0x41, 0x53, 0x5f, 0x2a, 0x68, 0xa4, 0x89, 0x27, 0xcd, 0x48, 0xfe, 0xf8,
+	0x1e, 0xa8, 0xe7, 0xeb, 0x42, 0x1b, 0x98, 0x27, 0x0f, 0xdc, 0x0d, 0x7e, 0x2d, 0x1c, 0x9f, 0x04,
+	0x0f, 0x4f, 0x0e, 0x1f, 0xb8, 0x86, 0xff, 0xbd, 0x59, 0x3c, 0xdc, 0x6b, 0x49, 0x72, 0x37, 0x9b,
+	0x93, 0x67, 0xa2, 0x14, 0xc6, 0x4d, 0x13, 0xaf, 0x49, 0x35, 0x1c, 0x15, 0x58, 0xc5, 0x6c, 0xac,
+	0x5c, 0x21, 0x1b, 0xad, 0xf5, 0xb3, 0xb1, 0x7a, 0xb5, 0x6c, 0xb4, 0xd7, 0xc8, 0xc6, 0x9f, 0xcd,
+	0xd2, 0x65, 0xb7, 0x96, 0x44, 0x85, 0x83, 0x6d, 0xae, 0x38, 0xd8, 0x65, 0x3d, 0x2b, 0x57, 0xd7,
+	0xd3, 0x5a, 0xa1, 0xa7, 0x07, 0xaa, 0x62, 0x20, 0x14, 0xb2, 0x64, 0xa6, 0x48, 0xa2, 0xc4, 0xe1,
+	0x07, 0xa0, 0xd5, 0x67, 0x78, 0xc6, 0x1e, 0x9f, 0x4d, 0x48, 0x9f, 0xe1, 0xc9, 0x54, 0x88, 0x63,
+	0x05, 0x30, 0x4d, 0xbc, 0x16, 0x2d, 0x58, 0x50, 0x89, 0xc9, 0x55, 0x15, 0x48, 0x76, 0x4e, 0x6a,
+	0xea, 0xe2, 0xa3, 0x0a, 0x46, 0x3a, 0xc7, 0xff, 0xd3, 0x28, 0xd7, 0x8b, 0xeb, 0x22, 0xeb, 0xfa,
+	0x99, 0xb7, 0x2f, 0xcb, 0x5b, 0xef, 0x88, 0x8a, 0xc2, 0x5c, 0x55, 0xc9, 0x14, 0x29, 0x18, 0xe9,
+	0x1c, 0xff, 0x0f, 0xa3, 0x50, 0x12, 0xdf, 0x88, 0x6f, 0xfe, 0x2e, 0x0b, 0x75, 0x9f, 0x0c, 0x5f,
+	0xfd, 0x25, 0xb3, 0x0f, 0x9c, 0x4f, 0x66, 0x78, 0x38, 0x21, 0x11, 0x3b, 0xbe, 0x98, 0x64, 0x9f,
+	0x2f, 0xf6, 0xf7, 0x54, 0xc1, 0x48, 0xe7, 0xf8, 0xbf, 0x1b, 0xc5, 0xae, 0xe4, 0xf5, 0x0b, 0xca,
+	0x1d, 0xd0, 0xe0, 0xff, 0xf5, 0x90, 0x88, 0xcd, 0x44, 0x39, 0x88, 0x94, 0xdd, 0x1f, 0x15, 0xfb,
+	0xa5, 0x57, 0x17, 0x0b, 0xff, 0xc7, 0x4a, 0xa9, 0x11, 0xbb, 0x46, 0x37, 0xa7, 0x2a, 0x19, 0xd6,
+	0x8a, 0x92, 0xf1, 0x2e, 0xa8, 0x89, 0x41, 0xef, 0x48, 0x48, 0xdb, 0x90, 0xed, 0x79, 0x28, 0x21,
+	0x94, 0xdb, 0xc4, 0xc1, 0x20, 0xec, 0x59, 0x3c, 0x3b, 0x17, 0xdd, 0xbe, 0x56, 0x59, 0x22, 0x05,
+	0x23, 0x9d, 0xc3, 0x37, 0xff, 0x10, 0x33, 0x42, 0x8b, 0xf7, 0xa6, 0xd8, 0xfc, 0x58, 0xc3, 0x51,
+	0x81, 0xc5, 0x17, 0x92, 0x63, 0x51, 0xf3, 0xf5, 0x86, 0x6a, 0xac, 0x60, 0xa4, 0x73, 0xe0, 0x21,
+	0xd8, 0xd2, 0x86, 0x88, 0xd0, 0x8b, 0x31, 0xeb, 0x34, 0xc4, 0xc4, 0xb7, 0xd2, 0xc4, 0xdb, 0x1a,
+	0x97, 0x8d, 0x68, 0x99, 0xef, 0x7f, 0x65, 0x96, 0x5b, 0xf5, 0xeb, 0x12, 0xce, 0x52, 0x51, 0xb7,
+	0x56, 0x17, 0x75, 0xf8, 0x11, 0x70, 0xf5, 0xd7, 0x84, 0x76, 0x70, 0x6e, 0xa6, 0x89, 0xe7, 0xe2,
+	0x92, 0x0d, 0x2d, 0xb1, 0xfd, 0x2f, 0xcd, 0xa5, 0x57, 0xca, 0x6b, 0xac, 0xc7, 0x5d, 0xd0, 0xcc,
+	0x86, 0xba, 0x16, 0x62, 0x21, 0xac, 0xe1, 0xa8, 0xc0, 0xe2, 0x0d, 0xf5, 0xbf, 0x3d, 0xca, 0xde,
+	0xe8, 0xbc, 0xf8, 0xda, 0x90, 0x0f, 0x71, 0xf9, 0xa8, 0x7c, 0xa9, 0x0f, 0x98, 0xff, 0x27, 0x83,
+	0xff, 0x97, 0xb9, 0xfc, 0xcc, 0x5d, 0x6b, 0x4b, 0x3b, 0xa5, 0x2d, 0x2d, 0x2f, 0xf4, 0x42, 0x1b,
+	0x2b, 0xa6, 0x80, 0xb5, 0x22, 0x05, 0x4a, 0xc1, 0xac, 0xae, 0x11, 0xcc, 0xc2, 0x35, 0x6f, 0xaf,
+	0xb8, 0xe6, 0xf5, 0x6a, 0x5b, 0x5b, 0x55, 0x6d, 0x55, 0xdf, 0x5d, 0xff, 0xef, 0xbe, 0x3b, 0xd8,
+	0x7e, 0x7e, 0xd9, 0x35, 0x7e, 0xba, 0xec, 0x1a, 0xbf, 0x5c, 0x76, 0x8d, 0x5f, 0x2f, 0xbb, 0xc6,
+	0xb7, 0xbf, 0x75, 0x37, 0x3e, 0xb3, 0xe8, 0x3c, 0x0a, 0x4f, 0x6d, 0xf1, 0x76, 0x7b, 0xff, 0x9f,
+	0x00, 0x00, 0x00, 0xff, 0xff, 0xdb, 0xf7, 0x23, 0x5d, 0x81, 0x12, 0x00, 0x00,
 }
 
 func (m *SyncMessage) Marshal() (dAtA []byte, err error) {
@@ -856,45 +1555,52 @@ func (m *HeartBeatRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.AccountRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountRoot)))
 		i--
-		dAtA[i] = 0x3a
+		dAtA[i] = 0x42
 	}
 	if len(m.ChainRoot) > 0 {
 		i -= len(m.ChainRoot)
 		copy(dAtA[i:], m.ChainRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.ChainRoot)))
 		i--
-		dAtA[i] = 0x32
+		dAtA[i] = 0x3a
 	}
 	if len(m.NodeRoot) > 0 {
 		i -= len(m.NodeRoot)
 		copy(dAtA[i:], m.NodeRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeRoot)))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x32
 	}
 	if len(m.EpochRoot) > 0 {
 		i -= len(m.EpochRoot)
 		copy(dAtA[i:], m.EpochRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.EpochRoot)))
 		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x2a
 	}
 	if m.SateVersion != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.SateVersion))
 		i--
-		dAtA[i] = 0x18
+		dAtA[i] = 0x20
 	}
 	if len(m.StateRoot) > 0 {
 		i -= len(m.StateRoot)
 		copy(dAtA[i:], m.StateRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x1a
 	}
 	if m.BlockHeight != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.BlockHeight))
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x10
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -926,7 +1632,14 @@ func (m *BlockRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.Height != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.Height))
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x10
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -965,17 +1678,31 @@ func (m *BlockResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			i = encodeVarintMessageSync(dAtA, i, uint64(size))
 		}
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x2a
+	}
+	if len(m.BlockHash) > 0 {
+		i -= len(m.BlockHash)
+		copy(dAtA[i:], m.BlockHash)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.BlockHash)))
+		i--
+		dAtA[i] = 0x22
 	}
 	if m.Code != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.Code))
 		i--
-		dAtA[i] = 0x10
+		dAtA[i] = 0x18
 	}
 	if m.Height != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.Height))
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x10
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -1009,72 +1736,26 @@ func (m *StateRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.AccountRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountRoot)))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x32
 	}
 	if len(m.ChainRoot) > 0 {
 		i -= len(m.ChainRoot)
 		copy(dAtA[i:], m.ChainRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.ChainRoot)))
 		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x2a
 	}
 	if len(m.NodeRoot) > 0 {
 		i -= len(m.NodeRoot)
 		copy(dAtA[i:], m.NodeRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeRoot)))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x22
 	}
 	if len(m.EpochRoot) > 0 {
 		i -= len(m.EpochRoot)
 		copy(dAtA[i:], m.EpochRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.EpochRoot)))
-		i--
-		dAtA[i] = 0x12
-	}
-	if m.StateVersion != 0 {
-		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
-		i--
-		dAtA[i] = 0x8
-	}
-	return len(dAtA) - i, nil
-}
-
-func (m *StateResponse) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *StateResponse) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *StateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	if m.XXX_unrecognized != nil {
-		i -= len(m.XXX_unrecognized)
-		copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	if len(m.EpochInfo) > 0 {
-		i -= len(m.EpochInfo)
-		copy(dAtA[i:], m.EpochInfo)
-		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.EpochInfo)))
-		i--
-		dAtA[i] = 0x22
-	}
-	if len(m.StateByVersion) > 0 {
-		i -= len(m.StateByVersion)
-		copy(dAtA[i:], m.StateByVersion)
-		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateByVersion)))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -1083,10 +1764,10 @@ func (m *StateResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x10
 	}
-	if len(m.StateRoot) > 0 {
-		i -= len(m.StateRoot)
-		copy(dAtA[i:], m.StateRoot)
-		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1120,17 +1801,207 @@ func (m *EpochResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.StartHeight != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.StartHeight))
 		i--
-		dAtA[i] = 0x18
+		dAtA[i] = 0x38
 	}
 	if m.StartTimeStamp != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.StartTimeStamp))
 		i--
-		dAtA[i] = 0x10
+		dAtA[i] = 0x30
 	}
 	if m.Epoch != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.Epoch))
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x28
+	}
+	if len(m.EpochRoot) > 0 {
+		i -= len(m.EpochRoot)
+		copy(dAtA[i:], m.EpochRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.EpochRoot)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *NodeIDsRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *NodeIDsRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *NodeIDsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.NodeIDsData) > 0 {
+		i -= len(m.NodeIDsData)
+		copy(dAtA[i:], m.NodeIDsData)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeIDsData)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.NodeRoot) > 0 {
+		i -= len(m.NodeRoot)
+		copy(dAtA[i:], m.NodeRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeRoot)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *NodeRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *NodeRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *NodeRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.NodeIDsData) > 0 {
+		i -= len(m.NodeIDsData)
+		copy(dAtA[i:], m.NodeIDsData)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeIDsData)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.NodeRoot) > 0 {
+		i -= len(m.NodeRoot)
+		copy(dAtA[i:], m.NodeRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeRoot)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *NodeSegRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *NodeSegRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *NodeSegRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.FragmentNum != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.FragmentNum))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -1159,24 +2030,77 @@ func (m *NodeResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if len(m.StateData) > 0 {
-		i -= len(m.StateData)
-		copy(dAtA[i:], m.StateData)
-		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateData)))
+	if len(m.NodesData) > 0 {
+		i -= len(m.NodesData)
+		copy(dAtA[i:], m.NodesData)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodesData)))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x2a
 	}
 	if len(m.NodeRoot) > 0 {
 		i -= len(m.NodeRoot)
 		copy(dAtA[i:], m.NodeRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeRoot)))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x22
 	}
 	if m.StateVersion != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x18
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ChainRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ChainRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ChainRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -1205,24 +2129,124 @@ func (m *ChainResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if len(m.StateData) > 0 {
-		i -= len(m.StateData)
-		copy(dAtA[i:], m.StateData)
-		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateData)))
+	if len(m.LatestBlockResult) > 0 {
+		i -= len(m.LatestBlockResult)
+		copy(dAtA[i:], m.LatestBlockResult)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.LatestBlockResult)))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x4a
+	}
+	if len(m.LatestBlock) > 0 {
+		i -= len(m.LatestBlock)
+		copy(dAtA[i:], m.LatestBlock)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.LatestBlock)))
+		i--
+		dAtA[i] = 0x42
+	}
+	if m.LatestHeight != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.LatestHeight))
+		i--
+		dAtA[i] = 0x38
+	}
+	if len(m.NetworkType) > 0 {
+		i -= len(m.NetworkType)
+		copy(dAtA[i:], m.NetworkType)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NetworkType)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.ChainID) > 0 {
+		i -= len(m.ChainID)
+		copy(dAtA[i:], m.ChainID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.ChainID)))
+		i--
+		dAtA[i] = 0x2a
 	}
 	if len(m.ChainRoot) > 0 {
 		i -= len(m.ChainRoot)
 		copy(dAtA[i:], m.ChainRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.ChainRoot)))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x22
 	}
 	if m.StateVersion != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x18
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *AccountRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *AccountRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *AccountRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.AccountAddrsData) > 0 {
+		i -= len(m.AccountAddrsData)
+		copy(dAtA[i:], m.AccountAddrsData)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountAddrsData)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.AccountRoot) > 0 {
+		i -= len(m.AccountRoot)
+		copy(dAtA[i:], m.AccountRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountRoot)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -1251,24 +2275,221 @@ func (m *AccountResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if len(m.StateData) > 0 {
-		i -= len(m.StateData)
-		copy(dAtA[i:], m.StateData)
-		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateData)))
+	if len(m.AccountsData) > 0 {
+		i -= len(m.AccountsData)
+		copy(dAtA[i:], m.AccountsData)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountsData)))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x2a
 	}
 	if len(m.AccountRoot) > 0 {
 		i -= len(m.AccountRoot)
 		copy(dAtA[i:], m.AccountRoot)
 		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountRoot)))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x22
 	}
 	if m.StateVersion != 0 {
 		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0x18
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *AccountAddrsRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *AccountAddrsRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *AccountAddrsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.AccountAddrsData) > 0 {
+		i -= len(m.AccountAddrsData)
+		copy(dAtA[i:], m.AccountAddrsData)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountAddrsData)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.AccountRoot) > 0 {
+		i -= len(m.AccountRoot)
+		copy(dAtA[i:], m.AccountRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountRoot)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *SyncInfoRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *SyncInfoRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SyncInfoRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Height != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.Height))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *SyncInfoResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *SyncInfoResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SyncInfoResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.EpochRoot) > 0 {
+		i -= len(m.EpochRoot)
+		copy(dAtA[i:], m.EpochRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.EpochRoot)))
+		i--
+		dAtA[i] = 0x42
+	}
+	if len(m.NodeRoot) > 0 {
+		i -= len(m.NodeRoot)
+		copy(dAtA[i:], m.NodeRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeRoot)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.ChainRoot) > 0 {
+		i -= len(m.ChainRoot)
+		copy(dAtA[i:], m.ChainRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.ChainRoot)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.AccountRoot) > 0 {
+		i -= len(m.AccountRoot)
+		copy(dAtA[i:], m.AccountRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.AccountRoot)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.StateRoot) > 0 {
+		i -= len(m.StateRoot)
+		copy(dAtA[i:], m.StateRoot)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.StateRoot)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.StateVersion != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.StateVersion))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Height != 0 {
+		i = encodeVarintMessageSync(dAtA, i, uint64(m.Height))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.NodeID) > 0 {
+		i -= len(m.NodeID)
+		copy(dAtA[i:], m.NodeID)
+		i = encodeVarintMessageSync(dAtA, i, uint64(len(m.NodeID)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -1309,6 +2530,10 @@ func (m *HeartBeatRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
 	if m.BlockHeight != 0 {
 		n += 1 + sovMessageSync(uint64(m.BlockHeight))
 	}
@@ -1347,6 +2572,10 @@ func (m *BlockRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
 	if m.Height != 0 {
 		n += 1 + sovMessageSync(uint64(m.Height))
 	}
@@ -1362,11 +2591,19 @@ func (m *BlockResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
 	if m.Height != 0 {
 		n += 1 + sovMessageSync(uint64(m.Height))
 	}
 	if m.Code != 0 {
 		n += 1 + sovMessageSync(uint64(m.Code))
+	}
+	l = len(m.BlockHash)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
 	}
 	if m.Block != nil {
 		l = m.Block.Size()
@@ -1384,6 +2621,10 @@ func (m *StateRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
 	if m.StateVersion != 0 {
 		n += 1 + sovMessageSync(uint64(m.StateVersion))
 	}
@@ -1409,12 +2650,16 @@ func (m *StateRequest) Size() (n int) {
 	return n
 }
 
-func (m *StateResponse) Size() (n int) {
+func (m *EpochResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
 	l = len(m.StateRoot)
 	if l > 0 {
 		n += 1 + l + sovMessageSync(uint64(l))
@@ -1422,26 +2667,10 @@ func (m *StateResponse) Size() (n int) {
 	if m.StateVersion != 0 {
 		n += 1 + sovMessageSync(uint64(m.StateVersion))
 	}
-	l = len(m.StateByVersion)
+	l = len(m.EpochRoot)
 	if l > 0 {
 		n += 1 + l + sovMessageSync(uint64(l))
 	}
-	l = len(m.EpochInfo)
-	if l > 0 {
-		n += 1 + l + sovMessageSync(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
-	return n
-}
-
-func (m *EpochResponse) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
 	if m.Epoch != 0 {
 		n += 1 + sovMessageSync(uint64(m.Epoch))
 	}
@@ -1457,12 +2686,20 @@ func (m *EpochResponse) Size() (n int) {
 	return n
 }
 
-func (m *NodeResponse) Size() (n int) {
+func (m *NodeIDsRequest) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.StateRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
 	if m.StateVersion != 0 {
 		n += 1 + sovMessageSync(uint64(m.StateVersion))
 	}
@@ -1470,9 +2707,112 @@ func (m *NodeResponse) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovMessageSync(uint64(l))
 	}
-	l = len(m.StateData)
+	l = len(m.NodeIDsData)
 	if l > 0 {
 		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *NodeRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.StateRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageSync(uint64(m.StateVersion))
+	}
+	l = len(m.NodeRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.NodeIDsData)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *NodeSegRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageSync(uint64(m.StateVersion))
+	}
+	if m.FragmentNum != 0 {
+		n += 1 + sovMessageSync(uint64(m.FragmentNum))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *NodeResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.StateRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageSync(uint64(m.StateVersion))
+	}
+	l = len(m.NodeRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.NodesData)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ChainRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageSync(uint64(m.StateVersion))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -1486,6 +2826,14 @@ func (m *ChainResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.StateRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
 	if m.StateVersion != 0 {
 		n += 1 + sovMessageSync(uint64(m.StateVersion))
 	}
@@ -1493,7 +2841,53 @@ func (m *ChainResponse) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovMessageSync(uint64(l))
 	}
-	l = len(m.StateData)
+	l = len(m.ChainID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.NetworkType)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.LatestHeight != 0 {
+		n += 1 + sovMessageSync(uint64(m.LatestHeight))
+	}
+	l = len(m.LatestBlock)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.LatestBlockResult)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *AccountRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.StateRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageSync(uint64(m.StateVersion))
+	}
+	l = len(m.AccountRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.AccountAddrsData)
 	if l > 0 {
 		n += 1 + l + sovMessageSync(uint64(l))
 	}
@@ -1509,6 +2903,14 @@ func (m *AccountResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.StateRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
 	if m.StateVersion != 0 {
 		n += 1 + sovMessageSync(uint64(m.StateVersion))
 	}
@@ -1516,7 +2918,102 @@ func (m *AccountResponse) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovMessageSync(uint64(l))
 	}
-	l = len(m.StateData)
+	l = len(m.AccountsData)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *AccountAddrsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.StateRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageSync(uint64(m.StateVersion))
+	}
+	l = len(m.AccountRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.AccountAddrsData)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *SyncInfoRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.Height != 0 {
+		n += 1 + sovMessageSync(uint64(m.Height))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageSync(uint64(m.StateVersion))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *SyncInfoResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.NodeID)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	if m.Height != 0 {
+		n += 1 + sovMessageSync(uint64(m.Height))
+	}
+	if m.StateVersion != 0 {
+		n += 1 + sovMessageSync(uint64(m.StateVersion))
+	}
+	l = len(m.StateRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.AccountRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.ChainRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.NodeRoot)
+	if l > 0 {
+		n += 1 + l + sovMessageSync(uint64(l))
+	}
+	l = len(m.EpochRoot)
 	if l > 0 {
 		n += 1 + l + sovMessageSync(uint64(l))
 	}
@@ -1666,6 +3163,40 @@ func (m *HeartBeatRequest) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field BlockHeight", wireType)
 			}
@@ -1684,7 +3215,7 @@ func (m *HeartBeatRequest) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 2:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
 			}
@@ -1718,7 +3249,7 @@ func (m *HeartBeatRequest) Unmarshal(dAtA []byte) error {
 				m.StateRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
+		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SateVersion", wireType)
 			}
@@ -1737,7 +3268,7 @@ func (m *HeartBeatRequest) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 4:
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field EpochRoot", wireType)
 			}
@@ -1771,7 +3302,7 @@ func (m *HeartBeatRequest) Unmarshal(dAtA []byte) error {
 				m.EpochRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field NodeRoot", wireType)
 			}
@@ -1805,7 +3336,7 @@ func (m *HeartBeatRequest) Unmarshal(dAtA []byte) error {
 				m.NodeRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 6:
+		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ChainRoot", wireType)
 			}
@@ -1839,7 +3370,7 @@ func (m *HeartBeatRequest) Unmarshal(dAtA []byte) error {
 				m.ChainRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 7:
+		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field AccountRoot", wireType)
 			}
@@ -1925,6 +3456,40 @@ func (m *BlockRequest) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Height", wireType)
 			}
@@ -1995,6 +3560,40 @@ func (m *BlockResponse) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Height", wireType)
 			}
@@ -2013,7 +3612,7 @@ func (m *BlockResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 2:
+		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Code", wireType)
 			}
@@ -2032,7 +3631,41 @@ func (m *BlockResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 3:
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BlockHash", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BlockHash = append(m.BlockHash[:0], dAtA[iNdEx:postIndex]...)
+			if m.BlockHash == nil {
+				m.BlockHash = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Block", wireType)
 			}
@@ -2120,6 +3753,40 @@ func (m *StateRequest) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
 			}
@@ -2138,7 +3805,7 @@ func (m *StateRequest) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 2:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field EpochRoot", wireType)
 			}
@@ -2172,7 +3839,7 @@ func (m *StateRequest) Unmarshal(dAtA []byte) error {
 				m.EpochRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field NodeRoot", wireType)
 			}
@@ -2206,7 +3873,7 @@ func (m *StateRequest) Unmarshal(dAtA []byte) error {
 				m.NodeRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 4:
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ChainRoot", wireType)
 			}
@@ -2240,7 +3907,7 @@ func (m *StateRequest) Unmarshal(dAtA []byte) error {
 				m.ChainRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field AccountRoot", wireType)
 			}
@@ -2296,7 +3963,7 @@ func (m *StateRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *StateResponse) Unmarshal(dAtA []byte) error {
+func (m *EpochResponse) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2319,13 +3986,47 @@ func (m *StateResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: StateResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: EpochResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: StateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: EpochResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
 			}
@@ -2359,7 +4060,7 @@ func (m *StateResponse) Unmarshal(dAtA []byte) error {
 				m.StateRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 2:
+		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
 			}
@@ -2378,43 +4079,9 @@ func (m *StateResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StateByVersion", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowMessageSync
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthMessageSync
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return ErrInvalidLengthMessageSync
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.StateByVersion = append(m.StateByVersion[:0], dAtA[iNdEx:postIndex]...)
-			if m.StateByVersion == nil {
-				m.StateByVersion = []byte{}
-			}
-			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field EpochInfo", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field EpochRoot", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -2441,9 +4108,272 @@ func (m *StateResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.EpochInfo = append(m.EpochInfo[:0], dAtA[iNdEx:postIndex]...)
-			if m.EpochInfo == nil {
-				m.EpochInfo = []byte{}
+			m.EpochRoot = append(m.EpochRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.EpochRoot == nil {
+				m.EpochRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StartTimeStamp", wireType)
+			}
+			m.StartTimeStamp = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StartTimeStamp |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StartHeight", wireType)
+			}
+			m.StartHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StartHeight |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageSync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *NodeIDsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageSync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: NodeIDsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: NodeIDsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StateRoot = append(m.StateRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.StateRoot == nil {
+				m.StateRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeRoot = append(m.NodeRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeRoot == nil {
+				m.NodeRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeIDsData", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeIDsData = append(m.NodeIDsData[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeIDsData == nil {
+				m.NodeIDsData = []byte{}
 			}
 			iNdEx = postIndex
 		default:
@@ -2468,7 +4398,7 @@ func (m *StateResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *EpochResponse) Unmarshal(dAtA []byte) error {
+func (m *NodeRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2491,17 +4421,17 @@ func (m *EpochResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: EpochResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: NodeRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: EpochResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: NodeRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
 			}
-			m.Epoch = 0
+			var byteLen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMessageSync
@@ -2511,16 +4441,31 @@ func (m *EpochResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Epoch |= uint64(b&0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StartTimeStamp", wireType)
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
 			}
-			m.StartTimeStamp = 0
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
+			}
+			var byteLen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMessageSync
@@ -2530,16 +4475,222 @@ func (m *EpochResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.StartTimeStamp |= uint64(b&0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StateRoot = append(m.StateRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.StateRoot == nil {
+				m.StateRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeRoot = append(m.NodeRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeRoot == nil {
+				m.NodeRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeIDsData", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeIDsData = append(m.NodeIDsData[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeIDsData == nil {
+				m.NodeIDsData = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageSync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *NodeSegRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageSync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: NodeSegRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: NodeSegRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StartHeight", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field FragmentNum", wireType)
 			}
-			m.StartHeight = 0
+			m.FragmentNum = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowMessageSync
@@ -2549,7 +4700,7 @@ func (m *EpochResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.StartHeight |= uint64(b&0x7F) << shift
+				m.FragmentNum |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2606,6 +4757,74 @@ func (m *NodeResponse) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StateRoot = append(m.StateRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.StateRoot == nil {
+				m.StateRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
 			}
@@ -2624,7 +4843,7 @@ func (m *NodeResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 2:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field NodeRoot", wireType)
 			}
@@ -2658,9 +4877,9 @@ func (m *NodeResponse) Unmarshal(dAtA []byte) error {
 				m.NodeRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
+		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StateData", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field NodesData", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -2687,11 +4906,115 @@ func (m *NodeResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.StateData = append(m.StateData[:0], dAtA[iNdEx:postIndex]...)
-			if m.StateData == nil {
-				m.StateData = []byte{}
+			m.NodesData = append(m.NodesData[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodesData == nil {
+				m.NodesData = []byte{}
 			}
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageSync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ChainRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageSync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ChainRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ChainRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipMessageSync(dAtA[iNdEx:])
@@ -2744,6 +5067,74 @@ func (m *ChainResponse) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StateRoot = append(m.StateRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.StateRoot == nil {
+				m.StateRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
 			}
@@ -2762,7 +5153,7 @@ func (m *ChainResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 2:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ChainRoot", wireType)
 			}
@@ -2796,9 +5187,41 @@ func (m *ChainResponse) Unmarshal(dAtA []byte) error {
 				m.ChainRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
+		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StateData", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ChainID", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChainID = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NetworkType", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -2825,9 +5248,302 @@ func (m *ChainResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.StateData = append(m.StateData[:0], dAtA[iNdEx:postIndex]...)
-			if m.StateData == nil {
-				m.StateData = []byte{}
+			m.NetworkType = append(m.NetworkType[:0], dAtA[iNdEx:postIndex]...)
+			if m.NetworkType == nil {
+				m.NetworkType = []byte{}
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LatestHeight", wireType)
+			}
+			m.LatestHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.LatestHeight |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LatestBlock", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.LatestBlock = append(m.LatestBlock[:0], dAtA[iNdEx:postIndex]...)
+			if m.LatestBlock == nil {
+				m.LatestBlock = []byte{}
+			}
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LatestBlockResult", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.LatestBlockResult = append(m.LatestBlockResult[:0], dAtA[iNdEx:postIndex]...)
+			if m.LatestBlockResult == nil {
+				m.LatestBlockResult = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageSync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *AccountRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageSync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AccountRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AccountRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StateRoot = append(m.StateRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.StateRoot == nil {
+				m.StateRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AccountRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AccountRoot = append(m.AccountRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.AccountRoot == nil {
+				m.AccountRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AccountAddrsData", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AccountAddrsData = append(m.AccountAddrsData[:0], dAtA[iNdEx:postIndex]...)
+			if m.AccountAddrsData == nil {
+				m.AccountAddrsData = []byte{}
 			}
 			iNdEx = postIndex
 		default:
@@ -2882,6 +5598,74 @@ func (m *AccountResponse) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StateRoot = append(m.StateRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.StateRoot == nil {
+				m.StateRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
 			}
@@ -2900,7 +5684,7 @@ func (m *AccountResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 2:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field AccountRoot", wireType)
 			}
@@ -2934,9 +5718,9 @@ func (m *AccountResponse) Unmarshal(dAtA []byte) error {
 				m.AccountRoot = []byte{}
 			}
 			iNdEx = postIndex
-		case 3:
+		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StateData", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AccountsData", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -2963,9 +5747,631 @@ func (m *AccountResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.StateData = append(m.StateData[:0], dAtA[iNdEx:postIndex]...)
-			if m.StateData == nil {
-				m.StateData = []byte{}
+			m.AccountsData = append(m.AccountsData[:0], dAtA[iNdEx:postIndex]...)
+			if m.AccountsData == nil {
+				m.AccountsData = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageSync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *AccountAddrsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageSync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AccountAddrsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AccountAddrsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StateRoot = append(m.StateRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.StateRoot == nil {
+				m.StateRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AccountRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AccountRoot = append(m.AccountRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.AccountRoot == nil {
+				m.AccountRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AccountAddrsData", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AccountAddrsData = append(m.AccountAddrsData[:0], dAtA[iNdEx:postIndex]...)
+			if m.AccountAddrsData == nil {
+				m.AccountAddrsData = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageSync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *SyncInfoRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageSync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: SyncInfoRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: SyncInfoRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Height", wireType)
+			}
+			m.Height = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Height |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMessageSync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *SyncInfoResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMessageSync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: SyncInfoResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: SyncInfoResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeID = append(m.NodeID[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeID == nil {
+				m.NodeID = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Height", wireType)
+			}
+			m.Height = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Height |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateVersion", wireType)
+			}
+			m.StateVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StateVersion |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StateRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StateRoot = append(m.StateRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.StateRoot == nil {
+				m.StateRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AccountRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AccountRoot = append(m.AccountRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.AccountRoot == nil {
+				m.AccountRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChainRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChainRoot = append(m.ChainRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.ChainRoot == nil {
+				m.ChainRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NodeRoot = append(m.NodeRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.NodeRoot == nil {
+				m.NodeRoot = []byte{}
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EpochRoot", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMessageSync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMessageSync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.EpochRoot = append(m.EpochRoot[:0], dAtA[iNdEx:postIndex]...)
+			if m.EpochRoot == nil {
+				m.EpochRoot = []byte{}
 			}
 			iNdEx = postIndex
 		default:

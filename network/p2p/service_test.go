@@ -140,7 +140,7 @@ func TestSendWithMultiProtocols(t *testing.T) {
 	err = p2p1.Send(ctx1, protocol.SyncProtocolID_Msg, "", nil)
 	assert.Equal(t, nil, err)
 
-	err = p2p1.Send(ctx1, protocol.HeatBeatPtotocolID, "", nil)
+	err = p2p1.Send(ctx1, protocol.HeartBeatPtotocolID, "", nil)
 	assert.Equal(t, nil, err)
 
 	time.Sleep(30 * time.Second)

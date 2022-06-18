@@ -24,6 +24,7 @@ import (
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	"github.com/TopiaNetwork/topia/transaction_pool/mock"
 )
 
 var (
@@ -314,9 +315,9 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Tran
 		level:               level,
 		ctx:                 ctx,
 		allTxsForLook:       newAllTxsLookupMap(),
-		ActivationIntervals: newActivationInterval(),
-		HeightIntervals:     newHeightInterval(),
-		TxHashCategory:      newTxHashCategory(),
+		activationIntervals: newActivationInterval(),
+		heightIntervals:     newHeightInterval(),
+		txHashCategory:      newTxHashCategory(),
 		chanBlockAdded:      make(chan BlockAddedEvent, ChanBlockAddedSize),
 		chanReqReset:        make(chan *txPoolResetHeads),
 		chanReqTurn:         make(chan *accountCache),
@@ -337,7 +338,7 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Tran
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
-	pool.Reset(nil, curBlock.GetHead())
+	pool.reset(nil, curBlock.GetHead())
 	pool.wg.Add(1)
 	go pool.ReorgAndTurnTxLoop()
 
@@ -360,11 +361,11 @@ func Test_transactionPool_GetLocalTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
@@ -399,12 +400,12 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-	blockService := NewMockBlockService(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
 
-	network := NewMockNetwork(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -453,12 +454,12 @@ func Test_transactionPool_RemoveTxByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -487,12 +488,12 @@ func Test_transactionPool_RemoveTxHashs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -526,12 +527,12 @@ func Test_transactionPool_UpdateTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -573,12 +574,12 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -598,7 +599,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	want = append(want, Tx4)
 	want = append(want, TxR1)
 	want = append(want, TxR2)
-	pending, _ := pool.Pending()
+	pending := pool.PickTxs()
 
 	for _, tx := range pending {
 		got = append(got, tx)
@@ -611,12 +612,12 @@ func Test_transactionPool_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -642,12 +643,12 @@ func Test_transactionPool_Count(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -668,12 +669,12 @@ func Test_transactionPool_Size(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -697,12 +698,12 @@ func Test_transactionPool_Start(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -719,12 +720,12 @@ func Test_transactionPool_Stop(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
-	network := NewMockNetwork(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))

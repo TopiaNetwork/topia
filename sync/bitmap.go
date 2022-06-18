@@ -11,8 +11,7 @@ type BitmapItem struct {
 	ModValues  []uint64
 	Length     uint64
 	BeginIndex uint64
-	//Left   *BitmapItem
-	Right *BitmapItem
+	Right      *BitmapItem
 }
 
 func (bitmap *IdBitmap) IsExist(num uint64) bool {
@@ -44,7 +43,7 @@ func (item *BitmapItem) isExist(floor uint64, bit uint) bool {
 }
 
 func (bitmap *IdBitmap) Add(num uint64) bool {
-	floor, bit := uint64(num/64), uint(num%64)
+	floor, bit := num/64, uint(num%64)
 	isExist := false
 	if bitmap.First == nil {
 		bitmap.First = new(BitmapItem)

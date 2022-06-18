@@ -14,10 +14,14 @@ var (
 type LockFreePriorityQueue struct {
 	next unsafe.Pointer
 }
+type FreeItem struct {
+	score float64
+	value interface{}
+}
 
 type node struct {
 	priority uint64
-	value    interface{}
+	value    *FreeItem
 	next     unsafe.Pointer
 }
 
@@ -27,10 +31,10 @@ func NewLKQueue() *LockFreePriorityQueue {
 	return lk
 }
 
-func (q *LockFreePriorityQueue) Push(v interface{}, priority uint64) error {
+func (q *LockFreePriorityQueue) Push(item *FreeItem, priority uint64) error {
 	n := &node{
 		priority: priority,
-		value:    v}
+		value:    item}
 PushCAS:
 	head := Load(&q.next)
 	for {
@@ -51,7 +55,10 @@ PushCAS:
 			}
 			return nil
 		} else if atomic.LoadUint64(&head.priority) == priority {
-			return ErrPriorityExisted
+			if item.score > head.value.score {
+				head.value = item
+			}
+			return nil
 		} else if atomic.LoadUint64(&head.priority) < priority {
 			if head.next == nil {
 				ok := cas(&head.next, nil, n)
@@ -74,7 +81,7 @@ PushCAS:
 	}
 }
 
-func (q *LockFreePriorityQueue) PopHead() interface{} {
+func (q *LockFreePriorityQueue) PopHead() *FreeItem {
 popCAS:
 	head := Load(&q.next)
 	if head.value == nil {

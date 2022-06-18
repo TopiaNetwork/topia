@@ -84,6 +84,7 @@ func (n NodeRole) Value(role string) NodeRole {
 
 type NodeInfo struct {
 	NodeID        string
+	Address       string
 	Weight        uint64
 	DKGPartPubKey string
 	Role          NodeRole

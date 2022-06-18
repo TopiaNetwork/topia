@@ -1,4 +1,4 @@
-package consensus
+package vrf
 
 import (
 	"encoding/binary"
@@ -37,13 +37,24 @@ type candidateInfo struct {
 	weight uint64
 }
 
+type RoleSelectorVRF interface {
+	ComputeVRF(priKey tpcrtypes.PrivateKey, data []byte) ([]byte, error)
+
+	Select(role RoleSelector,
+		stateVersion uint64,
+		priKey tpcrtypes.PrivateKey,
+		latestBlock *tpchaintypes.Block,
+		servant vrfServant,
+		count int) ([]string, []byte, error)
+}
+
 type roleSelectorVRF struct {
 	log    tplog.Logger
 	nodeID string
 	crypt  tpcrt.CryptService
 }
 
-func newLeaderSelectorVRF(log tplog.Logger, nodeID string, crypt tpcrt.CryptService) *roleSelectorVRF {
+func NewLeaderSelectorVRF(log tplog.Logger, nodeID string, crypt tpcrt.CryptService) RoleSelectorVRF {
 	return &roleSelectorVRF{
 		log:    log,
 		nodeID: nodeID,
@@ -148,10 +159,10 @@ func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64
 	return hasher.Bytes(), nil
 }
 
-func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, epochService EpochService) ([]*candidateInfo, error) {
+func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, servant vrfServant) ([]*candidateInfo, error) {
 	var canInfos []*candidateInfo
 	for _, nodeId := range avtiveNodeID {
-		nodeWeight, err := epochService.GetNodeWeight(nodeId)
+		nodeWeight, err := servant.GetNodeWeight(nodeId)
 		if err != nil {
 			selector.log.Errorf("Can't get node weight: %v", err)
 			return nil, err
@@ -170,41 +181,41 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 	stateVersion uint64,
 	priKey tpcrtypes.PrivateKey,
 	latestBlock *tpchaintypes.Block,
-	epochService EpochService,
-	count int) ([]*candidateInfo, []byte, error) {
+	servant vrfServant,
+	count int) ([]string, []byte, error) {
 	thresholdVals := make([]uint64, count)
 
 	err := error(nil)
 	var totalActiveWeight uint64
-	var avtiveNodeID []string
+	var activeNodeID []string
 
 	selector.log.Infof("Enter Select: state version %d, self node %s", stateVersion, selector.nodeID)
 
 	switch role {
 	case RoleSelector_ExecutionLauncher:
 		{
-			totalActiveWeight = epochService.GetActiveExecutorsTotalWeight()
-			avtiveNodeID = epochService.GetActiveExecutorIDs()
+			totalActiveWeight = servant.GetActiveExecutorsTotalWeight()
+			activeNodeID = servant.GetActiveExecutorIDs()
 		}
 	case RoleSelector_VoteCollector:
 		{
-			totalActiveWeight = epochService.GetActiveValidatorsTotalWeight()
-			avtiveNodeID = epochService.GetActiveValidatorIDs()
+			totalActiveWeight = servant.GetActiveValidatorsTotalWeight()
+			activeNodeID = servant.GetActiveValidatorIDs()
 		}
 	default:
 		return nil, nil, fmt.Errorf("Invalid role %s", role.String())
 	}
 
-	sort.Strings(avtiveNodeID)
+	sort.Strings(activeNodeID)
 
-	canInfos, err := selector.getCandidateInfos(avtiveNodeID, epochService)
+	canInfos, err := selector.getCandidateInfos(activeNodeID, servant)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	eponInfo := epochService.GetLatestEpoch()
+	epochInfo := servant.GetLatestEpoch()
 
-	csProof := &ConsensusProof{
+	csProof := &tpchaintypes.ConsensusProof{
 		ParentBlockHash: latestBlock.Head.ParentBlockHash,
 		Height:          latestBlock.Head.Height,
 		AggSign:         latestBlock.Head.VoteAggSignature,
@@ -214,11 +225,11 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		return nil, nil, err
 	}
 
-	selector.log.Infof("Vrf input data: role %s, epoch %d, state version %d, self node %s", role.String(), eponInfo.Epoch, stateVersion, selector.nodeID)
+	selector.log.Infof("Vrf input data: role %s, epoch %d, state version %d, self node %s", role.String(), epochInfo.Epoch, stateVersion, selector.nodeID)
 
-	vrfInputData, err := selector.getVrfInputData(role, eponInfo.Epoch, latestBlock.Head.Height, csProofBytes, stateVersion)
+	vrfInputData, err := selector.getVrfInputData(role, epochInfo.Epoch, latestBlock.Head.Height, csProofBytes, stateVersion)
 	if err != nil {
-		selector.log.Errorf("Can't get vrf inputting data: epoch=%d, height=%d, err=%v", eponInfo.Epoch, latestBlock.Head.Height, err)
+		selector.log.Errorf("Can't get vrf inputting data: epoch=%d, height=%d, err=%v", epochInfo.Epoch, latestBlock.Head.Height, err)
 		return nil, nil, err
 	}
 
@@ -227,7 +238,7 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 		return nil, nil, err
 	}
 
-	vrfHash := selector.makeVRFHash(role, eponInfo.Epoch, stateVersion, vrfInputData)
+	vrfHash := selector.makeVRFHash(role, epochInfo.Epoch, stateVersion, vrfInputData)
 	seed := selector.hashToSeed(vrfHash)
 
 	for i := 0; i < count; i++ {
@@ -237,12 +248,12 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 
 	cans := selector.sort(canInfos)
 
-	cansResult := make([]*candidateInfo, count)
+	cansResult := make([]string, count)
 	cumulativeWeight := uint64(0)
 	undrawn := 0
 	for _, can := range cans {
 		if thresholdVals[undrawn] < (cumulativeWeight + can.weight) {
-			cansResult[undrawn] = can
+			cansResult[undrawn] = can.nodeID
 			undrawn++
 			if undrawn == len(cansResult) {
 				return cansResult, vrfProof, nil

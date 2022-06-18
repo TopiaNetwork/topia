@@ -1,9 +1,11 @@
 package chain
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	"sync"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -54,6 +56,23 @@ func NewBlockInfoSubProcessor(log tplog.Logger, nodeID string, marshaler codec.M
 }
 
 func (bsp *blockInfoSubProcessor) validateRemoteBlockInfo(block *tpchaintypes.Block, blockResult *tpchaintypes.BlockResult) tpnetmsg.ValidationResult {
+	txCount := uint64(len(block.Data.Txs))
+	if txCount > bsp.config.ChainConfig.MaxTxCountOfEachBlock {
+		bsp.log.Errorf("Txs count beyond max value of each block: %d, max %d, height %d", txCount, bsp.config.ChainConfig.MaxTxCountOfEachBlock, block.Head.Height)
+		return tpnetmsg.ValidationReject
+	}
+
+	txRoot := txbasic.TxRootByBytes(block.Data.Txs)
+	if bytes.Equal(txRoot, block.Head.TxRoot) {
+		bsp.log.Errorf("Invalid tx root: height %d", block.Head.Height)
+		return tpnetmsg.ValidationReject
+	}
+
+	if blockResult != nil && txCount != uint64(len(blockResult.Data.TxResults)) {
+		bsp.log.Errorf("Invalid tx result: height %d", block.Head.Height)
+		return tpnetmsg.ValidationReject
+	}
+
 	return tpnetmsg.ValidationAccept
 }
 

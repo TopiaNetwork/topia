@@ -1,4 +1,4 @@
-package consensus
+package vrf
 
 import (
 	"bytes"
@@ -147,6 +147,10 @@ func newProposerSelectorPoiss(crypt tpcrt.CryptService) *proposerSelectorPoiss {
 
 func (ep *proposerSelectorPoiss) ComputeVRF(priKey tpcrtypes.PrivateKey, data []byte) ([]byte, error) {
 	return ep.crypt.Sign(priKey, data)
+}
+
+func (ep *proposerSelectorPoiss) VerifyVRF(addr tpcrtypes.Address, data []byte, vrfProof []byte) (bool, error) {
+	return ep.crypt.Verify(addr, data, vrfProof)
 }
 
 func (ep *proposerSelectorPoiss) SelectProposer(VRFProof []byte, weight *big.Int, totalWeight *big.Int) int64 {

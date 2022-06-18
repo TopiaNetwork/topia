@@ -148,12 +148,6 @@ message CommitMessage {
   bytes BlockHead     = 8  [(gogoproto.jsontag) = "blockHead"];
 }
 
-message ConsensusProof {
-  bytes  ParentBlockHash = 1  [(gogoproto.jsontag) = "parentBlockHash"];
-  uint64 Height          = 2  [(gogoproto.jsontag) = "height"];
-  bytes  AggSign         = 3  [(gogoproto.jsontag) = "aggSign"];
-}
-
 message DKGPartPubKeyMessage {
   bytes  ChainID   = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version   = 2  [(gogoproto.jsontag) = "version"];

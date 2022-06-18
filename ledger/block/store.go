@@ -27,6 +27,10 @@ type BlockStore interface {
 	GetBlocksIterator(startBlockNum tpchaintypes.BlockNum) (tplgtypes.ResultsIterator, error)
 
 	CommitBlock(block *tpchaintypes.Block) error
+
+	CommitBlockResult(block *tpchaintypes.BlockResult) error
+
+	Rollback(blockNum tpchaintypes.BlockNum) error
 }
 
 type blockStore struct {
@@ -47,6 +51,16 @@ func NewBlockStore(log tplog.Logger, rootPath string, backendType backend.Backen
 }
 
 func (store *blockStore) CommitBlock(block *tpchaintypes.Block) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (store *blockStore) CommitBlockResult(block *tpchaintypes.BlockResult) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (store *blockStore) Rollback(blockNum tpchaintypes.BlockNum) error {
 	//TODO implement me
 	panic("implement me")
 }

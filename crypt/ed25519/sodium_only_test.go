@@ -28,10 +28,10 @@ func TestEd25519ToCurve25519(t *testing.T) {
 func BenchmarkBatchVerifyOneByOne10(b *testing.B) {
 	b.StopTimer()
 	var c CryptServiceEd25519
-	pubs, msgs, sigs := prepareForBatchVerify(benchCgoGroupAmount10)
+	addrs, msgs, sigs := prepareForBatchVerify(benchCgoGroupAmount10)
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
-		retBool, err := c.batchVerifyOneByOne(pubs, msgs, sigs)
+		retBool, err := c.batchVerifyOneByOne(addrs, msgs, sigs)
 		b.StopTimer()
 		assert.Equal(b, true, retBool, "BatchVerify err")
 		assert.Equal(b, nil, err, "BatchVerify err")
@@ -40,10 +40,10 @@ func BenchmarkBatchVerifyOneByOne10(b *testing.B) {
 func BenchmarkBatchVerifyOneByOne50(b *testing.B) {
 	b.StopTimer()
 	var c CryptServiceEd25519
-	pubs, msgs, sigs := prepareForBatchVerify(benchCgoGroupAmount50)
+	addrs, msgs, sigs := prepareForBatchVerify(benchCgoGroupAmount50)
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
-		retBool, err := c.batchVerifyOneByOne(pubs, msgs, sigs)
+		retBool, err := c.batchVerifyOneByOne(addrs, msgs, sigs)
 		b.StopTimer()
 		assert.Equal(b, true, retBool, "BatchVerify err")
 		assert.Equal(b, nil, err, "BatchVerify err")
@@ -52,10 +52,10 @@ func BenchmarkBatchVerifyOneByOne50(b *testing.B) {
 func BenchmarkBatchVerifyOneByOne100(b *testing.B) {
 	b.StopTimer()
 	var c CryptServiceEd25519
-	pubs, msgs, sigs := prepareForBatchVerify(benchCgoGroupAmount100)
+	addrs, msgs, sigs := prepareForBatchVerify(benchCgoGroupAmount100)
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
-		retBool, err := c.batchVerifyOneByOne(pubs, msgs, sigs)
+		retBool, err := c.batchVerifyOneByOne(addrs, msgs, sigs)
 		b.StopTimer()
 		assert.Equal(b, true, retBool, "BatchVerify err")
 		assert.Equal(b, nil, err, "BatchVerify err")

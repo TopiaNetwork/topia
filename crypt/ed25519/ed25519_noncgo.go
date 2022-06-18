@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -66,12 +65,17 @@ func (c *CryptServiceEd25519) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpc
 	return sig, nil
 }
 
-func (c *CryptServiceEd25519) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error) {
+func (c *CryptServiceEd25519) Verify(addr tpcrtypes.Address, msg []byte, signData tpcrtypes.Signature) (bool, error) {
 	if len(pubKey) != PublicKeyBytes || len(msg) == 0 || len(signData) != SignatureBytes {
 		return false, errors.New("input invalid argument")
 	}
-	retBool := ed25519.Verify([]byte(pubKey), msg, signData)
-	return retBool, nil
+
+	pubKey, err := pubKeyFromAddr(addr)
+	if err != nil {
+		return false, err
+	}
+
+	return ed25519.Verify([]byte(pubKey), msg, signData), nil
 }
 
 func (c *CryptServiceEd25519) BatchVerify(pubKeys []tpcrtypes.PublicKey, msgs [][]byte, signDatas []tpcrtypes.Signature) (bool, error) {
@@ -94,9 +98,8 @@ func (c *CryptServiceEd25519) BatchVerify(pubKeys []tpcrtypes.PublicKey, msgs []
 }
 
 func (c *CryptServiceEd25519) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_ED25519).Compute(string(pubKey))
-	if len(addressHash) != tpcrtypes.AddressLen_ED25519 {
-		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_ED25519)
+	if len(pubKey) != PublicKeyBytes {
+		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid pubKey: len %d, expected %d", len(pubKey), tpcrtypes.AddressLen_ED25519)
 	}
-	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Ed25519, addressHash)
+	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Ed25519, pubKey)
 }

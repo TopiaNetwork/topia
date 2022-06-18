@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
@@ -28,6 +27,18 @@ type CryptServiceEd25519 struct {
 
 func New(log tplog.Logger) *CryptServiceEd25519 {
 	return &CryptServiceEd25519{log}
+}
+
+func pubKeyFromAddr(addr tpcrtypes.Address) (tpcrtypes.PublicKey, error) {
+	payload, err := addr.Payload()
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) != PublicKeyBytes {
+		return nil, fmt.Errorf("Expecte verifying pubKey %d, actual %d", PublicKeyBytes, len(payload))
+	}
+
+	return payload, nil
 }
 
 func (c *CryptServiceEd25519) CryptType() tpcrtypes.CryptType {
@@ -80,10 +91,16 @@ func (c *CryptServiceEd25519) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpc
 	return sig, nil
 }
 
-func (c *CryptServiceEd25519) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error) {
-	if len(pubKey) != PublicKeyBytes || len(msg) == 0 || len(signData) != SignatureBytes {
+func (c *CryptServiceEd25519) Verify(addr tpcrtypes.Address, msg []byte, signData tpcrtypes.Signature) (bool, error) {
+	if len(msg) == 0 || len(signData) != SignatureBytes {
 		return false, errors.New("input invalid argument")
 	}
+
+	pubKey, err := pubKeyFromAddr(addr)
+	if err != nil {
+		return false, err
+	}
+
 	retBool, err := verifyDetached(pubKey, msg, signData)
 	if err != nil {
 		return false, err
@@ -91,14 +108,24 @@ func (c *CryptServiceEd25519) Verify(pubKey tpcrtypes.PublicKey, msg []byte, sig
 	return retBool, nil
 }
 
-func (c *CryptServiceEd25519) BatchVerify(pubKeys []tpcrtypes.PublicKey, msgs [][]byte, signDatas []tpcrtypes.Signature) (bool, error) {
-	if len(pubKeys) != len(signDatas) || len(pubKeys) != len(msgs) {
+func (c *CryptServiceEd25519) BatchVerify(addrs []tpcrtypes.Address, msgs [][]byte, signDatas []tpcrtypes.Signature) (bool, error) {
+	if len(addrs) != len(signDatas) || len(addrs) != len(msgs) {
 		return false, errors.New("input invalid argument")
 	}
-	for i := range pubKeys {
-		if len(pubKeys[i]) == 0 || len(msgs[i]) == 0 || len(signDatas[i]) == 0 {
+	for i := range addrs {
+		if len(msgs[i]) == 0 || len(signDatas[i]) != SignatureBytes {
 			return false, errors.New("input invalid argument")
 		}
+	}
+
+	pubKeys := make([]tpcrtypes.PublicKey, len(addrs))
+	for i := range pubKeys {
+		//pubKeys[i] = make(tpcrtypes.PublicKey, PublicKeyBytes) todo maybe delete
+		tempPubkey, err := pubKeyFromAddr(addrs[i])
+		if err != nil {
+			return false, err
+		}
+		pubKeys[i] = tempPubkey
 	}
 
 	retbool := batchVerify(pubKeys, msgs, signDatas)
@@ -106,25 +133,30 @@ func (c *CryptServiceEd25519) BatchVerify(pubKeys []tpcrtypes.PublicKey, msgs []
 }
 
 func (c *CryptServiceEd25519) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_ED25519).Compute(string(pubKey))
-	if len(addressHash) != tpcrtypes.AddressLen_ED25519 {
-		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_ED25519)
+	if len(pubKey) != PublicKeyBytes {
+		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid pubKey: len %d, expected %d", len(pubKey), PublicKeyBytes)
 	}
-	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Ed25519, addressHash)
+	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Ed25519, pubKey)
 }
 
-func (c *CryptServiceEd25519) batchVerifyOneByOne(pubKeys []tpcrtypes.PublicKey, msgs [][]byte, signDatas []tpcrtypes.Signature) (bool, error) {
-	if len(pubKeys) != len(signDatas) || len(pubKeys) != len(msgs) {
+func (c *CryptServiceEd25519) batchVerifyOneByOne(addrs []tpcrtypes.Address, msgs [][]byte, signDatas []tpcrtypes.Signature) (bool, error) {
+	if len(addrs) != len(signDatas) || len(addrs) != len(msgs) {
 		return false, errors.New("input invalid argument")
 	}
-	for i := range pubKeys {
-		if len(pubKeys[i]) != PublicKeyBytes || len(msgs[i]) == 0 || len(signDatas[i]) != SignatureBytes {
+	for i := range addrs {
+		if len(msgs[i]) == 0 || len(signDatas[i]) != SignatureBytes {
 			return false, errors.New("input invalid argument")
 		}
 	}
 
+	pubKeys := make([]tpcrtypes.PublicKey, len(addrs))
 	for i := range pubKeys {
-		_, err := verifyDetached(pubKeys[i], msgs[i], signDatas[i])
+		tempPubkey, err := pubKeyFromAddr(addrs[i])
+		if err != nil {
+			return false, err
+		}
+		pubKeys[i] = tempPubkey
+		_, err = verifyDetached(pubKeys[i], msgs[i], signDatas[i])
 		if err != nil {
 			return false, err
 		}
@@ -141,9 +173,15 @@ func ToCurve25519(sec tpcrtypes.PrivateKey, pub tpcrtypes.PublicKey) (curveSec [
 }
 
 func StreamEncrypt(password []byte, msg []byte) (encryptedData []byte, err error) {
+	if len(password) == 0 || len(msg) == 0 {
+		return nil, errors.New("input invalid argument")
+	}
 	return streamEncrypt(password, msg)
 }
 
 func StreamDecrypt(password []byte, encryptedData []byte) (decryptedMsg []byte, err error) {
+	if len(password) == 0 || len(encryptedData) == 0 {
+		return nil, errors.New("input invalid argument")
+	}
 	return streamDecrypt(password, encryptedData)
 }

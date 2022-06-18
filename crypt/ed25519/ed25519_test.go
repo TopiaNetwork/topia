@@ -65,7 +65,10 @@ func TestVerify(t *testing.T) {
 	assert.Equal(t, SignatureBytes, len(sig), "signature length err")
 	assert.Equal(t, nil, err, "Sign err")
 
-	retBool, err := c.Verify(pub, msg, sig)
+	addr, err := c.CreateAddress(pub)
+	assert.Nil(t, err, "CreateAddress err")
+
+	retBool, err := c.Verify(addr, msg, sig)
 	assert.Equal(t, true, retBool, "Verify err")
 	assert.Equal(t, nil, err, "Verify err")
 }
@@ -77,6 +80,7 @@ func TestBatchVerify(t *testing.T) {
 	pubs := make([]tpcrtypes.PublicKey, num)
 	msgs := make([][]byte, num)
 	sigs := make([]tpcrtypes.Signature, num)
+	addrs := make([]tpcrtypes.Address, num)
 	var err error
 
 	for i := 0; i < num; i++ {
@@ -96,7 +100,14 @@ func TestBatchVerify(t *testing.T) {
 		assert.Equal(t, SignatureBytes, len(sigs[i]), "signature length err")
 		assert.Equal(t, nil, err, "Sign err")
 	}
-	retBool, err := c.BatchVerify(pubs, msgs, sigs)
+
+	for i := range addrs {
+		tempAddr, err := c.CreateAddress(pubs[i])
+		assert.Nil(t, err, "CreateAddress err")
+		addrs[i] = tempAddr
+	}
+
+	retBool, err := c.BatchVerify(addrs, msgs, sigs)
 	assert.Equal(t, true, retBool, "BatchVerify err")
 	assert.Equal(t, nil, err, "BatchVerify err")
 }

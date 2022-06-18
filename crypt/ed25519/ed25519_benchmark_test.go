@@ -37,6 +37,9 @@ func BenchmarkVerify(b *testing.B) {
 	assert.Equal(b, PublicKeyBytes, len(pub), "public key length err")
 	assert.Equal(b, nil, err, "GeneratePriPubKey err")
 
+	addr, err := c.CreateAddress(pub)
+	assert.Nil(b, err, "CreateAddress err")
+
 	msg := []byte("this is test msg for sign")
 	sig, err := c.Sign(sec, msg)
 	assert.Equal(b, SignatureBytes, len(sig), "signature length err")
@@ -44,23 +47,28 @@ func BenchmarkVerify(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
-		retBool, err := c.Verify(pub, msg, sig)
+		retBool, err := c.Verify(addr, msg, sig)
 		b.StopTimer()
 		assert.Equal(b, true, retBool, "Verify err")
 		assert.Equal(b, nil, err, "Verify err")
 	}
 }
 
-func prepareForBatchVerify(groupNum int) (pubs []tpcrtypes.PublicKey, msgs [][]byte, sigs []tpcrtypes.Signature) {
+func prepareForBatchVerify(groupNum int) (addrs []tpcrtypes.Address, msgs [][]byte, sigs []tpcrtypes.Signature) {
 	var c CryptServiceEd25519
 	secs := make([]tpcrtypes.PrivateKey, groupNum)
-	pubs = make([]tpcrtypes.PublicKey, groupNum)
+	pubs := make([]tpcrtypes.PublicKey, groupNum)
+	addrs = make([]tpcrtypes.Address, groupNum)
 	msgs = make([][]byte, groupNum)
 	sigs = make([]tpcrtypes.Signature, groupNum)
 
 	for i := 0; i < groupNum; i++ {
 		secs[i], pubs[i], _ = c.GeneratePriPubKey()
 	}
+	for i := range pubs {
+		addrs[i], _ = c.CreateAddress(pubs[i])
+	}
+
 	msgLen := 256
 	for i := range msgs {
 		msgs[i] = make([]byte, msgLen)
@@ -69,16 +77,16 @@ func prepareForBatchVerify(groupNum int) (pubs []tpcrtypes.PublicKey, msgs [][]b
 	for i := range msgs {
 		sigs[i], _ = c.Sign(secs[i], msgs[i])
 	}
-	return pubs, msgs, sigs
+	return addrs, msgs, sigs
 }
 
 func BenchmarkBatchVerify10(b *testing.B) {
 	b.StopTimer()
 	var c CryptServiceEd25519
-	pubs, msgs, sigs := prepareForBatchVerify(benchGroupAmount10)
+	addrs, msgs, sigs := prepareForBatchVerify(benchGroupAmount10)
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
-		retBool, err := c.BatchVerify(pubs, msgs, sigs)
+		retBool, err := c.BatchVerify(addrs, msgs, sigs)
 		b.StopTimer()
 		assert.Equal(b, true, retBool, "BatchVerify err")
 		assert.Equal(b, nil, err, "BatchVerify err")
@@ -88,10 +96,10 @@ func BenchmarkBatchVerify10(b *testing.B) {
 func BenchmarkBatchVerify50(b *testing.B) {
 	b.StopTimer()
 	var c CryptServiceEd25519
-	pubs, msgs, sigs := prepareForBatchVerify(benchGroupAmount50)
+	addrs, msgs, sigs := prepareForBatchVerify(benchGroupAmount50)
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
-		retBool, err := c.BatchVerify(pubs, msgs, sigs)
+		retBool, err := c.BatchVerify(addrs, msgs, sigs)
 		b.StopTimer()
 		assert.Equal(b, true, retBool, "BatchVerify err")
 		assert.Equal(b, nil, err, "BatchVerify err")
@@ -101,10 +109,10 @@ func BenchmarkBatchVerify50(b *testing.B) {
 func BenchmarkBatchVerify100(b *testing.B) {
 	b.StopTimer()
 	var c CryptServiceEd25519
-	pubs, msgs, sigs := prepareForBatchVerify(benchGroupAmount100)
+	addrs, msgs, sigs := prepareForBatchVerify(benchGroupAmount100)
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
-		retBool, err := c.BatchVerify(pubs, msgs, sigs)
+		retBool, err := c.BatchVerify(addrs, msgs, sigs)
 		b.StopTimer()
 		assert.Equal(b, true, retBool, "BatchVerify err")
 		assert.Equal(b, nil, err, "BatchVerify err")

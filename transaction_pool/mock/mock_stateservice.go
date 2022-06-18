@@ -2,7 +2,7 @@
 // Source: ./service/state.go
 
 // Package transactionpool is a generated GoMock package.
-package transactionpool
+package mock
 
 import (
 	big "math/big"

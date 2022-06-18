@@ -16,13 +16,6 @@ func exist(blockNum types.BlockNum) {
 
 
 
-	//
-	//roaring.ParOr(4, rb1, rb2, rb3)
-	//
-	//roaring.ParAnd(4, rb1, rb2, rb3)
-
-
-
 	i := rb1.Iterator()
 	for i.HasNext() {
 		fmt.Println(i.Next())

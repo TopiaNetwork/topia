@@ -30,7 +30,7 @@ type RoundInfo struct {
 	Epoch        uint64
 	LastRoundNum uint64
 	CurRoundNum  uint64
-	Proof        *ConsensusProof
+	Proof        *tpchaintypes.ConsensusProof
 }
 
 type Consensus interface {

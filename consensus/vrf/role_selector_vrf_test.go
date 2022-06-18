@@ -1,7 +1,8 @@
-package consensus
+package vrf
 
 import (
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/consensus"
 	"testing"
 	"time"
 
@@ -24,13 +25,13 @@ func TestSelect(t *testing.T) {
 		},
 	}
 
-	cryptService := &CryptServiceMock{}
-	epochService := &EpochServiceMock{}
+	cryptService := &consensus.CryptServiceMock{}
+	epochService := &consensus.EpochServiceMock{}
 	priKey1, _, _ := cryptService.GeneratePriPubKey()
 	priKey2, _, _ := cryptService.GeneratePriPubKey()
 	priKey3, _, _ := cryptService.GeneratePriPubKey()
 
-	roleSel := newLeaderSelectorVRF(log, "", cryptService)
+	roleSel := NewLeaderSelectorVRF(log, "", cryptService)
 
 	t.Log("Node 1:")
 	for i := 0; i < 5; i++ {

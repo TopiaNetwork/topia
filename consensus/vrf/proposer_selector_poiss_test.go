@@ -1,6 +1,7 @@
-package consensus
+package vrf
 
 import (
+	"github.com/TopiaNetwork/topia/consensus"
 	"math/big"
 	"sort"
 	"testing"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestComputeVRF(t *testing.T) {
-	crypt := &CryptServiceMock{}
+	crypt := &consensus.CryptServiceMock{}
 
 	priKey, pubKey, _ := crypt.GeneratePriPubKey()
 
@@ -29,7 +30,7 @@ func TestComputeVRF(t *testing.T) {
 }
 
 func TestSelectProposer(t *testing.T) {
-	crypt := &CryptServiceMock{}
+	crypt := &consensus.CryptServiceMock{}
 
 	priKey, pubKey, _ := crypt.GeneratePriPubKey()
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/TopiaNetwork/topia/consensus/vrf"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"go.uber.org/atomic"
@@ -496,14 +497,14 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 		return "", nil, err
 	}
 
-	selVoteColectors, vrfProof, err := newLeaderSelectorVRF(md.log, md.nodeID, md.cryptService).Select(RoleSelector_VoteCollector, 0, md.priKey, lastBlock, md.epochService, 1)
+	selVoteColectors, vrfProof, err := vrf.NewLeaderSelectorVRF(md.log, md.nodeID, md.cryptService).Select(vrf.RoleSelector_VoteCollector, 0, md.priKey, lastBlock, md.epochService, 1)
 	if len(selVoteColectors) != 1 {
 		err := fmt.Errorf("Expect vote collector count 1, got %d", len(selVoteColectors))
 		md.log.Errorf("%v", err)
 		return "", nil, err
 	}
 
-	return selVoteColectors[0].nodeID, vrfProof, err
+	return selVoteColectors[0], vrfProof, err
 }
 
 func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error {

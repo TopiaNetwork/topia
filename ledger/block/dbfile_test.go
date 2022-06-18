@@ -3,6 +3,7 @@ package block
 import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
+	"os"
 	"testing"
 	//"github.com/fatih/structs"
 	//"reflecting"
@@ -54,7 +55,7 @@ var block_all = types.Block{
 	100,
 }
 
-var FilenameNow = "30666261306332616661393039663365373863393634333761396561313065356430383032326539383839633063383232363265633430353339653239316161"
+var FilenameNow = "1817128"
 //struct block1{
 //
 //}
@@ -93,25 +94,26 @@ func TestNewFile(t *testing.T) {
 	//fmt.Println("",trans)
 }
 
-//func TestReaddata(t *testing.T) {
-//	filename := FilenameNow + ".topia"
-//	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 //
-//	if err != nil{
-//		panic(err)
-//	}
-//
-//	var to = TopiaFile{
-//		1,
-//		file,
-//		1,
-//
-//	}
-//	err =to.Writedata(&block_all)
-//	if err != nil{
-//		panic(err)
-//	}
-//}
+func TestReaddata(t *testing.T) {
+	filename := FilenameNow + ".topia"
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+
+	if err != nil{
+		panic(err)
+	}
+
+	var to = TopiaFile{
+		1,
+		file,
+		1,
+
+	}
+	err =to.Writedata(&block_all)
+	if err != nil{
+		panic(err)
+	}
+}
 //
 //func TestWritedata(t *testing.T) {
 //	file, err := os.OpenFile("test.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
@@ -133,6 +135,27 @@ func TestNewFile(t *testing.T) {
 //}
 //
 //
+func TestTopiaFile_Findindex(t *testing.T) {
+	filename := FilenameNow + ".index"
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+
+	if err != nil{
+		panic(err)
+	}
+
+	var to = TopiaFile{
+		1,
+		file,
+		1,
+
+	}
+	tpindex,_ :=to.Findindex(1817128)
+	//if err != nil{
+	//	panic(err)
+	//}
+	fmt.Println(tpindex)
+}
+
 //func TestWriteindex(t *testing.T) {
 //	file, err := os.OpenFile("test.index", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 //

@@ -7,12 +7,12 @@ require (
 	github.com/RoaringBitmap/roaring v1.2.1
 	github.com/TopiaNetwork/go-bls v0.0.1
 	github.com/TopiaNetwork/kyber/v3 v3.7.8
+	github.com/bluele/gcache v0.0.2
 	github.com/btcsuite/btcd v0.22.0-beta
 	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/ethereum/go-ethereum v1.10.13
-	github.com/fatih/structs v1.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2

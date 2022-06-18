@@ -1,25 +1,20 @@
 package block
 
 import (
-
+	"encoding/binary"
+	"fmt"
 	"os"
 	"path"
-	"fmt"
-	"syscall"
 	"strconv"
 	"strings"
-	"encoding/binary"
+	"syscall"
 	//"encoding/json"
-
 
 	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/snksoft/crc"
 	"launchpad.net/gommap"
-
 )
 
-const LOCK_FILE = "LOCK"
-const DATA_FILE = "DATA"
 
 const FILE_SIZE = 10000 //* 1000
 
@@ -32,8 +27,9 @@ var Transoffset = 0
 type TopiaFile struct {
 	Filetype int8 //0,data;1,index;2,transactionindex
 	File   *os.File
-	Offset int16
+	Offset int16 //INT64
 }
+
 type TopiaData struct{
 	version int32
 	offset int16
@@ -41,11 +37,14 @@ type TopiaData struct{
 	crc int64
 	data *types.Block
 }
+
+
 type TopiaIndex struct{
 	version int16
 	position int16
 	offset int16
 }
+
 
 type TransIndex struct{
 	Version int16
@@ -90,6 +89,7 @@ func NewFile(block *types.Block) (*TopiaFile, error) {
 	NewIndexFile(block)
 
 	NewTransFile(block)
+
 	return &tp, nil
 }
 
@@ -204,6 +204,7 @@ func (df *TopiaFile) Writedata(block *types.Block) error {
 	offsetbyte := Int16ToBytes(df.Offset)
 
 	mmap, _ := gommap.Map(df.File.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+
 	defer mmap.UnsafeUnmap()
 
 
@@ -279,7 +280,6 @@ func (df *TopiaFile) Writeindex(version int16,offset int16) error {
 
 }
 
-//func (df *TopiaFile) Writetrans(version int16,txid string,blockheight int16, offset int16) error {
 func (df *TopiaFile) Writetrans(block *types.Block) error {
 	versionbyte := Int32ToBytes(int32(block.GetHead().Version))
 
@@ -413,6 +413,8 @@ func Decodeblock(buf []byte)(*types.Block)  {
 	}
 	return &b
 }
+
+
 func binarySearch(start int, end int,blockid byte,mmap gommap.MMap)(int,bool){
 	//current := end / 2
 	//for end-start > 1 {

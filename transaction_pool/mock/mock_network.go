@@ -2,7 +2,7 @@
 // Source: ../network/network.go
 
 // Package transactionpool is a generated GoMock package.
-package transactionpool
+package mock
 
 import (
 	context "context"
@@ -261,6 +261,18 @@ func (m *MockNetwork) Start() {
 func (mr *MockNetworkMockRecorder) Start() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockNetwork)(nil).Start))
+}
+
+func (m *MockNetwork) Ready() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ready")
+	ret0 := ret[0].(bool)
+	return ret0
+}
+
+func (mr *MockNetworkMockRecorder) Ready() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ready", reflect.TypeOf((*MockNetwork)(nil).Ready()))
 }
 
 // Stop mocks base method.

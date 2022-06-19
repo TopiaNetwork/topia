@@ -7,6 +7,7 @@ require (
 	github.com/Gurpartap/async v0.0.0-20180927173644-4f7f499dd9ee
 	github.com/TopiaNetwork/go-bls v0.0.1
 	github.com/TopiaNetwork/kyber/v3 v3.7.8
+	github.com/beevik/ntp v0.3.0
 	github.com/btcsuite/btcd v0.22.0-beta
 	github.com/coocood/freecache v1.2.1
 	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea

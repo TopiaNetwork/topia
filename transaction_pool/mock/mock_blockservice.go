@@ -2,7 +2,7 @@
 // Source: ./service/block.go
 
 // Package transactionpool is a generated GoMock package.
-package transactionpool
+package mock
 
 import (
 	reflect "reflect"

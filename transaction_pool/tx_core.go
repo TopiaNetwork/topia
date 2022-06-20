@@ -13,16 +13,6 @@ import (
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
-type TransactionState string
-
-const (
-	StateTxAdded                   TransactionState = "Tx Added"
-	StateTxRemoved                                  = "tx removed"
-	StateTxDiscardForReplaceFailed                  = "Tx Discard For replace failed"
-	StateTxDiscardForTxPoolFull                     = "Tx Discard For TxPool is Full"
-	StateTxAddToQueue                               = "Tx Add To Queue"
-)
-
 type TxRepublicPolicy byte
 
 const (
@@ -178,6 +168,13 @@ func (m *txSortedMapByNonce) Ready(start uint64) []*txbasic.Transaction {
 	if m.index.Len() == 0 || (*m.index)[0] <= start {
 		return nil
 	}
+	if (*m.index)[0] != start+1 {
+		return nil
+	}
+	if (*m.index)[0]+uint64(m.index.Len()) != (*m.index)[m.index.Len()-1] {
+		return nil
+	}
+
 	var ready []*txbasic.Transaction
 	for next := (*m.index)[0]; m.index.Len() > 0 && (*m.index)[0] == next; next++ {
 		ready = append(ready, m.items[next])
@@ -237,15 +234,15 @@ func newCoreList(strict bool) *txCoreList {
 func (l *txCoreList) WhetherSameNonce(tx *txbasic.Transaction) bool {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	Nonce := tx.Head.Nonce
-	return l.txs.Get(Nonce) != nil
+	nonce := tx.Head.Nonce
+	return l.txs.Get(nonce) != nil
 }
 
 func (l *txCoreList) txCoreAdd(tx *txbasic.Transaction) (bool, *txbasic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	Nonce := tx.Head.Nonce
-	old := l.txs.Get(Nonce)
+	nonce := tx.Head.Nonce
+	old := l.txs.Get(nonce)
 	if old != nil {
 		gaspriceOld := GasPrice(old)
 		gaspriceTx := GasPrice(tx)
@@ -254,6 +251,7 @@ func (l *txCoreList) txCoreAdd(tx *txbasic.Transaction) (bool, *txbasic.Transact
 		}
 	}
 	l.txs.Put(tx)
+
 	return true, old
 }
 
@@ -274,8 +272,7 @@ func (l *txCoreList) CapLimitTxs(threshold int) []*txbasic.Transaction {
 func (l *txCoreList) Remove(tx *txbasic.Transaction) (bool, []*txbasic.Transaction) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	Nonce := tx.Head.Nonce
-	nonce := Nonce
+	nonce := tx.Head.Nonce
 	if removed := l.txs.Remove(nonce); !removed {
 		return false, nil
 	}
@@ -890,9 +887,9 @@ func (queuemap *queuesMap) replaceExecutablesDropTooOld(category txbasic.Transac
 		return
 	}
 	// Drop all transactions that are deemed too old (low nonce)
-	DropsLessNonce := list.RemovedTxForLessNonce(f1(addr))
+	dropsLessNonce := list.RemovedTxForLessNonce(f1(addr))
 
-	for _, tx := range DropsLessNonce {
+	for _, tx := range dropsLessNonce {
 		txID, _ := tx.TxID()
 		f2(category, txID)
 
@@ -1434,36 +1431,36 @@ func (activ *activationInterval) removeTxActiv(key txbasic.TxID) {
 }
 
 type HeightInterval struct {
-	Mu sync.RWMutex
-	HI map[txbasic.TxID]uint64
+	Mu     sync.RWMutex
+	height map[txbasic.TxID]uint64
 }
 
 func newHeightInterval() *HeightInterval {
 	hi := &HeightInterval{
-		HI: make(map[txbasic.TxID]uint64),
+		height: make(map[txbasic.TxID]uint64),
 	}
 	return hi
 }
 func (hi *HeightInterval) getAll() map[txbasic.TxID]uint64 {
 	hi.Mu.Lock()
 	defer hi.Mu.Unlock()
-	return hi.HI
+	return hi.height
 }
 func (hi *HeightInterval) getTxHeightByKey(key txbasic.TxID) uint64 {
 	hi.Mu.Lock()
 	defer hi.Mu.Unlock()
-	return hi.HI[key]
+	return hi.height[key]
 }
 func (hi *HeightInterval) setTxHeight(key txbasic.TxID, height uint64) {
 	hi.Mu.Lock()
 	defer hi.Mu.Unlock()
-	hi.HI[key] = height
+	hi.height[key] = height
 	return
 }
 func (hi *HeightInterval) removeTxHeight(key txbasic.TxID) {
 	hi.Mu.Lock()
 	defer hi.Mu.Unlock()
-	delete(hi.HI, key)
+	delete(hi.height, key)
 	return
 }
 
@@ -1602,16 +1599,16 @@ func (pq *SizeAccountHeap) Push(x interface{}) {
 func (pq *SizeAccountHeap) Pop() interface{} {
 	old := *pq
 	n := len(old)
-	GreyAccCnt := old[n-1]
-	GreyAccCnt.index = -1 // for safety
+	greyAccCnt := old[n-1]
+	greyAccCnt.index = -1 // for safety
 	*pq = old[0 : n-1]
-	return GreyAccCnt
+	return greyAccCnt
 }
 
 // txByActivationInterval tagged with transaction's last activity timestamp.
 type txByActivationInterval struct {
 	txId               txbasic.TxID
-	ActivationInterval time.Time
+	activationInterval time.Time
 	size               int
 }
 
@@ -1619,7 +1616,7 @@ type txsByActivationInterval []txByActivationInterval
 
 func (t txsByActivationInterval) Len() int { return len(t) }
 func (t txsByActivationInterval) Less(i, j int) bool {
-	return t[i].ActivationInterval.Before(t[j].ActivationInterval)
+	return t[i].activationInterval.Before(t[j].activationInterval)
 }
 func (t txsByActivationInterval) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
 
@@ -1641,10 +1638,10 @@ func (pr TxByPriceAndNonce) Less(i, j int) bool {
 	case 1:
 		return false
 	default:
-		var Noncei, Noncej uint64
-		Noncei = pr[i].Head.Nonce
-		Noncej = pr[j].Head.Nonce
-		return Noncei < Noncej
+		var nonceI, nonceJ uint64
+		nonceI = pr[i].Head.Nonce
+		nonceJ = pr[j].Head.Nonce
+		return nonceI < nonceJ
 	}
 }
 func (pr TxByPriceAndNonce) cmp(a, b *txbasic.Transaction) int {

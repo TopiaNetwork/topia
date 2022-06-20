@@ -1,12 +1,13 @@
 package txpoolinterface
 
 import (
+	"time"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	"time"
 )
 
 const MOD_NAME = "TransactionPool"
@@ -14,9 +15,20 @@ const MOD_NAME = "TransactionPool"
 type PickTxType uint32
 
 const (
-	PickTransactionsFromPending PickTxType = iota
-	PickTransactionsSortedByGasPriceAndNonce
-	PickTransactionsSortedByGasPriceAndTime
+	PickTxPending PickTxType = iota
+	PickTxPriceAndNonce
+	PickTxPriceAndTime
+)
+
+type TransactionState string
+
+const (
+	StateTxAdded                   TransactionState = "Tx Added"
+	StateTxRemoved                                  = "tx removed"
+	StateTxDiscardForReplaceFailed                  = "Tx Discard For replace failed"
+	StateTxDiscardForTxPoolFull                     = "Tx Discard For TxPool is Full"
+	StateTxAddToQueue                               = "Tx Add To Queue"
+	StateTxNil                                      = "no transaction state for this tx "
 )
 
 type TxExpiredPolicy byte
@@ -32,10 +44,12 @@ type TransactionPoolConfig struct {
 	PathTxsStorge   string
 	ReStoredDur     time.Duration
 	TxExpiredPolicy TxExpiredPolicy
-	TxCacheSize     int
-	GasPriceLimit   uint64
-	TxMaxSize       uint64
-	TxPoolMaxSize   uint64
+	PickTxType      PickTxType
+
+	TxCacheSize   int
+	GasPriceLimit uint64
+	TxMaxSize     uint64
+	TxPoolMaxSize uint64
 
 	MaxSizeOfEachPendingAccount uint64 // Maximum size of executable transaction per account
 	MaxSizeOfPending            uint64 // Maximum size of executable transaction
@@ -54,8 +68,10 @@ var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	PathTxsStorge:   "StorgeInfo/StorageTxsDataAndConfig.json",
 	ReStoredDur:     30 * time.Minute,
 	TxExpiredPolicy: TxExpiredTimeAndHeight,
-	GasPriceLimit:   1000, // 1000
-	TxCacheSize:     36000000,
+	PickTxType:      PickTxPending,
+
+	GasPriceLimit: 1000, // 1000
+	TxCacheSize:   36000000,
 
 	TxMaxSize:     2 * 1024,
 	TxPoolMaxSize: 64 * 2 * 1024,
@@ -114,15 +130,11 @@ type TransactionPool interface {
 
 	RemoveTxHashs(hashs []txbasic.TxID) []error
 
-	Reset(oldHead, newHead *tpchaintypes.BlockHead) error
-
 	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
-
-	Pending() ([]*txbasic.Transaction, error)
 
 	PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error)
 
-	PickTxs(txType PickTxType) []*txbasic.Transaction
+	PickTxs() []*txbasic.Transaction
 
 	Count() int64
 
@@ -136,5 +148,5 @@ type TransactionPool interface {
 
 	SetTxPoolConfig(conf TransactionPoolConfig)
 
-	PeekTxState(hash txbasic.TxID) interface{}
+	PeekTxState(hash txbasic.TxID) TransactionState
 }

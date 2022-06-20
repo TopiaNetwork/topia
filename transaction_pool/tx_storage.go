@@ -1,11 +1,11 @@
 package transactionpool
 
 import (
-	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"io/ioutil"
 	"time"
 
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type TxsStorage struct {
@@ -24,9 +24,9 @@ func (pool *transactionPool) SaveTxsData(path string) error {
 		Categorys:           pool.allTxsForLook.getAllCategory(),
 		TxsLocal:            pool.allTxsForLook.getAllTxs(true),
 		TxsRemote:           pool.allTxsForLook.getAllTxs(false),
-		ActivationIntervals: pool.ActivationIntervals.getAll(),
-		HeightIntervals:     pool.HeightIntervals.getAll(),
-		TxHashCategorys:     pool.TxHashCategory.getAll(),
+		ActivationIntervals: pool.activationIntervals.getAll(),
+		HeightIntervals:     pool.heightIntervals.getAll(),
+		TxHashCategorys:     pool.txHashCategory.getAll(),
 		Config:              pool.config,
 	}
 	txsData, err := pool.marshaler.Marshal(txsStorge)
@@ -69,13 +69,13 @@ func (pool *transactionPool) loadTxsData(path string) error {
 	pool.addTxs(txsData.TxsLocal, true)
 	pool.addTxs(txsData.TxsRemote, false)
 	for txId, ActivationInterval := range txsData.ActivationIntervals {
-		pool.ActivationIntervals.setTxActiv(txId, ActivationInterval)
+		pool.activationIntervals.setTxActiv(txId, ActivationInterval)
 	}
 	for txId, height := range txsData.HeightIntervals {
-		pool.HeightIntervals.setTxHeight(txId, height)
+		pool.heightIntervals.setTxHeight(txId, height)
 	}
 	for txId, TxHashCategory := range txsData.TxHashCategorys {
-		pool.TxHashCategory.setHashCat(txId, TxHashCategory)
+		pool.txHashCategory.setHashCat(txId, TxHashCategory)
 	}
 	return nil
 }

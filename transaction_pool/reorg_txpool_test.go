@@ -9,6 +9,7 @@ import (
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/transaction_pool/mock"
 )
 
 func Test_transactionPool_Reset(t *testing.T) {
@@ -16,11 +17,11 @@ func Test_transactionPool_Reset(t *testing.T) {
 	defer ctrl.Finish()
 
 	log := TpiaLog
-	stateService := NewMockStateQueryService(ctrl)
+	stateService := mock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := NewMockBlockService(ctrl)
+	blockService := mock.NewMockBlockService(ctrl)
 	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(OldBlock.Head.Hash)).AnyTimes().Return(OldBlock, nil)
 	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(MidBlock.Head.Hash)).AnyTimes().Return(MidBlock, nil)
 	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(NewBlock.Head.Hash)).AnyTimes().Return(NewBlock, nil)
@@ -28,7 +29,7 @@ func Test_transactionPool_Reset(t *testing.T) {
 	blockService.EXPECT().GetBlockByNumber(MidBlock.BlockNum()).AnyTimes().Return(MidBlock, nil)
 	blockService.EXPECT().GetBlockByNumber(NewBlock.BlockNum()).AnyTimes().Return(NewBlock, nil)
 
-	network := NewMockNetwork(ctrl)
+	network := mock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -42,7 +43,7 @@ func Test_transactionPool_Reset(t *testing.T) {
 	assert.Equal(t, 30, pool.allTxsForLook.getLocalCountByCategory(Category1))
 	assert.Equal(t, 0, pool.allTxsForLook.getRemoteCountByCategory(Category1))
 
-	if err := pool.Reset(OldBlockHead, NewBlockHead); err != nil {
+	if err := pool.reset(OldBlockHead, NewBlockHead); err != nil {
 		t.Error("want", nil, "got", err)
 	}
 	var addrsNeedTurn []tpcrtypes.Address

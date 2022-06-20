@@ -64,7 +64,7 @@ func (txm *TransactionPoolMock) SetTxPoolConfig(conf txpooli.TransactionPoolConf
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) PeekTxState(hash txbasic.TxID) interface{} {
+func (txm *TransactionPoolMock) PeekTxState(hash txbasic.TxID) txpooli.TransactionState {
 	//TODO implement me
 	panic("implement me")
 }
@@ -190,7 +190,7 @@ func (txm *TransactionPoolMock) Start(sysActor *actor.ActorSystem, network tpnet
 	return nil
 }
 
-func (txm *TransactionPoolMock) PickTxs(txType txpooli.PickTxType) []*txbasic.Transaction {
+func (txm *TransactionPoolMock) PickTxs() []*txbasic.Transaction {
 	//TODO implement me
 	panic("implement me")
 }

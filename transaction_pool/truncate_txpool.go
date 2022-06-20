@@ -61,7 +61,7 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 	}
 	// Sort all accounts with queued transactions by heartbeat
 	f2 := func(string2 txbasic.TxID) time.Time {
-		return pool.ActivationIntervals.getTxActivByKey(string2)
+		return pool.activationIntervals.getTxActivByKey(string2)
 	}
 	f3 := func(category txbasic.TransactionCategory, key txbasic.TxID) *txbasic.Transaction {
 		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, key)
@@ -96,12 +96,12 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 	}
 	f514 := func(txId txbasic.TxID, category txbasic.TransactionCategory) {
 
-		pool.ActivationIntervals.setTxActiv(txId, time.Now())
-		pool.TxHashCategory.setHashCat(txId, category)
+		pool.activationIntervals.setTxActiv(txId, time.Now())
+		pool.txHashCategory.setHashCat(txId, category)
 	}
 	f6 := func(txId txbasic.TxID) {
-		pool.ActivationIntervals.removeTxActiv(txId)
-		pool.TxHashCategory.removeHashCat(txId)
+		pool.activationIntervals.removeTxActiv(txId)
+		pool.txHashCategory.removeHashCat(txId)
 	}
 	pool.queues.removeTxsForTruncateQueue(category, f2, f3, f4, f5, f511, f512, f513, f514, f6,
 		queueSize, pool.config.MaxSizeOfQueue)

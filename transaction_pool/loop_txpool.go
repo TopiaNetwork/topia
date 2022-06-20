@@ -77,6 +77,7 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 			pool.log.Errorf("loopResetIfBlockAdded err:", err, debug.Stack())
 		}
 	}()
+
 	// Track the previous head headers for transaction reorgs
 	head, err := pool.txServant.GetLatestBlock()
 	if err != nil {
@@ -115,7 +116,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 		// Handle inactive account transaction eviction
 		case <-evict.C:
 			f1 := func(string2 txbasic.TxID) time.Duration {
-				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
+				return time.Since(pool.activationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.LifetimeForTx
 			f2 := func(string2 txbasic.TxID) {
@@ -126,7 +127,7 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 				if err != nil {
 					pool.log.Errorf("get current height error:", err)
 				}
-				txheight := pool.HeightIntervals.HI[string2]
+				txheight := pool.heightIntervals.height[string2]
 				if curheight > txheight {
 					return curheight - txheight
 				}
@@ -188,7 +189,7 @@ func (pool *transactionPool) loopRegularRepublic() {
 		select {
 		case <-republic.C:
 			f1 := func(string2 txbasic.TxID) time.Duration {
-				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
+				return time.Since(pool.activationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.TxTTLTimeOfRepublic
 			f2 := func(tx *txbasic.Transaction) {
@@ -199,7 +200,7 @@ func (pool *transactionPool) loopRegularRepublic() {
 				if err != nil {
 					pool.log.Errorf("get current height error:", err)
 				}
-				txHeight := pool.HeightIntervals.getTxHeightByKey(string2)
+				txHeight := pool.heightIntervals.getTxHeightByKey(string2)
 				if curHeight > txHeight {
 					return curHeight - txHeight
 				}

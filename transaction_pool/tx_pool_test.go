@@ -315,9 +315,9 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Tran
 		level:               level,
 		ctx:                 ctx,
 		allTxsForLook:       newAllTxsLookupMap(),
-		ActivationIntervals: newActivationInterval(),
-		HeightIntervals:     newHeightInterval(),
-		TxHashCategory:      newTxHashCategory(),
+		activationIntervals: newActivationInterval(),
+		heightIntervals:     newHeightInterval(),
+		txHashCategory:      newTxHashCategory(),
 		chanBlockAdded:      make(chan BlockAddedEvent, ChanBlockAddedSize),
 		chanReqReset:        make(chan *txPoolResetHeads),
 		chanReqTurn:         make(chan *accountCache),
@@ -338,7 +338,7 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Tran
 	if err != nil {
 		pool.log.Errorf("NewTransactionPool get current block error:", err)
 	}
-	pool.Reset(nil, curBlock.GetHead())
+	pool.reset(nil, curBlock.GetHead())
 	pool.wg.Add(1)
 	go pool.ReorgAndTurnTxLoop()
 
@@ -361,6 +361,7 @@ func Test_transactionPool_GetLocalTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -400,6 +401,7 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -454,6 +456,7 @@ func Test_transactionPool_RemoveTxByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -488,6 +491,7 @@ func Test_transactionPool_RemoveTxHashs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -527,6 +531,7 @@ func Test_transactionPool_UpdateTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -574,6 +579,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -599,7 +605,7 @@ func Test_transactionPool_PickTxs(t *testing.T) {
 	want = append(want, Tx4)
 	want = append(want, TxR1)
 	want = append(want, TxR2)
-	pending, _ := pool.Pending()
+	pending := pool.PickTxs()
 
 	for _, tx := range pending {
 		got = append(got, tx)
@@ -612,6 +618,7 @@ func Test_transactionPool_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -643,6 +650,7 @@ func Test_transactionPool_Count(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -669,6 +677,7 @@ func Test_transactionPool_Size(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -698,6 +707,7 @@ func Test_transactionPool_Start(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -720,6 +730,7 @@ func Test_transactionPool_Stop(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)

@@ -1,7 +1,6 @@
 package transactionpool
 
 import (
-	"fmt"
 	"math"
 	"time"
 
@@ -71,9 +70,8 @@ func (pool *transactionPool) runReorgTxpool(done chan struct{}, reset *txPoolRes
 	if accountCache != nil && reset == nil {
 		addrsNeedTurn = accountCache.flatten()
 	}
-	fmt.Println("runReorgTxpool addrsNeedTurn", addrsNeedTurn)
 	if reset != nil {
-		pool.Reset(reset.oldBlockHead, reset.newBlockHead)
+		pool.reset(reset.oldBlockHead, reset.newBlockHead)
 		// Reset needs turn all addresses to pending
 		addrsNeedTurn = pool.queues.getAllAddress()
 	}
@@ -107,7 +105,7 @@ func (pool *transactionPool) requestTurnToPending(cache *accountCache) chan stru
 	}
 }
 
-func (pool *transactionPool) Reset(oldBlockHead, newBlockHead *tpchaintypes.BlockHead) error {
+func (pool *transactionPool) reset(oldBlockHead, newBlockHead *tpchaintypes.BlockHead) error {
 	defer func(t0 time.Time) {
 		pool.log.Infof("reset cost time: ", time.Since(t0))
 	}(time.Now())

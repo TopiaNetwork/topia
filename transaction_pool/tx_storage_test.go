@@ -12,6 +12,7 @@ import (
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+
 	txpoolmock "github.com/TopiaNetwork/topia/transaction_pool/mock"
 )
 
@@ -19,6 +20,7 @@ func Test_transactionPool_AddLocal(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -44,6 +46,7 @@ func Test_transactionPool_AddRemote(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -69,6 +72,7 @@ func Test_TransactionPool_AddRemotes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -101,6 +105,7 @@ func Test_transactionPool_SaveTxsData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -145,6 +150,7 @@ func Test_transactionPool_LoadTxsData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -164,6 +170,7 @@ func Test_transactionPool_PublishTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)

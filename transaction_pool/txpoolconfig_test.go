@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/TopiaNetwork/topia/codec"
+
 	txpoolmock "github.com/TopiaNetwork/topia/transaction_pool/mock"
 )
 
@@ -14,6 +15,7 @@ func Test_transactionPool_SetTxPoolConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)

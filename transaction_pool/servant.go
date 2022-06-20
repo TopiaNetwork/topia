@@ -162,6 +162,6 @@ func (msgSub *txMessageSubProcessor) Process(ctx context.Context, subMsgTxMessag
 		return err
 	}
 
-	msgSub.txpool.txCache.Add(txId, StateTxAdded)
+	msgSub.txpool.txCache.Add(txId, txpooli.StateTxAdded)
 	return nil
 }

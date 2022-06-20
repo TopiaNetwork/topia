@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"errors"
+	"github.com/TopiaNetwork/topia/transaction_pool/mock"
 	"testing"
 	"time"
 
@@ -19,12 +20,14 @@ func Test_transactionPool_loop_chanRemoveTxHashs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
 	blockService := txpoolmock.NewMockBlockService(ctrl)
 	network := txpoolmock.NewMockNetwork(ctrl)
+
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
@@ -89,12 +92,14 @@ func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
 	blockService := txpoolmock.NewMockBlockService(ctrl)
 	network := txpoolmock.NewMockNetwork(ctrl)
+
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))
@@ -132,6 +137,7 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	defer ctrl.Finish()
 
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -140,6 +146,7 @@ func Test_transactionPool_loop_resetIfNewHead(t *testing.T) {
 	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(OldBlock.Head.Hash)).AnyTimes().Return(OldBlock, nil)
 	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(NewBlock.Head.Hash)).AnyTimes().Return(NewBlock, nil)
 	network := txpoolmock.NewMockNetwork(ctrl)
+
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
@@ -172,12 +179,14 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
 	blockService := txpoolmock.NewMockBlockService(ctrl)
 	network := txpoolmock.NewMockNetwork(ctrl)
+
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
@@ -215,12 +224,14 @@ func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
 	blockService := txpoolmock.NewMockBlockService(ctrl)
 	network := txpoolmock.NewMockNetwork(ctrl)
+
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
@@ -250,12 +261,14 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 	defer ctrl.Finish()
 
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
 	blockService := txpoolmock.NewMockBlockService(ctrl)
 	network := txpoolmock.NewMockNetwork(ctrl)
+
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
@@ -284,6 +297,7 @@ func Test_transactionPool_loop(t *testing.T) {
 	defer ctrl.Finish()
 
 	log := TpiaLog
+
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -292,6 +306,7 @@ func Test_transactionPool_loop(t *testing.T) {
 	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(OldBlock.Head.Hash)).AnyTimes().Return(OldBlock, nil)
 	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(NewBlock.Head.Hash)).AnyTimes().Return(NewBlock, nil)
 	network := txpoolmock.NewMockNetwork(ctrl)
+
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 

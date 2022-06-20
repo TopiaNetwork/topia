@@ -13,6 +13,7 @@ const (
 	PrivateKeyBytes           = 32 //32 bytes
 	SignatureRecoverableBytes = 65 //65 bytes
 	MsgBytes                  = 32 //32 bytes
+	SeedBytes                 = 32 // 32 bytes
 	maxLoopCreateSeckey       = 3
 )
 
@@ -68,6 +69,42 @@ func (c *CryptServiceSecp256) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtyp
 	return seckey[:], pubkey[:], nil
 }
 
+func (c *CryptServiceSecp256) GeneratePriPubKeyBySeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
+	if len(seed) != SeedBytes {
+		return nil, nil, errors.New("seed length incorrect")
+	}
+
+	var seckey [PrivateKeyBytes]byte
+	var pubkey [PublicKeyBytes]byte
+
+	if err := contextRandomize(ctx, seed); err != nil {
+		c.log.Error(err.Error())
+		return nil, nil, err
+	}
+
+	for i := 0; i < maxLoopCreateSeckey; i++ {
+		if err := fillRandom(seckey[:]); err != nil {
+			c.log.Error(err.Error())
+			return nil, nil, err
+		}
+		verifyOK, err := ecSeckeyVerify(ctx, seckey[:])
+		if err != nil {
+			c.log.Error(err.Error())
+			return nil, nil, err
+		}
+		if verifyOK == true {
+			break
+		}
+	}
+
+	pubkey, err := ecPubkeyCreateAndSerialize(ctx, seckey[:])
+	if err != nil {
+		c.log.Error(err.Error())
+		return nil, nil, err
+	}
+	return seckey[:], pubkey[:], nil
+}
+
 func (c *CryptServiceSecp256) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	if len(priKey) != PrivateKeyBytes {
 		return nil, errors.New("secp256 ConvertToPublic input seckey incorrect")
@@ -81,7 +118,8 @@ func (c *CryptServiceSecp256) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcr
 }
 
 func (c *CryptServiceSecp256) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrtypes.Signature, error) {
-	if len(priKey) != PrivateKeyBytes || len(msg) != MsgBytes {
+	signMsg := tpcmm.NewBlake2bHasher(MsgBytes).Compute(string(msg))
+	if len(priKey) != PrivateKeyBytes || len(signMsg) != MsgBytes {
 		return nil, errors.New("secp256 Sign input invalid parameter")
 	}
 
@@ -92,9 +130,14 @@ func (c *CryptServiceSecp256) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpc
 	return serializedSig[:], nil
 }
 
-func (c *CryptServiceSecp256) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error) {
-	if len(pubKey) != PublicKeyBytes || len(msg) != MsgBytes || signData == nil {
+func (c *CryptServiceSecp256) Verify(addr tpcrtypes.Address, msg []byte, signData tpcrtypes.Signature) (bool, error) {
+	if len(msg) != MsgBytes || signData == nil {
 		return false, errors.New("secp256 Verify input invalid parameter")
+	}
+
+	pubKey, err := c.RecoverPublicKey(msg, signData)
+	if err != nil {
+		return false, err
 	}
 
 	retBool, err := ecdsaVerify(ctx, pubKey, signData, msg)
@@ -115,10 +158,17 @@ func (c *CryptServiceSecp256) RecoverPublicKey(msg []byte, signData tpcrtypes.Si
 	return pubkeyArr[:], nil
 }
 
+//func (c *CryptServiceSecp256) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
+//	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_Secp256).Compute(string(pubKey))
+//	if len(addressHash) != tpcrtypes.AddressLen_Secp256 {
+//		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_Secp256)
+//	}
+//	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Secp256, addressHash)
+//}
+
 func (c *CryptServiceSecp256) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_Secp256).Compute(string(pubKey))
-	if len(addressHash) != tpcrtypes.AddressLen_Secp256 {
-		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_Secp256)
+	if len(pubKey) != PublicKeyBytes {
+		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid pubKey: len %d, expected %d", len(pubKey), PublicKeyBytes)
 	}
-	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Secp256, addressHash)
+	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Secp256, pubKey)
 }

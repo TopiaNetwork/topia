@@ -35,9 +35,12 @@ func BenchmarkVerify(b *testing.B) {
 	sig, err := c.Sign(sec, msgArr[:])
 	assert.Equal(b, nil, err, "Sign err")
 
+	addr, err := c.CreateAddress(pub)
+	assert.Nil(b, err, "CreateAddress err")
+
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
-		retBool, err := c.Verify(pub, msgArr[:], sig)
+		retBool, err := c.Verify(addr, msgArr[:], sig)
 		b.StopTimer()
 		assert.Equal(b, true, retBool, "Verify should be true")
 		assert.Equal(b, nil, err, "Verify err")

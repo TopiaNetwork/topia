@@ -1,7 +1,9 @@
 package secp256
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -9,6 +11,17 @@ import (
 func TestGeneratePriPubKey(t *testing.T) {
 	var c CryptServiceSecp256
 	sec, pub, err := c.GeneratePriPubKey()
+	assert.Equal(t, PrivateKeyBytes, len(sec), "Generate seckey length err")
+	assert.Equal(t, PublicKeyBytes, len(pub), "Generate pubkey length err")
+	assert.Equal(t, nil, err, "Generate key err")
+}
+
+func TestGeneratePriPubKeyBySeed(t *testing.T) {
+	var c CryptServiceSecp256
+	seed := make([]byte, SeedBytes)
+	_, err := rand.Read(seed)
+	assert.Equal(t, nil, err, "generate rand num err")
+	sec, pub, err := c.GeneratePriPubKeyBySeed(seed)
 	assert.Equal(t, PrivateKeyBytes, len(sec), "Generate seckey length err")
 	assert.Equal(t, PublicKeyBytes, len(pub), "Generate pubkey length err")
 	assert.Equal(t, nil, err, "Generate key err")
@@ -38,7 +51,10 @@ func TestSignAndVerify(t *testing.T) {
 	sig, err := c.Sign(sec, msgArr[:])
 	assert.Equal(t, nil, err, "Sign err")
 
-	retBool, err := c.Verify(pub, msgArr[:], sig)
+	addr, err := c.CreateAddress(pub)
+	assert.Nil(t, err, "CreateAddress err")
+
+	retBool, err := c.Verify(addr, msgArr[:], sig)
 	assert.Equal(t, true, retBool, "Verify should be true")
 	assert.Equal(t, nil, err, "Verify err")
 }
@@ -100,6 +116,8 @@ func TestCompatibleWithETH(t *testing.T) {
 		}
 	}
 
+	addrs := make([]tpcrtypes.Address, len(secETH))
+
 	for i := range secETH {
 		sign, err := c.Sign(secETH[i], msg[i])
 		assert.Equal(t, nil, err, "ETH sign err")
@@ -107,7 +125,11 @@ func TestCompatibleWithETH(t *testing.T) {
 			assert.Equal(t, sigETH[i][j], sign[j], "ETH sign err")
 		}
 
-		retBool, err := c.Verify(pubETH[i], msg[i], sign)
+		tempAddr, err := c.CreateAddress(pubETH[i])
+		assert.Nil(t, err, "CreateAddress err")
+		addrs[i] = tempAddr
+
+		retBool, err := c.Verify(addrs[i], msg[i], sign)
 		assert.Equal(t, nil, err, "ETH verify err")
 		assert.Equal(t, true, retBool, "ETH verify false")
 

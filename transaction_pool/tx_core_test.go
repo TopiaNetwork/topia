@@ -9,7 +9,8 @@ import (
 
 	"github.com/TopiaNetwork/topia/codec"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	"github.com/TopiaNetwork/topia/transaction_pool/mock"
+	txpoolmock "github.com/TopiaNetwork/topia/transaction_pool/mock"
+
 )
 
 var (
@@ -252,12 +253,13 @@ func Test_transactionPool_AddLocals(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-	stateService := mock.NewMockStateQueryService(ctrl)
+
+	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
 
-	blockService := mock.NewMockBlockService(ctrl)
-	network := mock.NewMockNetwork(ctrl)
+	blockService := txpoolmock.NewMockBlockService(ctrl)
+	network := txpoolmock.NewMockNetwork(ctrl)
 	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	assert.Equal(t, 0, len(pool.queues.getAddrTxListOfCategory(Category1)))

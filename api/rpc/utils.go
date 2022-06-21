@@ -3,6 +3,7 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -76,4 +77,14 @@ func Decode(b []byte) (data []interface{}, err error) {
 		return make([]interface{}, 0), err
 	}
 	return data, nil
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	rpc "github.com/TopiaNetwork/topia/api/rpc"
-	"github.com/TopiaNetwork/topia/api/rpc/example/helloworld/public"
+	"github.com/TopiaNetwork/topia/api/rpc/example/timeout/public"
 	tlog "github.com/TopiaNetwork/topia/log"
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/coocood/freecache"
@@ -35,7 +35,13 @@ func main() {
 
 	srv := rpc.NewServer(addr, rpc.SetAUTH(auth), rpc.SetCache(c), rpc.SetWebsocket(upgrader))
 	var f func(i int, s string, f float64) (res string, e error) = public.MyTest
+	var f1 func(i int, s string, f float64) (res string, e error) = public.MyTestWithSleep
 	e := srv.Register(f, "MyTest", 0x04, 60, 10*time.Second)
+	if e != nil {
+		log.Println(e)
+		return
+	}
+	e = srv.Register(f1, "MyTestWithSleep", 0x04, 60, 10*time.Second)
 	if e != nil {
 		log.Println(e)
 		return

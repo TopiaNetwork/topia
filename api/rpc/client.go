@@ -3,35 +3,84 @@ package rpc
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	tlog "github.com/TopiaNetwork/topia/log"
+	logcomm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/gregjones/httpcache"
-	"github.com/gregjones/httpcache/diskcache"
+)
+
+var (
+	newline = []byte{'\n'}
+	space   = []byte{' '}
 )
 
 type Client struct {
 	addr    string
 	options *ClientOptions
+	logger  tlog.Logger
 }
 
 // NewClient creates a new client
-func NewClient(addr string, options ...ClientOption) *Client {
-	client := &Client{
+func NewClient(addr string, options ...ClientOption) (*Client, error) {
+	logger, err := tlog.CreateMainLogger(logcomm.DebugLevel, tlog.JSONFormat, tlog.StdErrOutput, "")
+	if err != nil {
+		panic(err)
+	}
+	c := &Client{
 		addr:    addr,
 		options: defaultClientOptions(),
+		logger:  logger,
 	}
 	for _, fn := range options {
-		fn(client.options)
+		fn(c.options)
 	}
-	return client
+
+	if c.options.ws != nil {
+		addr := strings.Trim("ws://"+addr+"/websocket", " ")
+		c.options.ws.addr = addr
+		c.options.ws.Run()
+		// c.options.recws.Dial(addr, nil)
+		// go func() {
+		// 	timeSleep := time.Duration(0)
+		// 	timeIncrease := 500 * time.Microsecond
+		// 	for {
+		// 		_, data, err := c.options.recws.ReadMessage()
+		// 		if err != nil {
+		// 			timeSleep := timeSleep + timeIncrease
+		// 			log.Print(err.Error())
+		// 			time.Sleep(timeSleep)
+		// 			continue
+		// 		}
+		// 		message, _ := DecodeMessage(data)
+		// 		receive, ok := c.requestRes[message.RequestId]
+		// 		if !ok {
+		// 			continue
+		// 		}
+		// 		timeSleep = time.Duration(0)
+		// 		receive <- message.Payload
+		// 	}
+		// }()
+
+		// go func() {
+		// 	for {
+		// 		data := <-c.send
+		// 		err := c.options.recws.WriteMessage(1, data)
+		// 		if err!=nil {
+
+		// 		}
+		// 	}
+		// }()
+	}
+
+	return c, nil
 }
 
-func (c *Client) sendPostRetry(postUrl string, reqBody []byte) ([]byte, error) {
+func (c *Client) sendPostRetry(postUrl string, reqBody []byte) (*Message, error) {
 	if c.options.attempts <= 0 {
 		return c.sendPost(postUrl, reqBody)
 	}
@@ -52,11 +101,10 @@ func (c *Client) sendPostRetry(postUrl string, reqBody []byte) ([]byte, error) {
 	return nil, errors.New("SendRetry err:" + errString)
 }
 
-func (c *Client) sendPost(postUrl string, reqBody []byte) ([]byte, error) {
-	diskcache := diskcache.New("data")
+func (c *Client) sendPost(postUrl string, reqBody []byte) (*Message, error) {
 	client := &http.Client{
 		Transport: &httpcache.Transport{
-			Cache:               diskcache,
+			Cache:               c.options.cache,
 			MarkCachedResponses: true,
 			Transport: &http.Transport{
 				Dial: func(netw, addr string) (net.Conn, error) {
@@ -67,6 +115,7 @@ func (c *Client) sendPost(postUrl string, reqBody []byte) ([]byte, error) {
 					_ = conn.SetDeadline(time.Now().Add(c.options.timeout))
 					return conn, nil
 				},
+				TLSClientConfig:       c.options.tlsConfig,
 				ResponseHeaderTimeout: c.options.timeout,
 			},
 		},
@@ -74,38 +123,50 @@ func (c *Client) sendPost(postUrl string, reqBody []byte) ([]byte, error) {
 	requestDo, err := http.NewRequest("POST", postUrl, bytes.NewReader(reqBody))
 	requestDo.Header.Set("Content-Type", "text/xml; charset=UTF-8")
 	if err != nil {
-		log.Printf("NewRequest error: %v", err)
+		c.logger.Infof("NewRequest error: %v", err)
 		return nil, errors.New("httpPost err:" + err.Error())
 	}
 	res, err := client.Do(requestDo)
 	if nil != err {
-		log.Printf("httpPost error: %v, url: %v, params: %v\n", err, postUrl, reqBody)
+		c.logger.Infof("httpPost error: %v, url: %v, params: %v\n", err, postUrl, reqBody)
 		return nil, errors.New("httpPost err:" + err.Error())
 	}
 	defer res.Body.Close()
 
-	data, err := ioutil.ReadAll(res.Body)
+	message, err := IODecodeMessage(res.Body)
 	if nil != err {
-		log.Println("ReadAll err:", err)
-		return nil, errors.New("ReadAll err:" + err.Error())
+		c.logger.Infof("IODecodeMessage err:", err)
+		return nil, errors.New("IODecodeMessage err:" + err.Error())
 	}
-	return data, nil
+	return message, nil
 }
 
-func (c *Client) Call(methodName string, inArgs []interface{}) (res []byte, err error) {
-	requestData := make(map[string]interface{}, 2)
+func (c *Client) Call(methodName string, inArgs []interface{}) (res *Message, err error) {
 	requestId, err := DistributedID()
 	if err != nil {
 		return nil, err
 	}
-	requestData["Id"] = requestId
-	requestData["InArgs"] = inArgs
-	requestData["Auth"] = c.options.AUTH
-	inBuf, err := Encode(requestData)
-	if err != nil {
-		return nil, err
-	}
-	url := strings.Trim(c.addr+"/"+methodName+"/", " ")
-	return c.sendPostRetry(url, inBuf)
-
+	payload, _ := Encode(inArgs)
+	data, _ := EncodeMessage(requestId, methodName, c.options.AUTH, payload)
+	url := strings.Trim("http://"+c.addr+"/"+methodName+"/", " ")
+	return c.sendPostRetry(url, data)
 }
+
+func (c *Client) CallWithWS(methodName string, inArgs []interface{}) (requestId string, res chan []byte, err error) {
+	requestId, err = DistributedID()
+	log.Print(requestId)
+	if err != nil {
+		return "", nil, err
+	}
+	payload, _ := Encode(inArgs)
+	data, _ := EncodeMessage(requestId, methodName, c.options.AUTH, payload)
+	res = make(chan []byte)
+	c.options.ws.requestRes[requestId] = res
+	c.options.ws.send <- data
+	// c.options.recws.WriteMessage(websocket.TextMessage, data)
+	return
+}
+
+// func (c *Client) Test() {
+// 	c.options.recws.Conn.Close()
+// }

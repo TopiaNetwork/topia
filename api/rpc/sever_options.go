@@ -1,43 +1,49 @@
 package rpc
 
 import (
+	"sync"
+	"time"
+
 	"github.com/coocood/freecache"
+	"github.com/gorilla/websocket"
 )
 
 type Options struct {
-	Auth  AuthObject
-	cache *freecache.Cache
+	auth             AuthObject
+	cc               *freecache.Cache
+	upgrader         *websocket.Upgrader
+	websocketServers sync.Map
 }
 
 type Option func(options *Options)
 
 type AuthObject struct {
-	// level => token
-	tokenArr []string
+	// authority => token
+	tokenArr map[byte]string
 }
 
-func NewAuthObject(arr []string) *AuthObject {
+func NewAuthObject(m map[byte]string) *AuthObject {
 	return &AuthObject{
-		tokenArr: arr,
+		tokenArr: m,
 	}
 }
 
-func (auth *AuthObject) Token(level int) (token string, err error) {
-	if level < 0 || level >= len(auth.tokenArr) {
-		err = ErrAuthLevel
+func (auth *AuthObject) Token(authority byte) (token string, err error) {
+	token, ok := auth.tokenArr[authority]
+	if !ok {
+		token = RandStringRunes(10) + time.Stamp
+		auth.tokenArr[authority] = token
 	}
-	token = auth.tokenArr[level]
 	return token, err
 }
 
-func (auth *AuthObject) Level(token string) (level int) {
-	level = 0
-	for i := range auth.tokenArr {
-		if auth.tokenArr[i] == token {
-			level = i
+func (auth *AuthObject) Level(token string) (authority byte) {
+	for k, v := range auth.tokenArr {
+		if token == v {
+			return k
 		}
 	}
-	return
+	return None
 }
 
 func defaultOptions() *Options {
@@ -46,12 +52,18 @@ func defaultOptions() *Options {
 
 func SetAUTH(auth AuthObject) Option {
 	return func(options *Options) {
-		options.Auth = auth
+		options.auth = auth
 	}
 }
 
 func SetCache(cache *freecache.Cache) Option {
 	return func(options *Options) {
-		options.cache = cache
+		options.cc = cache
+	}
+}
+
+func SetWebsocket(upgrader *websocket.Upgrader) Option {
+	return func(options *Options) {
+		options.upgrader = upgrader
 	}
 }

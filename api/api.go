@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/TopiaNetwork/topia/api/rpc"
+	rpc "github.com/TopiaNetwork/topia/api/rpc"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
@@ -9,7 +9,7 @@ import (
 type TPApi struct {
 	log       tplog.Logger
 	level     tplogcmm.LogLevel
-	rpcServer *rpc.RPCServer
+	rpcServer *rpc.Server
 }
 
 func NewTPApi(level tplogcmm.LogLevel, log tplog.Logger) *TPApi {

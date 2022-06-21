@@ -110,12 +110,7 @@ func (txm *TransactionPoolMock) RemoveTxByKey(key txbasic.TxID) error {
 	return nil
 }
 
-func (txm *TransactionPoolMock) Reset(oldHead, newHead *tpchaintypes.BlockHead) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (txm *TransactionPoolMock) Pending() ([]*txbasic.Transaction, error) {
+func (txm *TransactionPoolMock) PickTxs() []*txbasic.Transaction {
 	txm.sync.Lock()
 	defer txm.sync.Unlock()
 
@@ -127,7 +122,7 @@ func (txm *TransactionPoolMock) Pending() ([]*txbasic.Transaction, error) {
 		i++
 	}
 
-	return newTxs, nil
+	return newTxs
 }
 
 func (txm *TransactionPoolMock) processBlockAddedEvent(ctx context.Context, data interface{}) error {
@@ -188,11 +183,6 @@ func (txm *TransactionPoolMock) Start(sysActor *actor.ActorSystem, network tpnet
 	txm.produceTxsTimer(ctx)
 	eventhub.GetEventHubManager().GetEventHub(txm.nodeID).Observe(ctx, eventhub.EventName_BlockAdded, txm.processBlockAddedEvent)
 	return nil
-}
-
-func (txm *TransactionPoolMock) PickTxs() []*txbasic.Transaction {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (txm *TransactionPoolMock) SysShutDown() {

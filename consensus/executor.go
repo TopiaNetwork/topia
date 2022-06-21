@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/consensus/vrf"
 	"sync"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/consensus/vrf"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/execution"
@@ -365,6 +365,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 					e.log.Infof("Prepare timer starts to get max state version: self node %s", e.nodeID)
 					maxStateVersion, err := e.exeScheduler.MaxStateVersion(latestBlock)
 					if err != nil {
+						e.log.Errorf("Can't get max state version: %v, self node %s", err, e.nodeID)
 						return
 					}
 					e.log.Infof("Prepare timer gets max state version: maxStateVersion %d, self node %s", maxStateVersion, e.nodeID)
@@ -487,12 +488,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 }
 
 func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateVersion uint64) error {
-	pendTxs, err := e.txPool.Pending()
-	if err != nil {
-		e.log.Errorf("Can't get pending txs: %v", err)
-		return err
-	}
-
+	pendTxs := e.txPool.PickTxs()
 	if len(pendTxs) == 0 {
 		e.log.Infof("Current pending txs'size 0")
 		return nil
@@ -502,7 +498,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 
 	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
 	if compState == nil {
-		err = fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", stateVersion)
+		err := fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", stateVersion)
 		e.log.Errorf("%v", err)
 		return err
 	}

@@ -92,10 +92,6 @@ func NewFile(block *types.Block) (*FileItem, error) {
 		panic(err)
 	}
 
-	err = NewTransFile(block)
-	if err != nil{
-		panic(err)
-	}
 
 	return &tp, nil
 }
@@ -141,29 +137,29 @@ func NewIndexFile(block *types.Block) ( error) {
 	return nil
 }
 
-func NewTransFile(block *types.Block) ( error) {
-	blockKey := block.GetHead().GetHeight()
-	filepath := strconv.FormatInt(int64(blockKey), 10) + ".trans"
-
-	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
-	file.Write(make([]byte, FILE_SIZE))
-	if err != nil {
-		return err
-	}
-
-	//stat, err := os.Stat(filepath)
-	//if err != nil {
-	//	return nil, err
-	//}
-
-	var tp  = FileItem{
-		Filetype: 2,
-		File:   file,
-		Offset: 0,
-	}
-
-	tp.Writetrans(block)
-
-	return nil
-}
+//func NewTransFile(block *types.Block) ( error) {
+//	blockKey := block.GetHead().GetHeight()
+//	filepath := strconv.FormatInt(int64(blockKey), 10) + ".trans"
+//
+//	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//	file.Write(make([]byte, FILE_SIZE))
+//	if err != nil {
+//		return err
+//	}
+//
+//	//stat, err := os.Stat(filepath)
+//	//if err != nil {
+//	//	return nil, err
+//	//}
+//
+//	var tp  = FileItem{
+//		Filetype: 2,
+//		File:   file,
+//		Offset: 0,
+//	}
+//
+//	tp.Writetrans(block)
+//
+//	return nil
+//}
 

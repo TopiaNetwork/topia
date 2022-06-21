@@ -144,7 +144,7 @@ func TestTopiaFile_Findindex(t *testing.T) {
 		panic(err)
 	}
 
-	var to = TopiaFile{
+	var to = FileItem{
 		1,
 		file,
 		0,
@@ -164,7 +164,7 @@ func TestTopiaFile_Findindex(t *testing.T) {
 //		panic(err)
 //	}
 //
-//	var to = TopiaFile{
+//	var to = FileItem{
 //		1,
 //		file,
 //		1,
@@ -211,7 +211,7 @@ func TestFindBlock(t *testing.T) {
 		panic(err)
 	}
 
-	var to = TopiaFile{
+	var to = FileItem{
 		0,
 		file,
 		0,

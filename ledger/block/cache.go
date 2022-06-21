@@ -7,7 +7,7 @@ import (
 
 )
 
-func (df *TopiaFile) FindBlockInCache(blockNum types.BlockNum) (*types.Block, error) {
+func (df *FileItem) FindBlockInCache(blockNum types.BlockNum) (*types.Block, error) {
 	gc := gcache.New(20).
 		LRU().
 		Build()

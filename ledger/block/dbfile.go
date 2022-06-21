@@ -13,7 +13,12 @@ import (
 
 const FILE_SIZE = 10000 //* 1000
 
+type FileType int8
 
+const (
+	DataFile       FileType = 0
+	IndexFile      FileType = 1
+)
 
 var FileNameOpening = ""
 var Indexoffset = 0
@@ -21,7 +26,7 @@ var Indexoffset = 0
 
 type FileItem struct {
 	//header
-	Filetype int8 //0,data;1,index;2,transactionindex
+	Filetype FileType //0,data;1,index;2,transactionindex
 	File   *os.File
 	Offset int16 //INT64
 }
@@ -78,7 +83,7 @@ func NewFile(block *types.Block) (*FileItem, error) {
 	FileNameOpening = filepath
 
 	tp := FileItem{
-		Filetype: 0,
+		Filetype: DataFile,
 		File:   file,
 		Offset: 0,
 	}
@@ -125,7 +130,7 @@ func NewIndexFile(block *types.Block) ( error) {
 	//}
 
 	var tp  = FileItem{
-		Filetype: 1,
+		Filetype: IndexFile,
 		File:   file,
 		Offset: 0,
 	}

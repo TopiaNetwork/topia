@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"github.com/TopiaNetwork/topia/common"
 
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
@@ -16,7 +17,7 @@ const (
 )
 
 type NodeInactiveState interface {
-	GetNodeInactiveStateRoot() ([]byte, error)
+	GetNodeInactiveRoot() ([]byte, error)
 
 	IsExistInactiveNode(nodeID string) bool
 
@@ -25,6 +26,8 @@ type NodeInactiveState interface {
 	GetInactiveNode(nodeID string) (*common.NodeInfo, error)
 
 	GetInactiveNodesTotalWeight() (uint64, error)
+
+	GetAllInactiveNodes() ([]*common.NodeInfo, error)
 
 	AddInactiveNode(nodeInfo *common.NodeInfo) error
 
@@ -39,14 +42,14 @@ type nodeInactiveState struct {
 	tplgss.StateStore
 }
 
-func NewNodeInactiveState(stateStore tplgss.StateStore) NodeInactiveState {
-	stateStore.AddNamedStateStore(StateStore_Name_NodeInactive)
+func NewNodeInactiveState(stateStore tplgss.StateStore, cacheSize int) NodeInactiveState {
+	stateStore.AddNamedStateStore(StateStore_Name_NodeInactive, cacheSize)
 	return &nodeInactiveState{
 		StateStore: stateStore,
 	}
 }
 
-func (ns *nodeInactiveState) GetNodeInactiveStateRoot() ([]byte, error) {
+func (ns *nodeInactiveState) GetNodeInactiveRoot() ([]byte, error) {
 	return ns.Root(StateStore_Name_NodeInactive)
 }
 
@@ -55,7 +58,7 @@ func (ns *nodeInactiveState) IsExistInactiveNode(nodeID string) bool {
 }
 
 func (ns *nodeInactiveState) GetInactiveNodeIDs() ([]string, error) {
-	totolAEIdsBytes, _, err := ns.GetState(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeIDs_Key))
+	totolAEIdsBytes, err := ns.GetStateData(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeIDs_Key))
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +81,7 @@ func (ns *nodeInactiveState) GetInactiveNode(nodeID string) (*common.NodeInfo, e
 }
 
 func (ns *nodeInactiveState) GetInactiveNodesTotalWeight() (uint64, error) {
-	totalAEWeightBytes, _, err := ns.GetState(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeWeight_Key))
+	totalAEWeightBytes, err := ns.GetStateData(StateStore_Name_NodeInactive, []byte(TotalInactiveNodeWeight_Key))
 	if err != nil {
 		return 0, err
 	}
@@ -88,6 +91,33 @@ func (ns *nodeInactiveState) GetInactiveNodesTotalWeight() (uint64, error) {
 	}
 
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
+}
+
+func (ns *nodeInactiveState) GetAllInactiveNodes() ([]*common.NodeInfo, error) {
+	keys, vals, err := ns.GetAllStateData(StateStore_Name_NodeInactive)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) != len(vals) {
+		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
+	}
+
+	var nodes []*common.NodeInfo
+	for i, val := range vals {
+		if string(keys[i]) == TotalInactiveNodeIDs_Key || string(keys[i]) == TotalInactiveNodeWeight_Key {
+			continue
+		}
+
+		var nodeInfo common.NodeInfo
+		err = json.Unmarshal(val, &nodeInfo)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, &nodeInfo)
+	}
+
+	return nodes, nil
 }
 
 func (ns *nodeInactiveState) AddInactiveNode(nodeInfo *common.NodeInfo) error {

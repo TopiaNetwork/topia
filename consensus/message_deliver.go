@@ -2,9 +2,14 @@ package consensus
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/TopiaNetwork/topia/consensus/vrf"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"go.uber.org/atomic"
+
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
@@ -13,9 +18,9 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/network"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
+	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	"go.uber.org/atomic"
 )
 
 type DeliverStrategy byte
@@ -43,7 +48,9 @@ type messageDeliverI interface {
 
 	deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error)
 
-	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error
+	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage, err error) error
+
+	deliverBestProposeMessage(ctx context.Context, msg *BestProposeMessage) error
 
 	deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error
 
@@ -54,6 +61,8 @@ type messageDeliverI interface {
 	deliverDKGDealMessage(ctx context.Context, nodeID string, msg *DKGDealMessage) error
 
 	deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error
+
+	setEpochService(epService EpochService)
 
 	updateDKGBls(dkgBls DKGBls)
 
@@ -68,6 +77,7 @@ type messageDeliver struct {
 	strategy     DeliverStrategy
 	network      network.Network
 	ledger       ledger.Ledger
+	epochService EpochService
 	marshaler    codec.Marshaler
 	cryptService tpcrt.CryptService
 	dkgBls       DKGBls
@@ -123,21 +133,21 @@ func (md *messageDeliver) deliverSendWithRespCommon(ctx context.Context, protoco
 
 	sendCycleMaxCount := 3
 	for sendCycleMaxCount > 0 {
-		var respData [][]byte
 		sendCycleMaxCount--
 		resps, err := md.network.SendWithResponse(ctx, protocolID, moduleName, csMsgBytes)
 		if err != nil {
 			return nil, err
 		}
-
-		for _, resp := range resps {
-			if resp.Err == nil {
-				respData = append(respData, resp.RespData)
+		_, respBytes, respErrs := tpnetmsg.ParseSendResp(resps)
+		rtnBytes := [][]byte(nil)
+		for i, respErr := range respErrs {
+			if respErr == "" {
+				rtnBytes = append(rtnBytes, respBytes[i])
 			}
 		}
 
-		if len(respData) > 0 {
-			return respData, nil
+		if len(rtnBytes) > 0 {
+			return rtnBytes, nil
 		}
 	}
 
@@ -146,9 +156,6 @@ func (md *messageDeliver) deliverSendWithRespCommon(ctx context.Context, protoco
 }
 
 func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
 	sigData, err := md.cryptService.Sign(md.priKey, msg.TxsData())
 	if err != nil {
 		md.log.Errorf("Can't sign when deliver PreparePackedMessageExe err: %v", err)
@@ -172,11 +179,7 @@ func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, 
 	var peerIDsExecutor []string
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDsExecutor, err = csStateRN.GetActiveExecutorIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
-			return err
-		}
+		peerIDsExecutor = md.epochService.GetActiveExecutorIDs()
 		if len(peerIDsExecutor) == 0 {
 			err := fmt.Errorf("Zero active executor node")
 			md.log.Errorf("%v", err)
@@ -196,9 +199,6 @@ func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, 
 }
 
 func (md *messageDeliver) deliverPreparePackagedMessageExeIndication(ctx context.Context, launcherID string, msg *PreparePackedMessageExeIndication) error {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
 	sigData, err := md.cryptService.Sign(md.priKey, msg.DataBytes())
 	if err != nil {
 		md.log.Errorf("Can't sign when deliver PreparePackedMessageExeIndication err: %v", err)
@@ -235,9 +235,6 @@ func (md *messageDeliver) deliverPreparePackagedMessageExeIndication(ctx context
 }
 
 func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context, msg *PreparePackedMessageProp) error {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
 	sigData, err := md.cryptService.Sign(md.priKey, msg.TxHashsData())
 	if err != nil {
 		md.log.Errorf("Can't sign PreparePackedMessageProp when deliver PreparePackagedMessageProp err: %v", err)
@@ -261,11 +258,7 @@ func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context,
 	var peerIDsProposer []string
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDsProposer, err = csStateRN.GetActiveProposerIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
-			return err
-		}
+		peerIDsProposer = md.epochService.GetActiveProposerIDs()
 		if len(peerIDsProposer) == 0 {
 			err := fmt.Errorf("Zero active proposer node")
 			md.log.Errorf("%v", err)
@@ -285,9 +278,6 @@ func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context,
 }
 
 func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
 	if msg == nil {
 		return errors.New("Nil ProposeMessage for delivering")
 	}
@@ -298,20 +288,11 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 	ctxValidator := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerActiveProposerIDs, err := csStateRN.GetActiveProposerIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
-			return err
-		}
+		peerActiveProposerIDs := md.epochService.GetActiveProposerIDs()
 		peerActiveProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerActiveProposerIDs)
-
 		ctxProposer = context.WithValue(ctxProposer, tpnetcmn.NetContextKey_PeerList, peerActiveProposerIDs)
 
-		peerActiveValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
-			return err
-		}
+		peerActiveValidatorIDs := md.epochService.GetActiveValidatorIDs()
 		ctxValidator = context.WithValue(ctxValidator, tpnetcmn.NetContextKey_PeerList, peerActiveValidatorIDs)
 	}
 
@@ -347,21 +328,13 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 }
 
 func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error) {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RespThreshold, float32(1.0))
 
 	randExecutorID := make([]string, TxsResultValidity_MaxExecutor)
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetActiveExecutorIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
-			return nil, err
-		}
-
+		peerIDs := md.epochService.GetActiveExecutorIDs()
 		randIndexs := tpcmm.GenerateRandomNumber(0, len(peerIDs), TxsResultValidity_MaxExecutor)
 		for i := 0; i < len(randExecutorID); i++ {
 			randExecutorID[i] = peerIDs[randIndexs[i]]
@@ -411,33 +384,101 @@ func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, m
 	return &validateResp, err
 }
 
-func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage) error {
-	msg.Executor = []byte(md.nodeID)
+func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage, err error) error {
+	errRtn := err
+	msgBytes := []byte(nil)
+	defer func() {
+		respData := &tpnetmsg.ResponseData{
+			Data: msgBytes,
+		}
+		if errRtn != nil {
+			respData.ErrMsg = errRtn.Error()
+		}
 
-	sigData, err := md.cryptService.Sign(md.priKey, msg.TxAndResultProofsData())
-	if err != nil {
-		md.log.Errorf("Sign err for execution result validate response msg: %v", err)
-		return err
+		respDataBytes, _ := json.Marshal(&respData)
+		actorCtx.Respond(respDataBytes)
+		md.log.Infof("Successfully deliver result validate resp message: state version %d, self node %s", msg.StateVersion, md.nodeID)
+
+	}()
+
+	if errRtn != nil {
+		return errRtn
 	}
 
+	msg.Executor = []byte(md.nodeID)
+
+	sigData, errRtn := md.cryptService.Sign(md.priKey, msg.TxAndResultProofsData())
+	if errRtn != nil {
+		md.log.Errorf("Sign err for execution result validate response msg: %v", errRtn)
+		return errRtn
+	}
+
+	pubKey, errRtn := md.cryptService.ConvertToPublic(md.priKey)
+	if errRtn != nil {
+		md.log.Errorf("Can't get public key from private key: %v", errRtn)
+		return errRtn
+	}
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
+	msgBytes, errRtn = md.marshaler.Marshal(msg)
+	if errRtn != nil {
+		md.log.Errorf("ExeResultValidateRespMessage marshal err: %v", errRtn)
+		return errRtn
+	}
+
+	return nil
+}
+
+func (md *messageDeliver) deliverBestProposeMessage(ctx context.Context, msg *BestProposeMessage) error {
+	if msg == nil {
+		return errors.New("Nil ProposeMessage for delivering")
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+
+	ctxProposer := ctx
+	ctxValidator := ctx
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerActiveProposerIDs := md.epochService.GetActiveProposerIDs()
+		peerActiveProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerActiveProposerIDs)
+		ctxProposer = context.WithValue(ctxProposer, tpnetcmn.NetContextKey_PeerList, peerActiveProposerIDs)
+
+		peerActiveValidatorIDs := md.epochService.GetActiveValidatorIDs()
+		ctxValidator = context.WithValue(ctxValidator, tpnetcmn.NetContextKey_PeerList, peerActiveValidatorIDs)
+	}
+
+	sigData, err := md.cryptService.Sign(md.priKey, msg.PropMsgData)
+	if err != nil {
+		md.log.Errorf("Sign the best propose msg err: %v", err)
+		return err
+	}
 	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
 	if err != nil {
 		md.log.Errorf("Can't get public key from private key: %v", err)
 		return err
 	}
+
 	msg.Signature = sigData
 	msg.PubKey = pubKey
 	msgBytes, err := md.marshaler.Marshal(msg)
 	if err != nil {
-		md.log.Errorf("ExeResultValidateRespMessage marshal err: %v", err)
+		md.log.Errorf("ProposeMessage marshal err: %v", err)
 		return err
 	}
+	err = md.deliverSendCommon(ctxProposer, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_BestPropose, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send propose message to proposer network failed: err=%v", err)
+		return nil
+	}
 
-	actorCtx.Respond(msgBytes)
+	err = md.deliverSendCommon(ctxValidator, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_BestPropose, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send propose message to validator network failed: err=%v", err)
+	}
 
-	md.log.Infof("Successfully deliver result validate resp message: state version %d, self node %s", msg.StateVersion, md.nodeID)
-
-	return nil
+	return err
 }
 
 func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, error) {
@@ -456,14 +497,14 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 		return "", nil, err
 	}
 
-	selVoteColectors, vrfProof, err := newLeaderSelectorVRF(md.log, md.cryptService).Select(RoleSelector_VoteCollector, 0, md.priKey, csStateRN, 1)
+	selVoteColectors, vrfProof, err := vrf.NewLeaderSelectorVRF(md.log, md.nodeID, md.cryptService).Select(vrf.RoleSelector_VoteCollector, 0, md.priKey, lastBlock, md.epochService, 1)
 	if len(selVoteColectors) != 1 {
 		err := fmt.Errorf("Expect vote collector count 1, got %d", len(selVoteColectors))
 		md.log.Errorf("%v", err)
 		return "", nil, err
 	}
 
-	return selVoteColectors[0].nodeID, vrfProof, err
+	return selVoteColectors[0], vrfProof, err
 }
 
 func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessage, proposer string) error {
@@ -501,9 +542,6 @@ func (md *messageDeliver) deliverVoteMessage(ctx context.Context, msg *VoteMessa
 }
 
 func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitMessage) error {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
 	sigData, err := md.cryptService.Sign(md.priKey, msg.BlockHead)
 	if err != nil {
 		md.log.Errorf("Sign err for commit msg: %v", err)
@@ -525,29 +563,44 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 		return err
 	}
 
+	exeCtx := ctx
+	propCtx := ctx
+	ValCtx := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs, err := csStateRN.GetActiveExecutorIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active executor nodes: err=%v", err)
-			return err
-		}
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+		peerIDs := md.epochService.GetActiveExecutorIDs()
+		exeCtx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+
+		peerProposerIDs := md.epochService.GetActiveProposerIDs()
+		peerProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerProposerIDs)
+		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, peerProposerIDs)
+
+		peerValidatorIDs := md.epochService.GetActiveValidatorIDs()
+		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
 	}
 
-	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = md.deliverSendCommon(ctx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+	exeCtx = context.WithValue(exeCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.deliverSendCommon(exeCtx, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
 	if err != nil {
-		md.log.Errorf("Send propose message to executor network failed: err=%v", err)
+		md.log.Errorf("Send commit message to executor network failed: err=%v", err)
+	}
+
+	propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.deliverSendCommon(propCtx, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send commit message to propose network failed: err=%v", err)
+	}
+
+	ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = md.deliverSendCommon(ValCtx, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send commit message to validate network failed: err=%v", err)
 	}
 
 	return err
 }
 
 func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *DKGPartPubKeyMessage) error {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
 	sigData, err := md.cryptService.Sign(md.priKey, msg.PartPubKey)
 	if err != nil {
 		md.log.Errorf("Sign err for commit msg: %v", err)
@@ -573,19 +626,11 @@ func (md *messageDeliver) deliverDKGPartPubKeyMessage(ctx context.Context, msg *
 	ValCtx := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerProposerIDs, err := csStateRN.GetActiveProposerIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
-			return err
-		}
+		peerProposerIDs := md.epochService.GetActiveProposerIDs()
 		peerProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerProposerIDs)
 		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, peerProposerIDs)
 
-		peerValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
-			return err
-		}
+		peerValidatorIDs := md.epochService.GetActiveValidatorIDs()
 		peerValidatorIDs = tpcmm.RemoveIfExistString(md.nodeID, peerValidatorIDs)
 		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
 	}
@@ -662,9 +707,6 @@ func (md *messageDeliver) deliverDKGDealMessage(ctx context.Context, nodeID stri
 }
 
 func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
 	sigData, err := md.cryptService.Sign(md.priKey, msg.RespData)
 	if err != nil {
 		md.log.Errorf("Sign err for commit msg: %v", err)
@@ -690,21 +732,13 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 	ValCtx := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerProposerIDs, err := csStateRN.GetActiveProposerIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active proposer nodes: err=%v", err)
-			return err
-		}
+		peerProposerIDs := md.epochService.GetActiveProposerIDs()
 		peerProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerProposerIDs)
 		if len(peerProposerIDs) > 0 {
 			propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, peerProposerIDs)
 		}
 
-		peerValidatorIDs, err := csStateRN.GetActiveValidatorIDs()
-		if err != nil {
-			md.log.Errorf("Can't get all active validator nodes: err=%v", err)
-			return err
-		}
+		peerValidatorIDs := md.epochService.GetActiveValidatorIDs()
 		peerValidatorIDs = tpcmm.RemoveIfExistString(md.nodeID, peerValidatorIDs)
 		if len(peerValidatorIDs) > 0 {
 			ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
@@ -728,6 +762,10 @@ func (md *messageDeliver) deliverDKGDealRespMessage(ctx context.Context, msg *DK
 	}
 
 	return err
+}
+
+func (md *messageDeliver) setEpochService(epService EpochService) {
+	md.epochService = epService
 }
 
 func (md *messageDeliver) updateDKGBls(dkgBls DKGBls) {

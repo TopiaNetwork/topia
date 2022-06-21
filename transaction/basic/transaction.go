@@ -82,7 +82,7 @@ func NewTransaction(log tplog.Logger, cryptService tpcrt.CryptService, privKey t
 		panic("Can't convert public key from fromPubKey: " + err.Error())
 	}
 
-	if txCategory == TransactionCategory_Eth && !txFromAddr.IsEth() {
+	if txCategory == TransactionCategory_Eth && !tpcrtypes.IsEth(string(txFromAddr)) {
 		panic("Tx from address is not eth")
 	}
 
@@ -120,9 +120,18 @@ func (m *Transaction) CryptType() (tpcrtypes.CryptType, error) {
 	return tpcrtypes.NewFromBytes(m.Head.FromAddr).CryptType()
 }
 
-func (m *Transaction) HashBytes() ([]byte, error) {
+func (m *Transaction) Bytes() ([]byte, error) {
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 	txBytes, err := marshaler.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return txBytes, nil
+}
+
+func (m *Transaction) HashBytes() ([]byte, error) {
+	txBytes, err := m.Bytes()
 	if err != nil {
 		return nil, err
 	}
@@ -130,6 +139,15 @@ func (m *Transaction) HashBytes() ([]byte, error) {
 	hasher := tpcmm.NewBlake2bHasher(0)
 
 	return hasher.Compute(string(txBytes)), nil
+}
+
+func (m *Transaction) TxID() (TxID, error) {
+	hashBytes, err := m.HashBytes()
+	if err != nil {
+		return "", err
+	}
+
+	return TxID(hex.EncodeToString(hashBytes)), nil
 }
 
 func (m *Transaction) HashHex() (string, error) {

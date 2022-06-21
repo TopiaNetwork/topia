@@ -9,12 +9,19 @@ import "gogo.proto";
 
 //protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.  --gofast_out=. ./block.proto
 
+message ConsensusProof {
+  bytes  ParentBlockHash = 1  [(gogoproto.jsontag) = "parentBlockHash"];
+  uint64 Height          = 2  [(gogoproto.jsontag) = "height"];
+  bytes  AggSign         = 3  [(gogoproto.jsontag) = "aggSign"];
+}
+
+
 message BlockHead {
   bytes  ChainID           = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version           = 2  [(gogoproto.jsontag) = "version"];
   uint64 Height            = 3  [(gogoproto.jsontag) = "height"];
   uint64 Epoch             = 4  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round             = 5  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round             = 5  [(gogoproto.jsontag) = "round"];
   bytes  ParentBlockHash   = 6  [(gogoproto.jsontag) = "parentBlockHash"];
   bytes  Launcher          = 7  [(gogoproto.jsontag) = "launcher"];
   bytes  Proposer          = 8  [(gogoproto.jsontag) = "proposer"];
@@ -26,7 +33,7 @@ message BlockHead {
   uint32 TxCount           = 14 [(gogoproto.jsontag) = "txCount"];
   bytes  TxRoot            = 15 [(gogoproto.jsontag) = "txRoot"];
   bytes  TxResultRoot      = 16 [(gogoproto.jsontag) = "txResultHash"];
-  bytes  StateRoot         = 17 [(gogoproto.jsontag) = "txResultHash"];
+  bytes  StateRoot         = 17 [(gogoproto.jsontag) = "stateRoot"];
   bytes  GasFees           = 18 [(gogoproto.jsontag) = "gasFees"];
   uint64 TimeStamp         = 19 [(gogoproto.jsontag) = "timeStamp"];
   uint64 ElapsedSpan       = 20 [(gogoproto.jsontag) = "elaspedSpan"]; //unit ms
@@ -71,4 +78,14 @@ message BlockResult {
 message PubSubMessageBlockInfo {
   bytes Block       = 1  [(gogoproto.jsontag) = "block"];
   bytes BlockResult = 2  [(gogoproto.jsontag) = "blockResult"];
+}
+
+message ChainMessage {
+  enum Type {
+    Unknown = 0;
+    Tx = 1;
+    BlockInfo = 2;
+  }
+  Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
+  bytes Data = 2  [(gogoproto.jsontag) = "data"];
 }

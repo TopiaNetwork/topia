@@ -10,11 +10,11 @@ import "block/types/proto/block.proto";
 
 message SyncMessage {
   enum SyncMessageType {
-      Unknown = 0;
-      BlockRequest = 1;
-      BlockResponse = 2;
-      StatusRequest = 3;
-      StatusResponse = 4;
+    Unknown = 0;
+    BlockRequest = 1;
+    BlockResponse = 2;
+    StatusRequest = 3;
+    StatusResponse = 4;
   };
 
   SyncMessageType MsgType  = 1  [(gogoproto.jsontag) = "msgType"];
@@ -43,3 +43,6 @@ message StatusResponse {
   uint64 HeightHighest = 1  [(gogoproto.jsontag) = "heightHighest"];
   uint64 HeightLowest = 2  [(gogoproto.jsontag) = "heightLowest"];
 }
+    © 2022 GitHub, Inc.
+    Terms
+    Privacy

@@ -77,18 +77,9 @@ func (txfer *TransactionUniversalTransfer) HashBytes() ([]byte, error) {
 
 func (txfer *TransactionUniversalTransfer) Verify(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) txbasic.VerifyResult {
 	txUniServant := NewTransactionUniversalServant(txServant)
-	txUniData, _ := txfer.DataBytes()
-	txUni := TransactionUniversal{
-		Head: &txfer.TransactionUniversalHead,
-		Data: &TransactionUniversalData{
-			Specification: txUniData,
-		},
-	}
 
-	txUniWithHead := &TransactionUniversalWithHead{
-		TransactionHead:      txfer.TransactionHead,
-		TransactionUniversal: txUni,
-	}
+	txUniData, _ := txfer.DataBytes()
+	txUniWithHead := ContructTransactionUniversalWithHead(&txfer.TransactionHead, &txfer.TransactionUniversalHead, txUniData)
 
 	vR := txUniWithHead.TxUniVerify(ctx, log, nodeID, txServant)
 	switch vR {
@@ -107,6 +98,13 @@ func (txfer *TransactionUniversalTransfer) Verify(ctx context.Context, log tplog
 	return txbasic.VerifyResult_Accept
 }
 
+func (txfer *TransactionUniversalTransfer) Estimate(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) (*big.Int, error) {
+	txUniData, _ := txfer.DataBytes()
+	txUniWithHead := ContructTransactionUniversalWithHead(&txfer.TransactionHead, &txfer.TransactionUniversalHead, txUniData)
+
+	return txUniWithHead.Estimate(ctx, log, nodeID, txServant)
+}
+
 func (txfer *TransactionUniversalTransfer) currencyTransfer(txServant txbasic.TransactionServant) (gasUsed uint64, errMsg string, status TransactionResultUniversal_ResultStatus) {
 	dataBytes, _ := txfer.DataBytes()
 	txUniWithHead := &TransactionUniversalWithHead{
@@ -118,7 +116,7 @@ func (txfer *TransactionUniversalTransfer) currencyTransfer(txServant txbasic.Tr
 			},
 		},
 	}
-	gasUsed = computeBasicGas(txServant.GetGasConfig(), txUniWithHead)
+	gasUsed = computeBasicGas(txServant.GetGasConfig(), txUniWithHead.DataLen())
 	gasVal := tpcmm.SafeMul(gasUsed, txfer.GasPrice)
 
 	fromAcc, err := txServant.GetAccount(tpcrtypes.NewFromBytes(txfer.FromAddr))

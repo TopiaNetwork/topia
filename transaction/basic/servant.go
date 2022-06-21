@@ -1,6 +1,8 @@
 package basic
 
 import (
+	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/common"
 	"math/big"
 
 	"github.com/hashicorp/golang-lru"
@@ -12,7 +14,6 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
 )
@@ -30,13 +31,19 @@ var CurrentTxServantPolicy = TxServantPolicy_WR
 type TransactionServantBaseRead interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() tpnet.NetworkType
+	NetworkType() common.NetworkType
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
 	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
+
+	GetMarshaler() codec.Marshaler
+
+	GetTxPoolSize() int64
+
+	GetLatestBlock() (*tpchaintypes.Block, error)
 }
 
 type TransactionServant interface {
@@ -59,10 +66,15 @@ type TransactionServant interface {
 	UpdateName(addr tpcrtypes.Address, name tpacc.AccountName) error
 }
 
-func NewTransactionServant(chainState statechain.ChainState, accountState stateaccount.AccountState) TransactionServant {
+func NewTransactionServant(chainState statechain.ChainState,
+	accountState stateaccount.AccountState,
+	marshaler codec.Marshaler,
+	txPoolSize func() int64) TransactionServant {
 	return &transactionServant{
 		ChainState:   chainState,
 		AccountState: accountState,
+		marshaler:    marshaler,
+		txPoolSize:   txPoolSize,
 	}
 }
 
@@ -77,6 +89,8 @@ func NewTansactionServantSimulate(tsBaseRead TransactionServantBaseRead) Transac
 type transactionServant struct {
 	statechain.ChainState
 	stateaccount.AccountState
+	marshaler  codec.Marshaler
+	txPoolSize func() int64
 }
 
 type transactionServantSimulate struct {
@@ -94,6 +108,14 @@ func (ts *transactionServant) GetGasConfig() *configuration.GasConfiguration {
 
 func (ts *transactionServant) GetChainConfig() *configuration.ChainConfiguration {
 	return configuration.GetConfiguration().ChainConfig
+}
+
+func (ts *transactionServant) GetMarshaler() codec.Marshaler {
+	return ts.marshaler
+}
+
+func (ts *transactionServant) GetTxPoolSize() int64 {
+	return ts.txPoolSize()
 }
 
 func (ts *transactionServantSimulate) GetCryptService(log tplog.Logger, cryptType tpcrtypes.CryptType) (tpcrt.CryptService, error) {

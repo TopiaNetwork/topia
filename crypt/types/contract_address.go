@@ -3,8 +3,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	tpnet "github.com/TopiaNetwork/topia/network"
-
 	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
@@ -19,10 +17,10 @@ func CreateNativeContractAddress(id uint64) Address {
 	binary.BigEndian.PutUint64(idBytes, id)
 
 	var ntwPrefix string
-	switch tpnet.CurrentNetworkType {
-	case tpnet.NetworkType_Mainnet:
+	switch tpcmm.CurrentNetworkType {
+	case tpcmm.NetworkType_Mainnet:
 		ntwPrefix = MainnetPrefix
-	case tpnet.NetworkType_Testnet:
+	case tpcmm.NetworkType_Testnet:
 		ntwPrefix = TestnetPrefix
 	default:
 		return UndefAddress
@@ -54,4 +52,12 @@ func CreateUserContractAddress(fromAddr Address, nonce uint64) Address {
 	}
 
 	return newAddr
+}
+
+func IsNativeContractAddress(contractAddr Address) bool {
+	if contractAddr == NativeContractAddr_Account {
+		return true
+	}
+
+	return false
 }

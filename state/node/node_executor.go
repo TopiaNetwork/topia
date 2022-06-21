@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"github.com/TopiaNetwork/topia/common"
 
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
@@ -16,7 +17,7 @@ const (
 )
 
 type NodeExecutorState interface {
-	GetNodeExecutorStateRoot() ([]byte, error)
+	GetNodeExecutorRoot() ([]byte, error)
 
 	IsExistActiveExecutor(nodeID string) bool
 
@@ -25,6 +26,8 @@ type NodeExecutorState interface {
 	GetActiveExecutor(nodeID string) (*common.NodeInfo, error)
 
 	GetActiveExecutorsTotalWeight() (uint64, error)
+
+	GetAllActiveExecutors() ([]*common.NodeInfo, error)
 
 	addActiveExecutor(nodeInfo *common.NodeInfo) error
 
@@ -39,14 +42,14 @@ type nodeExecutorState struct {
 	tplgss.StateStore
 }
 
-func NewNodeExecutorState(stateStore tplgss.StateStore) NodeExecutorState {
-	stateStore.AddNamedStateStore(StateStore_Name_Exe)
+func NewNodeExecutorState(stateStore tplgss.StateStore, cacheSize int) NodeExecutorState {
+	stateStore.AddNamedStateStore(StateStore_Name_Exe, cacheSize)
 	return &nodeExecutorState{
 		StateStore: stateStore,
 	}
 }
 
-func (ns *nodeExecutorState) GetNodeExecutorStateRoot() ([]byte, error) {
+func (ns *nodeExecutorState) GetNodeExecutorRoot() ([]byte, error) {
 	return ns.Root(StateStore_Name_Exe)
 }
 
@@ -55,7 +58,7 @@ func (ns *nodeExecutorState) IsExistActiveExecutor(nodeID string) bool {
 }
 
 func (ns *nodeExecutorState) GetActiveExecutorIDs() ([]string, error) {
-	totolAEIdsBytes, _, err := ns.GetState(StateStore_Name_Exe, []byte(TotalActiveExecutorNodeIDs_Key))
+	totolAEIdsBytes, err := ns.GetStateData(StateStore_Name_Exe, []byte(TotalActiveExecutorNodeIDs_Key))
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +81,7 @@ func (ns *nodeExecutorState) GetActiveExecutor(nodeID string) (*common.NodeInfo,
 }
 
 func (ns *nodeExecutorState) GetActiveExecutorsTotalWeight() (uint64, error) {
-	totalAEWeightBytes, _, err := ns.GetState(StateStore_Name_Exe, []byte(TotalActiveExecutorWeight_Key))
+	totalAEWeightBytes, err := ns.GetStateData(StateStore_Name_Exe, []byte(TotalActiveExecutorWeight_Key))
 	if err != nil {
 		return 0, err
 	}
@@ -88,6 +91,33 @@ func (ns *nodeExecutorState) GetActiveExecutorsTotalWeight() (uint64, error) {
 	}
 
 	return binary.BigEndian.Uint64(totalAEWeightBytes), nil
+}
+
+func (ns *nodeExecutorState) GetAllActiveExecutors() ([]*common.NodeInfo, error) {
+	keys, vals, err := ns.GetAllStateData(StateStore_Name_Exe)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) != len(vals) {
+		return nil, fmt.Errorf("Invalid keys' len %d and vals' len %d", len(keys), len(vals))
+	}
+
+	var nodes []*common.NodeInfo
+	for i, val := range vals {
+		if string(keys[i]) == TotalActiveExecutorNodeIDs_Key || string(keys[i]) == TotalActiveExecutorWeight_Key {
+			continue
+		}
+
+		var nodeInfo common.NodeInfo
+		err = json.Unmarshal(val, &nodeInfo)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, &nodeInfo)
+	}
+
+	return nodes, nil
 }
 
 func (ns *nodeExecutorState) addActiveExecutor(nodeInfo *common.NodeInfo) error {

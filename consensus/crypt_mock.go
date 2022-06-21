@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 )
 
@@ -19,6 +18,11 @@ func (cs *CryptServiceMock) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtypes
 	pubKey, priKey, err := ed25519.GenerateKey(rand.Reader)
 
 	return tpcrtypes.PrivateKey(priKey), tpcrtypes.PublicKey(pubKey), err
+}
+
+func (cs *CryptServiceMock) GeneratePriPubKeyWithSeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (cs *CryptServiceMock) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
@@ -43,17 +47,20 @@ func (cs *CryptServiceMock) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrt
 	return signData, nil
 }
 
-func (cs *CryptServiceMock) Verify(pubKey tpcrtypes.PublicKey, msg []byte, signData tpcrtypes.Signature) (bool, error) {
-	edPubKey := ed25519.PublicKey(pubKey)
+func (cs *CryptServiceMock) Verify(addr tpcrtypes.Address, msg []byte, signData tpcrtypes.Signature) (bool, error) {
+	payload, err := addr.Payload()
+	if err != nil {
+		return false, err
+	}
+
+	edPubKey := ed25519.PublicKey(payload)
 
 	return ed25519.Verify(edPubKey, msg, signData), nil
 }
 
 func (cs *CryptServiceMock) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_ED25519).Compute(string(pubKey))
-	if len(addressHash) != tpcrtypes.AddressLen_ED25519 {
-		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_ED25519)
+	if len(pubKey) != tpcrtypes.AddressLen_ED25519 {
+		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid pubKey: len %d, expected %d", len(pubKey), tpcrtypes.AddressLen_ED25519)
 	}
-
-	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Ed25519, addressHash)
+	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Ed25519, pubKey)
 }

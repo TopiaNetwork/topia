@@ -2,15 +2,14 @@ package chain
 
 import (
 	"errors"
-
+	"fmt"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
-const StateStore_Name = "chain"
+const StateStore_Name_Chain = "chain"
 
 const (
 	ChainID_Key           = "chainid"
@@ -26,13 +25,17 @@ type LedgerStateUpdater interface {
 type ChainState interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() tpnet.NetworkType
+	NetworkType() tpcmm.NetworkType
 
 	GetChainRoot() ([]byte, error)
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
 	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
+
+	SetChainID(chainID tpchaintypes.ChainID) error
+
+	SetNetworkType(netType tpcmm.NetworkType) error
 
 	SetLatestBlock(block *tpchaintypes.Block) error
 
@@ -44,8 +47,8 @@ type chainState struct {
 	lgUpdater LedgerStateUpdater
 }
 
-func NewChainStore(stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater) ChainState {
-	stateStore.AddNamedStateStore(StateStore_Name)
+func NewChainStore(stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater, cacheSize int) ChainState {
+	stateStore.AddNamedStateStore(StateStore_Name_Chain, cacheSize)
 	return &chainState{
 		StateStore: stateStore,
 		lgUpdater:  lgUpdater,
@@ -53,29 +56,29 @@ func NewChainStore(stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater) C
 }
 
 func (cs *chainState) ChainID() tpchaintypes.ChainID {
-	chainIDBytes, _, err := cs.GetState(StateStore_Name, []byte(ChainID_Key))
-	if err != nil {
+	chainIDBytes, err := cs.GetStateData(StateStore_Name_Chain, []byte(ChainID_Key))
+	if err != nil || chainIDBytes == nil {
 		return tpchaintypes.ChainID_Empty
 	}
 
 	return tpchaintypes.ChainID(chainIDBytes)
 }
 
-func (cs *chainState) NetworkType() tpnet.NetworkType {
-	netTypeBytes, _, err := cs.GetState(StateStore_Name, []byte(NetworkType_Key))
-	if err != nil {
-		return tpnet.NetworkType_Unknown
+func (cs *chainState) NetworkType() tpcmm.NetworkType {
+	netTypeBytes, err := cs.GetStateData(StateStore_Name_Chain, []byte(NetworkType_Key))
+	if err != nil || netTypeBytes == nil {
+		return tpcmm.NetworkType_Unknown
 	}
 
-	return tpnet.NetworkType(netTypeBytes[0])
+	return tpcmm.NetworkType(netTypeBytes[0])
 }
 
 func (cs *chainState) GetChainRoot() ([]byte, error) {
-	return cs.Root(StateStore_Name)
+	return cs.Root(StateStore_Name_Chain)
 }
 
 func (cs *chainState) GetLatestBlock() (*tpchaintypes.Block, error) {
-	blockBytes, _, err := cs.GetState(StateStore_Name, []byte(LatestBlock_Key))
+	blockBytes, err := cs.GetStateData(StateStore_Name_Chain, []byte(LatestBlock_Key))
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +94,7 @@ func (cs *chainState) GetLatestBlock() (*tpchaintypes.Block, error) {
 }
 
 func (cs *chainState) GetLatestBlockResult() (*tpchaintypes.BlockResult, error) {
-	blockRSBytes, _, err := cs.GetState(StateStore_Name, []byte(LatestBlockResult_Key))
+	blockRSBytes, err := cs.GetStateData(StateStore_Name_Chain, []byte(LatestBlockResult_Key))
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +109,24 @@ func (cs *chainState) GetLatestBlockResult() (*tpchaintypes.BlockResult, error) 
 	return &blockRS, nil
 }
 
+func (cs *chainState) SetChainID(chainID tpchaintypes.ChainID) error {
+	cID := cs.ChainID()
+	if cID != tpchaintypes.ChainID_Empty {
+		return fmt.Errorf("Have set chain id %s", cID)
+	}
+
+	return cs.Put(StateStore_Name_Chain, []byte(ChainID_Key), []byte(chainID))
+}
+
+func (cs *chainState) SetNetworkType(netType tpcmm.NetworkType) error {
+	nType := cs.NetworkType()
+	if nType != tpcmm.NetworkType_Unknown {
+		return fmt.Errorf("Have set net type %s", nType.String())
+	}
+
+	return cs.Put(StateStore_Name_Chain, []byte(ChainID_Key), []byte{byte(netType)})
+}
+
 func (cs *chainState) SetLatestBlock(block *tpchaintypes.Block) error {
 	if block == nil {
 		return errors.New("Nil block")
@@ -117,12 +138,12 @@ func (cs *chainState) SetLatestBlock(block *tpchaintypes.Block) error {
 		return err
 	}
 
-	isExist, _ := cs.Exists(StateStore_Name, []byte(LatestBlock_Key))
+	isExist, _ := cs.Exists(StateStore_Name_Chain, []byte(LatestBlock_Key))
 	if isExist {
-		err = cs.Update(StateStore_Name, []byte(LatestBlock_Key), blkBytes)
+		err = cs.Update(StateStore_Name_Chain, []byte(LatestBlock_Key), blkBytes)
 
 	} else {
-		err = cs.Put(StateStore_Name, []byte(LatestBlock_Key), blkBytes)
+		err = cs.Put(StateStore_Name_Chain, []byte(LatestBlock_Key), blkBytes)
 	}
 
 	if err == nil && block.Head.Height >= 2 {
@@ -143,10 +164,10 @@ func (cs *chainState) SetLatestBlockResult(blockResult *tpchaintypes.BlockResult
 		return err
 	}
 
-	isExist, _ := cs.Exists(StateStore_Name, []byte(LatestBlock_Key))
+	isExist, _ := cs.Exists(StateStore_Name_Chain, []byte(LatestBlock_Key))
 	if isExist {
-		return cs.Update(StateStore_Name, []byte(LatestBlockResult_Key), blkRSBytes)
+		return cs.Update(StateStore_Name_Chain, []byte(LatestBlockResult_Key), blkRSBytes)
 	} else {
-		return cs.Put(StateStore_Name, []byte(LatestBlockResult_Key), blkRSBytes)
+		return cs.Put(StateStore_Name_Chain, []byte(LatestBlockResult_Key), blkRSBytes)
 	}
 }

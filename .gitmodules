@@ -1,3 +1,7 @@
 [submodule "crypt/secp256/secp256k1"]
 	path = crypt/secp256/secp256k1
 	url = https://github.com/bitcoin-core/secp256k1.git
+[submodule "crypt/ed25519/libsodium"]
+	path = crypt/ed25519/libsodium
+	url = https://github.com/TopiaNetwork/libsodium.git
+	branch = forTopia

@@ -2,16 +2,17 @@ package p2p
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/network/message"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/TopiaNetwork/topia/configuration"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
+	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/protocol"
 )
 
@@ -20,11 +21,13 @@ const ticksForAssertEventually = 100 * time.Millisecond
 func TestSend(t *testing.T) {
 	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 
-	p2p1 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
+	netConfig := configuration.GetConfiguration().NetConfig
+
+	p2p1 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
 
 	testLog.Infof("p2p1 id=%s", p2p1.ID().String())
 
-	p2p2 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
+	p2p2 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
 
 	testLog.Infof("p2p2 id=%s", p2p2.ID().String())
 
@@ -40,11 +43,13 @@ func TestSend(t *testing.T) {
 func sendByDHT(t *testing.T, routeStrategy tpnetcmn.RouteStrategy) {
 	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 
-	p2p1 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
+	netConfig := configuration.GetConfiguration().NetConfig
+
+	p2p1 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
 
 	testLog.Infof("p2p1 id=%s", p2p1.ID().String())
 
-	p2p2 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
+	p2p2 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
 
 	testLog.Infof("p2p2 id=%s", p2p2.ID().String())
 
@@ -85,18 +90,20 @@ func TestSendByDHTBucketsWithFactorStrategy(t *testing.T) {
 func TestSendWithMultiProtocols(t *testing.T) {
 	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 
-	p2p1 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
+	netConfig := configuration.GetConfiguration().NetConfig
+
+	p2p1 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
 
 	testLog.Infof("p2p1 id=%s", p2p1.ID().String())
 
-	p2p2 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
+	p2p2 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
 
 	testLog.Infof("p2p2 id=%s", p2p2.ID().String())
 
 	p2p3AvtiveNodes := NewNetworkActiveNodeMock()
 	p2p3AvtiveNodes.addActiveValidator(p2p2.ID().String())
 	p2p3AvtiveNodes.addActiveProposer(p2p1.ID().String())
-	p2p3 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41002", "topia3", p2p3AvtiveNodes)
+	p2p3 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41002", "topia3", p2p3AvtiveNodes)
 
 	testLog.Infof("p2p3 id=%s", p2p2.ID().String())
 
@@ -133,7 +140,7 @@ func TestSendWithMultiProtocols(t *testing.T) {
 	err = p2p1.Send(ctx1, protocol.SyncProtocolID_Msg, "", nil)
 	assert.Equal(t, nil, err)
 
-	err = p2p1.Send(ctx1, protocol.HeatBeatPtotocolID, "", nil)
+	err = p2p1.Send(ctx1, protocol.HeatBeatProtocolID, "", nil)
 	assert.Equal(t, nil, err)
 
 	time.Sleep(30 * time.Second)
@@ -142,11 +149,13 @@ func TestSendWithMultiProtocols(t *testing.T) {
 func TestPubSub(t *testing.T) {
 	testLog, _ := tplog.CreateMainLogger(tplogcmm.DebugLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 
-	p2p1 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
+	netConfig := configuration.GetConfiguration().NetConfig
+
+	p2p1 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41000", "topia1", NewNetworkActiveNodeMock())
 
 	testLog.Infof("p2p1 id=%s", p2p1.ID().String())
 
-	p2p2 := NewP2PService(context.Background(), testLog, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
+	p2p2 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41001", "topia2", NewNetworkActiveNodeMock())
 
 	testLog.Infof("p2p2 id=%s", p2p2.ID().String())
 

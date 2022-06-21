@@ -3,9 +3,15 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
+
+	"github.com/AsynkronIT/protoactor-go/actor"
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -19,16 +25,11 @@ import (
 	"github.com/TopiaNetwork/topia/integration/mock"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
-	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
-	"os"
-	"testing"
-	"time"
-
-	"github.com/AsynkronIT/protoactor-go/actor"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
+	"github.com/TopiaNetwork/topia/state"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -54,7 +55,7 @@ type nodeParams struct {
 	mainLog         tplog.Logger
 	codecType       codec.CodecType
 	network         tpnet.Network
-	txPool          txpool.TransactionPool
+	txPool          txpooli.TransactionPool
 	ledger          ledger.Ledger
 	scheduler       execution.ExecutionScheduler
 	cs              consensus.Consensus
@@ -287,22 +288,29 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		l := createLedger(testMainLog, "./TestConsensus", backend.BackendType_Badger, i, nodeType)
 
-		network := tpnet.NewNetwork(context.Background(), testMainLog, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
+		network := tpnet.NewNetwork(context.Background(), testMainLog, config.NetConfig, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
 
 		txPool := mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
-		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, txPool)
+		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, codec.CodecType_PROTO, txPool)
 
-		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, exeScheduler, config)
+		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
 
-		compState := state.GetStateBuilder().CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
+		cType := state.CompStateBuilderType_Full
+		if nodeType != "executor" {
+			cType = state.CompStateBuilderType_Simple
+			for i := 1; i <= 100; i++ {
+				state.GetStateBuilder(cType).CreateCompositionState(testMainLog, network.ID(), l, uint64(i), "tester")
+			}
+		}
+		compState := state.GetStateBuilder(cType).CreateCompositionState(testMainLog, network.ID(), l, 1, "tester")
 
 		var latestEpochInfo *tpcmm.EpochInfo
 		var latestBlock *tpchaintypes.Block
 		if l.State() == tpcmm.LedgerState_Uninitialized {
-			err = compState.SetLatestEpoch(config.Genesis.Epon)
+			err = compState.SetLatestEpoch(config.Genesis.Epoch)
 			if err != nil {
 				panic("Set latest epoch of genesis error: " + err.Error())
 				compState.Stop()
@@ -322,7 +330,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 				return nil
 			}
 
-			latestEpochInfo = config.Genesis.Epon
+			latestEpochInfo = config.Genesis.Epoch
 			latestBlock = config.Genesis.Block
 
 			compState.AddAccount(tpacc.NativeContractAccount_Account)
@@ -372,7 +380,6 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
 		eventhub.GetEventHubManager().GetEventHub(nParams[i].nodeID).Start(nParams[i].sysActor)
-		nParams[i].chain.Start(nParams[i].sysActor, nParams[i].network)
 		cs := consensus.NewConsensus(
 			nParams[i].chainID,
 			nParams[i].nodeID,
@@ -391,7 +398,10 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 		nParams[i].cs = cs
 		css = append(css, cs)
 
-		nParams[i].txPool.Start(nParams[i].sysActor, nParams[i].network)
+		if nParams[i].nodeType == "executor" {
+			nParams[i].chain.Start(nParams[i].sysActor, nParams[i].network)
+			nParams[i].txPool.Start(nParams[i].sysActor, nParams[i].network)
+		}
 	}
 
 	return css
@@ -399,6 +409,11 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 
 func TestMultiRoleNodes(t *testing.T) {
 	os.RemoveAll("./TestConsensus")
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+		}
+	}()
 
 	waitChan := make(chan struct{})
 
@@ -432,7 +447,7 @@ func TestMultiRoleNodes(t *testing.T) {
 			activeProposers, _ := csStateRN.GetActiveProposerIDs()
 			activeValidators, _ := csStateRN.GetActiveValidatorIDs()
 
-			nodeP.mainLog.Infof("Curent active proposers %v and validators %v", activeProposers, activeValidators)
+			nodeP.mainLog.Infof("Current active proposers %v and validators %v", activeProposers, activeValidators)
 
 			latestEpochInfo, _ := csStateRN.GetLatestEpoch()
 

@@ -129,3 +129,21 @@ func GenerateRandomNumber(start int, end int, count int) []int {
 
 	return nums
 }
+
+func MinUint64(x, y uint64) uint64 {
+	if x > y {
+		return y
+	}
+	return x
+}
+
+func NumberToByte(number interface{}) []byte {
+	buf := bytes.NewBuffer([]byte{})
+	binary.Write(buf, binary.BigEndian, number)
+	return buf.Bytes()
+}
+
+func BytesToNumber(ptr interface{}, b []byte) {
+	buf := bytes.NewBuffer(b)
+	binary.Read(buf, binary.BigEndian, ptr)
+}

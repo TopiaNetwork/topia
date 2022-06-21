@@ -3,16 +3,15 @@ package consensus
 import (
 	"context"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
-	"github.com/TopiaNetwork/topia/state"
 )
 
 type ConsensusHandler interface {
@@ -27,6 +26,8 @@ type ConsensusHandler interface {
 	ProcessPropose(msg *ProposeMessage) error
 
 	ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error
+
+	ProcessBestPropose(msg *BestProposeMessage) error
 
 	ProcessVote(msg *VoteMessage) error
 
@@ -50,6 +51,7 @@ type consensusHandler struct {
 	preprePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
 	preprePackedMsgPropChan     chan *PreparePackedMessageProp
 	proposeMsgChan              chan *ProposeMessage
+	bestProposeMsgChan          chan *BestProposeMessage
 	voteMsgChan                 chan *VoteMessage
 	commitMsgChan               chan *CommitMessage
 	blockAddedEpochCh           chan *tpchaintypes.Block
@@ -61,6 +63,7 @@ type consensusHandler struct {
 	marshaler                   codec.Marshaler
 	deliver                     messageDeliverI
 	exeScheduler                execution.ExecutionScheduler
+	epochService                EpochService
 }
 
 func NewConsensusHandler(log tplog.Logger,
@@ -69,6 +72,7 @@ func NewConsensusHandler(log tplog.Logger,
 	preprePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
 	preprePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
+	bestProposeMsgChan chan *BestProposeMessage,
 	voteMsgChan chan *VoteMessage,
 	commitMsgChan chan *CommitMessage,
 	blockAddedEpochCh chan *tpchaintypes.Block,
@@ -79,7 +83,8 @@ func NewConsensusHandler(log tplog.Logger,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
 	deliver messageDeliverI,
-	exeScheduler execution.ExecutionScheduler) *consensusHandler {
+	exeScheduler execution.ExecutionScheduler,
+	epochService EpochService) *consensusHandler {
 	return &consensusHandler{
 		log:                         log,
 		epochNew:                    epochNew,
@@ -87,6 +92,7 @@ func NewConsensusHandler(log tplog.Logger,
 		preprePackedMsgExeIndicChan: preprePackedMsgExeIndicChan,
 		preprePackedMsgPropChan:     preprePackedMsgPropChan,
 		proposeMsgChan:              proposeMsgChan,
+		bestProposeMsgChan:          bestProposeMsgChan,
 		voteMsgChan:                 voteMsgChan,
 		commitMsgChan:               commitMsgChan,
 		blockAddedEpochCh:           blockAddedEpochCh,
@@ -98,6 +104,7 @@ func NewConsensusHandler(log tplog.Logger,
 		marshaler:                   marshaler,
 		deliver:                     deliver,
 		exeScheduler:                exeScheduler,
+		epochService:                epochService,
 	}
 }
 
@@ -106,21 +113,13 @@ func (handler *consensusHandler) VerifyBlock(block *tpchaintypes.Block) error {
 }
 
 func (handler *consensusHandler) ProcessPreparePackedMsgExe(msg *PreparePackedMessageExe) error {
-	csStateRN := state.CreateCompositionStateReadonly(handler.log, handler.ledger)
-	defer csStateRN.Stop()
-
 	id := handler.deliver.deliverNetwork().ID()
 
-	activeExeIds, err := csStateRN.GetActiveExecutorIDs()
-	if err != nil {
-		handler.log.Errorf("Can't get active executor ids: %v", err)
-		return err
-	}
-
+	activeExeIds := handler.epochService.GetActiveExecutorIDs()
 	if tpcmm.IsContainString(id, activeExeIds) {
 		handler.preprePackedMsgExeChan <- msg
 	} else {
-		err = fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe", id)
+		err := fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe", id)
 		handler.log.Errorf("%v", err)
 	}
 
@@ -128,21 +127,13 @@ func (handler *consensusHandler) ProcessPreparePackedMsgExe(msg *PreparePackedMe
 }
 
 func (handler *consensusHandler) ProcessPreparePackedMsgExeIndication(msg *PreparePackedMessageExeIndication) error {
-	csStateRN := state.CreateCompositionStateReadonly(handler.log, handler.ledger)
-	defer csStateRN.Stop()
-
 	id := handler.deliver.deliverNetwork().ID()
 
-	activeExeIds, err := csStateRN.GetActiveExecutorIDs()
-	if err != nil {
-		handler.log.Errorf("Can't get active executor ids: %v", err)
-		return err
-	}
-
+	activeExeIds := handler.epochService.GetActiveExecutorIDs()
 	if tpcmm.IsContainString(id, activeExeIds) {
 		handler.preprePackedMsgExeIndicChan <- msg
 	} else {
-		err = fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe indication", id)
+		err := fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe indication", id)
 		handler.log.Errorf("%v", err)
 	}
 
@@ -150,21 +141,13 @@ func (handler *consensusHandler) ProcessPreparePackedMsgExeIndication(msg *Prepa
 }
 
 func (handler *consensusHandler) ProcessPreparePackedMsgProp(msg *PreparePackedMessageProp) error {
-	csStateRN := state.CreateCompositionStateReadonly(handler.log, handler.ledger)
-	defer csStateRN.Stop()
-
 	id := handler.deliver.deliverNetwork().ID()
 
-	activeeProposeIds, err := csStateRN.GetActiveProposerIDs()
-	if err != nil {
-		handler.log.Errorf("Can't get active proposer ids: %v", err)
-		return err
-	}
-
+	activeeProposeIds := handler.epochService.GetActiveProposerIDs()
 	if tpcmm.IsContainString(id, activeeProposeIds) {
 		handler.preprePackedMsgPropChan <- msg
 	} else {
-		err = fmt.Errorf("Node %s not active proposers, so will discard received prepare packed msg prop", id)
+		err := fmt.Errorf("Node %s not active proposers, so will discard received prepare packed msg prop", id)
 		handler.log.Errorf("%v", err)
 	}
 
@@ -195,7 +178,13 @@ func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Conte
 		validateResp.TxResultProofs = txRSProofs
 	}
 
-	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp)
+	return handler.deliver.deliverResultValidateRespMessage(actorCtx, validateResp, err)
+}
+
+func (handler *consensusHandler) ProcessBestPropose(msg *BestProposeMessage) error {
+	handler.bestProposeMsgChan <- msg
+
+	return nil
 }
 
 func (handler *consensusHandler) ProcessVote(msg *VoteMessage) error {

@@ -14,7 +14,7 @@ const (
 )
 
 type EpochState interface {
-	GetRoundStateRoot() ([]byte, error)
+	GetEpochRoot() ([]byte, error)
 
 	GetLatestEpoch() (*tpcmm.EpochInfo, error)
 
@@ -25,19 +25,19 @@ type epochState struct {
 	tplgss.StateStore
 }
 
-func NewRoundState(stateStore tplgss.StateStore) EpochState {
-	stateStore.AddNamedStateStore("epoch")
+func NewRoundState(stateStore tplgss.StateStore, cacheSize int) EpochState {
+	stateStore.AddNamedStateStore(StateStore_Name_Epoch, cacheSize)
 	return &epochState{
 		StateStore: stateStore,
 	}
 }
 
-func (es *epochState) GetRoundStateRoot() ([]byte, error) {
+func (es *epochState) GetEpochRoot() ([]byte, error) {
 	return es.Root(StateStore_Name_Epoch)
 }
 
 func (es *epochState) GetLatestEpoch() (*tpcmm.EpochInfo, error) {
-	latestEpochBytes, _, err := es.GetState(StateStore_Name_Epoch, []byte(LatestEpoch_Key))
+	latestEpochBytes, err := es.GetStateData(StateStore_Name_Epoch, []byte(LatestEpoch_Key))
 	if err != nil || latestEpochBytes == nil {
 		return nil, err
 	}

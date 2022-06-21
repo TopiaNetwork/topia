@@ -12,6 +12,7 @@ type Configuration struct {
 	fsPath      string
 	ChainConfig *ChainConfiguration
 	NodeConfig  *NodeConfiguration
+	NetConfig   *NetworkConfiguration
 	CSConfig    *ConsensusConfiguration
 	GasConfig   *GasConfiguration
 	Genesis     *GenesisData
@@ -20,7 +21,7 @@ type Configuration struct {
 func GetConfiguration() *Configuration {
 	once.Do(func() {
 		genData := new(GenesisData)
-		err := genData.Load("genesis.json")
+		err := genData.Load()
 		if err != nil {
 			curDir, _ := os.Getwd()
 			panic("Load genesis data err: " + err.Error() + ";Current Dir: " + curDir)
@@ -28,6 +29,7 @@ func GetConfiguration() *Configuration {
 		config = &Configuration{
 			ChainConfig: DefChainConfiguration(),
 			NodeConfig:  DefNodeConfiguration(),
+			NetConfig:   DefNetworkConfiguration(),
 			CSConfig:    DefConsensusConfiguration(),
 			GasConfig:   DefGasConfiguration(),
 			Genesis:     genData,

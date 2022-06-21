@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	txservant "github.com/TopiaNetwork/topia/transaction/basic"
 	"sync"
 	"time"
 
@@ -25,7 +24,8 @@ import (
 	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool"
+	txservant "github.com/TopiaNetwork/topia/transaction/basic"
+	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 const (
@@ -44,13 +44,13 @@ const (
 type ExecutionScheduler interface {
 	State() SchedulerState
 
-	MaxStateVersion(log tplog.Logger, ledger ledger.Ledger) (uint64, error)
+	MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error)
 
 	PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error)
 
 	ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error)
 
-	CommitBlock(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockRS *tpchaintypes.BlockResult, latestBlock *tpchaintypes.Block, ledger ledger.Ledger, requester string) error
+	CommitBlock(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockRS *tpchaintypes.BlockResult, latestBlock *tpchaintypes.Block, ledger ledger.Ledger, cType state.CompStateBuilderType, requester string) error
 
 	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, deltaHeight int, marshaler codec.Marshaler, network tpnet.Network, ledger ledger.Ledger) error
 }
@@ -64,11 +64,12 @@ type executionScheduler struct {
 	lastStateVersion *atomic.Uint64
 	exePackedTxsList *list.List
 	config           *configuration.Configuration
-	txPool           txpool.TransactionPool
+	marshaler        codec.Marshaler
+	txPool           txpooli.TransactionPool
 	syncCommitBlock  sync.RWMutex
 }
 
-func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, txPool txpool.TransactionPool) *executionScheduler {
+func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuration.Configuration, codecType codec.CodecType, txPool txpooli.TransactionPool) *executionScheduler {
 	exeLog := tplog.CreateModuleLogger(logcomm.InfoLevel, MOD_NAME, log)
 	return &executionScheduler{
 		nodeID:           nodeID,
@@ -79,6 +80,7 @@ func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuratio
 		schedulerState:   atomic.NewUint32(uint32(SchedulerState_Idle)),
 		exePackedTxsList: list.New(),
 		config:           config,
+		marshaler:        codec.CreateMarshaler(codecType),
 		txPool:           txPool,
 	}
 }
@@ -88,7 +90,8 @@ func (scheduler *executionScheduler) State() SchedulerState {
 }
 
 func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error) {
-	if ok := scheduler.executeMutex.TryLockTimeout(10 * time.Second); !ok {
+	scheduler.log.Infof("Scheduler try to fetch the execution lock: state version %d, self node %s", txPacked.StateVersion, scheduler.nodeID)
+	if ok := scheduler.executeMutex.TryLockTimeout(60 * time.Second); !ok {
 		err := fmt.Errorf("A packedTxs is executing, try later again")
 		scheduler.log.Errorf("%v", err)
 		return nil, err
@@ -98,8 +101,12 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 	scheduler.schedulerState.Store(uint32(SchedulerState_Executing))
 	defer scheduler.schedulerState.Store(uint32(SchedulerState_Idle))
 
+	scheduler.log.Infof("Scheduler try to fetch the comp state lock: state version %d, self node %s", txPacked.StateVersion, scheduler.nodeID)
+
 	compState.Lock()
 	defer compState.Unlock()
+
+	scheduler.log.Infof("Scheduler begin to execute: state version %d, self node %s，txs'len %d", txPacked.StateVersion, scheduler.nodeID, scheduler.exePackedTxsList.Len())
 
 	if scheduler.exePackedTxsList.Len() != 0 {
 		exeTxsItem := scheduler.exePackedTxsList.Front()
@@ -131,7 +138,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 
 	exePackedTxs := newExecutionPackedTxs(scheduler.nodeID, txPacked, compState)
 
-	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txservant.NewTransactionServant(compState, compState))
+	packedTxsRS, err := exePackedTxs.Execute(scheduler.log, ctx, txservant.NewTransactionServant(compState, compState, scheduler.marshaler, scheduler.txPool.Size))
 	if err == nil {
 		compState.UpdateCompSState(state.CompSState_Normal)
 		scheduler.lastStateVersion.Store(txPacked.StateVersion)
@@ -139,8 +146,8 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 		scheduler.exePackedTxsList.PushBack(exePackedTxs)
 
 		for _, tx := range txPacked.TxList {
-			txHash, _ := tx.HashHex()
-			scheduler.txPool.RemoveTxByKey(txHash)
+			txID, _ := tx.TxID()
+			scheduler.txPool.RemoveTxByKey(txID)
 		}
 
 		if scheduler.exePackedTxsList.Len() >= int(scheduler.config.CSConfig.MaxPrepareMsgCache) {
@@ -160,23 +167,18 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 	return nil, err
 }
 
-func (scheduler *executionScheduler) MaxStateVersion(log tplog.Logger, ledger ledger.Ledger) (uint64, error) {
+func (scheduler *executionScheduler) MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error) {
 	scheduler.executeMutex.RLock()
 	defer scheduler.executeMutex.RUnlock()
-
-	compStatRN := state.CreateCompositionStateReadonly(log, ledger)
-	defer compStatRN.Stop()
-
-	latestBlock, err := compStatRN.GetLatestBlock()
-	if err != nil {
-		scheduler.log.Errorf("Can't get the latest block: %v", err)
-		return 0, nil
-	}
 
 	maxStateVersion := latestBlock.Head.Height
 
 	if scheduler.exePackedTxsList.Len() > 0 {
 		exeTxsL := scheduler.exePackedTxsList.Back().Value.(*executionPackedTxs)
+		if latestBlock.Head.Height > exeTxsL.StateVersion() {
+			scheduler.log.Warnf("The latest height %d bigger than the latest state version %d", latestBlock.Head.Height, exeTxsL.StateVersion())
+			return maxStateVersion, nil
+		}
 		maxStateVersion = exeTxsL.StateVersion()
 	}
 
@@ -266,7 +268,7 @@ func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler code
 		Version: blockHead.Version,
 	}
 	for i := 0; i < len(packedTxs.TxList); i++ {
-		txBytes, _ := packedTxs.TxList[i].HashBytes()
+		txBytes, _ := packedTxs.TxList[i].Bytes()
 		blockData.Txs = append(blockData.Txs, txBytes)
 	}
 
@@ -317,34 +319,47 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 	blockRS *tpchaintypes.BlockResult,
 	latestBlock *tpchaintypes.Block,
 	ledger ledger.Ledger,
+	cType state.CompStateBuilderType,
 	requester string) error {
+	scheduler.log.Infof("Enter CommitBlock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	scheduler.syncCommitBlock.Lock()
 	defer scheduler.syncCommitBlock.Unlock()
 
-	compState := state.GetStateBuilder().CreateCompositionState(scheduler.log, scheduler.nodeID, ledger, stateVersion, requester)
+	scheduler.log.Infof("CommitBlock gets lock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
+	compState := state.GetStateBuilder(cType).CreateCompositionState(scheduler.log, scheduler.nodeID, ledger, stateVersion, requester)
 	if compState == nil {
 		err := fmt.Errorf("Nil csState and can't commit block whose height %d, latest block height %d, self node %s", block.Head.Height, latestBlock.Head.Height, scheduler.nodeID)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock gets compState: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	compState.Lock()
 	defer compState.Unlock()
+
+	scheduler.log.Infof("CommitBlock gets compState lock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	err := compState.SetLatestBlock(block)
 	if err != nil {
 		scheduler.log.Errorf("Set latest block err when CommitBlock: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock set latest block: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	err = compState.SetLatestBlockResult(blockRS)
 	if err != nil {
 		scheduler.log.Errorf("Set latest block result err when CommitBlock: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock set latest block result: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	latestEpoch, err := compState.GetLatestEpoch()
 	if err != nil {
 		scheduler.log.Errorf("Can't get latest epoch error: %v", err)
 		return err
 	}
+	scheduler.log.Infof("CommitBlock get latest epoch: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	var newEpoch *tpcmm.EpochInfo
 	deltaH := int(block.Head.Height) - int(latestEpoch.StartHeight)
@@ -361,11 +376,13 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 		}
 	}
 
+	scheduler.log.Infof("CommitBlock begins committing: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 	errCMMState := compState.Commit()
 	if errCMMState != nil {
 		scheduler.log.Errorf("Commit state version %d err: %v", compState.StateVersion(), errCMMState)
 		return errCMMState
 	}
+	scheduler.log.Infof("CommitBlock finished committing: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	/*ToDo Save new block and block result to block store
 	errCMMBlock := ledger.GetBlockStore().CommitBlock(block)
@@ -376,19 +393,9 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 	}
 	*/
 
+	scheduler.log.Infof("CommitBlock begins updating comp state: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
+
 	compState.UpdateCompSState(state.CompSState_Commited)
-
-	if stateVersion == 3 {
-		csStateRN := state.CreateCompositionStateReadonly(scheduler.log, ledger)
-		latestBlock, err := csStateRN.GetLatestBlock()
-		if err != nil {
-			err = fmt.Errorf("Can't get the latest block: %v", err)
-			csStateRN.Stop()
-		}
-		csStateRN.Stop()
-
-		scheduler.log.Infof("latest block %d", latestBlock.Head.Height)
-	}
 
 	scheduler.log.Infof("CompositionState changes to commited: state version %d, height %d, by %s, self node %s", compState.StateVersion(), block.Head.Height, requester, scheduler.nodeID)
 
@@ -408,11 +415,13 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 	marshaler codec.Marshaler,
 	network tpnet.Network,
 	ledger ledger.Ledger) error {
-	if ok := scheduler.executeMutex.TryLockTimeout(1 * time.Second); !ok {
-		err := fmt.Errorf("A packedTxs is commiting, try later again")
-		scheduler.log.Errorf("%v", err)
-		return err
-	}
+	/*
+		if ok := scheduler.executeMutex.TryLockTimeout(60 * time.Second); !ok {
+			err := fmt.Errorf("A packedTxs is commiting, try later again")
+			scheduler.log.Errorf("%v", err)
+			return err
+		}*/
+	scheduler.executeMutex.Lock()
 	defer scheduler.executeMutex.Unlock()
 
 	scheduler.schedulerState.Store(uint32(SchedulerState_Commiting))
@@ -467,7 +476,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 			return err
 		}
 
-		err = scheduler.CommitBlock(ctx, stateVersion, block, blockRS, latestBlock, ledger, "CommitPackedTx")
+		err = scheduler.CommitBlock(ctx, stateVersion, block, blockRS, latestBlock, ledger, state.CompStateBuilderType_Full, "CommitPackedTx")
 		if err != nil {
 			scheduler.log.Errorf("CommitBlock err: %v, stateVersion=%d, self node %s", err, stateVersion, scheduler.nodeID)
 			return err
@@ -495,8 +504,18 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 			return err
 		}
 
+		chainMsg := &tpchaintypes.ChainMessage{
+			MsgType: tpchaintypes.ChainMessage_BlockInfo,
+			Data:    pubsubBlockInfoBytes,
+		}
+		chainMsgBytes, err := marshaler.Marshal(chainMsg)
+		if err != nil {
+			scheduler.log.Errorf("Marshal chain msg err: stateVersion=%d, err=%v", stateVersion, err)
+			return err
+		}
+
 		go func() {
-			err := network.Publish(ctx, []string{tpchaintypes.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, pubsubBlockInfoBytes)
+			err := network.Publish(ctx, []string{tpchaintypes.MOD_NAME}, tpnetprotoc.PubSubProtocolID_BlockInfo, chainMsgBytes)
 			if err != nil {
 				scheduler.log.Errorf("Publish block info err: stateVersion=%d, err=%v", stateVersion, err)
 			}

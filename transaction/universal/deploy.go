@@ -3,6 +3,7 @@ package universal
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -66,18 +67,9 @@ func (txdp *TransactionUniversalDeploy) HashBytes() ([]byte, error) {
 
 func (txdp *TransactionUniversalDeploy) Verify(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) txbasic.VerifyResult {
 	txUniServant := NewTransactionUniversalServant(txServant)
-	txUniData, _ := txdp.DataBytes()
-	txUni := TransactionUniversal{
-		Head: &txdp.TransactionUniversalHead,
-		Data: &TransactionUniversalData{
-			Specification: txUniData,
-		},
-	}
 
-	txUniWithHead := &TransactionUniversalWithHead{
-		TransactionHead:      txdp.TransactionHead,
-		TransactionUniversal: txUni,
-	}
+	txUniData, _ := txdp.DataBytes()
+	txUniWithHead := ContructTransactionUniversalWithHead(&txdp.TransactionHead, &txdp.TransactionUniversalHead, txUniData)
 
 	vR := txUniWithHead.TxUniVerify(ctx, log, nodeID, txServant)
 	switch vR {
@@ -96,6 +88,13 @@ func (txdp *TransactionUniversalDeploy) Verify(ctx context.Context, log tplog.Lo
 	return txbasic.VerifyResult_Accept
 }
 
+func (txdp *TransactionUniversalDeploy) Estimate(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) (*big.Int, error) {
+	txUniData, _ := txdp.DataBytes()
+	txUniWithHead := ContructTransactionUniversalWithHead(&txdp.TransactionHead, &txdp.TransactionUniversalHead, txUniData)
+
+	return txUniWithHead.Estimate(ctx, log, nodeID, txServant)
+}
+
 func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) *txbasic.TransactionResult {
 	vmServant := tpvmmservice.NewVMServant(txServant, txServant.GetGasConfig().MaxGasEachBlock)
 	vmContext := &tpvmmservice.VMContext{
@@ -105,7 +104,9 @@ func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.L
 		Code:      txdp.Code,
 	}
 
-	gasUsed := uint64(0)
+	txUniData, _ := txdp.DataBytes()
+	gasUsed := computeBasicGas(txServant.GetGasConfig(), uint64(len(txUniData)))
+
 	errMsg := ""
 	status := TransactionResultUniversal_Err
 	vmResult, err := tpvm.GetVMFactory().GetVM(tpvmtype.VMType_TVM).DeployContract(vmContext)
@@ -117,7 +118,6 @@ func (txdp *TransactionUniversalDeploy) Execute(ctx context.Context, log tplog.L
 	}
 
 	status = TransactionResultUniversal_OK
-	gasUsed = vmResult.GasUsed
 
 	txHashBytes, _ := txdp.HashBytes()
 	txUniRS := &TransactionResultUniversal{

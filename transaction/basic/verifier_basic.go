@@ -3,10 +3,10 @@ package basic
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	tpcmm "github.com/TopiaNetwork/topia/common"
+
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 type VerifyResult byte
@@ -38,18 +38,12 @@ func TransactionFromAddressVerifier() TransactionVerifier {
 		tx := txI.(*TransactionHead)
 		fromAddr := tpcrtypes.NewFromBytes(tx.FromAddr)
 
-		fEth := fromAddr.IsEth()
+		fEth := tpcrtypes.IsEth(string(fromAddr))
 
 		if fEth && string(tx.Category) == TransactionCategory_Eth {
 			return VerifyResult_Accept
 		} else if !fEth {
-			cryType, err := fromAddr.CryptType()
-			if err != nil {
-				log.Errorf("Can't get from address type: %v", err)
-				return VerifyResult_Reject
-			}
-
-			if isValid, _ := fromAddr.IsValid(tpnet.CurrentNetworkType, cryType); !isValid {
+			if isValid := fromAddr.IsValid(tpcmm.CurrentNetworkType); !isValid {
 				log.Errorf("Invalid from address: %v", tx.FromAddr)
 				return VerifyResult_Reject
 			}
@@ -73,14 +67,7 @@ func TransactionSignatureVerifier() TransactionVerifier {
 		}
 
 		cryService, _ := txServant.GetCryptService(log, cryType)
-
-		var fromSign tpcrtypes.SignatureInfo
-		err = json.Unmarshal(tx.Head.Signature, &fromSign)
-		if err != nil {
-			log.Errorf("Can't unmarshal tx signature: %v", err)
-			return VerifyResult_Reject
-		}
-		if ok, err := cryService.Verify(fromSign.PublicKey, tx.Data.Specification, fromSign.SignData); !ok {
+		if ok, err := cryService.Verify(tpcrtypes.Address(tx.Head.FromAddr), tx.Data.Specification, tx.Head.Signature); !ok {
 			log.Errorf("Can't verify tx signature: %v", err)
 			return VerifyResult_Reject
 		}

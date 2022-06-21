@@ -4,15 +4,21 @@ import (
 	"encoding/json"
 	"io/fs"
 	"io/ioutil"
+	"os"
+	"path"
+	"strings"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 )
 
 type GenesisData struct {
-	Epon        *tpcmm.EpochInfo
+	ChainID     tpchaintypes.ChainID
+	NetType     tpcmm.NetworkType
+	Epoch       *tpcmm.EpochInfo
 	Block       *tpchaintypes.Block
 	BlockResult *tpchaintypes.BlockResult
+	GenesisNode []*tpcmm.NodeInfo
 }
 
 func (genesis *GenesisData) Save(fileFullName string) error {
@@ -24,7 +30,11 @@ func (genesis *GenesisData) Save(fileFullName string) error {
 	return ioutil.WriteFile(fileFullName, dataBytes, fs.ModePerm)
 }
 
-func (genesis *GenesisData) Load(fileFullName string) error {
+func (genesis *GenesisData) Load() error {
+	currentDir, _ := os.Getwd()
+	lImdex := strings.LastIndex(currentDir, "topia")
+	fileFullName := currentDir[:lImdex]
+	fileFullName = path.Join(fileFullName, "topia", "configuration", "genesis.json")
 	dataBytes, err := ioutil.ReadFile(fileFullName)
 	if err != nil {
 		return err

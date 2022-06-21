@@ -4,19 +4,25 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	vss "github.com/TopiaNetwork/kyber/v3/share/vss/pedersen"
 	"sync"
 
 	"github.com/TopiaNetwork/kyber/v3"
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	"github.com/TopiaNetwork/kyber/v3/share"
 	dkg "github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
+	vss "github.com/TopiaNetwork/kyber/v3/share/vss/pedersen"
 	"github.com/TopiaNetwork/kyber/v3/sign/bls"
 	"github.com/TopiaNetwork/kyber/v3/sign/tbls"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 
 	tplog "github.com/TopiaNetwork/topia/log"
 )
+
+type TestCacheData struct {
+	pubP kyber.Point
+	msg  []byte
+	sign []byte
+}
 
 type dkgCrypt struct {
 	log tplog.Logger
@@ -246,6 +252,17 @@ func (d *dkgCrypt) Finished() bool {
 	return d.dkGenerator.Certified()
 }
 
+func (d *dkgCrypt) PubKey() ([]byte, error) {
+	dkShare, err := d.dkGenerator.DistKeyShare()
+	if err != nil {
+		return nil, err
+	}
+
+	pubPoly := share.NewPubPoly(d.suite, d.suite.Point().Base(), dkShare.Commitments())
+
+	return pubPoly.Commit().MarshalBinary()
+}
+
 func (d *dkgCrypt) Sign(msg []byte) ([]byte, []byte, error) {
 	if d.dkGenerator == nil {
 		err := errors.New("Current state invalid and can't sign msg")
@@ -291,7 +308,25 @@ func (d *dkgCrypt) Verify(msg, sig []byte) error {
 		return err
 	}
 
-	return bls.Verify(d.suite, dkShare.Public(), msg, sig)
+	s := tbls.SigShare(sig)
+
+	i, err := s.Index()
+	if err != nil {
+		return err
+	}
+
+	return bls.Verify(d.suite, pubPolicy.Eval(i).V, msg, s.Value())
+}
+
+func (d *dkgCrypt) VerifyAgg(msg, sig []byte) error {
+	dkShare, err := d.dkGenerator.DistKeyShare()
+	if err != nil {
+		return err
+	}
+
+	pubPoly := share.NewPubPoly(d.suite, d.suite.Point().Base(), dkShare.Commitments())
+
+	return bls.Verify(d.suite, pubPoly.Commit(), msg, sig)
 }
 
 func (d *dkgCrypt) RecoverSig(msg []byte, sigs [][]byte) ([]byte, error) {

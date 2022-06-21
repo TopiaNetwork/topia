@@ -9,6 +9,13 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	txaction "github.com/TopiaNetwork/topia/transaction/action"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	"math/big"
+)
+
+type TransactionUniversalVersion uint32
+
+const (
+	TransactionUniversalVersion_v1 TransactionUniversalVersion = 1
 )
 
 type TransactionUniversalType uint32
@@ -32,6 +39,20 @@ func NewTransactionUniversalWithHead(txHead *txbasic.TransactionHead, txUni *Tra
 	return &TransactionUniversalWithHead{
 		TransactionHead:      *txHead,
 		TransactionUniversal: *txUni,
+	}
+}
+
+func ContructTransactionUniversalWithHead(txHead *txbasic.TransactionHead, txUniHead *TransactionUniversalHead, txUnidata []byte) *TransactionUniversalWithHead {
+	txUni := TransactionUniversal{
+		Head: txUniHead,
+		Data: &TransactionUniversalData{
+			Specification: txUnidata,
+		},
+	}
+
+	return &TransactionUniversalWithHead{
+		TransactionHead:      *txHead,
+		TransactionUniversal: txUni,
 	}
 }
 
@@ -74,6 +95,14 @@ func (txuni *TransactionUniversalWithHead) TxUniVerify(ctx context.Context, log 
 	return txbasic.VerifyResult_Accept
 }
 
+func (txuni *TransactionUniversalWithHead) Estimate(ctx context.Context, log tplog.Logger, nodeID string, txServant txbasic.TransactionServant) (*big.Int, error) {
+	txUniServant := NewTransactionUniversalServant(txServant)
+
+	gasEstimator, _ := txUniServant.GetGasEstimator()
+
+	return gasEstimator.Estimate(ctx, log, nodeID, txServant, txuni)
+}
+
 func (m *TransactionUniversal) GetSpecificTransactionAction(txHead *txbasic.TransactionHead) txaction.TransactionAction {
 	switch TransactionUniversalType(m.Head.Type) {
 	case TransactionUniversalType_Transfer:
@@ -87,6 +116,27 @@ func (m *TransactionUniversal) GetSpecificTransactionAction(txHead *txbasic.Tran
 		}
 
 		return NewTransactionUniversalTransfer(txHead, m.Head, txUniTrData.TargetAddr, txUniTrData.Targets)
+	case TransactionUniversalType_ContractDeploy:
+		var txUniDPData struct {
+			ContractAddress tpcrtypes.Address
+			Code            []byte
+		}
+		err := json.Unmarshal(m.Data.Specification, &txUniDPData)
+		if err != nil {
+			panic("Unmarshal tx uni data err: " + err.Error())
+		}
+		return NewTransactionUniversalDeploy(txHead, m.Head, txUniDPData.ContractAddress, txUniDPData.Code)
+	case TransactionUniversalType_ContractInvoke:
+		var txUniIVData struct {
+			ContractAddr tpcrtypes.Address
+			Method       string
+			Args         string
+		}
+		err := json.Unmarshal(m.Data.Specification, &txUniIVData)
+		if err != nil {
+			panic("Unmarshal tx uni data err: " + err.Error())
+		}
+		return NewTransactionUniversalInvoke(txHead, m.Head, txUniIVData.ContractAddr, txUniIVData.Method, txUniIVData.Args)
 	default:
 		panic("Invalid tx uni type: " + fmt.Sprintf("%s", TransactionUniversalType(m.Head.Type).String()))
 	}

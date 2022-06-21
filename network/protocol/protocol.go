@@ -25,12 +25,16 @@ const (
 	SyncProtocolID_Msg         = P2PProtocolPrefix + "/sync/msg/0.0.1"
 	PubSubProtocolID_BlockInfo = P2PProtocolPrefix + "/pubsub/blkinfo/0.0.1"
 	PubSubProtocolID_Msgs      = P2PProtocolPrefix + "/pubsub/msgs/0.0.1"
-	HeatBeatPtotocolID         = P2PProtocolPrefix + "/hearbeat/0.0.1"
-	P2PProtocolExecutePrefix   = "/topia/execute"
-	ForwardExecute_Msg         = P2PProtocolExecutePrefix + "/forward/msg/0.0.1"
-	ForwardExecute_SyncMsg     = P2PProtocolExecutePrefix + "/forward/sync/msg/0.0.1"
-	P2PProtocolProposePrefix   = "/topia/propose"
-	ForwardPropose_Msg         = P2PProtocolProposePrefix + "/forward/msg/0.0.1"
-	P2PProtocolValidatePrefix  = "/topia/validate"
-	FrowardValidate_Msg        = P2PProtocolValidatePrefix + "/forward/msg/0.0.1"
+	HeatBeatProtocolID         = P2PProtocolPrefix + "/hearbeat/0.0.1"
+
+	P2PProtocolExecutePrefix = "/topia/execute"
+	ForwardExecute_Msg       = P2PProtocolExecutePrefix + "/forward/msg/0.0.1"
+	ForwardExecute_SyncMsg   = P2PProtocolExecutePrefix + "/forward/sync/msg/0.0.1"
+	ForwardExecute_SyncTx    = P2PProtocolExecutePrefix + "/forward/sync/tx/0.0.1"
+
+	P2PProtocolProposePrefix = "/topia/propose"
+	ForwardPropose_Msg       = P2PProtocolProposePrefix + "/forward/msg/0.0.1"
+
+	P2PProtocolValidatePrefix = "/topia/validate"
+	FrowardValidate_Msg       = P2PProtocolValidatePrefix + "/forward/msg/0.0.1"
 )

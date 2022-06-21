@@ -21,6 +21,7 @@ const (
 	PreparePackedExeIndicChannel_Size = 10
 	PreparePackedPropChannel_Size     = 10
 	ProposeChannel_Size               = 10
+	BestProposeChannel_Size           = 10
 
 	PartPubKeyChannel_Size  = 500
 	DealMSGChannel_Size     = 500
@@ -353,7 +354,9 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 func (ex *dkgExchange) startLoop(ctx context.Context) {
 	ex.log.Info("Start DKG exchange loop")
 	ex.startSendDealLoop(ctx)
+
 	ex.startReceiveDealLoop(ctx)
+
 	ex.startReceiveDealRespLoop(ctx)
 }
 

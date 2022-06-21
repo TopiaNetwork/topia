@@ -1,9 +1,13 @@
 package chain
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	"sync"
+
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	"github.com/TopiaNetwork/topia/configuration"
@@ -12,7 +16,6 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/state"
-	"sync"
 )
 
 type BlockInfoSubProcessor interface {
@@ -23,6 +26,7 @@ type BlockInfoSubProcessor interface {
 type blockInfoSubProcessor struct {
 	log         tplog.Logger
 	nodeID      string
+	cType       state.CompStateBuilderType
 	marshaler   codec.Marshaler
 	ledger      ledger.Ledger
 	scheduler   execution.ExecutionScheduler
@@ -31,9 +35,19 @@ type blockInfoSubProcessor struct {
 }
 
 func NewBlockInfoSubProcessor(log tplog.Logger, nodeID string, marshaler codec.Marshaler, ledger ledger.Ledger, scheduler execution.ExecutionScheduler, config *configuration.Configuration) BlockInfoSubProcessor {
+	csStateRN := state.CreateCompositionStateReadonly(log, ledger)
+	defer csStateRN.Stop()
+
+	isExecutor := csStateRN.IsExistActiveExecutor(nodeID)
+	cType := state.CompStateBuilderType_Full
+	if !isExecutor {
+		cType = state.CompStateBuilderType_Simple
+	}
+
 	return &blockInfoSubProcessor{
 		log:       log,
 		nodeID:    nodeID,
+		cType:     cType,
 		marshaler: marshaler,
 		ledger:    ledger,
 		scheduler: scheduler,
@@ -42,6 +56,23 @@ func NewBlockInfoSubProcessor(log tplog.Logger, nodeID string, marshaler codec.M
 }
 
 func (bsp *blockInfoSubProcessor) validateRemoteBlockInfo(block *tpchaintypes.Block, blockResult *tpchaintypes.BlockResult) tpnetmsg.ValidationResult {
+	txCount := uint64(len(block.Data.Txs))
+	if txCount > bsp.config.ChainConfig.MaxTxCountOfEachBlock {
+		bsp.log.Errorf("Txs count beyond max value of each block: %d, max %d, height %d", txCount, bsp.config.ChainConfig.MaxTxCountOfEachBlock, block.Head.Height)
+		return tpnetmsg.ValidationReject
+	}
+
+	txRoot := txbasic.TxRootByBytes(block.Data.Txs)
+	if bytes.Equal(txRoot, block.Head.TxRoot) {
+		bsp.log.Errorf("Invalid tx root: height %d", block.Head.Height)
+		return tpnetmsg.ValidationReject
+	}
+
+	if blockResult != nil && txCount != uint64(len(blockResult.Data.TxResults)) {
+		bsp.log.Errorf("Invalid tx result: height %d", block.Head.Height)
+		return tpnetmsg.ValidationReject
+	}
+
 	return tpnetmsg.ValidationAccept
 }
 
@@ -71,13 +102,20 @@ func (bsp *blockInfoSubProcessor) checkAndParseSubData(subMsgBlockInfo *tpchaint
 
 func (bsp *blockInfoSubProcessor) Validate(ctx context.Context, isLocal bool, data []byte) tpnetmsg.ValidationResult {
 	if data == nil {
-		err := errors.New("Received blank block info pubsub message")
+		err := errors.New("Chain received blank pubsub data")
 		bsp.log.Errorf("%v", err)
 		return tpnetmsg.ValidationReject
 	}
 
+	var chainMsg tpchaintypes.ChainMessage
+	err := bsp.marshaler.Unmarshal(data, &chainMsg)
+	if err != nil {
+		bsp.log.Errorf("Received invalid chain msg: %v", err)
+		return tpnetmsg.ValidationReject
+	}
+
 	var blockInfo tpchaintypes.PubSubMessageBlockInfo
-	err := bsp.marshaler.Unmarshal(data, &blockInfo)
+	err = bsp.marshaler.Unmarshal(chainMsg.Data, &blockInfo)
 	if err != nil {
 		bsp.log.Errorf("Can't Unmarshal received block info pubsub message: %v", err)
 		return tpnetmsg.ValidationReject
@@ -106,7 +144,7 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 		return err
 	}
 
-	bsp.log.Infof("Process pubsub message: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
+	bsp.log.Infof("Process of pubsub message: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
 
 	csStateRN := state.CreateCompositionStateReadonly(bsp.log, bsp.ledger)
 	latestBlock, err := csStateRN.GetLatestBlock()
@@ -121,11 +159,14 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 		return nil
 	}
 
-	err = bsp.scheduler.CommitBlock(ctx, block.Head.Height, block, blockRS, latestBlock, bsp.ledger, "ChainBlockSubscriber")
+	bsp.log.Infof("Process of pubsub message begins committing block: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
+
+	err = bsp.scheduler.CommitBlock(ctx, block.Head.Height, block, blockRS, latestBlock, bsp.ledger, bsp.cType, "ChainBlockSubscriber")
 	if err != nil {
 		bsp.log.Errorf("Chain block subscriber CommitBlock err: %v, height %d, latest block %d, self node %s", err, block.Head.Height, latestBlock.Head.Height, bsp.nodeID)
 		return err
 	}
+	bsp.log.Infof("Process of pubsub message finishes committing block: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
 
 	return nil
 }

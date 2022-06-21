@@ -2,13 +2,13 @@ package state
 
 import (
 	"crypto/sha256"
-	"github.com/TopiaNetwork/topia/account"
-	"go.uber.org/atomic"
 	"math/big"
 	"sync"
 
 	"github.com/lazyledger/smt"
+	"go.uber.org/atomic"
 
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -16,7 +16,6 @@ import (
 	"github.com/TopiaNetwork/topia/ledger"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 	tplog "github.com/TopiaNetwork/topia/log"
-	tpnet "github.com/TopiaNetwork/topia/network"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
 	staetround "github.com/TopiaNetwork/topia/state/epoch"
@@ -32,19 +31,49 @@ type NodeNetWorkStateWapper interface {
 }
 
 type CompositionStateReadonly interface {
-	GetAccount(addr tpcrtypes.Address) (*account.Account, error)
+	ChainID() tpchaintypes.ChainID
+
+	NetworkType() common.NetworkType
+
+	GetAccountRoot() ([]byte, error)
+
+	GetAccountProof(addr tpcrtypes.Address) ([]byte, error)
+
+	IsAccountExist(addr tpcrtypes.Address) bool
+
+	GetAccount(addr tpcrtypes.Address) (*tpacc.Account, error)
 
 	GetNonce(addr tpcrtypes.Address) (uint64, error)
 
 	GetBalance(addr tpcrtypes.Address, symbol currency.TokenSymbol) (*big.Int, error)
 
-	ChainID() tpchaintypes.ChainID
+	GetAllAccounts() ([]*tpacc.Account, error)
 
-	NetworkType() tpnet.NetworkType
+	GetChainRoot() ([]byte, error)
 
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
 	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
+
+	GetNodeRoot() ([]byte, error)
+
+	GetNodeExecutorRoot() ([]byte, error)
+
+	GetNodeProposerRoot() ([]byte, error)
+
+	GetNodeValidatorRoot() ([]byte, error)
+
+	GetNodeInactiveRoot() ([]byte, error)
+
+	IsNodeExist(nodeID string) bool
+
+	IsExistActiveExecutor(nodeID string) bool
+
+	IsExistActiveProposer(nodeID string) bool
+
+	IsExistActiveValidator(nodeID string) bool
+
+	IsExistInactiveNode(nodeID string) bool
 
 	GetAllConsensusNodeIDs() ([]string, error)
 
@@ -58,6 +87,16 @@ type CompositionStateReadonly interface {
 
 	GetActiveValidatorIDs() ([]string, error)
 
+	GetInactiveNodeIDs() ([]string, error)
+
+	GetAllActiveExecutors() ([]*common.NodeInfo, error)
+
+	GetAllActiveProposers() ([]*common.NodeInfo, error)
+
+	GetAllActiveValidators() ([]*common.NodeInfo, error)
+
+	GetAllInactiveNodes() ([]*common.NodeInfo, error)
+
 	GetNodeWeight(nodeID string) (uint64, error)
 
 	GetDKGPartPubKeysForVerify() (map[string]string, error)
@@ -67,6 +106,8 @@ type CompositionStateReadonly interface {
 	GetActiveProposersTotalWeight() (uint64, error)
 
 	GetActiveValidatorsTotalWeight() (uint64, error)
+
+	GetEpochRoot() ([]byte, error)
 
 	GetLatestEpoch() (*common.EpochInfo, error)
 
@@ -108,6 +149,7 @@ type CompositionState interface {
 	stateaccount.AccountState
 	statechain.ChainState
 	statenode.NodeState
+	statenode.NodeInactiveState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
@@ -173,29 +215,32 @@ func NewNodeNetWorkStateWapper(log tplog.Logger, ledger ledger.Ledger) NodeNetWo
 	}
 }
 
-func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
-	stateStore, _ := ledger.CreateStateStore()
-
-	inactiveState := statenode.NewNodeInactiveState(stateStore)
-	executorState := statenode.NewNodeExecutorState(stateStore)
-	proposerState := statenode.NewNodeProposerState(stateStore)
-	validatorState := statenode.NewNodeValidatorState(stateStore)
-	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
-	compS := &compositionState{
+func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64, stateStore tplgss.StateStore) *compositionState {
+	inactiveState := statenode.NewNodeInactiveState(stateStore, 1024*1024) // 1 Megabyte
+	executorState := statenode.NewNodeExecutorState(stateStore, 2*1024*1024)
+	proposerState := statenode.NewNodeProposerState(stateStore, 2*1024*1024)
+	validatorState := statenode.NewNodeValidatorState(stateStore, 2*1024*1024)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState, 1024*1024)
+	return &compositionState{
 		log:                log,
 		stateVersion:       stateVersion,
 		ledger:             ledger,
 		StateStore:         stateStore,
-		AccountState:       stateaccount.NewAccountState(stateStore),
-		ChainState:         statechain.NewChainStore(stateStore, ledger),
+		AccountState:       stateaccount.NewAccountState(stateStore, 1024*1024),
+		ChainState:         statechain.NewChainStore(stateStore, ledger, 1024*1024),
 		NodeState:          nodeState,
 		NodeInactiveState:  inactiveState,
 		NodeExecutorState:  executorState,
 		NodeProposerState:  proposerState,
 		NodeValidatorState: validatorState,
-		EpochState:         staetround.NewRoundState(stateStore),
+		EpochState:         staetround.NewRoundState(stateStore, 1024*1024),
 	}
+}
 
+func createCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64) CompositionState {
+	stateStore, _ := ledger.CreateStateStore()
+
+	compS := createCompositionStateWithStateStore(log, ledger, stateVersion, stateStore)
 	compS.state.Store(uint32(CompSState_Idle))
 
 	return compS
@@ -204,48 +249,19 @@ func CreateCompositionState(log tplog.Logger, ledger ledger.Ledger, stateVersion
 func CreateCompositionStateReadonly(log tplog.Logger, ledger ledger.Ledger) CompositionStateReadonly {
 	stateStore, _ := ledger.CreateStateStoreReadonly()
 
-	inactiveState := statenode.NewNodeInactiveState(stateStore)
-	executorState := statenode.NewNodeExecutorState(stateStore)
-	proposerState := statenode.NewNodeProposerState(stateStore)
-	validatorState := statenode.NewNodeValidatorState(stateStore)
-	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
-	return &compositionState{
-		log:                log,
-		ledger:             ledger,
-		StateStore:         stateStore,
-		AccountState:       stateaccount.NewAccountState(stateStore),
-		ChainState:         statechain.NewChainStore(stateStore, ledger),
-		NodeState:          nodeState,
-		NodeInactiveState:  inactiveState,
-		NodeExecutorState:  executorState,
-		NodeProposerState:  proposerState,
-		NodeValidatorState: validatorState,
-		EpochState:         staetround.NewRoundState(stateStore),
-	}
+	return createCompositionStateWithStateStore(log, ledger, 0, stateStore)
+}
+
+func CreateCompositionStateReadonlyAt(log tplog.Logger, ledger ledger.Ledger, version uint64) CompositionStateReadonly {
+	stateStore, _ := ledger.CreateStateStoreReadonlyAt(version)
+
+	return createCompositionStateWithStateStore(log, ledger, 0, stateStore)
 }
 
 func CreateCompositionStateMem(log tplog.Logger, compState CompositionStateReadonly) CompositionState {
 	stateStore, ledger, _ := ledger.CreateStateStoreMem(log)
 
-	inactiveState := statenode.NewNodeInactiveState(stateStore)
-	executorState := statenode.NewNodeExecutorState(stateStore)
-	proposerState := statenode.NewNodeProposerState(stateStore)
-	validatorState := statenode.NewNodeValidatorState(stateStore)
-	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState)
-	compS := &compositionState{
-		log:                log,
-		stateVersion:       1,
-		ledger:             ledger,
-		StateStore:         stateStore,
-		AccountState:       stateaccount.NewAccountState(stateStore),
-		ChainState:         statechain.NewChainStore(stateStore, ledger),
-		NodeState:          nodeState,
-		NodeInactiveState:  inactiveState,
-		NodeExecutorState:  executorState,
-		NodeProposerState:  proposerState,
-		NodeValidatorState: validatorState,
-		EpochState:         staetround.NewRoundState(stateStore),
-	}
+	compS := createCompositionStateWithStateStore(log, ledger, 1, stateStore)
 
 	compS.state.Store(uint32(CompSState_Idle))
 
@@ -280,37 +296,37 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 		return nil, err
 	}
 
-	inactiveRoot, err := cs.GetNodeInactiveStateRoot()
+	inactiveRoot, err := cs.GetNodeInactiveRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get inactive node state root: %v", err)
 		return nil, err
 	}
 
-	nodeRoot, err := cs.GetNodeStateRoot()
+	nodeRoot, err := cs.GetNodeRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get node state root: %v", err)
 		return nil, err
 	}
 
-	nodeExecutorRoot, err := cs.GetNodeExecutorStateRoot()
+	nodeExecutorRoot, err := cs.GetNodeExecutorRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get node executor state root: %v", err)
 		return nil, err
 	}
 
-	nodeProposerRoot, err := cs.GetNodeProposerStateRoot()
+	nodeProposerRoot, err := cs.GetNodeProposerRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get node proposer state root: %v", err)
 		return nil, err
 	}
 
-	nodeValidatorRoot, err := cs.GetNodeValidatorStateRoot()
+	nodeValidatorRoot, err := cs.GetNodeValidatorRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get node validator state root: %v", err)
 		return nil, err
 	}
 
-	roundRoot, err := cs.GetRoundStateRoot()
+	epochRoot, err := cs.GetEpochRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get epoch state root: %v", err)
 		return nil, err
@@ -324,7 +340,7 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 	tree.Update(nodeExecutorRoot, nodeExecutorRoot)
 	tree.Update(nodeProposerRoot, nodeProposerRoot)
 	tree.Update(nodeValidatorRoot, nodeValidatorRoot)
-	tree.Update(roundRoot, roundRoot)
+	tree.Update(epochRoot, epochRoot)
 
 	return tree.Root(), nil
 }

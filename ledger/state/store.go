@@ -29,11 +29,11 @@ type StateStoreComposition struct {
 	proofS    *stateProof
 }
 
-func newStateStoreComposition(log tplog.Logger, backendRW tplgcmm.DBReadWriter, name string) *StateStoreComposition {
+func newStateStoreComposition(log tplog.Logger, backendRW tplgcmm.DBReadWriter, name string, cacheSize int) *StateStoreComposition {
 	backendDBNamed := backend.NewBackendRWPrefixed([]byte(name), backendRW)
 
 	stateDataBackend := backend.NewBackendRWPrefixed([]byte{stateDataPrefix}, backendDBNamed)
-	stateData := newStateData(name, stateDataBackend)
+	stateData := newStateData(name, stateDataBackend, cacheSize)
 
 	smtNodeDataBackend := backend.NewBackendRWPrefixed([]byte{merkleNodePrefix}, backendDBNamed)
 	smtNodeValueBackend := backend.NewBackendRWPrefixed([]byte{merkleValuePrefix}, backendDBNamed)
@@ -47,11 +47,11 @@ func newStateStoreComposition(log tplog.Logger, backendRW tplgcmm.DBReadWriter, 
 	}
 }
 
-func newStateStoreCompositionReadOnly(log tplog.Logger, backendR tplgcmm.DBReader, name string) *StateStoreComposition {
+func newStateStoreCompositionReadOnly(log tplog.Logger, backendR tplgcmm.DBReader, name string, cacheSize int) *StateStoreComposition {
 	backendDBNamed := backend.NewBackendRPrefixed([]byte(name), backendR)
 
 	stateDataBackend := backend.NewBackendRPrefixed([]byte{stateDataPrefix}, backendDBNamed)
-	stateData := newStateDataReadonly(name, stateDataBackend)
+	stateData := newStateDataReadonly(name, stateDataBackend, cacheSize)
 
 	smtNodeDataBackend := backend.NewBackendRPrefixed([]byte{merkleNodePrefix}, backendDBNamed)
 	smtNodeValueBackend := backend.NewBackendRPrefixed([]byte{merkleValuePrefix}, backendDBNamed)
@@ -117,6 +117,10 @@ func (store *StateStoreComposition) Update(key []byte, value []byte) error {
 	return store.Put(key, value)
 }
 
+func (store *StateStoreComposition) GetStateData(key []byte) ([]byte, error) {
+	return store.dataS.Get(key)
+}
+
 func (store *StateStoreComposition) GetState(key []byte) ([]byte, []byte, error) {
 	var rError error
 
@@ -131,6 +135,24 @@ func (store *StateStoreComposition) GetState(key []byte) ([]byte, []byte, error)
 	}
 
 	return value, proof, rError
+}
+
+func (store *StateStoreComposition) GetAllStateData() ([][]byte, [][]byte, error) {
+	var keys [][]byte
+	var values [][]byte
+
+	dataIt, err := store.dataS.Iterator(nil, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer dataIt.Close()
+
+	for dataIt.Next() {
+		keys = append(keys, dataIt.Key())
+		values = append(values, dataIt.Value())
+	}
+
+	return keys, values, err
 }
 
 func (store *StateStoreComposition) GetAllState() ([][]byte, [][]byte, [][]byte, error) {

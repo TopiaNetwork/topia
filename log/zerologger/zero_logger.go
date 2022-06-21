@@ -8,6 +8,10 @@ import (
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 )
 
+func init() {
+	zerolog.TimeFieldFormat = "2006-01-02T15:04:05.000Z07:00"
+}
+
 type ZeroLogger struct {
 	log *zerolog.Logger
 }

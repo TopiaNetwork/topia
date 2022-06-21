@@ -20,7 +20,7 @@ const (
 )
 
 type StateStore interface {
-	AddNamedStateStore(name string) error
+	AddNamedStateStore(name string, cacheSize int) error
 
 	Root(name string) ([]byte, error)
 
@@ -32,7 +32,11 @@ type StateStore interface {
 
 	Update(name string, key []byte, value []byte) error
 
+	GetStateData(name string, key []byte) ([]byte, error)
+
 	GetState(name string, key []byte) ([]byte, []byte, error)
+
+	GetAllStateData(name string) ([][]byte, [][]byte, error)
 
 	GetAllState(name string) ([][]byte, [][]byte, [][]byte, error)
 
@@ -81,7 +85,32 @@ func NewStateStore(log tplog.Logger, backendDB backend.Backend, flag Flag) State
 	}
 }
 
-func (m *stateStore) AddNamedStateStore(name string) error {
+func NewStateStoreAt(log tplog.Logger, backendDB backend.Backend, flag Flag, version uint64) StateStore {
+	if Flag_ReadOnly|Flag_WriteOnly == flag {
+		return &stateStore{
+			log:       log,
+			backend:   backendDB,
+			backendRW: backendDB.ReadWriter(),
+			storeMap:  make(map[string]*StateStoreComposition),
+		}
+	} else if Flag_ReadOnly == flag {
+		backendR, err := backendDB.ReaderAt(version)
+		if err != nil {
+			log.Panicf("%v", err)
+		}
+		return &stateStore{
+			log:      log,
+			backend:  backendDB,
+			backendR: backendR,
+			storeMap: make(map[string]*StateStoreComposition),
+		}
+	} else {
+		log.Panicf("Invalid state store flag")
+		return nil
+	}
+}
+
+func (m *stateStore) AddNamedStateStore(name string, cacheSize int) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -91,9 +120,9 @@ func (m *stateStore) AddNamedStateStore(name string) error {
 
 	var ss *StateStoreComposition
 	if m.backendR != nil {
-		ss = newStateStoreCompositionReadOnly(m.log, m.backendR, name)
+		ss = newStateStoreCompositionReadOnly(m.log, m.backendR, name, cacheSize)
 	} else {
-		ss = newStateStoreComposition(m.log, m.backendRW, name)
+		ss = newStateStoreComposition(m.log, m.backendRW, name, cacheSize)
 	}
 	m.storeMap[name] = ss
 
@@ -163,12 +192,34 @@ func (m *stateStore) Update(name string, key []byte, value []byte) error {
 	return fmt.Errorf("Can't find the responding state store: name=%s", name)
 }
 
+func (m *stateStore) GetStateData(name string, key []byte) ([]byte, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	if ss, ok := m.storeMap[name]; ok {
+		return ss.GetStateData(key)
+	}
+
+	return nil, fmt.Errorf("Can't find the responding state store: name=%s", name)
+}
+
 func (m *stateStore) GetState(name string, key []byte) ([]byte, []byte, error) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
 	if ss, ok := m.storeMap[name]; ok {
 		return ss.GetState(key)
+	}
+
+	return nil, nil, fmt.Errorf("Can't find the responding state store: name=%s", name)
+}
+
+func (m *stateStore) GetAllStateData(name string) ([][]byte, [][]byte, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	if ss, ok := m.storeMap[name]; ok {
+		return ss.GetAllStateData()
 	}
 
 	return nil, nil, fmt.Errorf("Can't find the responding state store: name=%s", name)

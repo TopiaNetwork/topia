@@ -4,8 +4,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 func (pool *transactionPool) loopChanSelect() {
@@ -26,8 +25,9 @@ func (pool *transactionPool) loopChanSelect() {
 func (pool *transactionPool) loopChanRemoveTxHashs() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
-			pool.log.Errorf("chanRemoveTxHashs err:", err, debug.Stack())
+		err := recover()
+		if err != nil {
+			pool.log.Errorf("loopChanRemoveTxHashs err:", err, debug.Stack())
 		}
 	}()
 
@@ -46,8 +46,9 @@ func (pool *transactionPool) loopChanRemoveTxHashs() {
 func (pool *transactionPool) loopSaveAllIfShutDown() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
-			pool.log.Errorf("saveAllIfShutDown err:", err, debug.Stack())
+		err := recover()
+		if err != nil {
+			pool.log.Errorf("loopSaveAllIfShutDown err:", err, debug.Stack())
 		}
 	}()
 
@@ -61,7 +62,7 @@ func (pool *transactionPool) loopSaveAllIfShutDown() {
 			pool.saveAllWhenSysShutDown()
 			return
 		case <-pool.ctx.Done():
-			pool.log.Info("Systemshutdown stopped")
+			pool.log.Info("loopSaveAllIfShutDown stopped")
 			return
 		}
 	}
@@ -71,13 +72,17 @@ func (pool *transactionPool) loopSaveAllIfShutDown() {
 func (pool *transactionPool) loopResetIfBlockAdded() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
+		err := recover()
+		if err != nil {
 			pool.log.Errorf("loopResetIfBlockAdded err:", err, debug.Stack())
 		}
 	}()
-	// Track the previous head headers for transaction reorgs
-	var head = pool.query.CurrentBlock()
 
+	// Track the previous head headers for transaction reorgs
+	head, err := pool.txServant.GetLatestBlock()
+	if err != nil {
+		pool.log.Errorf("loopResetIfBlockAdded get current block err:", err)
+	}
 	for {
 		select {
 		// Handle ChainHeadEvent
@@ -97,7 +102,8 @@ func (pool *transactionPool) loopResetIfBlockAdded() {
 func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
+		err := recover()
+		if err != nil {
 			pool.log.Errorf("removeTxForUptoLifeTime err:", err, debug.Stack())
 		}
 	}()
@@ -109,18 +115,30 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 		select {
 		// Handle inactive account transaction eviction
 		case <-evict.C:
-			f0 := func(address tpcrtypes.Address) bool { return pool.locals.contains(address) }
-			f1 := func(string2 string) time.Duration {
-				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
+			f1 := func(string2 txbasic.TxID) time.Duration {
+				return time.Since(pool.activationIntervals.getTxActivByKey(string2))
 			}
 			time2 := pool.config.LifetimeForTx
-			f2 := func(string2 string) {
+			f2 := func(string2 txbasic.TxID) {
 				pool.RemoveTxByKey(string2)
 			}
-			for category, _ := range pool.queues.getAll() {
-				pool.queues.removeTxForLifeTime(category, f0, f1, time2, f2)
+			f3 := func(string2 txbasic.TxID) uint64 {
+				curheight, err := pool.txServant.CurrentHeight()
+				if err != nil {
+					pool.log.Errorf("get current height error:", err)
+				}
+				txheight := pool.heightIntervals.height[string2]
+				if curheight > txheight {
+					return curheight - txheight
+				}
+				return 0
+			}
+			diffHeight := pool.config.LifeHeight
+			for _, category := range pool.allTxsForLook.getAllCategory() {
+				pool.queues.removeTxForLifeTime(category, pool.config.TxExpiredPolicy, f1, time2, f2, f3, diffHeight)
 
 			}
+
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRemoveTxForUptoLifeTime stopped")
 			return
@@ -131,7 +149,8 @@ func (pool *transactionPool) loopRemoveTxForUptoLifeTime() {
 func (pool *transactionPool) loopRegularSaveLocalTxs() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
+		err := recover()
+		if err != nil {
 			pool.log.Errorf("regularSaveLocalTxs err:", err, debug.Stack())
 		}
 	}()
@@ -144,11 +163,7 @@ func (pool *transactionPool) loopRegularSaveLocalTxs() {
 		select {
 		// Handle local transaction  store
 		case <-stored.C:
-			for category, _ := range pool.allTxsForLook.getAll() {
-				if err := pool.SaveLocalTxs(category); err != nil {
-					pool.log.Warnf("Failed to save local tx ", "err", err)
-				}
-			}
+			pool.SaveTxsData(pool.config.PathTxsStorge)
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRegularSaveLocalTxs stopped")
 			return
@@ -161,7 +176,8 @@ func (pool *transactionPool) loopRegularSaveLocalTxs() {
 func (pool *transactionPool) loopRegularRepublic() {
 	defer pool.wg.Done()
 	defer func() {
-		if err := recover(); err != nil {
+		err := recover()
+		if err != nil {
 			pool.log.Errorf("regularRepublic err:", err, debug.Stack())
 		}
 	}()
@@ -172,15 +188,27 @@ func (pool *transactionPool) loopRegularRepublic() {
 	for {
 		select {
 		case <-republic.C:
-			f1 := func(string2 string) time.Duration {
-				return time.Since(pool.ActivationIntervals.getTxActivByKey(string2))
+			f1 := func(string2 txbasic.TxID) time.Duration {
+				return time.Since(pool.activationIntervals.getTxActivByKey(string2))
 			}
-			time2 := pool.config.DurationForTxRePublic
-			f2 := func(tx *basic.Transaction) {
-				pool.BroadCastTx(tx)
+			time2 := pool.config.TxTTLTimeOfRepublic
+			f2 := func(tx *txbasic.Transaction) {
+				pool.txServant.PublishTx(pool.ctx, tx)
 			}
-			for category, _ := range pool.queues.getAll() {
-				pool.queues.republicTx(category, f1, time2, f2)
+			f3 := func(string2 txbasic.TxID) uint64 {
+				curHeight, err := pool.txServant.CurrentHeight()
+				if err != nil {
+					pool.log.Errorf("get current height error:", err)
+				}
+				txHeight := pool.heightIntervals.getTxHeightByKey(string2)
+				if curHeight > txHeight {
+					return curHeight - txHeight
+				}
+				return 0
+			}
+			diffHeight := pool.config.TxTTLHeightOfRepublic
+			for _, category := range pool.allTxsForLook.getAllCategory() {
+				pool.queues.republicTx(category, TxRepublicTime, f1, time2, f2, f3, diffHeight)
 			}
 		case <-pool.ctx.Done():
 			pool.log.Info("loopRegularRepublic stopped")
@@ -190,17 +218,11 @@ func (pool *transactionPool) loopRegularRepublic() {
 }
 
 func (pool *transactionPool) saveAllWhenSysShutDown() {
-	for category, _ := range pool.allTxsForLook.getAll() {
-		if err := pool.SaveLocalTxs(category); err != nil {
-			pool.log.Warnf("Failed to save local transaction", "err", err)
+	if pool.config.PathTxsStorge != "" {
+		if err := pool.SaveTxsData(pool.config.PathTxsStorge); err != nil {
+			pool.log.Errorf("Failed to save transactions info", "err", err)
 		}
-		//remote txs save
-		if err := pool.SaveRemoteTxs(category); err != nil {
-			pool.log.Warnf("Failed to save remote transaction", "err", err)
-		}
-	}
-	//txPool configs save
-	if err := pool.SaveConfig(); err != nil {
-		pool.log.Warnf("Failed to save transaction pool configs", "err", err)
+	} else {
+		pool.log.Errorf("Failed to save transactions info: config.PathTxsStorge is nil")
 	}
 }

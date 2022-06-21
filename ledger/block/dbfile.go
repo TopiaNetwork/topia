@@ -24,25 +24,27 @@ var FileNameOpening = ""
 var Indexoffset = 0
 var Transoffset = 0
 
-type TopiaFile struct {
+type FileItem struct {
+	//header
 	Filetype int8 //0,data;1,index;2,transactionindex
 	File   *os.File
 	Offset int16 //INT64
 }
 
-type TopiaData struct{
+
+type DataItem struct{
 	version int32
-	offset int16
+	offset int64
 	size int16
 	crc int64
 	data *types.Block
 }
 
 
-type TopiaIndex struct{
+type IndexItem struct{
 	version int16
 	position int16
-	offset int16
+	offset int64
 }
 
 
@@ -50,15 +52,15 @@ type TransIndex struct{
 	Version int16
 	Txid int64
 	BlockHeight int16
-	Offset int16
+	Offset int64
 }
-//func newTopiaFile(basePath string) (*TopiaFile, error) {
+//func newFileItem(basePath string) (*FileItem, error) {
 //	datafile := basePath + string(os.PathSeparator) + DATA_FILE
 //	return newFileImpl(datafile)
 //}
 
 
-func NewFile(block *types.Block) (*TopiaFile, error) {
+func NewFile(block *types.Block) (*FileItem, error) {
 
 	//blockKey,_ := block.HashHex()
 	blockKey := block.GetHead().GetHeight()
@@ -77,7 +79,7 @@ func NewFile(block *types.Block) (*TopiaFile, error) {
 	}
 	FileNameOpening = filepath
 
-	tp := TopiaFile{
+	tp := FileItem{
 		Filetype: 0,
 		File:   file,
 		Offset: 0,
@@ -93,8 +95,20 @@ func NewFile(block *types.Block) (*TopiaFile, error) {
 	return &tp, nil
 }
 
+// transaction to bytes
+//func (m *Transaction) HashBytes() ([]byte, error) {
+//	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+//	txBytes, err := marshaler.Marshal(m)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	hasher := tpcmm.NewBlake2bHasher(0)
+//
+//	return hasher.Compute(string(txBytes)), nil
+//}
 
-func NewIndexFile(block *types.Block) (*TopiaFile, error) {
+func NewIndexFile(block *types.Block) (*FileItem, error) {
 	blockKey := block.GetHead().GetHeight()
 	filepath := strconv.FormatInt(int64(blockKey), 10) + ".index"
 
@@ -109,7 +123,7 @@ func NewIndexFile(block *types.Block) (*TopiaFile, error) {
 	//	return nil, err
 	//}
 
-	var tp  = TopiaFile{
+	var tp  = FileItem{
 		Filetype: 1,
 		File:   file,
 		Offset: 0,
@@ -122,7 +136,7 @@ func NewIndexFile(block *types.Block) (*TopiaFile, error) {
 	return &tp, nil
 }
 
-func NewTransFile(block *types.Block) (*TopiaFile, error) {
+func NewTransFile(block *types.Block) (*FileItem, error) {
 	blockKey := block.GetHead().GetHeight()
 	filepath := strconv.FormatInt(int64(blockKey), 10) + ".trans"
 
@@ -137,7 +151,7 @@ func NewTransFile(block *types.Block) (*TopiaFile, error) {
 	//	return nil, err
 	//}
 
-	var tp  = TopiaFile{
+	var tp  = FileItem{
 		Filetype: 2,
 		File:   file,
 		Offset: 0,
@@ -149,7 +163,7 @@ func NewTransFile(block *types.Block) (*TopiaFile, error) {
 }
 
 
-func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, error) {
+func (df *FileItem) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, error) {
 
 
 	//indexfilename := filename ,".index")
@@ -157,7 +171,7 @@ func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, e
 	StartBlock := df.File.Name()[:TraceIndex]
 	fileindex, err := os.OpenFile(StartBlock+".index", os.O_RDWR, 0644)
 
-	indexfile := TopiaFile{
+	indexfile := FileItem{
 		1,
 		fileindex,
 		0,
@@ -183,7 +197,7 @@ func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, e
 	fmt.Println(size)
 	crc := int64(binary.BigEndian.Uint64(datammap[dataoffset+8:dataoffset + 16]))
 	fmt.Println(crc)
-	block := Decodeblock(datammap[dataoffset+16:dataoffset + 16+ size])
+	block := Decodeblock(datammap[dataoffset+16:dataoffset + 16+ int64(size)])
 	fmt.Println(block)
 	//item, err := Decodeblock(buf)
 	if block.Size() < 0{
@@ -198,7 +212,7 @@ func (df *TopiaFile) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, e
 
 }
 
-func (df *TopiaFile) Writedata(block *types.Block) error {
+func (df *FileItem) Writedata(block *types.Block) error {
 	versionbyte := Int32ToBytes(int32(block.GetHead().Version))
 	fmt.Println(versionbyte)
 	offsetbyte := Int16ToBytes(df.Offset)
@@ -228,7 +242,7 @@ func (df *TopiaFile) Writedata(block *types.Block) error {
 
 
 
-func (df *TopiaFile) Findindex(blockNum types.BlockNum) (*TopiaIndex, error) {
+func (df *FileItem) Findindex(blockNum types.BlockNum) (*IndexItem, error) {
 
 	TraceIndex := strings.Index(df.File.Name(), ".")
 	StartBlock,_ := strconv.Atoi(df.File.Name()[:TraceIndex])
@@ -239,9 +253,9 @@ func (df *TopiaFile) Findindex(blockNum types.BlockNum) (*TopiaIndex, error) {
 	defer mmap.UnsafeUnmap()
 	versionint := int16(binary.BigEndian.Uint16(mmap[indexnum*6:indexnum*6+2]))
 	positionint := int16(binary.BigEndian.Uint16(mmap[indexnum*6+2:indexnum*6+4]))
-	offsetint := int16(binary.BigEndian.Uint16(mmap[indexnum*6+4:indexnum*6+6]))
+	offsetint := int64(binary.BigEndian.Uint16(mmap[indexnum*6+4:indexnum*6+6]))
 
-	tpindex := TopiaIndex{
+	tpindex := IndexItem{
 		versionint,
 		positionint,
 		offsetint,
@@ -253,7 +267,7 @@ func (df *TopiaFile) Findindex(blockNum types.BlockNum) (*TopiaIndex, error) {
 }
 
 
-func (df *TopiaFile) Writeindex(version int16,offset int16) error {
+func (df *FileItem) Writeindex(version int16,offset int16) error {
 	//versionbyte,_ := json.Marshal(version)
 	versionbyte := Int16ToBytes(version)
 	offsetbyte := Int16ToBytes(offset)
@@ -280,7 +294,7 @@ func (df *TopiaFile) Writeindex(version int16,offset int16) error {
 
 }
 
-func (df *TopiaFile) Writetrans(block *types.Block) error {
+func (df *FileItem) Writetrans(block *types.Block) error {
 	versionbyte := Int32ToBytes(int32(block.GetHead().Version))
 
 	//
@@ -313,7 +327,7 @@ func (df *TopiaFile) Writetrans(block *types.Block) error {
 
 
 
-func (df *TopiaFile) FindBlock(filename string) (*types.Block, error) {
+func (df *FileItem) FindBlock(filename string) (*types.Block, error) {
 	//blockbyte,_ := json.Marshal(block)
 	//buf := make([]byte, len(blockbyte))
 
@@ -347,7 +361,7 @@ func (df *TopiaFile) FindBlock(filename string) (*types.Block, error) {
 }
 
 
-func (df *TopiaFile) findTrans(filename string) (*types.Block, error) {
+func (df *FileItem) findTrans(filename string) (*types.Block, error) {
 	//blockbyte,_ := json.Marshal(block)
 	//buf := make([]byte, len(blockbyte))
 

@@ -1,7 +1,11 @@
 package rpc
 
 import (
+	"crypto/tls"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/gregjones/httpcache"
 )
 
 type ClientOptions struct {
@@ -9,6 +13,9 @@ type ClientOptions struct {
 	AUTH      string
 	attempts  int
 	sleepTime time.Duration
+	tlsConfig *tls.Config
+	cache     httpcache.Cache
+	ws        *WebsocketClient
 }
 
 type ClientOption func(options *ClientOptions)
@@ -43,5 +50,33 @@ func SetClientAttempts(attempts int) ClientOption {
 func SetClientSleepTime(sleepTime time.Duration) ClientOption {
 	return func(options *ClientOptions) {
 		options.sleepTime = sleepTime
+	}
+}
+
+func SetClientTLS(config *tls.Config) ClientOption {
+	return func(options *ClientOptions) {
+		options.tlsConfig = config
+	}
+}
+
+func SetClientCache(cache httpcache.Cache) ClientOption {
+	return func(options *ClientOptions) {
+		options.cache = cache
+	}
+}
+
+// using websocket
+func SetClientWS(maxMessageSize int, pingWait string) ClientOption {
+	return func(options *ClientOptions) {
+		options.ws = &WebsocketClient{
+			maxMessageSize: maxMessageSize,
+			pingWait:       pingWait,
+			conn:           new(websocket.Conn),
+			send:           make(chan []byte),
+			receive:        make(chan []byte),
+			// isClosed:       true,
+			requestRes: map[string]chan []byte{},
+			// mutex:          new(sync.Mutex),
+		}
 	}
 }

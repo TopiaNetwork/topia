@@ -1,16 +1,28 @@
 package main
 
 import (
-	"log"
-
 	rpc "github.com/TopiaNetwork/topia/api/rpc"
+	"github.com/gregjones/httpcache/diskcache"
+
+	tlog "github.com/TopiaNetwork/topia/log"
+	logcomm "github.com/TopiaNetwork/topia/log/common"
 )
 
 func main() {
+	mylog, err := tlog.CreateMainLogger(logcomm.DebugLevel, tlog.JSONFormat, tlog.StdErrOutput, "")
+	if err != nil {
+		panic(err)
+	}
 
-	addr := "http://localhost:8199"
+	addr := "localhost:8199"
 
-	cli := rpc.NewClient(addr, rpc.SetClientAUTH("vesfa"))
+	cache := diskcache.New("data")
+
+	cli, _ := rpc.NewClient(
+		addr, rpc.SetClientAUTH("vesfa"),
+		rpc.SetClientCache(cache),
+		rpc.SetClientWS(512, "10s"),
+	)
 	inArgs := make([]interface{}, 3)
 	inArgs[0] = 1
 	inArgs[1] = "test"
@@ -19,8 +31,15 @@ func main() {
 	res, err := cli.Call(methodName, inArgs)
 
 	if err != nil {
-		log.Print(err.Error())
+		mylog.Info("1" + err.Error())
 	} else {
-		log.Print(res)
+		mylog.Infof("%v", string(res.Payload))
+	}
+
+	_, res2, err := cli.CallWithWS(methodName, inArgs)
+	if err != nil {
+		mylog.Info(err.Error())
+	} else {
+		mylog.Info(string(<-res2))
 	}
 }

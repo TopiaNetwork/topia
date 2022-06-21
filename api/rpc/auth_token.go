@@ -1,9 +1,9 @@
 package rpc
 
 var (
-	None    = 0
-	Read    = 1
-	Write   = 2
-	Sign    = 3
-	Manager = 4
+	None    byte = 0x00
+	Read    byte = 0x01
+	Write   byte = 0x02
+	Sign    byte = 0x04
+	Manager byte = 0x08
 )

@@ -7,8 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/topia/consensus/vrf"
 	"math/big"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,6 +17,7 @@ import (
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/consensus/vrf"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -49,6 +51,7 @@ type consensusProposer struct {
 	lastProposeHeight       uint64     //the block height which self-proposer launched based on last time
 	newHeightStartTimeStamp time.Time  // the timestamp of new block height
 	proposedRecord          *lru.Cache //height->context.CancelFunc
+	votedRecord             *lru.Cache //Key: StateVersion@Voter
 	syncPPMPropList         sync.RWMutex
 	ppmPropList             *list.List
 	validator               *consensusValidator
@@ -68,7 +71,9 @@ func newConsensusProposer(log tplog.Logger,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
 	validator *consensusValidator) *consensusProposer {
+
 	proposedRecord, _ := lru.New(10)
+	votedRecord, _ := lru.New(200)
 
 	csProposer := &consensusProposer{
 		log:                     tplog.CreateSubModuleLogger("proposer", log),
@@ -85,6 +90,7 @@ func newConsensusProposer(log tplog.Logger,
 		blockMaxCyclePeriod:     blockMaxCyclePeriod,
 		isProposing:             0,
 		proposedRecord:          proposedRecord,
+		votedRecord:             votedRecord,
 		ppmPropList:             list.New(),
 		validator:               validator,
 	}
@@ -291,6 +297,16 @@ func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, v
 	return nil
 }
 
+func (p *consensusProposer) setIfNotVoted(voteMsg *VoteMessage) bool {
+	vKey := strings.Join([]string{strconv.FormatUint(voteMsg.StateVersion, 10),
+		string(voteMsg.Voter),
+	}, "@")
+
+	ok, _ := p.votedRecord.ContainsOrAdd(vKey, struct{}{})
+
+	return ok
+}
+
 func (p *consensusProposer) receiveVoteMessageStart(ctx context.Context) {
 	go func() {
 		for {
@@ -298,6 +314,11 @@ func (p *consensusProposer) receiveVoteMessageStart(ctx context.Context) {
 			case voteMsg := <-p.voteMsgChan:
 				if p.validator.commitMsg.Contains(voteMsg.StateVersion) {
 					p.log.Infof("Have received commit message and the vote message will be discarded: state version %d, self node %s", voteMsg.StateVersion, p.nodeID)
+					continue
+				}
+
+				if p.setIfNotVoted(voteMsg) {
+					p.log.Infof("Have received same vote and the vote message will be discarded: state version %d, voter %s, self node %s", voteMsg.StateVersion, string(voteMsg.Voter), p.nodeID)
 					continue
 				}
 				p.log.Infof("Received vote message, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
@@ -400,7 +421,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	if ok := p.proposedRecord.Contains(latestBlock.Head.Height); ok {
 		err = fmt.Errorf("Have sucessfully proposed based on height %d, self node %s", latestBlock.Head.Height, p.nodeID)
 		p.log.Warnf("%s", err.Error())
-		if time.Since(p.newHeightStartTimeStamp).Milliseconds() > 10*p.blockMaxCyclePeriod.Milliseconds() {
+		if time.Since(p.newHeightStartTimeStamp).Milliseconds() > 60*p.blockMaxCyclePeriod.Milliseconds() {
 			p.log.Warn("Must be time out")
 		}
 		return err
@@ -522,7 +543,7 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 		for !p.deliver.isReady() {
 			time.Sleep(50 * time.Millisecond)
 		}
-		p.log.Warnf("Proposer message deliver ready: self node %s", p.nodeID)
+		p.log.Infof("Proposer message deliver ready: self node %s", p.nodeID)
 
 		for {
 			select {

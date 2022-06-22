@@ -403,6 +403,7 @@ func (v *consensusValidator) produceVoteMsg(msg *ProposeMessage) (*VoteMessage, 
 		Epoch:        msg.Epoch,
 		Round:        msg.Round,
 		StateVersion: msg.StateVersion,
+		Voter:        []byte(v.nodeID),
 		BlockHead:    msg.BlockHead,
 	}, nil
 }
@@ -425,10 +426,15 @@ func (v *consensusValidator) constructBlockWithOnlyHead(blockHead *tpchaintypes.
 }
 
 func (v *consensusValidator) commitMsgDispose(ctx context.Context, bh *tpchaintypes.BlockHead, commitMsg *CommitMessage) error {
+	timeBegin := time.Now()
 	compState := state.GetStateBuilder(state.CompStateBuilderType_Simple).CreateCompositionState(v.log, v.nodeID, v.ledger, commitMsg.StateVersion, "validator")
 	if compState == nil {
 		err := fmt.Errorf("Validator nil csState and can't commit block whose height %d, self node %s", bh.Height, v.nodeID)
 		return err
+	}
+	timeSpan := time.Since(timeBegin)
+	if timeSpan.Seconds() > 2 {
+		v.log.Warn("Too long time to create simple CompositionState")
 	}
 
 	compState.Lock()
@@ -455,6 +461,8 @@ func (v *consensusValidator) commitMsgDispose(ctx context.Context, bh *tpchainty
 		v.log.Errorf("Validator commits state version %d err: %v", compState.StateVersion(), errCMMState)
 		return errCMMState
 	}
+	compState.UpdateCompSState(state.CompSState_Commited)
+
 	v.log.Infof("Validator finished committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
 
 	eventhub.GetEventHubManager().GetEventHub(v.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	lru "github.com/hashicorp/golang-lru"
 	"sync"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/TopiaNetwork/topia/state"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 type consensusExecutor struct {

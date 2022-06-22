@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/consensus/vrf"
 	"sync"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/consensus/vrf"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/execution"
@@ -18,6 +18,7 @@ import (
 	"github.com/TopiaNetwork/topia/state"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 type consensusExecutor struct {
@@ -35,8 +36,7 @@ type consensusExecutor struct {
 	commitMsgChan                chan *CommitMessage
 	cryptService                 tpcrt.CryptService
 	prepareInterval              time.Duration
-	syncPrepareMsgLaunched       sync.RWMutex
-	prepareMsgLunched            map[uint64]struct{} //Key: state version
+	prepareMsgLunched            *lru.Cache //Key: state version
 }
 
 func newConsensusExecutor(log tplog.Logger,
@@ -53,6 +53,9 @@ func newConsensusExecutor(log tplog.Logger,
 	commitMsgChan chan *CommitMessage,
 	cryptService tpcrt.CryptService,
 	prepareInterval time.Duration) *consensusExecutor {
+
+	pMsgLCache, _ := lru.New(10)
+
 	return &consensusExecutor{
 		log:                          tplog.CreateSubModuleLogger("executor", log),
 		nodeID:                       nodeID,
@@ -68,31 +71,8 @@ func newConsensusExecutor(log tplog.Logger,
 		commitMsgChan:                commitMsgChan,
 		cryptService:                 cryptService,
 		prepareInterval:              prepareInterval,
-		prepareMsgLunched:            make(map[uint64]struct{}),
+		prepareMsgLunched:            pMsgLCache,
 	}
-}
-
-func (e *consensusExecutor) prepareMsgLaunched(stateVersion uint64) bool {
-	e.syncPrepareMsgLaunched.Lock()
-	defer e.syncPrepareMsgLaunched.Unlock()
-
-	if _, ok := e.prepareMsgLunched[stateVersion]; ok {
-		return true
-	}
-
-	return false
-}
-
-func (e *consensusExecutor) notPrepareMsgLaunchedSet(stateVersion uint64) bool {
-	e.syncPrepareMsgLaunched.Lock()
-	defer e.syncPrepareMsgLaunched.Unlock()
-
-	if _, ok := e.prepareMsgLunched[stateVersion]; !ok {
-		e.prepareMsgLunched[stateVersion] = struct{}{}
-		return true
-	}
-
-	return false
 }
 
 func (e *consensusExecutor) UnmarshalTxsOfPreparePackedMessage(txs [][]byte) ([]*txbasic.Transaction, error) {
@@ -159,7 +139,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 		for {
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
-				if e.notPrepareMsgLaunchedSet(perparePMExe.StateVersion) {
+				if ok, _ := e.prepareMsgLunched.ContainsOrAdd(perparePMExe.StateVersion, struct{}{}); !ok {
 					e.log.Infof("Received PreparePackedMessageExe from other executor, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 				} else {
 					e.log.Infof("Received PreparePackedMessageExe from other executor but existed, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
@@ -365,6 +345,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 					e.log.Infof("Prepare timer starts to get max state version: self node %s", e.nodeID)
 					maxStateVersion, err := e.exeScheduler.MaxStateVersion(latestBlock)
 					if err != nil {
+						e.log.Errorf("Can't get max state version: %v, self node %s", err, e.nodeID)
 						return
 					}
 					e.log.Infof("Prepare timer gets max state version: maxStateVersion %d, self node %s", maxStateVersion, e.nodeID)
@@ -372,7 +353,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 
 					e.log.Infof("Prepare timer: state version %d, self node %s", stateVersion, e.nodeID)
 
-					if e.prepareMsgLaunched(stateVersion) {
+					if e.prepareMsgLunched.Contains(stateVersion) {
 						e.log.Infof("Have launched prepare message: state version %d, self node %s", stateVersion, e.nodeID)
 						return
 					}
@@ -487,12 +468,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 }
 
 func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateVersion uint64) error {
-	pendTxs, err := e.txPool.Pending()
-	if err != nil {
-		e.log.Errorf("Can't get pending txs: %v", err)
-		return err
-	}
-
+	pendTxs := e.txPool.PickTxs()
 	if len(pendTxs) == 0 {
 		e.log.Infof("Current pending txs'size 0")
 		return nil
@@ -502,7 +478,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 
 	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
 	if compState == nil {
-		err = fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", stateVersion)
+		err := fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", stateVersion)
 		e.log.Errorf("%v", err)
 		return err
 	}
@@ -564,7 +540,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 		return err
 	}
 
-	e.notPrepareMsgLaunchedSet(stateVersion)
+	e.prepareMsgLunched.ContainsOrAdd(stateVersion, struct{}{})
 
 	e.log.Infof("Deliver prepare packed message to propose network successfully: state version %d， self node %s", packedMsgProp.StateVersion, e.nodeID)
 

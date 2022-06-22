@@ -68,7 +68,7 @@ func newConsensusProposer(log tplog.Logger,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
 	validator *consensusValidator) *consensusProposer {
-	proposedRecord, _ := lru.New(5)
+	proposedRecord, _ := lru.New(10)
 
 	csProposer := &consensusProposer{
 		log:                     tplog.CreateSubModuleLogger("proposer", log),

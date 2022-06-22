@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	lru "github.com/hashicorp/golang-lru"
 	"sync"
 	"time"
 
@@ -35,8 +36,7 @@ type consensusExecutor struct {
 	commitMsgChan                chan *CommitMessage
 	cryptService                 tpcrt.CryptService
 	prepareInterval              time.Duration
-	syncPrepareMsgLaunched       sync.RWMutex
-	prepareMsgLunched            map[uint64]struct{} //Key: state version
+	prepareMsgLunched            *lru.Cache //Key: state version
 }
 
 func newConsensusExecutor(log tplog.Logger,
@@ -53,6 +53,9 @@ func newConsensusExecutor(log tplog.Logger,
 	commitMsgChan chan *CommitMessage,
 	cryptService tpcrt.CryptService,
 	prepareInterval time.Duration) *consensusExecutor {
+
+	pMsgLCache, _ := lru.New(10)
+
 	return &consensusExecutor{
 		log:                          tplog.CreateSubModuleLogger("executor", log),
 		nodeID:                       nodeID,
@@ -68,31 +71,8 @@ func newConsensusExecutor(log tplog.Logger,
 		commitMsgChan:                commitMsgChan,
 		cryptService:                 cryptService,
 		prepareInterval:              prepareInterval,
-		prepareMsgLunched:            make(map[uint64]struct{}),
+		prepareMsgLunched:            pMsgLCache,
 	}
-}
-
-func (e *consensusExecutor) prepareMsgLaunched(stateVersion uint64) bool {
-	e.syncPrepareMsgLaunched.Lock()
-	defer e.syncPrepareMsgLaunched.Unlock()
-
-	if _, ok := e.prepareMsgLunched[stateVersion]; ok {
-		return true
-	}
-
-	return false
-}
-
-func (e *consensusExecutor) notPrepareMsgLaunchedSet(stateVersion uint64) bool {
-	e.syncPrepareMsgLaunched.Lock()
-	defer e.syncPrepareMsgLaunched.Unlock()
-
-	if _, ok := e.prepareMsgLunched[stateVersion]; !ok {
-		e.prepareMsgLunched[stateVersion] = struct{}{}
-		return true
-	}
-
-	return false
 }
 
 func (e *consensusExecutor) UnmarshalTxsOfPreparePackedMessage(txs [][]byte) ([]*txbasic.Transaction, error) {
@@ -159,7 +139,7 @@ func (e *consensusExecutor) receivePreparePackedMessageExeStart(ctx context.Cont
 		for {
 			select {
 			case perparePMExe := <-e.preparePackedMsgExeChan:
-				if e.notPrepareMsgLaunchedSet(perparePMExe.StateVersion) {
+				if ok, _ := e.prepareMsgLunched.ContainsOrAdd(perparePMExe.StateVersion, struct{}{}); !ok {
 					e.log.Infof("Received PreparePackedMessageExe from other executor, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
 				} else {
 					e.log.Infof("Received PreparePackedMessageExe from other executor but existed, state version %d, self node %s", perparePMExe.StateVersion, e.nodeID)
@@ -373,7 +353,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 
 					e.log.Infof("Prepare timer: state version %d, self node %s", stateVersion, e.nodeID)
 
-					if e.prepareMsgLaunched(stateVersion) {
+					if e.prepareMsgLunched.Contains(stateVersion) {
 						e.log.Infof("Have launched prepare message: state version %d, self node %s", stateVersion, e.nodeID)
 						return
 					}
@@ -560,7 +540,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 		return err
 	}
 
-	e.notPrepareMsgLaunchedSet(stateVersion)
+	e.prepareMsgLunched.ContainsOrAdd(stateVersion, struct{}{})
 
 	e.log.Infof("Deliver prepare packed message to propose network successfully: state version %d， self node %s", packedMsgProp.StateVersion, e.nodeID)
 

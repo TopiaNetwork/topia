@@ -143,8 +143,8 @@ func (handler *consensusHandler) ProcessPreparePackedMsgExeIndication(msg *Prepa
 func (handler *consensusHandler) ProcessPreparePackedMsgProp(msg *PreparePackedMessageProp) error {
 	id := handler.deliver.deliverNetwork().ID()
 
-	activeeProposeIds := handler.epochService.GetActiveProposerIDs()
-	if tpcmm.IsContainString(id, activeeProposeIds) {
+	activeProposeIds := handler.epochService.GetActiveProposerIDs()
+	if tpcmm.IsContainString(id, activeProposeIds) {
 		handler.preprePackedMsgPropChan <- msg
 	} else {
 		err := fmt.Errorf("Node %s not active proposers, so will discard received prepare packed msg prop", id)

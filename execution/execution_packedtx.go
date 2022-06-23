@@ -2,7 +2,6 @@ package execution
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -27,12 +26,12 @@ func newExecutionPackedTxs(nodeID string, packedTxs *PackedTxs, compState state.
 }
 
 func (ept *executionPackedTxs) Execute(log tplog.Logger, ctx context.Context, txServant basic.TransactionServant) (*PackedTxsResult, error) {
-	if len(ept.packedTxs.TxList) == 0 {
-		return nil, errors.New("Empty packedTxs")
-	}
-
 	packedTxsRS := PackedTxsResult{
 		StateVersion: ept.packedTxs.StateVersion,
+	}
+
+	if len(ept.packedTxs.TxList) == 0 {
+		return &packedTxsRS, nil
 	}
 
 	log.Infof("Execution of packed txs start executing tx: state version %d, tx count %d, self node %s", ept.packedTxs.StateVersion, len(ept.packedTxs.TxList), ept.nodeID)

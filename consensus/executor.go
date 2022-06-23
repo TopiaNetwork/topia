@@ -475,12 +475,6 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 
 func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateVersion uint64) error {
 	pendTxs := e.txPool.PickTxs()
-	if len(pendTxs) == 0 {
-		e.log.Infof("Current pending txs'size 0")
-		return nil
-	}
-
-	txRoot := txbasic.TxRoot(pendTxs)
 
 	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
 	if compState == nil {
@@ -491,9 +485,16 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 
 	var packedTxs execution.PackedTxs
 
+	var txRoot []byte
+	var txList []*txbasic.Transaction
+	if len(pendTxs) != 0 {
+		txRoot = txbasic.TxRoot(pendTxs)
+		txList = append(txList, pendTxs...)
+	}
+
 	packedTxs.StateVersion = stateVersion
 	packedTxs.TxRoot = txRoot
-	packedTxs.TxList = append(packedTxs.TxList, pendTxs...)
+	packedTxs.TxList = txList
 
 	txsRS, err := e.exeScheduler.ExecutePackedTx(ctx, &packedTxs, compState)
 	if err != nil {

@@ -462,11 +462,10 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 	}
 
 	var pppProp *PreparePackedMessageProp
-
 	for pppProp == nil {
 		pppProp, err = p.getAvailPPMProp(latestBlock.Head.Height)
 		if err != nil {
-			//p.log.Infof("%s", err.Error())
+			//p.log.Warnf("%s", err.Error())
 			time.Sleep(50 * time.Millisecond)
 		} else {
 			break

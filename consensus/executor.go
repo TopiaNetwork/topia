@@ -343,10 +343,16 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 					}
 
 					e.log.Infof("Prepare timer starts to get max state version: self node %s", e.nodeID)
-					maxStateVersion, err := e.exeScheduler.MaxStateVersion(latestBlock)
-					if err != nil {
-						e.log.Errorf("Can't get max state version: %v, self node %s", err, e.nodeID)
-						return
+
+					var maxStateVersion uint64
+					for maxStateVersion == 0 {
+						maxStateVersion, err = e.exeScheduler.MaxStateVersion(latestBlock)
+						if err != nil {
+							//e.log.Warnf("Can't get max state version: %v, self node %s", err, e.nodeID)
+							time.Sleep(50 * time.Millisecond)
+						} else {
+							break
+						}
 					}
 					e.log.Infof("Prepare timer gets max state version: maxStateVersion %d, self node %s", maxStateVersion, e.nodeID)
 					stateVersion := maxStateVersion + 1

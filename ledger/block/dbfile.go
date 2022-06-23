@@ -30,7 +30,8 @@ type FileItem struct {
 	Filetype FileType //0,data;1,index;2,transactionindex
 	File   *os.File
 	Offset uint64
-	HeaderSize int16
+	HeaderOffset uint64
+	//HeaderSize uint64
 
 }
 
@@ -45,17 +46,17 @@ type DataItem struct{
 
 
 type IndexItem struct{
-	version int16
-	position int16
-	offset int64
+	version uint16
+	position uint64
+	offset uint64
 }
 
 
 type TransIndex struct{
-	Version int16
+	Version uint16
 	Txid int64
-	BlockHeight int16
-	Offset int64
+	BlockHeight uint16
+	Offset uint64
 }
 //func newFileItem(basePath string) (*FileItem, error) {
 //	datafile := basePath + string(os.PathSeparator) + DATA_FILE
@@ -88,7 +89,7 @@ func NewFile(block *types.Block) (*FileItem, error) {
 	tp := FileItem{
 		Filetype: DataFile,
 		File:   file,
-		Offset: 0,
+		Offset: FILE_HEADER_SIZE,
 	}
 
 	tp.Writedata(block)

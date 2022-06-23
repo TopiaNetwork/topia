@@ -26,9 +26,9 @@ func (df *FileItem) Findindex(blockNum types.BlockNum) (*IndexItem, error) {
 	indexnum := int16(blockNum) - int16(StartBlock)
 	mmap, _ := gommap.Map(df.File.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	defer mmap.UnsafeUnmap()
-	versionint := int16(binary.BigEndian.Uint16(mmap[indexnum*6:indexnum*6+2]))
-	positionint := int16(binary.BigEndian.Uint16(mmap[indexnum*6+2:indexnum*6+4]))
-	offsetint := int64(binary.BigEndian.Uint16(mmap[indexnum*6+4:indexnum*6+6]))
+	versionint := binary.BigEndian.Uint16(mmap[indexnum*6:indexnum*6+2])
+	positionint := binary.BigEndian.Uint64(mmap[indexnum*6+2:indexnum*6+4])
+	offsetint := binary.BigEndian.Uint64(mmap[indexnum*6+4:indexnum*6+6])
 
 	tpindex := IndexItem{
 		versionint,
@@ -42,11 +42,11 @@ func (df *FileItem) Findindex(blockNum types.BlockNum) (*IndexItem, error) {
 }
 
 
-func (df *FileItem) Writeindex(version int16,offset int16) error {
+func (df *FileItem) Writeindex(version uint16,offset uint64) error {
 	//versionbyte,_ := json.Marshal(version)
-	versionbyte := Int16ToBytes(version)
-	offsetbyte := Int16ToBytes(offset)
-	offsetindex := Int16ToBytes(df.Offset)
+	versionbyte := Uint16ToBytes(version)
+	offsetbyte := Uint64ToBytes(offset)
+	offsetindex := Uint64ToBytes(df.Offset)
 
 	fmt.Println(versionbyte)
 	fmt.Println("",offsetbyte)

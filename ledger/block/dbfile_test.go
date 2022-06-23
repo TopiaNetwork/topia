@@ -147,6 +147,7 @@ func TestTopiaFile_Findindex(t *testing.T) {
 	var to = FileItem{
 		1,
 		file,
+		FILE_HEADER_SIZE,
 		0,
 
 	}
@@ -214,6 +215,7 @@ func TestFindBlock(t *testing.T) {
 	var to = FileItem{
 		0,
 		file,
+		0,
 		0,
 
 	}

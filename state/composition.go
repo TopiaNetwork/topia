@@ -133,7 +133,7 @@ type CompSState uint32
 const (
 	CompSState_Unknown CompSState = iota
 	CompSState_Idle
-	CompSState_Normal
+	CompSState_Executed
 	CompSState_Commited
 )
 

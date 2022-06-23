@@ -135,6 +135,18 @@ func (bsp *blockInfoSubProcessor) Validate(ctx context.Context, isLocal bool, da
 	return bsp.validateRemoteBlockInfo(block, blockRS)
 }
 
+func (bsp *blockInfoSubProcessor) GetCompositionState(stateVersion uint64) state.CompositionState {
+	var compState state.CompositionState
+	switch bsp.cType {
+	case state.CompStateBuilderType_Full:
+		compState, _ = bsp.scheduler.CompositionStateOfExePackedTxs(stateVersion)
+	case state.CompStateBuilderType_Simple:
+		compState = state.GetStateBuilder(bsp.cType).CreateCompositionState(bsp.log, bsp.nodeID, bsp.ledger, stateVersion, "ChainBlockSubscriber")
+	}
+
+	return compState
+}
+
 func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *tpchaintypes.PubSubMessageBlockInfo) error {
 	bsp.syncProcess.Lock()
 	defer bsp.syncProcess.Unlock()
@@ -161,7 +173,13 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 
 	bsp.log.Infof("Process of pubsub message begins committing block: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
 
-	err = bsp.scheduler.CommitBlock(ctx, block.Head.Height, block, blockRS, latestBlock, bsp.ledger, bsp.cType, "ChainBlockSubscriber")
+	compState := bsp.GetCompositionState(block.Head.Height)
+	if compState != nil {
+		err = fmt.Errorf("Process of pubsub message, can't get composition state: height=%d, self node %s", block.Head.Height, bsp.nodeID)
+		bsp.log.Errorf("%v", err)
+		return err
+	}
+	err = bsp.scheduler.CommitBlock(ctx, block.Head.Height, block, blockRS, compState, "ChainBlockSubscriber")
 	if err != nil {
 		bsp.log.Errorf("Chain block subscriber CommitBlock err: %v, height %d, latest block %d, self node %s", err, block.Head.Height, latestBlock.Head.Height, bsp.nodeID)
 		return err

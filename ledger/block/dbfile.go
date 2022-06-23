@@ -11,7 +11,8 @@ import (
 )
 
 
-const FILE_SIZE = 10000 //* 1000
+const FILE_SIZE = 10000 * 1000
+const FILE_HEADER_SIZE = 10000
 
 type FileType int8
 
@@ -28,15 +29,17 @@ type FileItem struct {
 	//header
 	Filetype FileType //0,data;1,index;2,transactionindex
 	File   *os.File
-	Offset int16 //INT64
+	Offset uint64
+	HeaderSize int16
+
 }
 
 
 type DataItem struct{
-	version int32
-	offset int64
-	size int16
-	crc int64
+	version uint32
+	offset uint64
+	size uint16
+	crc uint64
 	data *types.Block
 }
 

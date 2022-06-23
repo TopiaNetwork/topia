@@ -6,7 +6,7 @@ import (
 )
 
 type TxPoolService interface {
-	Pending() ([]*basic.Transaction, error)
+	PickTxs() []*basic.Transaction
 
 	Size() int64
 

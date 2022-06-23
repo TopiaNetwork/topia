@@ -2,7 +2,6 @@ package mock
 
 import (
 	"context"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"math/big"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
 	"github.com/TopiaNetwork/topia/eventhub"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -76,10 +76,10 @@ func NewTransactionPoolMock(log tplog.Logger, nodeID string, cryptService tpcrt.
 		log:          log,
 		nodeID:       nodeID,
 		cryptService: cryptService,
-		pendingTxs:   make(map[txbasic.TxID]*txbasic.Transaction),
+		pendingTxs:   make(map[txbasic.TxID]*txbasic.Transaction, 500),
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 500; i++ {
 		_, toPubKey, _ := cryptService.GeneratePriPubKey()
 		toAddr, _ := cryptService.CreateAddress(toPubKey)
 
@@ -151,8 +151,9 @@ func (txm *TransactionPoolMock) produceTxsTimer(ctx context.Context) {
 				err := func() error {
 					txm.sync.Lock()
 					defer txm.sync.Unlock()
+					txm.pendingTxs = make(map[txbasic.TxID]*txbasic.Transaction, 500)
 					fromPriKey, _, _ := txm.cryptService.GeneratePriPubKey()
-					for i := 0; i < 5; i++ {
+					for i := 0; i < 500; i++ {
 						_, toPubKey, _ := txm.cryptService.GeneratePriPubKey()
 						toAddr, _ := txm.cryptService.CreateAddress(toPubKey)
 

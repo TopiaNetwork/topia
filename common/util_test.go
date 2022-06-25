@@ -30,3 +30,15 @@ func TestAnyContain(t *testing.T) {
 
 	assert.Equal(t, false, isExist)
 }
+
+func TestRemoveIfExistString(t *testing.T) {
+	testString := []string{
+		"16Uiu2HAm5pFAjWt8DBenfaqb6WRCCJniQK29dgsPrCsVuPvxXXMb",
+		"16Uiu2HAm9AMMkvH9t8Q23NGtN8aGa6nHP7VETVnDRUPCT7SkRjbu",
+		"16Uiu2HAmK8NLUBrHkXMQFJGr47JgyD4UeYfswgDyAoUv9vNvezH4",
+	}
+
+	rtnString := RemoveIfExistString("16Uiu2HAm9AMMkvH9t8Q23NGtN8aGa6nHP7VETVnDRUPCT7SkRjbu", testString)
+
+	assert.Equal(t, 2, len(rtnString))
+}

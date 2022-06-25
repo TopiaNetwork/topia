@@ -1,17 +1,17 @@
 package execution
 
 import (
-	tx "github.com/TopiaNetwork/topia/transaction/basic"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type PackedTxs struct {
 	StateVersion uint64
 	TxRoot       []byte
-	TxList       []*tx.Transaction
+	TxList       []*txbasic.Transaction
 }
 
 type PackedTxsResult struct {
 	StateVersion uint64
 	TxRSRoot     []byte
-	TxsResult    []tx.TransactionResult
+	TxsResult    []txbasic.TransactionResult
 }

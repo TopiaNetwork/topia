@@ -2,7 +2,6 @@ package transactionpool
 
 import (
 	"errors"
-	"github.com/TopiaNetwork/topia/transaction_pool/mock"
 	"testing"
 	"time"
 

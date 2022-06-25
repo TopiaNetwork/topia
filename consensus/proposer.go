@@ -442,15 +442,8 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 
 	p.lastProposeHeight = proposeHeightNew
 
-	pppProp, err := p.getAvailPPMProp(latestBlock.Head.Height)
-	if err != nil {
-		p.log.Errorf("%v", err)
-		return err
-	}
-	p.log.Infof("Avail PPM prop state version %d, self node %s", pppProp.StateVersion, p.nodeID)
-
-	if p.validator.existProposeMsg(csStateRN.ChainID(), latestBlock.Head.Height, pppProp.StateVersion, p.nodeID) {
-		err = fmt.Errorf("Have existed proposed block: state version %d, latest height %d, self node %s", pppProp.StateVersion, latestBlock.Head.Height, p.nodeID)
+	if p.validator.existProposeMsg(csStateRN.ChainID(), latestBlock.Head.Height, latestBlock.Head.Height+1, p.nodeID) {
+		err = fmt.Errorf("Have existed proposed block: state version %d, latest height %d, self node %s", latestBlock.Head.Height+1, latestBlock.Head.Height, p.nodeID)
 		p.log.Warnf("%s", err.Error())
 		return err
 	}
@@ -467,6 +460,19 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		p.log.Errorf("Can't get state root: %v", err)
 		return err
 	}
+
+	var pppProp *PreparePackedMessageProp
+	for pppProp == nil {
+		pppProp, err = p.getAvailPPMProp(latestBlock.Head.Height)
+		if err != nil {
+			//p.log.Warnf("%s", err.Error())
+			time.Sleep(50 * time.Millisecond)
+		} else {
+			break
+		}
+	}
+	p.log.Infof("Avail PPM prop state version %d, self node %s", pppProp.StateVersion, p.nodeID)
+
 	proposeBlock, err := p.produceProposeBlock(csStateRN.ChainID(), latestEpoch, latestBlock, pppProp, vrfProof, maxPri, stateRoot, proposeHeightNew)
 	if err != nil {
 		p.log.Errorf("Produce propose block error: latest epoch=%d, latest height=%d, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, err)

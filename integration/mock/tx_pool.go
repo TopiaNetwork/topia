@@ -2,16 +2,17 @@ package mock
 
 import (
 	"context"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"math/big"
-	"sync"
+	"runtime"
 	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
 	"github.com/TopiaNetwork/topia/eventhub"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -25,8 +26,7 @@ type TransactionPoolMock struct {
 	log          tplog.Logger
 	nodeID       string
 	cryptService tpcrt.CryptService
-	sync         sync.RWMutex
-	pendingTxs   map[txbasic.TxID]*txbasic.Transaction //tx hex hash -> Transaction
+	pendingTxs   *tpcmm.ShrinkableMap //map[txbasic.TxID]*txbasic.Transaction //tx hex hash -> Transaction
 }
 
 func (txm *TransactionPoolMock) PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error) {
@@ -76,7 +76,7 @@ func NewTransactionPoolMock(log tplog.Logger, nodeID string, cryptService tpcrt.
 		log:          log,
 		nodeID:       nodeID,
 		cryptService: cryptService,
-		pendingTxs:   make(map[txbasic.TxID]*txbasic.Transaction),
+		pendingTxs:   tpcmm.NewShrinkMap(),
 	}
 
 	for i := 0; i < 5; i++ {
@@ -88,7 +88,7 @@ func NewTransactionPoolMock(log tplog.Logger, nodeID string, cryptService tpcrt.
 
 		txID, _ := tx.TxID()
 
-		txPool.pendingTxs[txID] = tx
+		txPool.pendingTxs.Set(txID, tx)
 	}
 
 	return txPool
@@ -100,27 +100,16 @@ func (txm *TransactionPoolMock) AddTx(tx *txbasic.Transaction, local bool) error
 }
 
 func (txm *TransactionPoolMock) RemoveTxByKey(key txbasic.TxID) error {
-	txm.sync.Lock()
-	defer txm.sync.Unlock()
-
-	if _, ok := txm.pendingTxs[key]; ok {
-		delete(txm.pendingTxs, key)
-	}
-
+	txm.pendingTxs.Del(key)
 	return nil
 }
 
 func (txm *TransactionPoolMock) PickTxs() []*txbasic.Transaction {
-	txm.sync.Lock()
-	defer txm.sync.Unlock()
+	var newTxs []*txbasic.Transaction
 
-	newTxs := make([]*txbasic.Transaction, len(txm.pendingTxs))
-
-	i := 0
-	for _, tx := range txm.pendingTxs {
-		newTxs[i] = tx
-		i++
-	}
+	txm.pendingTxs.IterateCallback(func(key interface{}, val interface{}) {
+		newTxs = append(newTxs, val.(*txbasic.Transaction))
+	})
 
 	return newTxs
 }
@@ -134,6 +123,8 @@ func (txm *TransactionPoolMock) processBlockAddedEvent(ctx context.Context, data
 			txID, _ := tx.TxID()
 			txm.RemoveTxByKey(txID)
 		}
+
+		runtime.GC()
 
 		return nil
 	}
@@ -149,8 +140,6 @@ func (txm *TransactionPoolMock) produceTxsTimer(ctx context.Context) {
 			select {
 			case <-timer.C:
 				err := func() error {
-					txm.sync.Lock()
-					defer txm.sync.Unlock()
 					fromPriKey, _, _ := txm.cryptService.GeneratePriPubKey()
 					for i := 0; i < 5; i++ {
 						_, toPubKey, _ := txm.cryptService.GeneratePriPubKey()
@@ -158,10 +147,9 @@ func (txm *TransactionPoolMock) produceTxsTimer(ctx context.Context) {
 
 						tx := txuni.ConstructTransactionWithUniversalTransfer(txm.log, txm.cryptService, fromPriKey, fromPriKey, uint64(i+1), 200, 500, toAddr,
 							[]txuni.TargetItem{{currency.TokenSymbol_Native, big.NewInt(10)}})
-
 						txID, _ := tx.TxID()
 
-						txm.pendingTxs[txID] = tx
+						txm.pendingTxs.Set(txID, tx)
 					}
 
 					return nil

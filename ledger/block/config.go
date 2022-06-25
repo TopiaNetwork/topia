@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-func main() {
+func init() {
 
 	viper.SetConfigName("config")
 

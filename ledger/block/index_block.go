@@ -6,11 +6,10 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	//"encoding/json"
+
 
 	"github.com/TopiaNetwork/topia/chain/types"
 	"launchpad.net/gommap"
-	//tplog "github.com/TopiaNetwork/topia/log"
 )
 
 

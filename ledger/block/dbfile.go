@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	//"encoding/json"
+
 
 	"github.com/TopiaNetwork/topia/chain/types"
-	//tplog "github.com/TopiaNetwork/topia/log"
 )
 
 
@@ -60,10 +59,7 @@ type TransIndex struct{
 	BlockHeight uint16
 	Offset uint64
 }
-//func newFileItem(basePath string) (*FileItem, error) {
-//	datafile := basePath + string(os.PathSeparator) + DATA_FILE
-//	return newFileImpl(datafile)
-//}
+
 
 
 func NewFile(block *types.Block) (*FileItem, error) {

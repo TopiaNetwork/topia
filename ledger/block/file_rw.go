@@ -7,14 +7,14 @@ import (
 	"os"
 	"strings"
 	"syscall"
-	//"encoding/json"
+
 
 	"github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 
-	//"github.com/snksoft/crc"
+
 	"launchpad.net/gommap"
-	//tplog "github.com/TopiaNetwork/topia/log"
+
 	"errors"
 )
 

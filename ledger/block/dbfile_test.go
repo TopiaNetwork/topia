@@ -95,46 +95,7 @@ func TestNewFile(t *testing.T) {
 }
 
 //
-//func TestReaddata(t *testing.T) {
-//	filename := FilenameNow + ".topia"
-//	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
-//
-//	if err != nil{
-//		panic(err)
-//	}
-//
-//	var to = TopiaFile{
-//		1,
-//		file,
-//		1,
-//
-//	}
-//	err =to.Writedata(&block_all)
-//	if err != nil{
-//		panic(err)
-//	}
-//}
 
-//
-//func TestWritedata(t *testing.T) {
-//	file, err := os.OpenFile("test.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
-//
-//	if err != nil{
-//		panic(err)
-//	}
-//
-//	var to = TopiaFile{
-//		1,
-//		file,
-//		1,
-//
-//	}
-//	err =to.Writedata(&block_all)
-//	if err != nil{
-//		panic(err)
-//	}
-//}
-//
 //
 func TestTopiaFile_Findindex(t *testing.T) {
 	filename := FilenameNow + ".index"

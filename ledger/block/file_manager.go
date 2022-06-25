@@ -19,14 +19,14 @@ type fileManager struct {
 	backend  backend.Backend
 }
 
-//func newFileManager(log tplog.Logger, rootPath string, index *blockIndex, backend backend.Backend) *fileManager {
-//	return &fileManager{
-//		log:      log,
-//		rootPath: rootPath,
-//		index:    index,
-//		backend:  backend,
-//	}
-//}
+func newFileManager(log tplog.Logger, rootPath string, index *blockIndex, backend backend.Backend) *fileManager {
+	return &fileManager{
+		log:      log,
+		rootPath: rootPath,
+		index:    index,
+		backend:  backend,
+	}
+}
 //func checkFileIsExist(filename string) bool {
 //	if _, err := os.Stat(filename); os.IsNotExist(err) {
 //		return false

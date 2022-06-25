@@ -100,8 +100,8 @@ func (df *FileItem) Writedata(block *types.Block) error {
 	copy(mmap[df.Offset:df.Offset+4],versionbyte)
 	copy(mmap[df.Offset+4:df.Offset+12],offsetbyte)
 	copy(mmap[df.Offset+12:df.Offset+20],sizebyte)
-	copy(mmap[df.Offset+20:df.Offset+16],crcbyte)
-	copy(mmap[df.Offset+16:df.Offset+16+size],buf)
+	copy(mmap[df.Offset+20:df.Offset+28],crcbyte)
+	copy(mmap[df.Offset+28:df.Offset+28+size],buf)
 
 	_ = df.File.Sync()
 	df.Offset = df.Offset + 16 + size
@@ -143,8 +143,7 @@ func (df *FileItem) WriteHeader(block *types.Block) error {
 	}
 
 	_ = df.File.Sync()
-	Indexoffset = Indexoffset + 26
-	df.Offset = df.Offset + 26
+	df.HeaderOffset = df.HeaderOffset + 26
 
 	return  nil
 

@@ -11,7 +11,7 @@ import (
 
 
 
-func (df *TopiaFile)AesEncrypt(key string) string {
+func (df *FileItem)Encrypt(key string) string {
 
 	filedata, _ := os.OpenFile(df.File.Name(), os.O_RDWR, 0644)
 	origData := bytes.NewBuffer(nil)
@@ -37,7 +37,7 @@ func (df *TopiaFile)AesEncrypt(key string) string {
 
 }
 
-func (df *TopiaFile)AesDecrypt(cryted string, key string) string {
+func (df *FileItem)Decrypt(cryted string, key string) string {
 
 	crytedByte, _ := base64.StdEncoding.DecodeString(cryted)
 	k := []byte(key)

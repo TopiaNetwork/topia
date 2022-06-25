@@ -22,7 +22,7 @@ import (
 //	}
 //}
 
-func (df *TopiaFile)Zip(src string) (err error) {
+func (df *FileItem)Zip(src string) (err error) {
 	dst := df.File.Name()
 	fw, err := os.Create(dst)
 	defer fw.Close()

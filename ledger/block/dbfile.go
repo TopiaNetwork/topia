@@ -14,11 +14,13 @@ import (
 const FILE_SIZE = 10000 * 1000
 const FILE_HEADER_SIZE = 10000
 
-type FileType int8
+type FileType uint16
 
 const (
-	DataFile       FileType = 0
-	IndexFile      FileType = 1
+	DataFileType       FileType = 0
+	IndexFileType      FileType = 1
+	DataHeaderType      FileType = 2
+	BackFileType      FileType = 3
 )
 
 var FileNameOpening = ""
@@ -87,7 +89,7 @@ func NewFile(block *types.Block) (*FileItem, error) {
 	FileNameOpening = filepath
 
 	tp := FileItem{
-		Filetype: DataFile,
+		Filetype: DataFileType,
 		File:   file,
 		Offset: FILE_HEADER_SIZE,
 	}
@@ -134,7 +136,7 @@ func NewIndexFile(block *types.Block) ( error) {
 	//}
 
 	var tp  = FileItem{
-		Filetype: IndexFile,
+		Filetype: IndexFileType,
 		File:   file,
 		Offset: 0,
 	}

@@ -1,10 +1,10 @@
 package block
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"os"
-	"path"
 	"strings"
 	"syscall"
 	//"encoding/json"
@@ -13,6 +13,7 @@ import (
 	"github.com/snksoft/crc"
 	"launchpad.net/gommap"
 	//tplog "github.com/TopiaNetwork/topia/log"
+	"errors"
 )
 
 
@@ -28,7 +29,7 @@ func (df *FileItem) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, er
 	fileindex, err := os.OpenFile(StartBlock+".index", os.O_RDWR, 0644)
 
 	indexfile := FileItem{
-		IndexFile,
+		IndexFileType,
 		fileindex,
 		FILE_HEADER_SIZE,
 		0,
@@ -104,7 +105,7 @@ func (df *FileItem) Writedata(block *types.Block) error {
 	copy(mmap[df.Offset+28:df.Offset+28+size],buf)
 
 	_ = df.File.Sync()
-	df.Offset = df.Offset + 16 + size
+	df.Offset = df.Offset + 28 + size
 	return  nil
 }
 
@@ -185,36 +186,28 @@ func (df *FileItem) WriteHeader(block *types.Block) error {
 //}
 
 
-func (df *FileItem) findTrans(filename string) (*types.Block, error) {
-	//blockbyte,_ := json.Marshal(block)
-	//buf := make([]byte, len(blockbyte))
+func (df *FileItem) findTrans(txid []byte) (uint64, error) {
 
-	indexfilename := path.Join(filename ,".trans")
-	file, err := os.OpenFile(indexfilename, os.O_RDWR, 0644)
-
-	//first index
-	indexmmap, _ := gommap.Map(file.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
-
-	start := 0
-	end := len(indexmmap)
-
-	dataoffset,_ := binarySearch(start,end,indexmmap[0],indexmmap)
-
-	datafilename := path.Join(filename ,".topia")
+	datafilename := df.File.Name()
 	filedata, err := os.OpenFile(datafilename, os.O_RDWR, 0644)
-	datammap, _ := gommap.Map(filedata.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
-
-	block := Decodeblock(datammap[0:dataoffset])
-	//item, err := Decodeblock(buf)
-	if block.Size() < 0{
-		return nil,err
-	}
-
-
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return block,err
+
+	datammap, err := gommap.Map(filedata.Fd(), syscall.PROT_READ, syscall.MAP_SHARED)
+	if err != nil{
+		panic(err)
+	}
+
+
+	for i :=0; i*26 < int(df.HeaderOffset); i++ {
+		if  bytes.Equal(datammap[i*26+2:i*26+10], txid){
+			blocknum := binary.BigEndian.Uint64(datammap[i*26+10:i*26 + 18])
+			return blocknum,nil
+		}
+	}
+
+	return 0,errors.New("Can not find txid")
 
 }
 
@@ -234,10 +227,7 @@ func OutSize(filepath string)(bool){
 }
 
 
-func RollBackWrite(blockNum types.BlockNum) error{
-	
-	return nil
-}
+
 
 
 

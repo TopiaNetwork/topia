@@ -10,7 +10,9 @@ import (
 	//"encoding/json"
 
 	"github.com/TopiaNetwork/topia/chain/types"
-	"github.com/snksoft/crc"
+	tpcmm "github.com/TopiaNetwork/topia/common"
+
+	//"github.com/snksoft/crc"
 	"launchpad.net/gommap"
 	//tplog "github.com/TopiaNetwork/topia/log"
 	"errors"
@@ -92,9 +94,11 @@ func (df *FileItem) Writedata(block *types.Block) error {
 
 
 	buf,_ := Encodeblock(block)
-	ccittCrc := crc.CalculateCRC(crc.CCITT, buf)
-	crcbyte :=  Uint64ToBytes(ccittCrc)
-	fmt.Println(ccittCrc)
+	//ccittCrc := crc.CalculateCRC(crc.CCITT, buf)
+	hasher := tpcmm.NewBlake2bHasher(0)
+	crcbyte := hasher.Compute(string(buf))
+
+
 	size := uint64(len(buf))
 	sizebyte := Uint64ToBytes(size)
 

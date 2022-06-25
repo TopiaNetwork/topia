@@ -19,7 +19,7 @@ type BackItem struct{
 }
 
 
-func (df *FileItem) roll_back_index() (error) {
+func (df *FileItem) RollBackIndex() (error) {
 
 	var err error
 
@@ -64,7 +64,7 @@ func (df *FileItem) roll_back_index() (error) {
 
 }
 
-func (df *FileItem) roll_back_header() ( error) {
+func (df *FileItem) RollBackHeader() ( error) {
 	var err error
 
 	TraceIndex := strings.Index(df.File.Name(), ".")
@@ -105,7 +105,7 @@ func (df *FileItem) roll_back_header() ( error) {
 	return nil
 }
 
-func (df *FileItem) roll_back_data() (error) {
+func (df *FileItem) RollBackData() (error) {
 	var err error
 
 	TraceIndex := strings.Index(df.File.Name(), ".")
@@ -146,7 +146,7 @@ func (df *FileItem) roll_back_data() (error) {
 	return nil
 }
 
-func (df *FileItem) emptyroll() (error) {
+func (df *FileItem) EmptyRoll() (error) {
 
 	var err error
 

@@ -133,6 +133,10 @@ func (an *activeNodeInfos) update(log tplog.Logger, compStateRN state.Compositio
 		an.nodeWeights[executorInfo.NodeID] = executorInfo.Weight
 	}
 
+	if len(an.activeProposerIDs) != 0 {
+		panic("")
+	}
+
 	for _, proposerInfo := range proposerInfos {
 		an.activeProposerIDs = append(an.activeProposerIDs, proposerInfo.NodeID)
 		an.activeProposerWeights += proposerInfo.Weight

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ValidateTxMaxCount = 3
+	ValidateTxMinCount = 3
 )
 
 type executionResultValidate struct {
@@ -125,13 +125,18 @@ func (ev *executionResultValidate) Validate(ctx context.Context, propMsg *Propos
 		return "", false, err
 	}
 
-	validateResp, txHashs, txResultHashs, err := ev.resultValidateDataRequest(ctx, propMsg, ValidateTxMaxCount)
+	validateTxCount := ValidateTxMinCount
+	if len(propMsg.TxHashs) < ValidateTxMinCount {
+		validateTxCount = len(propMsg.TxHashs)
+	}
+
+	validateResp, txHashs, txResultHashs, err := ev.resultValidateDataRequest(ctx, propMsg, validateTxCount)
 	if err != nil {
 		ev.log.Errorf("Deliver execution result validate req err: %v", err)
 		return "", false, err
 	}
 
-	if len(validateResp.TxProofs) != ValidateTxMaxCount || len(validateResp.TxResultProofs) != ValidateTxMaxCount {
+	if len(validateResp.TxProofs) != validateTxCount || len(validateResp.TxResultProofs) != validateTxCount {
 		err := fmt.Errorf("Invalid tx proof or tx result proof count: expected %d, %d; actual %d, %d", len(propMsg.TxHashs), len(propMsg.TxResultHashs), validateResp.TxProofs, validateResp.TxResultProofs)
 		ev.log.Errorf("%v", err)
 		return "", false, err

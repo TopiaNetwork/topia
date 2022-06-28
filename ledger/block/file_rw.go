@@ -8,14 +8,11 @@ import (
 	"strings"
 	"syscall"
 
-
 	"github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 
-
-	"launchpad.net/gommap"
-
 	"errors"
+	"launchpad.net/gommap"
 )
 
 
@@ -140,7 +137,6 @@ func (df *FileItem) WriteHeader(block *types.Block) error {
 	defer mmap.UnsafeUnmap()
 	txid_len := len(txids)
 	for i:=0;i < txid_len;i++ {
-
 		copy(mmap[df.Offset:df.Offset+2], versionbyte)
 		copy(mmap[df.Offset+2:df.Offset+10],txids[i])
 		copy(mmap[df.Offset+10:df.Offset+18], Uint64ToBytes(blockKey))

@@ -103,18 +103,7 @@ func NewFile(block *types.Block) (*FileItem, error) {
 	return &tp, nil
 }
 
-// transaction to bytes
-//func (m *Transaction) HashBytes() ([]byte, error) {
-//	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
-//	txBytes, err := marshaler.Marshal(m)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	hasher := tpcmm.NewBlake2bHasher(0)
-//
-//	return hasher.Compute(string(txBytes)), nil
-//}
+
 
 func NewIndexFile(block *types.Block) ( error) {
 	blockKey := block.GetHead().GetHeight()
@@ -137,7 +126,7 @@ func NewIndexFile(block *types.Block) ( error) {
 		Offset: 0,
 	}
 	//what's the version ?????
-	//索引是哪个版本的再哪确定
+
 	tp.Writeindex(88,0)
 
 

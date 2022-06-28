@@ -132,9 +132,10 @@ message VoteMessage {
   uint64 Epoch        = 3 [(gogoproto.jsontag) = "epoch"];
   uint64 Round        = 4 [(gogoproto.jsontag) = "epoch"];
   bytes Signature     = 5 [(gogoproto.jsontag) = "signature"];
-  bytes PubKey        = 6 [(gogoproto.jsontag) = "pubKey"];
-  uint64 StateVersion = 7 [(gogoproto.jsontag) = "stateVersion"];
-  bytes BlockHead     = 8 [(gogoproto.jsontag) = "blockHead"];
+  bytes Voter         = 6  [(gogoproto.jsontag)= "voter"];
+  bytes PubKey        = 7 [(gogoproto.jsontag) = "pubKey"];
+  uint64 StateVersion = 8 [(gogoproto.jsontag) = "stateVersion"];
+  bytes BlockHead     = 9 [(gogoproto.jsontag) = "blockHead"];
 }
 
 message CommitMessage {

@@ -5,3 +5,6 @@
 	path = crypt/ed25519/libsodium
 	url = https://github.com/TopiaNetwork/libsodium.git
 	branch = forTopia
+[submodule "ledger/block/zstd"]
+	path = ledger/block/zstd
+	url = https://github.com/facebook/zstd.git

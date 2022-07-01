@@ -20,6 +20,7 @@ package block
 #include  "./zstd/lib/common/bits.h"
 #include  "./zstd/lib/common/xxhash.h"
 #include  "./zstd/lib/common/xxhash.c"
+#include  "./zstd/lib/common/portability_macros.h"
 
 #include "./zstd/lib/compress/zstd_compress_internal.h"
 #include "./zstd/lib/compress/zstd_compress_sequences.c"
@@ -35,8 +36,18 @@ package block
 #include "./zstd/lib/compress/zstd_compress_superblock.h"
 #include "./zstd/lib/compress/zstd_compress_superblock.c"
 
+#include "./zstd/lib/decompress/huf_decompress.c"
+//#include "./zstd/lib/decompress/huf_decompress_amd64.S"
+#include "./zstd/lib/decompress/zstd_ddict.c"
+#include "./zstd/lib/decompress/zstd_ddict.h"
+#include "./zstd/lib/decompress/zstd_decompress_block.c"
+#include "./zstd/lib/decompress/zstd_decompress_block.h"
+#include "./zstd/lib/decompress/zstd_decompress_internal.h"
+
+
 #include "./zstd/lib/zstd.h"
 #include "./zstd/lib/compress/zstd_compress.c"
+#include "./zstd/lib/decompress/zstd_decompress.c"
 */
 import "C"
 import "unsafe"
@@ -44,10 +55,18 @@ import "unsafe"
 const DefaultCompressionLevel = 3
 
 func Compress(dst unsafe.Pointer, dstCapacity uint32, src unsafe.Pointer, srcSize uint32)  uint32{
-	return C.ZSTD_compress(dst, dstCapacity,src, srcSize, DefaultCompressionLevel)
+	res := C.ZSTD_compress(dst, C.ulong(dstCapacity),src, C.ulong(srcSize), C.int(DefaultCompressionLevel))
+	return is_error(uint32(res))
 }
 
 
-//func Decompress(dst, src []byte) []byte {
-//	return compressDictLevel(dst, src, nil, DefaultCompressionLevel)
+//func Decompress(dst unsafe.Pointer, dstCapacity uint32, src unsafe.Pointer, srcSize uint32)  uint32{
+//	res := C.ZSTD_decompress(dst, C.ulong(dstCapacity),src, C.ulong(srcSize))
+//	return is_error(uint32(res))
 //}
+
+
+func is_error(code uint32) uint32{
+
+	return uint32(C.ZSTD_isError(C.ulong(code)))
+}

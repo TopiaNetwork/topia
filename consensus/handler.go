@@ -35,76 +35,76 @@ type ConsensusHandler interface {
 
 	ProcessBlockAdded(block *tpchaintypes.Block) error
 
-	ProcessEpochNew(epoch *tpcmm.EpochInfo) error
-
 	ProcessDKGPartPubKey(msg *DKGPartPubKeyMessage) error
 
 	ProcessDKGDeal(msg *DKGDealMessage) error
 
 	ProcessDKGDealResp(msg *DKGDealRespMessage) error
+
+	ProcessDKGFinishedMsg(msg *DKGFinishedMessage) error
 }
 
 type consensusHandler struct {
-	log                         tplog.Logger
-	epochNew                    chan *tpcmm.EpochInfo
-	preprePackedMsgExeChan      chan *PreparePackedMessageExe
-	preprePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
-	preprePackedMsgPropChan     chan *PreparePackedMessageProp
-	proposeMsgChan              chan *ProposeMessage
-	bestProposeMsgChan          chan *BestProposeMessage
-	voteMsgChan                 chan *VoteMessage
-	commitMsgChan               chan *CommitMessage
-	blockAddedEpochCh           chan *tpchaintypes.Block
-	blockAddedProposerCh        chan *tpchaintypes.Block
-	partPubKey                  chan *DKGPartPubKeyMessage
-	dealMsgCh                   chan *DKGDealMessage
-	dealRespMsgCh               chan *DKGDealRespMessage
-	ledger                      ledger.Ledger
-	marshaler                   codec.Marshaler
-	deliver                     messageDeliverI
-	exeScheduler                execution.ExecutionScheduler
-	epochService                EpochService
+	log                          tplog.Logger
+	preparePackedMsgExeChan      chan *PreparePackedMessageExe
+	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
+	preparePackedMsgPropChan     chan *PreparePackedMessageProp
+	proposeMsgChan               chan *ProposeMessage
+	bestProposeMsgChan           chan *BestProposeMessage
+	voteMsgChan                  chan *VoteMessage
+	commitMsgChan                chan *CommitMessage
+	blockAddedCSDomain           chan *tpchaintypes.Block
+	blockAddedProposerCh         chan *tpchaintypes.Block
+	partPubKey                   chan *DKGPartPubKeyMessage
+	dealMsgCh                    chan *DKGDealMessage
+	dealRespMsgCh                chan *DKGDealRespMessage
+	finishedMsgCh                chan *DKGFinishedMessage
+	ledger                       ledger.Ledger
+	marshaler                    codec.Marshaler
+	deliver                      messageDeliverI
+	exeScheduler                 execution.ExecutionScheduler
+	epochService                 EpochService
 }
 
 func NewConsensusHandler(log tplog.Logger,
-	epochNew chan *tpcmm.EpochInfo,
-	preprePackedMsgExeChan chan *PreparePackedMessageExe,
-	preprePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
-	preprePackedMsgPropChan chan *PreparePackedMessageProp,
+	preparePackedMsgExeChan chan *PreparePackedMessageExe,
+	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
+	preparePackedMsgPropChan chan *PreparePackedMessageProp,
 	proposeMsgChan chan *ProposeMessage,
 	bestProposeMsgChan chan *BestProposeMessage,
 	voteMsgChan chan *VoteMessage,
 	commitMsgChan chan *CommitMessage,
-	blockAddedEpochCh chan *tpchaintypes.Block,
+	blockAddedCSDomain chan *tpchaintypes.Block,
 	blockAddedProposerCh chan *tpchaintypes.Block,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
+	finishedMsgCh chan *DKGFinishedMessage,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
 	deliver messageDeliverI,
 	exeScheduler execution.ExecutionScheduler,
 	epochService EpochService) *consensusHandler {
 	return &consensusHandler{
-		log:                         log,
-		epochNew:                    epochNew,
-		preprePackedMsgExeChan:      preprePackedMsgExeChan,
-		preprePackedMsgExeIndicChan: preprePackedMsgExeIndicChan,
-		preprePackedMsgPropChan:     preprePackedMsgPropChan,
-		proposeMsgChan:              proposeMsgChan,
-		bestProposeMsgChan:          bestProposeMsgChan,
-		voteMsgChan:                 voteMsgChan,
-		commitMsgChan:               commitMsgChan,
-		blockAddedEpochCh:           blockAddedEpochCh,
-		blockAddedProposerCh:        blockAddedProposerCh,
-		partPubKey:                  partPubKey,
-		dealMsgCh:                   dealMsgCh,
-		dealRespMsgCh:               dealRespMsgCh,
-		ledger:                      ledger,
-		marshaler:                   marshaler,
-		deliver:                     deliver,
-		exeScheduler:                exeScheduler,
-		epochService:                epochService,
+		log:                          log,
+		preparePackedMsgExeChan:      preparePackedMsgExeChan,
+		preparePackedMsgExeIndicChan: preparePackedMsgExeIndicChan,
+		preparePackedMsgPropChan:     preparePackedMsgPropChan,
+		proposeMsgChan:               proposeMsgChan,
+		bestProposeMsgChan:           bestProposeMsgChan,
+		voteMsgChan:                  voteMsgChan,
+		commitMsgChan:                commitMsgChan,
+		blockAddedCSDomain:           blockAddedCSDomain,
+		blockAddedProposerCh:         blockAddedProposerCh,
+		partPubKey:                   partPubKey,
+		dealMsgCh:                    dealMsgCh,
+		dealRespMsgCh:                dealRespMsgCh,
+		finishedMsgCh:                finishedMsgCh,
+		ledger:                       ledger,
+		marshaler:                    marshaler,
+		deliver:                      deliver,
+		exeScheduler:                 exeScheduler,
+		epochService:                 epochService,
 	}
 }
 
@@ -117,7 +117,7 @@ func (handler *consensusHandler) ProcessPreparePackedMsgExe(msg *PreparePackedMe
 
 	activeExeIds := handler.epochService.GetActiveExecutorIDs()
 	if tpcmm.IsContainString(id, activeExeIds) {
-		handler.preprePackedMsgExeChan <- msg
+		handler.preparePackedMsgExeChan <- msg
 	} else {
 		err := fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe", id)
 		handler.log.Errorf("%v", err)
@@ -131,7 +131,7 @@ func (handler *consensusHandler) ProcessPreparePackedMsgExeIndication(msg *Prepa
 
 	activeExeIds := handler.epochService.GetActiveExecutorIDs()
 	if tpcmm.IsContainString(id, activeExeIds) {
-		handler.preprePackedMsgExeIndicChan <- msg
+		handler.preparePackedMsgExeIndicChan <- msg
 	} else {
 		err := fmt.Errorf("Node %s not active executors, so will discard received prepare packed msg exe indication", id)
 		handler.log.Errorf("%v", err)
@@ -145,7 +145,7 @@ func (handler *consensusHandler) ProcessPreparePackedMsgProp(msg *PreparePackedM
 
 	activeProposeIds := handler.epochService.GetActiveProposerIDs()
 	if tpcmm.IsContainString(id, activeProposeIds) {
-		handler.preprePackedMsgPropChan <- msg
+		handler.preparePackedMsgPropChan <- msg
 	} else {
 		err := fmt.Errorf("Node %s not active proposers, so will discard received prepare packed msg prop", id)
 		handler.log.Errorf("%v", err)
@@ -200,14 +200,8 @@ func (handler *consensusHandler) ProcessCommit(msg *CommitMessage) error {
 }
 
 func (handler *consensusHandler) ProcessBlockAdded(block *tpchaintypes.Block) error {
-	handler.blockAddedEpochCh <- block
+	handler.blockAddedCSDomain <- block
 	handler.blockAddedProposerCh <- block
-
-	return nil
-}
-
-func (handler *consensusHandler) ProcessEpochNew(epoch *tpcmm.EpochInfo) error {
-	handler.epochNew <- epoch
 
 	return nil
 }
@@ -226,6 +220,12 @@ func (handler *consensusHandler) ProcessDKGDeal(msg *DKGDealMessage) error {
 
 func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) error {
 	handler.dealRespMsgCh <- msg
+
+	return nil
+}
+
+func (handler *consensusHandler) ProcessDKGFinishedMsg(msg *DKGFinishedMessage) error {
+	handler.finishedMsgCh <- msg
 
 	return nil
 }

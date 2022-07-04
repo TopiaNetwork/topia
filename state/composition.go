@@ -10,7 +10,7 @@ import (
 
 	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/common"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -18,7 +18,8 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
-	staetround "github.com/TopiaNetwork/topia/state/epoch"
+	statedomain "github.com/TopiaNetwork/topia/state/domain"
+	stateepoch "github.com/TopiaNetwork/topia/state/epoch"
 	statenode "github.com/TopiaNetwork/topia/state/node"
 )
 
@@ -33,7 +34,7 @@ type NodeNetWorkStateWapper interface {
 type CompositionStateReadonly interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() common.NetworkType
+	NetworkType() tpcmm.NetworkType
 
 	GetAccountRoot() ([]byte, error)
 
@@ -54,6 +55,26 @@ type CompositionStateReadonly interface {
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
 	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
+
+	GetNodeDomainRoot() ([]byte, error)
+
+	GetNodeExecuteDomainRoot() ([]byte, error)
+
+	GetNodeConsensusDomainRoot() ([]byte, error)
+
+	IsNodeDomainExist(nodeID string) bool
+
+	IsExistNodeExecuteDomain(id string) bool
+
+	IsExistNodeConsensusDomain(id string) bool
+
+	GetNodeDomain(id string) (*tpcmm.NodeDomainInfo, error)
+
+	GetAllActiveNodeDomains(height uint64) ([]*tpcmm.NodeDomainInfo, error)
+
+	GetAllActiveNodeExecuteDomains(height uint64) ([]*tpcmm.NodeDomainInfo, error)
+
+	GetAllActiveNodeConsensusDomains(height uint64) ([]*tpcmm.NodeDomainInfo, error)
 
 	GetNodeRoot() ([]byte, error)
 
@@ -77,7 +98,7 @@ type CompositionStateReadonly interface {
 
 	GetAllConsensusNodeIDs() ([]string, error)
 
-	GetNode(nodeID string) (*common.NodeInfo, error)
+	GetNode(nodeID string) (*tpcmm.NodeInfo, error)
 
 	GetTotalWeight() (uint64, error)
 
@@ -89,13 +110,13 @@ type CompositionStateReadonly interface {
 
 	GetInactiveNodeIDs() ([]string, error)
 
-	GetAllActiveExecutors() ([]*common.NodeInfo, error)
+	GetAllActiveExecutors() ([]*tpcmm.NodeInfo, error)
 
-	GetAllActiveProposers() ([]*common.NodeInfo, error)
+	GetAllActiveProposers() ([]*tpcmm.NodeInfo, error)
 
-	GetAllActiveValidators() ([]*common.NodeInfo, error)
+	GetAllActiveValidators() ([]*tpcmm.NodeInfo, error)
 
-	GetAllInactiveNodes() ([]*common.NodeInfo, error)
+	GetAllInactiveNodes() ([]*tpcmm.NodeInfo, error)
 
 	GetNodeWeight(nodeID string) (uint64, error)
 
@@ -109,7 +130,7 @@ type CompositionStateReadonly interface {
 
 	GetEpochRoot() ([]byte, error)
 
-	GetLatestEpoch() (*common.EpochInfo, error)
+	GetLatestEpoch() (*tpcmm.EpochInfo, error)
 
 	CompSStateStore() tplgss.StateStore
 
@@ -148,12 +169,15 @@ const (
 type CompositionState interface {
 	stateaccount.AccountState
 	statechain.ChainState
+	statedomain.NodeDomainState
+	statedomain.NodeExecuteDomainState
+	statedomain.NodeConsensusDomainState
 	statenode.NodeState
 	statenode.NodeInactiveState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
-	staetround.EpochState
+	stateepoch.EpochState
 
 	CompSStateStore() tplgss.StateStore
 
@@ -190,12 +214,15 @@ type compositionState struct {
 	tplgss.StateStore
 	stateaccount.AccountState
 	statechain.ChainState
+	statedomain.NodeDomainState
+	statedomain.NodeExecuteDomainState
+	statedomain.NodeConsensusDomainState
 	statenode.NodeState
 	statenode.NodeInactiveState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
-	staetround.EpochState
+	stateepoch.EpochState
 	log          tplog.Logger
 	ledger       ledger.Ledger
 	stateVersion uint64
@@ -233,7 +260,7 @@ func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger
 		NodeExecutorState:  executorState,
 		NodeProposerState:  proposerState,
 		NodeValidatorState: validatorState,
-		EpochState:         staetround.NewRoundState(stateStore, 1024*1024),
+		EpochState:         stateepoch.NewEpochState(stateStore, 1024*1024),
 	}
 }
 

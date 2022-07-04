@@ -43,7 +43,13 @@ const (
 
 const MaxAvail_Count = 5
 
+type EpochUpdater interface {
+	UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error
+}
+
 type ExecutionScheduler interface {
+	SetEpochUpdater(epochUpdater EpochUpdater)
+
 	State() SchedulerState
 
 	MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error)
@@ -69,6 +75,7 @@ type executionScheduler struct {
 	exePackedCount   *atomic.Uint32
 	exePackedTxsList *list.List
 	config           *configuration.Configuration
+	epochUpdater     EpochUpdater
 	marshaler        codec.Marshaler
 	txPool           txpooli.TransactionPool
 	syncCommitBlock  sync.RWMutex
@@ -89,6 +96,10 @@ func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuratio
 		marshaler:        codec.CreateMarshaler(codecType),
 		txPool:           txPool,
 	}
+}
+
+func (scheduler *executionScheduler) SetEpochUpdater(epochUpdater EpochUpdater) {
+	scheduler.epochUpdater = epochUpdater
 }
 
 func (scheduler *executionScheduler) State() SchedulerState {
@@ -353,8 +364,6 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 	scheduler.syncCommitBlock.Lock()
 	defer scheduler.syncCommitBlock.Unlock()
 
-	var newEpoch *tpcmm.EpochInfo
-
 	scheduler.log.Infof("CommitBlock gets lock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
 	stateCommitErr := func() error {
@@ -381,26 +390,7 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 		}
 		scheduler.log.Infof("CommitBlock set latest block result: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
-		latestEpoch, err := compState.GetLatestEpoch()
-		if err != nil {
-			scheduler.log.Errorf("Can't get latest epoch error: %v", err)
-			return err
-		}
-		scheduler.log.Infof("CommitBlock get latest epoch: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
-
-		deltaH := int(block.Head.Height) - int(latestEpoch.StartHeight)
-		if deltaH == int(scheduler.config.CSConfig.EpochInterval) {
-			newEpoch = &tpcmm.EpochInfo{
-				Epoch:          latestEpoch.Epoch + 1,
-				StartTimeStamp: uint64(time.Now().UnixNano()),
-				StartHeight:    block.Head.Height,
-			}
-			err = compState.SetLatestEpoch(newEpoch)
-			if err != nil {
-				scheduler.log.Errorf("Save the latest epoch error: %v", err)
-				return err
-			}
-		}
+		scheduler.epochUpdater.UpdateEpoch(ctx, block.Head, compState)
 
 		scheduler.log.Infof("CommitBlock begins committing: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 		errCMMState := compState.Commit()
@@ -434,10 +424,6 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 		return errCMMBlockRS
 	}
 	*/
-
-	if newEpoch != nil {
-		eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_EpochNew, newEpoch)
-	}
 
 	eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 

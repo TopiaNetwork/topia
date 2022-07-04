@@ -25,7 +25,7 @@ type epochState struct {
 	tplgss.StateStore
 }
 
-func NewRoundState(stateStore tplgss.StateStore, cacheSize int) EpochState {
+func NewEpochState(stateStore tplgss.StateStore, cacheSize int) EpochState {
 	stateStore.AddNamedStateStore(StateStore_Name_Epoch, cacheSize)
 	return &epochState{
 		StateStore: stateStore,

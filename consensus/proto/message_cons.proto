@@ -23,6 +23,7 @@ message ConsensusMessage {
     PartPubKey = 9;
     DKGDeal = 10;
     DKGDealResp = 11;
+    DKGFinished = 12;
   }
   Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
   bytes Data = 2  [(gogoproto.jsontag) = "data"];
@@ -150,30 +151,39 @@ message CommitMessage {
 }
 
 message DKGPartPubKeyMessage {
-  bytes  ChainID   = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version   = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Epoch     = 3  [(gogoproto.jsontag) = "epoch"];
-  bytes Signature  = 4  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey     = 5  [(gogoproto.jsontag) = "pubKey"];
-  bytes PartPubKey = 6  [(gogoproto.jsontag) = "partPubKey"];
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
+  bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes PartPubKey        = 6  [(gogoproto.jsontag) = "partPubKey"];
 }
 
 message DKGDealMessage {
-  bytes  ChainID  = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version  = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Epoch    = 3  [(gogoproto.jsontag) = "epoch"];
-  bytes Signature = 4  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey    = 5  [(gogoproto.jsontag) = "pubKey"];
-  bytes DealData  = 6  [(gogoproto.jsontag) = "dealData"];
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
+  bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes DealData          = 6  [(gogoproto.jsontag) = "dealData"];
 }
 
 message DKGDealRespMessage {
-  bytes  ChainID  = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version  = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Epoch    = 3  [(gogoproto.jsontag) = "epoch"];
-  bytes Signature = 4  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey    = 5  [(gogoproto.jsontag) = "pubKey"];
-  bytes RespData  = 6  [(gogoproto.jsontag) = "respData"];
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
+  bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes RespData          = 6  [(gogoproto.jsontag) = "respData"];
+}
+
+message DKGFinishedMessage {
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
+  bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes PubPolyCommit     = 6  [(gogoproto.jsontag) = "respData"];
 }
 
 

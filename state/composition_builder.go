@@ -2,11 +2,11 @@ package state
 
 import (
 	"context"
+	"github.com/orcaman/concurrent-map"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"github.com/orcaman/concurrent-map"
 
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -61,22 +61,26 @@ func GetStateBuilder(cType CompStateBuilderType) CompositionStateBuilder {
 }
 
 type compositionStateOfNodeFull struct {
-	sync          sync.RWMutex
-	nodeID        string
-	createdRecord map[uint64]struct{}
+	sync                sync.RWMutex
+	nodeID              string
+	topCompositionState atomic.Value //CompositionState
+	createdRecord       map[uint64]struct{}
 }
 
 type compositionStateOfNodeSimple struct {
-	nodeID          string
-	isCreating      uint32
-	maxStateVersion uint64
-	compStates      cmap.ConcurrentMap //StateVersion->CompositionState
+	nodeID              string
+	isCreating          uint32
+	maxStateVersion     uint64
+	topCompositionState atomic.Value       //CompositionState
+	compStates          cmap.ConcurrentMap //StateVersion->CompositionState
 }
 
 type CompositionStateBuilder interface {
 	CreateCompositionState(log tplog.Logger, nodeID string, ledger ledger.Ledger, stateVersion uint64, requester string) CompositionState
 
 	CompositionStateExist(nodeID string, stateVersion uint64) bool
+
+	TopCompositionState(nodeID string) CompositionState
 }
 
 type compositionStateBuilderFull struct {
@@ -111,6 +115,7 @@ func (bf *compositionStateBuilderFull) createCompositionStateOfNode(log tplog.Lo
 	if _, ok := compStateOfNode.createdRecord[stateVersion]; !ok {
 		compStateOfNode.createdRecord[stateVersion] = struct{}{}
 		compStateRTN = createCompositionState(log, ledger, stateVersion)
+		compStateOfNode.topCompositionState.Store(compStateRTN)
 		log.Infof("Create new CompositionState for stateVersion %d，requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
 	} else {
 		log.Warnf("Have created CompositionState for stateVersion %d，so ignore the create request, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
@@ -136,6 +141,20 @@ func (bf *compositionStateBuilderFull) CompositionStateExist(nodeID string, stat
 	}
 
 	return false
+}
+
+func (bs *compositionStateBuilderFull) TopCompositionState(nodeID string) CompositionState {
+	compStateOfNode := bs.getCompositionStateOfNode(nodeID)
+	if compStateOfNode == nil {
+		return nil
+	}
+
+	topCSVal := compStateOfNode.topCompositionState.Load()
+	if topCSVal == nil {
+		return nil
+	}
+
+	return topCSVal.(CompositionState)
 }
 
 func (ns *compositionStateOfNodeSimple) maintainTimerStart(ctx context.Context, log tplog.Logger, ledger ledger.Ledger) {
@@ -239,6 +258,8 @@ func (bs *compositionStateBuilderSimple) createCompositionStateOfNode(log tplog.
 
 		compStateOfNode.maxStateVersion = stateVersion
 
+		compStateOfNode.topCompositionState.Store(compStateRTN)
+
 		log.Infof("Create new CompositionState for stateVersion %d，requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
 		//}
 	}
@@ -268,4 +289,18 @@ func (bs *compositionStateBuilderSimple) CompositionStateExist(nodeID string, st
 	}
 
 	return false
+}
+
+func (bs *compositionStateBuilderSimple) TopCompositionState(nodeID string) CompositionState {
+	compStateOfNode := bs.getCompositionStateOfNode(nodeID, nil, nil)
+	if compStateOfNode == nil {
+		return nil
+	}
+
+	topCSVal := compStateOfNode.topCompositionState.Load()
+	if topCSVal == nil {
+		return nil
+	}
+
+	return topCSVal.(CompositionState)
 }

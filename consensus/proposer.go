@@ -555,6 +555,7 @@ func (p *consensusProposer) proposeBlockStart(ctx context.Context) {
 			select {
 			case addedBlock := <-p.blockAddedCh:
 				p.log.Infof("Proposer receives block added event: height %d, self node %s", addedBlock.Head.Height, p.nodeID)
+
 				if err := p.proposeBlockSpecification(ctx, addedBlock); err != nil {
 					continue
 				}

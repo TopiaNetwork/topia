@@ -449,9 +449,11 @@ func TestMultiRoleNodes(t *testing.T) {
 
 			nodeP.mainLog.Infof("Current active proposers %v and validators %v", activeProposers, activeValidators)
 
-			latestEpochInfo, _ := csStateRN.GetLatestEpoch()
+			latestBlock, _ := csStateRN.GetLatestBlock()
 
-			nodeP.cs.TriggerDKG(latestEpochInfo.Epoch)
+			if nodeP.nodeType != "executor" && nodeP.ledger.State() == tpcmm.LedgerState_Genesis {
+				nodeP.cs.TriggerDKG(latestBlock)
+			}
 		}()
 	}
 

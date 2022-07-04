@@ -3,7 +3,6 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/ledger/backend"
 	"log"
 	"sync"
 	"testing"
@@ -19,6 +18,7 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
 	"github.com/TopiaNetwork/topia/ledger"
+	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )

@@ -35,6 +35,8 @@ type NodeProposerState interface {
 
 	updateActiveProposerDKGPartPubKey(nodeID string, pubKey string) error
 
+	updateActiveProposerDKGPriShare(nodeID string, priShare []byte) error
+
 	removeActiveProposer(nodeID string) error
 }
 
@@ -125,11 +127,15 @@ func (ns *nodeProposerState) AddActiveProposer(nodeInfo *common.NodeInfo) error 
 }
 
 func (ns *nodeProposerState) updateActiveProposerWeight(nodeID string, weight uint64) error {
-	return uppdateWeight(ns.StateStore, StateStore_Name_Prop, nodeID, TotalActiveProposerWeight_Key, weight)
+	return updateWeight(ns.StateStore, StateStore_Name_Prop, nodeID, TotalActiveProposerWeight_Key, weight)
 }
 
 func (ns *nodeProposerState) updateActiveProposerDKGPartPubKey(nodeID string, pubKey string) error {
-	return uppdateDKGPartPubKey(ns.StateStore, StateStore_Name_Prop, nodeID, pubKey)
+	return updateDKGPartPubKey(ns.StateStore, StateStore_Name_Prop, nodeID, pubKey)
+}
+
+func (ns *nodeProposerState) updateActiveProposerDKGPriShare(nodeID string, priShare []byte) error {
+	return updateDKGPriShare(ns.StateStore, StateStore_Name_Prop, nodeID, priShare)
 }
 
 func (ns *nodeProposerState) removeActiveProposer(nodeID string) error {

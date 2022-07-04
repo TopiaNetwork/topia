@@ -76,13 +76,13 @@ func addNode(stateStore tplgss.StateStore, name string, totalNodeIDsKey string, 
 }
 
 func updateTotalIDs(stateStore tplgss.StateStore, name string, totalIDsKey string, nodeID string, isRemove bool) error {
-	totolIdsBytes, err := stateStore.GetStateData(name, []byte(totalIDsKey))
+	totalIdsBytes, err := stateStore.GetStateData(name, []byte(totalIDsKey))
 	if err != nil {
 		return err
 	}
 
 	var nodeIDs []string
-	err = json.Unmarshal(totolIdsBytes, &nodeIDs)
+	err = json.Unmarshal(totalIdsBytes, &nodeIDs)
 	if err != nil {
 		return err
 	}
@@ -92,12 +92,12 @@ func updateTotalIDs(stateStore tplgss.StateStore, name string, totalIDsKey strin
 	} else {
 		nodeIDs = tpcmm.RemoveIfExistString(nodeID, nodeIDs)
 	}
-	finalTotolIdsBytesNew, err := json.Marshal(&nodeIDs)
+	finalTotalIdsBytesNew, err := json.Marshal(&nodeIDs)
 	if err != nil {
 		return err
 	}
 
-	return stateStore.Update(name, []byte(totalIDsKey), finalTotolIdsBytesNew)
+	return stateStore.Update(name, []byte(totalIDsKey), finalTotalIdsBytesNew)
 }
 
 func updateTotalWeight(stateStore tplgss.StateStore, name string, totalWeightKey string, deltaWeight int64) error {
@@ -119,7 +119,7 @@ func updateTotalWeight(stateStore tplgss.StateStore, name string, totalWeightKey
 	return stateStore.Update(name, []byte(totalWeightKey), finalTotalWeightBytes)
 }
 
-func uppdateWeight(stateStore tplgss.StateStore, name string, nodeID string, totalWeightKey string, weight uint64) error {
+func updateWeight(stateStore tplgss.StateStore, name string, nodeID string, totalWeightKey string, weight uint64) error {
 	nodeInfo, err := getNode(stateStore, name, nodeID)
 	if err != nil {
 		return err
@@ -142,13 +142,29 @@ func uppdateWeight(stateStore tplgss.StateStore, name string, nodeID string, tot
 	return updateTotalWeight(stateStore, name, totalWeightKey, deltaWeight)
 }
 
-func uppdateDKGPartPubKey(stateStore tplgss.StateStore, name string, nodeID string, pubKey string) error {
+func updateDKGPartPubKey(stateStore tplgss.StateStore, name string, nodeID string, pubKey string) error {
 	nodeInfo, err := getNode(stateStore, name, nodeID)
 	if err != nil {
 		return err
 	}
 
 	nodeInfo.DKGPartPubKey = pubKey
+
+	nodeInfoBytes, err := json.Marshal(nodeInfo)
+	if err != nil {
+		return err
+	}
+
+	return stateStore.Update(name, []byte(nodeInfo.NodeID), nodeInfoBytes)
+}
+
+func updateDKGPriShare(stateStore tplgss.StateStore, name string, nodeID string, priShare []byte) error {
+	nodeInfo, err := getNode(stateStore, name, nodeID)
+	if err != nil {
+		return err
+	}
+
+	nodeInfo.DKGPriShare = priShare
 
 	nodeInfoBytes, err := json.Marshal(nodeInfo)
 	if err != nil {

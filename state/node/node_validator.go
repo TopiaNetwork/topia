@@ -35,6 +35,8 @@ type NodeValidatorState interface {
 
 	updateActiveValidatorDKGPartPubKey(nodeID string, pubKey string) error
 
+	updateActiveValidatorDKGPriShare(nodeID string, priShare []byte) error
+
 	removeActiveValidator(nodeID string) error
 }
 
@@ -125,11 +127,15 @@ func (ns *nodeValidatorState) AddActiveValidator(nodeInfo *common.NodeInfo) erro
 }
 
 func (ns *nodeValidatorState) updateActiveValidatorWeight(nodeID string, weight uint64) error {
-	return uppdateWeight(ns.StateStore, StateStore_Name_Val, nodeID, TotalActiveValidatorWeight_Key, weight)
+	return updateWeight(ns.StateStore, StateStore_Name_Val, nodeID, TotalActiveValidatorWeight_Key, weight)
 }
 
 func (ns *nodeValidatorState) updateActiveValidatorDKGPartPubKey(nodeID string, pubKey string) error {
-	return uppdateDKGPartPubKey(ns.StateStore, StateStore_Name_Val, nodeID, pubKey)
+	return updateDKGPartPubKey(ns.StateStore, StateStore_Name_Val, nodeID, pubKey)
+}
+
+func (ns *nodeValidatorState) updateActiveValidatorDKGPriShare(nodeID string, priShare []byte) error {
+	return updateDKGPriShare(ns.StateStore, StateStore_Name_Val, nodeID, priShare)
 }
 
 func (ns *nodeValidatorState) removeActiveValidator(nodeID string) error {

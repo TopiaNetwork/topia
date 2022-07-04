@@ -35,6 +35,8 @@ type NodeExecutorState interface {
 
 	updateActiveExecutorDKGPartPubKey(nodeID string, pubKey string) error
 
+	updateActiveExecutorDKGPriShare(nodeID string, priShare []byte) error
+
 	removeActiveExecutor(nodeID string) error
 }
 
@@ -125,11 +127,15 @@ func (ns *nodeExecutorState) addActiveExecutor(nodeInfo *common.NodeInfo) error 
 }
 
 func (ns *nodeExecutorState) updateActiveExecutorWeight(nodeID string, weight uint64) error {
-	return uppdateWeight(ns.StateStore, StateStore_Name_Exe, nodeID, TotalActiveExecutorWeight_Key, weight)
+	return updateWeight(ns.StateStore, StateStore_Name_Exe, nodeID, TotalActiveExecutorWeight_Key, weight)
 }
 
 func (ns *nodeExecutorState) updateActiveExecutorDKGPartPubKey(nodeID string, pubKey string) error {
-	return uppdateDKGPartPubKey(ns.StateStore, StateStore_Name_Exe, nodeID, pubKey)
+	return updateDKGPartPubKey(ns.StateStore, StateStore_Name_Exe, nodeID, pubKey)
+}
+
+func (ns *nodeExecutorState) updateActiveExecutorDKGPriShare(nodeID string, priShare []byte) error {
+	return updateDKGPriShare(ns.StateStore, StateStore_Name_Exe, nodeID, priShare)
 }
 
 func (ns *nodeExecutorState) removeActiveExecutor(nodeID string) error {

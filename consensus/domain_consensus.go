@@ -184,7 +184,7 @@ func (ds *domainConsensusService) collectConsensusCandidateNodeStart(ctx context
 				}
 
 				tSpan := ds.csConfig.BlocksPerEpoch / ConsensusDomain_TriggerTimesOfEachEpoch
-				tNumber := newBlock.Head.Height / tSpan * tSpan
+				tNumber := newBlock.Head.Height/tSpan*tSpan + 1
 				if tNumber == ds.triggerNumber {
 					continue
 				}
@@ -230,7 +230,9 @@ func (ds *domainConsensusService) collectConsensusCandidateNodeStart(ctx context
 					ds.dkgEx.deliver.updateCandNodeIDs(propCandNodeIDs, valCandNodeIDs)
 					ds.dkgEx.initWhenStart(ds.triggerNumber)
 					ds.dkgEx.addDKGBLSUpdater(ds)
-					ds.dkgEx.start(ds.triggerNumber)
+					ds.dkgEx.start(ds.triggerNumber, ctx)
+
+					ds.log.Infof("Candidate node is selected for consensus domain: self node %s", ds.nodeID)
 				}
 			case <-ctx.Done():
 				ds.log.Infof("Collect consensus candidate nodes exit: self node %s", ds.nodeID)

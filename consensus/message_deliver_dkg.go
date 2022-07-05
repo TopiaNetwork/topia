@@ -241,7 +241,7 @@ func (md *dkgMessageDeliver) deliverDKGFinishedMessage(ctx context.Context, msg 
 
 	if propCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
 		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-		err = deliverSendCommon(propCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_DKGDealResp, msgBytes)
+		err = deliverSendCommon(propCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_DKGFinished, msgBytes)
 		if err != nil {
 			md.log.Errorf("Send dkg finished message to propose network failed: err=%v", err)
 		}
@@ -249,7 +249,7 @@ func (md *dkgMessageDeliver) deliverDKGFinishedMessage(ctx context.Context, msg 
 
 	if ValCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
 		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-		err = deliverSendCommon(ValCtx, md.log, md.marshaler, md.network, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_DKGDealResp, msgBytes)
+		err = deliverSendCommon(ValCtx, md.log, md.marshaler, md.network, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_DKGFinished, msgBytes)
 		if err != nil {
 			md.log.Errorf("Send dkg finished message to validate network failed: err=%v", err)
 		}

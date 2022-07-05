@@ -39,9 +39,11 @@ func (selector *domainConsensusSelector) Select(selfNodeID string) (DKGBls, []*t
 		return nil, nil, 0, err
 	}
 	if len(activeCSDomains) == 0 {
-		selector.log.Warn("No available consensus domain at present")
+		//selector.log.Warn("No available consensus domain at present")
 		return nil, nil, 0, nil
 	}
+
+	selector.log.Infof("Get available consensus domains: number %d", len(activeCSDomains))
 
 	hasher := tpcmm.NewBlake2bHasher(0)
 	hashBytes := hasher.Compute(string(latestBlock.Head.VRFProof))

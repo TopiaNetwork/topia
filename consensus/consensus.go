@@ -114,7 +114,7 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 
 	epService := NewEpochService(consLog, nodeID, csConfig.EpochInterval, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
 
-	csDomainService := NewDomainConsensusService(nodeID, log, ledger, blockAddedCSDomain, roleSelector, csConfig)
+	csDomainService := NewDomainConsensusService(nodeID, log, ledger, blockAddedCSDomain, roleSelector, csConfig, dkgEx)
 
 	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, epService, deliver, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
 	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, bestProposeMsgChan, commitMsgChan, ledger, deliver, marshaler, epService)
@@ -232,8 +232,6 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 	cons.nodeRole = nodeInfo.Role
 	cons.log.Infof("Self Node id=%s, role=%s, state=%d", nodeInfo.NodeID, nodeInfo.Role.String(), nodeInfo.State)
 
-	cons.epochService.Start(ctx)
-
 	if nodeInfo.Role&tpcmm.NodeRole_Executor == tpcmm.NodeRole_Executor {
 		cons.executor.start(ctx)
 	}
@@ -249,6 +247,8 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 		cons.dkgEx.startLoop(ctx)
 
 		cons.csDomainService.Start(ctx)
+
+		cons.epochService.Start(ctx)
 	}
 
 	return nil

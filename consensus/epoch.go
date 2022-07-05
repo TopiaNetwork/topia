@@ -288,19 +288,21 @@ func (es *epochService) notifyUpdater(dkgBls DKGBls) {
 }
 
 func (es *epochService) Start(ctx context.Context) {
-	for {
-		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID)
-		if err != nil {
-			es.log.Errorf("Select consensus domain error: %v", err)
-			continue
+	go func() {
+		for {
+			dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID)
+			if err != nil {
+				es.log.Errorf("Select consensus domain error: %v", err)
+				continue
+			}
+			if dkgCPT != nil {
+				es.activeNodeInfos.update(es.log, es.ledger, members)
+				es.notifyUpdater(dkgCPT)
+				atomic.StoreUint32(&es.selfSelected, selfSelected)
+				return
+			} else {
+				time.Sleep(50 * time.Millisecond)
+			}
 		}
-		if dkgCPT != nil {
-			es.activeNodeInfos.update(es.log, es.ledger, members)
-			es.notifyUpdater(dkgCPT)
-			atomic.StoreUint32(&es.selfSelected, selfSelected)
-			return
-		} else {
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
+	}()
 }

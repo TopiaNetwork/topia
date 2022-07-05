@@ -44,7 +44,8 @@ func NewDomainConsensusService(
 	ledger ledger.Ledger,
 	blockAddedCh chan *tpchaintypes.Block,
 	selector vrf.RoleSelectorVRF,
-	csConfig *configuration.ConsensusConfiguration) *domainConsensusService {
+	csConfig *configuration.ConsensusConfiguration,
+	dkgEx *dkgExchange) *domainConsensusService {
 
 	return &domainConsensusService{
 		nodeID:       nodeID,
@@ -53,6 +54,7 @@ func NewDomainConsensusService(
 		blockAddedCh: blockAddedCh,
 		selector:     selector,
 		csConfig:     csConfig,
+		dkgEx:        dkgEx,
 	}
 }
 

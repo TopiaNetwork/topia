@@ -109,7 +109,7 @@ func TestDkgExchangeLoop(t *testing.T) {
 
 	for i := 0; i < nParticipant; i++ {
 		wg.Add(1)
-		dkgExChangeMap[i].start(10)
+		dkgExChangeMap[i].start(10, context.Background())
 		go func(dkgEx *dkgExchange, index int) {
 			defer wg.Done()
 			for {

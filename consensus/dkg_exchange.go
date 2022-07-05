@@ -156,8 +156,14 @@ func (ex *dkgExchange) initWhenStart(triggerNumber uint64) {
 	ex.setDKGCrypt(dkgCrypt)
 }
 
-func (ex *dkgExchange) start(triggerNumber uint64) {
+func (ex *dkgExchange) start(triggerNumber uint64, ctx context.Context) {
 	ex.startCh <- triggerNumber
+
+	ex.startReceiveDealLoop(ctx)
+
+	ex.startReceiveDealRespLoop(ctx)
+
+	ex.startReceiveFinishedMsg(ctx)
 }
 
 func (ex *dkgExchange) stop() {
@@ -401,7 +407,6 @@ func (ex *dkgExchange) startReceiveFinishedMsg(ctx context.Context) {
 				if len(ex.dkgCrypt.remoteFinished) >= ex.dkgCrypt.nParticipant-1 {
 					ex.updateDKGState(DKGExchangeState_IDLE)
 					ex.notifyUpdater()
-
 				}
 			case <-ex.stopCh:
 				ex.log.Info("DKG exchange receive finished message loop stop")
@@ -417,12 +422,6 @@ func (ex *dkgExchange) startReceiveFinishedMsg(ctx context.Context) {
 func (ex *dkgExchange) startLoop(ctx context.Context) {
 	ex.log.Info("Start DKG exchange loop")
 	ex.startSendDealLoop(ctx)
-
-	ex.startReceiveDealLoop(ctx)
-
-	ex.startReceiveDealRespLoop(ctx)
-
-	ex.startReceiveFinishedMsg(ctx)
 }
 
 func (state DKGExchangeState) String() string {

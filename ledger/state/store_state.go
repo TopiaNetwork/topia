@@ -19,6 +19,10 @@ const (
 	Flag_WriteOnly      = 0x10
 )
 
+type IterStateDataCBFunc func(key []byte, val []byte)
+
+type IterStateCBFunc func(key []byte, val []byte, proof []byte)
+
 type StateStore interface {
 	AddNamedStateStore(name string, cacheSize int) error
 
@@ -38,7 +42,11 @@ type StateStore interface {
 
 	GetAllStateData(name string) ([][]byte, [][]byte, error)
 
+	IterateAllStateDataCB(name string, iterCBFunc IterStateDataCBFunc) error
+
 	GetAllState(name string) ([][]byte, [][]byte, [][]byte, error)
+
+	IterateAllStateCB(name string, iterCBFunc IterStateCBFunc) error
 
 	Clone(other StateStore) error
 
@@ -225,6 +233,17 @@ func (m *stateStore) GetAllStateData(name string) ([][]byte, [][]byte, error) {
 	return nil, nil, fmt.Errorf("Can't find the responding state store: name=%s", name)
 }
 
+func (m *stateStore) IterateAllStateDataCB(name string, iterCBFunc IterStateDataCBFunc) error {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	if ss, ok := m.storeMap[name]; ok {
+		return ss.IterateAllStateDataCB(iterCBFunc)
+	}
+
+	return fmt.Errorf("Can't find the responding state store: name=%s", name)
+}
+
 func (m *stateStore) GetAllState(name string) ([][]byte, [][]byte, [][]byte, error) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
@@ -234,6 +253,17 @@ func (m *stateStore) GetAllState(name string) ([][]byte, [][]byte, [][]byte, err
 	}
 
 	return nil, nil, nil, fmt.Errorf("Can't find the responding state store: name=%s", name)
+}
+
+func (m *stateStore) IterateAllStateCB(name string, iterCBFunc IterStateCBFunc) error {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	if ss, ok := m.storeMap[name]; ok {
+		return ss.IterateAllStateCB(iterCBFunc)
+	}
+
+	return fmt.Errorf("Can't find the responding state store: name=%s", name)
 }
 
 func (m *stateStore) Clone(other StateStore) error {

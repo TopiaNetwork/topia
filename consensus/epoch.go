@@ -3,7 +3,10 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -30,6 +33,10 @@ type EpochService interface {
 
 	GetLatestEpoch() *tpcmm.EpochInfo
 
+	AddDKGBLSUpdater(updater DKGBLSUpdater)
+
+	UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error
+
 	Start(ctx context.Context)
 }
 
@@ -47,21 +54,21 @@ type activeNodeInfos struct {
 type epochService struct {
 	log                 tplog.Logger
 	nodeID              string
-	blockAddedCh        chan *tpchaintypes.Block
-	epochNewCh          chan *tpcmm.EpochInfo
 	epochInterval       uint64 //the height number between two epochs
 	currentEpoch        *tpcmm.EpochInfo
 	dkgStartBeforeEpoch uint64 //the starting height number of DKG before an epoch
 	exeScheduler        execution.ExecutionScheduler
 	ledger              ledger.Ledger
 	dkgExchange         *dkgExchange
+	csDomainSelector    *domainConsensusSelector
 	activeNodeInfos     *activeNodeInfos
+	selfSelected        uint32
+	updatersSync        sync.RWMutex
+	dkgBLSUpdaters      []DKGBLSUpdater
 }
 
 func NewEpochService(log tplog.Logger,
 	nodeID string,
-	blockAddedCh chan *tpchaintypes.Block,
-	epochNewCh chan *tpcmm.EpochInfo,
 	epochInterval uint64,
 	dkgStartBeforeEpoch uint64,
 	exeScheduler execution.ExecutionScheduler,
@@ -80,26 +87,32 @@ func NewEpochService(log tplog.Logger,
 	}
 
 	anInfos := &activeNodeInfos{}
-	anInfos.update(log, compStateRN)
 
-	return &epochService{
+	csDomainSel := NewDomainConsensusSelector(log, ledger)
+
+	epochS := &epochService{
 		log:                 log,
 		nodeID:              nodeID,
-		blockAddedCh:        blockAddedCh,
-		epochNewCh:          epochNewCh,
 		epochInterval:       epochInterval,
 		currentEpoch:        currentEpoch,
 		dkgStartBeforeEpoch: dkgStartBeforeEpoch,
 		exeScheduler:        exeScheduler,
 		ledger:              ledger,
 		dkgExchange:         dkgExchange,
+		csDomainSelector:    csDomainSel,
 		activeNodeInfos:     anInfos,
 	}
+
+	exeScheduler.SetEpochUpdater(epochS)
+
+	return epochS
 }
 
-func (an *activeNodeInfos) update(log tplog.Logger, compStateRN state.CompositionStateReadonly) {
+func (an *activeNodeInfos) update(log tplog.Logger, ledger ledger.Ledger, csDomainMember []*tpcmm.NodeDomainMember) {
 	an.sync.Lock()
 	defer an.sync.Unlock()
+
+	compStateRN := state.CreateCompositionStateReadonly(log, ledger)
 
 	an.activeExecutorWeights = 0
 	an.activeProposerWeights = 0
@@ -116,16 +129,6 @@ func (an *activeNodeInfos) update(log tplog.Logger, compStateRN state.Compositio
 		log.Errorf("Get active executor infos failed: %v", err)
 		return
 	}
-	proposerInfos, err := compStateRN.GetAllActiveProposers()
-	if err != nil {
-		log.Errorf("Get active proposer infos failed: %v", err)
-		return
-	}
-	validatorInfos, err := compStateRN.GetAllActiveValidators()
-	if err != nil {
-		log.Errorf("Get active validator infos failed: %v", err)
-		return
-	}
 
 	for _, executorInfo := range executorInfos {
 		an.activeExecutorIDs = append(an.activeExecutorIDs, executorInfo.NodeID)
@@ -137,16 +140,15 @@ func (an *activeNodeInfos) update(log tplog.Logger, compStateRN state.Compositio
 		panic("")
 	}
 
-	for _, proposerInfo := range proposerInfos {
-		an.activeProposerIDs = append(an.activeProposerIDs, proposerInfo.NodeID)
-		an.activeProposerWeights += proposerInfo.Weight
-		an.nodeWeights[proposerInfo.NodeID] = proposerInfo.Weight
-	}
-
-	for _, validatorInfo := range validatorInfos {
-		an.activeValidatorIDs = append(an.activeValidatorIDs, validatorInfo.NodeID)
-		an.activeValidatorWeights += validatorInfo.Weight
-		an.nodeWeights[validatorInfo.NodeID] = validatorInfo.Weight
+	for _, domainMember := range csDomainMember {
+		if domainMember.NodeRole&tpcmm.NodeRole_Proposer == tpcmm.NodeRole_Proposer {
+			an.activeProposerIDs = append(an.activeProposerIDs, domainMember.NodeID)
+			an.activeProposerWeights += domainMember.Weight
+		} else if domainMember.NodeRole&tpcmm.NodeRole_Validator == tpcmm.NodeRole_Validator {
+			an.activeValidatorIDs = append(an.activeValidatorIDs, domainMember.NodeID)
+			an.activeValidatorWeights += domainMember.Weight
+		}
+		an.nodeWeights[domainMember.NodeID] = domainMember.Weight
 	}
 }
 
@@ -235,75 +237,70 @@ func (es *epochService) GetLatestEpoch() *tpcmm.EpochInfo {
 	return es.currentEpoch
 }
 
-func (es *epochService) processBlockAddedStart(ctx context.Context) {
-	go func() {
-		for {
-			select {
-			case newBh := <-es.blockAddedCh:
-				err := func() error {
-					es.log.Infof("Epoch services receive new block added event: new block height %d", newBh.Head.Height)
-
-					epochInfo := es.currentEpoch
-
-					deltaH := int(newBh.Head.Height) - int(epochInfo.StartHeight)
-					if deltaH == int(es.epochInterval)-int(es.dkgStartBeforeEpoch) {
-						dkgExState := es.dkgExchange.getDKGState()
-						if dkgExState != DKGExchangeState_IDLE {
-							es.log.Warnf("Unfinished dkg exchange is going on an new dkg can't start, current state: %s", dkgExState.String)
-						} else {
-							compStateRN := state.CreateCompositionStateReadonly(es.log, es.ledger)
-							defer compStateRN.Stop()
-
-							err := es.dkgExchange.updateDKGPartPubKeys(compStateRN)
-							if err != nil {
-								es.log.Errorf("Update DKG exchange part pub keys err: %v", err)
-								return err
-							}
-							es.dkgExchange.initWhenStart(epochInfo.Epoch + 1)
-							es.dkgExchange.start(epochInfo.Epoch + 1)
-						}
-					}
-
-					return nil
-				}()
-
-				if err != nil {
-					continue
-				}
-			case <-ctx.Done():
-				es.log.Info("Epoch service propcess block added exit")
-				return
-			}
-		}
-	}()
+func (es *epochService) SelfSelected() bool {
+	return atomic.LoadUint32(&es.selfSelected) == 1
 }
 
-func (es *epochService) processEpochNewStart(ctx context.Context) {
-	go func() {
-		for {
-			select {
-			case newEpoch := <-es.epochNewCh:
-				es.log.Infof("Epoch service receives new epoch event: new epoch %d", newEpoch.Epoch)
-				es.currentEpoch = newEpoch
-
-				compStateRN := state.CreateCompositionStateReadonly(es.log, es.ledger)
-				es.activeNodeInfos.update(es.log, compStateRN)
-				if !es.dkgExchange.dkgCrypt.Finished() {
-					es.log.Warnf("Current epoch %d DKG unfinished and still use the old, height %d", newEpoch.Epoch, newEpoch.StartHeight)
-				} else {
-					es.dkgExchange.notifyUpdater()
-					es.dkgExchange.updateDKGState(DKGExchangeState_IDLE)
-				}
-				compStateRN.Stop()
-			case <-ctx.Done():
-				es.log.Info("Epoch service propcess epoch new exit")
-				return
-			}
+func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error {
+	deltaH := int(newBH.Height) - int(es.currentEpoch.StartHeight)
+	if deltaH == int(es.epochInterval) {
+		newEpoch := &tpcmm.EpochInfo{
+			Epoch:          es.currentEpoch.Epoch + 1,
+			StartTimeStamp: uint64(time.Now().UnixNano()),
+			StartHeight:    newBH.Height,
 		}
-	}()
+		err := compState.SetLatestEpoch(newEpoch)
+		if err != nil {
+			es.log.Errorf("Save the latest epoch error: %v", err)
+			return err
+		}
+
+		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID)
+		if err != nil {
+			es.log.Errorf("Select consensus domain error: %v", err)
+			return err
+		}
+		if dkgCPT != nil {
+			es.activeNodeInfos.update(es.log, es.ledger, members)
+			es.notifyUpdater(dkgCPT)
+			atomic.StoreUint32(&es.selfSelected, selfSelected)
+		}
+
+		eventhub.GetEventHubManager().GetEventHub(es.nodeID).Trig(ctx, eventhub.EventName_EpochNew, newEpoch)
+	}
+
+	return nil
+}
+
+func (es *epochService) AddDKGBLSUpdater(updater DKGBLSUpdater) {
+	es.updatersSync.Lock()
+	defer es.updatersSync.Unlock()
+
+	es.dkgBLSUpdaters = append(es.dkgBLSUpdaters, updater)
+}
+
+func (es *epochService) notifyUpdater(dkgBls DKGBls) {
+	es.updatersSync.RLock()
+	defer es.updatersSync.RUnlock()
+	for _, updater := range es.dkgBLSUpdaters {
+		updater.updateDKGBls(dkgBls)
+	}
 }
 
 func (es *epochService) Start(ctx context.Context) {
-	es.processBlockAddedStart(ctx)
-	es.processEpochNewStart(ctx)
+	for {
+		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID)
+		if err != nil {
+			es.log.Errorf("Select consensus domain error: %v", err)
+			continue
+		}
+		if dkgCPT != nil {
+			es.activeNodeInfos.update(es.log, es.ledger, members)
+			es.notifyUpdater(dkgCPT)
+			atomic.StoreUint32(&es.selfSelected, selfSelected)
+			return
+		} else {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 }

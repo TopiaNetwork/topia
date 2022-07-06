@@ -1,5 +1,9 @@
 package common
 
+const (
+	EpochSpan = 300
+)
+
 type LedgerState byte
 
 const (
@@ -8,12 +12,21 @@ const (
 	LedgerState_AutoInc
 )
 
+type DomainType byte
+
+const (
+	DomainType_Unknown DomainType = iota
+	DomainType_Execute
+	DomainType_Consensus
+)
+
 type NodeState byte
 
 const (
 	NodeState_Unknown NodeState = iota
+	NodeState_Standby
 	NodeState_Active
-	NodeState_Inactive
+	NodeState_Frozen
 )
 
 type NodeRole uint64
@@ -82,11 +95,39 @@ func (n NodeRole) Value(role string) NodeRole {
 	}
 }
 
+type NodeDomainMember struct {
+	NodeID   string
+	NodeRole NodeRole
+	Weight   uint64
+}
+
+type NodeConsensusDomain struct {
+	Threshold    int
+	NParticipant int
+	PublicKey    []byte
+	PubShares    [][]byte
+	Members      []*NodeDomainMember
+}
+
+type NodeExecuteDomain struct {
+	Members []string //nodeIDs
+}
+
+type NodeDomainInfo struct {
+	ID               string
+	Type             DomainType
+	ValidHeightStart uint64
+	ValidHeightEnd   uint64
+	CSDomainData     *NodeConsensusDomain
+	ExeDomainData    *NodeExecuteDomain
+}
+
 type NodeInfo struct {
 	NodeID        string
 	Address       string
 	Weight        uint64
 	DKGPartPubKey string
+	DKGPriShare   []byte
 	Role          NodeRole
 	State         NodeState
 }
@@ -95,4 +136,14 @@ type EpochInfo struct {
 	Epoch          uint64
 	StartTimeStamp uint64
 	StartHeight    uint64
+}
+
+func NodeIDs(nodeM []*NodeDomainMember) []string {
+	var nIDs []string
+
+	for _, nodeMember := range nodeM {
+		nIDs = append(nIDs, nodeMember.NodeID)
+	}
+
+	return nIDs
 }

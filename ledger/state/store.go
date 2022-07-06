@@ -155,6 +155,20 @@ func (store *StateStoreComposition) GetAllStateData() ([][]byte, [][]byte, error
 	return keys, values, err
 }
 
+func (store *StateStoreComposition) IterateAllStateDataCB(iterCBFunc IterStateDataCBFunc) error {
+	dataIt, err := store.dataS.Iterator(nil, nil)
+	if err != nil {
+		return err
+	}
+	defer dataIt.Close()
+
+	for dataIt.Next() {
+		iterCBFunc(dataIt.Key(), dataIt.Value())
+	}
+
+	return nil
+}
+
 func (store *StateStoreComposition) GetAllState() ([][]byte, [][]byte, [][]byte, error) {
 	var keys [][]byte
 	var values [][]byte
@@ -178,6 +192,25 @@ func (store *StateStoreComposition) GetAllState() ([][]byte, [][]byte, [][]byte,
 	}
 
 	return keys, values, proofs, err
+}
+
+func (store *StateStoreComposition) IterateAllStateCB(iterCBFunc IterStateCBFunc) error {
+	dataIt, err := store.dataS.Iterator(nil, nil)
+	if err != nil {
+		return err
+	}
+	defer dataIt.Close()
+
+	for dataIt.Next() {
+		proof, _, err := store.GetState(dataIt.Key())
+		if err != nil {
+			return err
+		}
+
+		iterCBFunc(dataIt.Key(), dataIt.Value(), proof)
+	}
+
+	return nil
 }
 
 func (store *StateStoreComposition) Commit() error {

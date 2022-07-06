@@ -4,18 +4,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/eventhub"
-	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"strconv"
 	"sync"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 type consensusValidator struct {
@@ -27,6 +27,7 @@ type consensusValidator struct {
 	ledger                ledger.Ledger
 	deliver               messageDeliverI
 	marshaler             codec.Marshaler
+	epochService          EpochService
 	syncPropMsgCached     sync.RWMutex
 	propMsgCached         *ProposeMessage
 	syncBestPropMsgCached sync.RWMutex
@@ -35,7 +36,7 @@ type consensusValidator struct {
 	commitMsg             *lru.Cache
 }
 
-func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, commitMsgChan chan *CommitMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler) *consensusValidator {
+func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, commitMsgChan chan *CommitMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler, epochService EpochService) *consensusValidator {
 	propMsgVoted, _ := lru.New(5)
 	commitMsg, _ := lru.New(5)
 	return &consensusValidator{
@@ -47,6 +48,7 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 		ledger:             ledger,
 		deliver:            deliver,
 		marshaler:          marshaler,
+		epochService:       epochService,
 		propMsgVoted:       propMsgVoted,
 		commitMsg:          commitMsg,
 	}
@@ -454,6 +456,8 @@ func (v *consensusValidator) commitMsgDispose(ctx context.Context, bh *tpchainty
 		return err
 	}
 	v.log.Infof("Validator sets latest block: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
+
+	v.epochService.UpdateEpoch(ctx, block.Head, compState)
 
 	v.log.Infof("Validator begins committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
 	errCMMState := compState.Commit()

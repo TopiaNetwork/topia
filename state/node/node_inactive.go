@@ -35,6 +35,8 @@ type NodeInactiveState interface {
 
 	updateInactiveNodeDKGPartPubKey(nodeID string, pubKey string) error
 
+	updateInactiveNodeDKGPriShare(nodeID string, priShare []byte) error
+
 	removeInactiveNode(nodeID string) error
 }
 
@@ -125,11 +127,15 @@ func (ns *nodeInactiveState) AddInactiveNode(nodeInfo *common.NodeInfo) error {
 }
 
 func (ns *nodeInactiveState) updateInactiveNodeWeight(nodeID string, weight uint64) error {
-	return uppdateWeight(ns.StateStore, StateStore_Name_NodeInactive, nodeID, TotalInactiveNodeWeight_Key, weight)
+	return updateWeight(ns.StateStore, StateStore_Name_NodeInactive, nodeID, TotalInactiveNodeWeight_Key, weight)
 }
 
 func (ns *nodeInactiveState) updateInactiveNodeDKGPartPubKey(nodeID string, pubKey string) error {
-	return uppdateDKGPartPubKey(ns.StateStore, StateStore_Name_NodeInactive, nodeID, pubKey)
+	return updateDKGPartPubKey(ns.StateStore, StateStore_Name_NodeInactive, nodeID, pubKey)
+}
+
+func (ns *nodeInactiveState) updateInactiveNodeDKGPriShare(nodeID string, priShare []byte) error {
+	return updateDKGPriShare(ns.StateStore, StateStore_Name_NodeInactive, nodeID, priShare)
 }
 
 func (ns *nodeInactiveState) removeInactiveNode(nodeID string) error {

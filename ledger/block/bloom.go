@@ -1,6 +1,7 @@
 package block
 
 import (
+	"fmt"
 	"github.com/bits-and-blooms/bitset"
 	"math"
 	"math/bits"
@@ -55,6 +56,11 @@ const (
 	c1_128     = 0x87c37b91114253d5
 	c2_128     = 0x4cf5ad432745937f
 	block_size = 16
+
+	count = 100000000
+	m = 2875517514
+	p = 0.000001
+	k = 20 //19.93
 )
 
 func New(m uint, k uint) *BloomFilter {
@@ -81,6 +87,13 @@ func baseHashes(data []byte) [4]uint64 {
 	}
 }
 
+func (f *BloomFilter) Add(data []byte) *BloomFilter {
+	h := baseHashes(data)
+	for i := uint(0); i < f.k; i++ {
+		f.b.Set(f.location(h, i))
+	}
+	return f
+}
 
 func location(h [4]uint64, i uint) uint64 {
 	ii := uint64(i)
@@ -91,6 +104,47 @@ func (f *BloomFilter) location(h [4]uint64, i uint) uint {
 	return uint(location(h, i) % uint64(f.m))
 }
 
+func (f *BloomFilter) Test(data []byte) bool {
+	h := baseHashes(data)
+	for i := uint(0); i < f.k; i++ {
+		if !f.b.Test(f.location(h, i)) {
+			return false
+		}
+	}
+	return true
+}
+func (f *BloomFilter) Cap() uint {
+	return f.m
+}
+
+func (f *BloomFilter) K() uint {
+	return f.k
+}
+
+// BitSet returns the underlying bitset for this filter.
+func (f *BloomFilter) BitSet() *bitset.BitSet {
+	return f.b
+}
+
+func (f *BloomFilter) Copy() *BloomFilter {
+	fc := New(f.m, f.k)
+	fc.Merge(f) // #nosec
+	return fc
+}
+
+func (f *BloomFilter) Merge(g *BloomFilter) error {
+	// Make sure the m's and k's are the same, otherwise merging has no real use.
+	if f.m != g.m {
+		return fmt.Errorf("m's don't match: %d != %d", f.m, g.m)
+	}
+
+	if f.k != g.k {
+		return fmt.Errorf("k's don't match: %d != %d", f.m, g.m)
+	}
+
+	f.b.InPlaceUnion(g.b)
+	return nil
+}
 
 func EstimateParameters(n uint, p float64) (m uint, k uint) {
 	m = uint(math.Ceil(-1 * float64(n) * math.Log(p) / math.Pow(math.Log(2), 2)))
@@ -127,6 +181,23 @@ func (d *digest128) sum256(data []byte) (hash1, hash2, hash3, hash4 uint64) {
 	}
 
 	return hash1, hash2, hash3, hash4
+}
+
+func (f *BloomFilter) Equal(g *BloomFilter) bool {
+	return f.m == g.m && f.k == g.k && f.b.Equal(g.b)
+}
+
+// Locations returns a list of hash locations representing a data item.
+func Locations(data []byte, k uint) []uint64 {
+	locs := make([]uint64, k)
+
+	// calculate locations
+	h := baseHashes(data)
+	for i := uint(0); i < k; i++ {
+		locs[i] = location(h, i)
+	}
+
+	return locs
 }
 
 func (d *digest128) sum128(pad_tail bool, length uint, tail []byte) (h1, h2 uint64) {

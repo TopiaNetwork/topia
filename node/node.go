@@ -105,7 +105,12 @@ func NewNode(rootPath string, endPoint string, seed string, role string) *Node {
 
 	n.evHub = eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 
-	n.consensus = consensus.NewConsensus(n.chainID, nodeID, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, n.network, n.txPool, n.ledger, exeScheduler, config)
+	cType := state.CompStateBuilderType_Full
+	if n.role != "executor" {
+		cType = state.CompStateBuilderType_Simple
+	}
+
+	n.consensus = consensus.NewConsensus(n.chainID, nodeID, cType, priKey, tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO, n.network, n.txPool, n.ledger, exeScheduler, config)
 
 	n.syncer = sync.NewSyncer(tplogcmm.InfoLevel, mainLog, codec.CodecType_PROTO)
 

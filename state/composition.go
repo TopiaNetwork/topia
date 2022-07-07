@@ -329,6 +329,24 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 		return nil, err
 	}
 
+	domainRoot, err := cs.GetNodeDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node domain state root: %v", err)
+		return nil, err
+	}
+
+	exeDomainRoot, err := cs.GetNodeExecuteDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node execute domain state root: %v", err)
+		return nil, err
+	}
+
+	csDomainRoot, err := cs.GetNodeConsensusDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node consensus domain state root: %v", err)
+		return nil, err
+	}
+
 	inactiveRoot, err := cs.GetNodeInactiveRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get inactive node state root: %v", err)
@@ -368,6 +386,9 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
 	tree.Update(accRoot, accRoot)
 	tree.Update(chainRoot, chainRoot)
+	tree.Update(domainRoot, domainRoot)
+	tree.Update(exeDomainRoot, exeDomainRoot)
+	tree.Update(csDomainRoot, csDomainRoot)
 	tree.Update(inactiveRoot, inactiveRoot)
 	tree.Update(nodeRoot, nodeRoot)
 	tree.Update(nodeExecutorRoot, nodeExecutorRoot)

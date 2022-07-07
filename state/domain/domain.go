@@ -102,9 +102,9 @@ func (ns *nodeDomainState) AddNodeDomain(domainInfo *tpcmm.NodeDomainInfo) error
 	var err error
 	switch domainInfo.Type {
 	case tpcmm.DomainType_Execute:
-		err = ns.AddNodeDomain(domainInfo)
+		err = ns.addNodeExecuteDomain(domainInfo)
 	case tpcmm.DomainType_Consensus:
-		err = ns.AddNodeDomain(domainInfo)
+		err = ns.addNodeConsensusDomain(domainInfo)
 	default:
 		return fmt.Errorf("Invalid domain type from %s", domainInfo.ID)
 	}

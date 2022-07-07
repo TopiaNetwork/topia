@@ -70,6 +70,7 @@ type consensus struct {
 
 func NewConsensus(chainID tpchaintypes.ChainID,
 	nodeID string,
+	stateBuilderType state.CompStateBuilderType,
 	priKey tpcrtypes.PrivateKey,
 	level tplogcmm.LogLevel,
 	log tplog.Logger,
@@ -79,6 +80,15 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	ledger ledger.Ledger,
 	exeScheduler execution.ExecutionScheduler,
 	config *tpconfig.Configuration) Consensus {
+
+	compStateRN := state.CreateCompositionStateReadonly(log, ledger)
+	defer compStateRN.Stop()
+
+	currentEpoch, err := compStateRN.GetLatestEpoch()
+	if err != nil {
+		log.Panicf("Can't get the latest epoch: err=%v", err)
+	}
+
 	consLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
 	preparePackedMsgExeChan := make(chan *PreparePackedMessageExe, PreparePackedExeChannel_Size)
@@ -94,6 +104,7 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 	finishedMsgCh := make(chan *DKGFinishedMessage, FinishedMsgChannel_Size)
+	finishedMsgExeCh := make(chan *DKGFinishedMessage, FinishedMsgChannel_Size)
 
 	csConfig := config.CSConfig
 
@@ -108,20 +119,25 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 
 	deliver := newMessageDeliver(consLog, nodeID, priKey, DeliverStrategy_Specifically, network, marshaler, cryptS, ledger)
 
-	dkgDeliver := NewDkgMessageDeliver(consLog, nodeID, priKey, DeliverStrategy_Specifically, network, marshaler, cryptS, ledger)
+	exeActiveNodeIDs, err := compStateRN.GetActiveExecutorIDs()
+	if err != nil {
+		log.Panicf("Can't get the all active executor node ids: err=%v", err)
+	}
+
+	dkgDeliver := NewDkgMessageDeliver(consLog, nodeID, priKey, DeliverStrategy_Specifically, network, marshaler, cryptS, ledger, exeActiveNodeIDs)
 
 	dkgEx := newDKGExchange(consLog, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, finishedMsgCh, csConfig.InitDKGPrivKey, dkgDeliver, ledger)
 
-	epService := NewEpochService(consLog, nodeID, csConfig.EpochInterval, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
+	epService := NewEpochService(consLog, nodeID, stateBuilderType, csConfig.EpochInterval, currentEpoch, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
 
-	csDomainService := NewDomainConsensusService(nodeID, log, ledger, blockAddedCSDomain, roleSelector, csConfig, dkgEx)
+	csDomainService := NewDomainConsensusService(nodeID, stateBuilderType, log, ledger, blockAddedCSDomain, roleSelector, csConfig, dkgEx)
 
-	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, epService, deliver, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
+	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, epService, csDomainService, deliver, finishedMsgExeCh, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
 	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, bestProposeMsgChan, commitMsgChan, ledger, deliver, marshaler, epService)
-	proposer := newConsensusProposer(consLog, nodeID, priKey, preparePackedMsgPropChan, voteMsgChan, blockAddedProposerCh, cryptS, csConfig.ProposerBlockMaxInterval, csConfig.BlockMaxCyclePeriod, deliver, ledger, marshaler, validator)
+	proposer := newConsensusProposer(consLog, nodeID, priKey, preparePackedMsgPropChan, voteMsgChan, blockAddedProposerCh, cryptS, epService, csConfig.ProposerBlockMaxInterval, csConfig.BlockMaxCyclePeriod, deliver, ledger, marshaler, validator)
 
 	deliver.setEpochService(epService)
-	csHandler := NewConsensusHandler(consLog, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, preparePackedMsgPropChan, proposeMsgChan, bestProposeMsgChan, voteMsgChan, commitMsgChan, blockAddedCSDomain, blockAddedProposerCh, partPubKey, dealMsgCh, dealRespMsgCh, finishedMsgCh, ledger, marshaler, deliver, exeScheduler, epService)
+	csHandler := NewConsensusHandler(consLog, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, preparePackedMsgPropChan, proposeMsgChan, bestProposeMsgChan, voteMsgChan, commitMsgChan, blockAddedCSDomain, blockAddedProposerCh, partPubKey, dealMsgCh, dealRespMsgCh, finishedMsgCh, finishedMsgExeCh, ledger, marshaler, deliver, exeScheduler, epService)
 
 	epService.AddDKGBLSUpdater(deliver)
 	epService.AddDKGBLSUpdater(proposer)
@@ -243,13 +259,11 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 		}
 
 		cons.validator.start(ctx)
-
 		cons.dkgEx.startLoop(ctx)
-
-		cons.csDomainService.Start(ctx)
-
-		cons.epochService.Start(ctx)
 	}
+
+	cons.csDomainService.Start(ctx)
+	cons.epochService.Start(ctx)
 
 	return nil
 }

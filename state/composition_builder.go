@@ -258,11 +258,11 @@ func (bs *compositionStateBuilderSimple) createCompositionStateOfNode(log tplog.
 
 		compStateOfNode.maxStateVersion = stateVersion
 
-		compStateOfNode.topCompositionState.Store(compStateRTN)
-
 		log.Infof("Create new CompositionState for stateVersion %d，requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
 		//}
 	}
+
+	compStateOfNode.topCompositionState.Store(compStateRTN)
 
 	return compStateRTN
 }

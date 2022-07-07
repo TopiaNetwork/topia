@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -163,7 +164,7 @@ func (d *dkgCrypt) getDeals() (map[int]*dkg.Deal, error) {
 	return d.dkGenerator.Deals()
 }
 
-func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
+func (d *dkgCrypt) processDeal(deal *dkg.Deal, ctx context.Context, finishedCallBack func(ctx context.Context)) (*dkg.Response, error) {
 	d.remoteDealsSync.Lock()
 	defer d.remoteDealsSync.Unlock()
 
@@ -185,6 +186,9 @@ func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 
 	if d.dkGenerator.ExpectedDeals() == d.nParticipant-1 {
 		d.processAdvanceResp()
+		if d.Finished() {
+			finishedCallBack(ctx)
+		}
 	}
 
 	return resp, err

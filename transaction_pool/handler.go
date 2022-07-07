@@ -8,17 +8,17 @@ import (
 )
 
 type TransactionPoolHandler interface {
-	ProcessTx(msg *TxMessage) error
+	ProcessTx(ctx context.Context, msg *TxMessage) error
 	processBlockAddedEvent(context.Context, interface{}) error
 }
 
 type transactionPoolHandler struct {
 	log      tplog.Logger
 	txPool   *transactionPool
-	txMsgSub TxMessageSubProcessor
+	txMsgSub TxMsgSubProcessor
 }
 
-func NewTransactionPoolHandler(log tplog.Logger, txPool *transactionPool, txMsgSub TxMessageSubProcessor) *transactionPoolHandler {
+func NewTransactionPoolHandler(log tplog.Logger, txPool *transactionPool, txMsgSub TxMsgSubProcessor) *transactionPoolHandler {
 	return &transactionPoolHandler{
 		log:      log,
 		txPool:   txPool,
@@ -32,10 +32,15 @@ func (handler *transactionPoolHandler) ProcessTx(ctx context.Context, msg *TxMes
 
 func (handler *transactionPoolHandler) processBlockAddedEvent(ctx context.Context, data interface{}) error {
 	if block, ok := data.(*tpchaintypes.Block); ok {
-		newChainHead := &BlockAddedEvent{
-			block,
-		}
-		handler.txPool.chanBlockAdded <- *newChainHead
+		handler.txPool.chanBlockAdded <- block
+	}
+	return nil
+}
+
+func (handler *transactionPoolHandler) processBlocksRevertEvent(ctx context.Context, data interface{}) error {
+	if blocks, ok := data.([]*tpchaintypes.Block); ok {
+
+		handler.txPool.chanBlocksRevert <- blocks
 	}
 	return nil
 }

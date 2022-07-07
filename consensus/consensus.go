@@ -124,11 +124,16 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 		log.Panicf("Can't get the all active executor node ids: err=%v", err)
 	}
 
+	exeActiveNodes, err := compStateRN.GetAllActiveExecutors()
+	if err != nil {
+		log.Panicf("Can't get the all active executor node: err=%v", err)
+	}
+
 	dkgDeliver := NewDkgMessageDeliver(consLog, nodeID, priKey, DeliverStrategy_Specifically, network, marshaler, cryptS, ledger, exeActiveNodeIDs)
 
 	dkgEx := newDKGExchange(consLog, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, finishedMsgCh, csConfig.InitDKGPrivKey, dkgDeliver, ledger)
 
-	epService := NewEpochService(consLog, nodeID, stateBuilderType, csConfig.EpochInterval, currentEpoch, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx)
+	epService := NewEpochService(consLog, nodeID, stateBuilderType, csConfig.EpochInterval, currentEpoch, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx, exeActiveNodes)
 
 	csDomainService := NewDomainConsensusService(nodeID, stateBuilderType, log, ledger, blockAddedCSDomain, roleSelector, csConfig, dkgEx)
 

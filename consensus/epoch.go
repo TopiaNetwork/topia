@@ -78,12 +78,19 @@ func NewEpochService(log tplog.Logger,
 	dkgStartBeforeEpoch uint64,
 	exeScheduler execution.ExecutionScheduler,
 	ledger ledger.Ledger,
-	dkgExchange *dkgExchange) EpochService {
+	dkgExchange *dkgExchange,
+	exeActiveNodeIds []*tpcmm.NodeInfo) EpochService {
 	if ledger == nil || dkgExchange == nil {
 		log.Panic("Invalid input parameter and can't create epoch service!")
 	}
 
 	anInfos := &activeNodeInfos{}
+	anInfos.nodeWeights = make(map[string]uint64)
+	for _, executorInfo := range exeActiveNodeIds {
+		anInfos.activeExecutorIDs = append(anInfos.activeExecutorIDs, executorInfo.NodeID)
+		anInfos.activeExecutorWeights += executorInfo.Weight
+		anInfos.nodeWeights[executorInfo.NodeID] = executorInfo.Weight
+	}
 
 	csDomainSel := NewDomainConsensusSelector(log, ledger)
 

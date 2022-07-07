@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/big"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -27,20 +28,43 @@ func (selector *domainConsensusSelector) Select(selfNodeID string, stateBuilderT
 	if compState == nil {
 		return nil, nil, 0, errors.New("Top composition state nil")
 	}
+	var selfNode *tpcmm.NodeInfo
+	var latestBlock *tpchaintypes.Block
+	var activeCSDomains []*tpcmm.NodeDomainInfo
 
-	selfNode, err := compState.GetNode(selfNodeID)
-	if err != nil {
-		return nil, nil, 0, err
-	}
+	if compState.CompSState() == state.CompSState_Commited {
+		compStateRN := state.CreateCompositionStateReadonly(selector.log, selector.ledger)
+		selfNodeT, err := compStateRN.GetNode(selfNodeID)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		selfNode = selfNodeT
 
-	latestBlock, err := compState.GetLatestBlock()
-	if err != nil {
-		return nil, nil, 0, err
-	}
+		latestBlock, err = compStateRN.GetLatestBlock()
+		if err != nil {
+			return nil, nil, 0, err
+		}
 
-	activeCSDomains, err := compState.GetAllActiveNodeConsensusDomains(latestBlock.Head.Height)
-	if err != nil {
-		return nil, nil, 0, err
+		activeCSDomains, err = compStateRN.GetAllActiveNodeConsensusDomains(latestBlock.Head.Height)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+	} else {
+		selfNodeT, err := compState.GetNode(selfNodeID)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		selfNode = selfNodeT
+
+		latestBlock, err = compState.GetLatestBlock()
+		if err != nil {
+			return nil, nil, 0, err
+		}
+
+		activeCSDomains, err = compState.GetAllActiveNodeConsensusDomains(latestBlock.Head.Height)
+		if err != nil {
+			return nil, nil, 0, err
+		}
 	}
 	if len(activeCSDomains) == 0 {
 		//selector.log.Warn("No available consensus domain at present")

@@ -256,7 +256,6 @@ func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context,
 		peerIDsProposer = md.epochService.GetActiveProposerIDs()
 		for len(peerIDsProposer) == 0 {
 			time.Sleep(50 * time.Millisecond)
-			return err
 		}
 		md.log.Infof("Active proposer node: %v", peerIDsProposer)
 

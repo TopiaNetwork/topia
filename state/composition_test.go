@@ -129,7 +129,11 @@ func TestIterate(t *testing.T) {
 	})
 	assert.Equal(t, nil, err)
 
-	domainInfos, err := compState.GetAllActiveNodeConsensusDomains(5)
+	compState.Commit()
+
+	compStateRN := CreateCompositionStateReadonly(testLog, l)
+
+	domainInfos, err := compStateRN.GetAllActiveNodeConsensusDomains(5)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 1, len(domainInfos))
 	assert.Equal(t, uint64(1000), domainInfos[0].ValidHeightEnd)

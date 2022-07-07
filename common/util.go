@@ -136,7 +136,12 @@ func MinUint64(x, y uint64) uint64 {
 	}
 	return x
 }
-
+func MinInt64(x, y int64) int64 {
+	if x > y {
+		return y
+	}
+	return x
+}
 func NumberToByte(number interface{}) []byte {
 	buf := bytes.NewBuffer([]byte{})
 	binary.Write(buf, binary.BigEndian, number)

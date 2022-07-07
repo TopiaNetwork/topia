@@ -154,7 +154,7 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 
 		for _, tx := range txPacked.TxList {
 			txID, _ := tx.TxID()
-			scheduler.txPool.RemoveTxByKey(txID)
+			scheduler.txPool.RemoveTxByKey(txID, true)
 		}
 
 		if scheduler.exePackedTxsList.Len() >= int(scheduler.config.CSConfig.MaxPrepareMsgCache) {

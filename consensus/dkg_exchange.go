@@ -259,7 +259,7 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 
 				ex.log.Infof("Node %s receive dealIndex %d trigger number %d", ex.nodeID, deal.Index, dealMsg.TriggerNumber)
 
-				dealResp, err := ex.dkgCrypt.processDeal(&deal)
+				dealResp, err := ex.dkgCrypt.processDeal(&deal, ctx, ex.callBackWhenFinished)
 				if err != nil {
 					if err == vss.ErrDealAlreadyProcessed {
 						ex.log.Warnf("Process received deal dealIndex %d trigger number %d: self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.triggerNumber, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
@@ -307,6 +307,32 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 	}()
 }
 
+func (ex *dkgExchange) callBackWhenFinished(ctx context.Context) {
+	ex.log.Infof("DKG exchange finished: self node %s", ex.nodeID)
+	ex.dkgExData.State.Swap(DKGExchangeState_Finished)
+	ex.finishedCh <- true
+
+	pubPolicyComm, err := ex.dkgCrypt.PubKey()
+	if err != nil {
+		ex.log.Panicf("Can't get public policy commit: trigger number %d", ex.dkgCrypt.triggerNumber)
+	}
+
+	finishedMsg := &DKGFinishedMessage{
+		ChainID:       []byte(ex.chainID),
+		Version:       CONSENSUS_VER,
+		TriggerNumber: ex.dkgCrypt.triggerNumber,
+		NodeID:        []byte(ex.nodeID),
+		PubPolyCommit: pubPolicyComm,
+	}
+
+	ex.log.Infof("Node send finished message to other participants: trigger number %d, self node %s", ex.dkgCrypt.triggerNumber, ex.nodeID)
+
+	err = ex.deliver.deliverDKGFinishedMessage(ctx, finishedMsg)
+	if err != nil {
+		ex.log.Panicf("Can't deliver finished message: %d, trigger number %d", err, ex.dkgCrypt.triggerNumber)
+	}
+}
+
 func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 	go func() {
 		for {
@@ -332,31 +358,10 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 					}
 				}
 
-				ex.log.Infof("Node %s process deal response successed %d trigger number %d", ex.nodeID, resp.Index, dealRespMsg.TriggerNumber)
+				ex.log.Infof("Node %s process deal response successes %d trigger number %d", ex.nodeID, resp.Index, dealRespMsg.TriggerNumber)
 
 				if ex.dkgCrypt.Finished() {
-					ex.log.Infof("DKG exchange finished: self node %s", ex.nodeID)
-					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
-					ex.finishedCh <- true
-
-					pubPolicyComm, err := ex.dkgCrypt.PubKey()
-					if err != nil {
-						ex.log.Panicf("Can't get public policy commit: trigger number %d", ex.dkgCrypt.triggerNumber)
-					}
-
-					finishedMsg := &DKGFinishedMessage{
-						ChainID:       []byte(ex.chainID),
-						Version:       CONSENSUS_VER,
-						TriggerNumber: ex.dkgCrypt.triggerNumber,
-						PubPolyCommit: pubPolicyComm,
-					}
-
-					ex.log.Infof("Node send finished message to other participants: trigger number %d, self node %s", ex.dkgCrypt.triggerNumber, ex.nodeID)
-
-					err = ex.deliver.deliverDKGFinishedMessage(ctx, finishedMsg)
-					if err != nil {
-						ex.log.Panicf("Can't deliver finished message: %d, trigger number %d", err, ex.dkgCrypt.triggerNumber)
-					}
+					ex.callBackWhenFinished(ctx)
 				}
 			case <-ex.stopCh:
 				ex.log.Info("DKG exchange receive deal response loop stop")
@@ -374,7 +379,7 @@ func (ex *dkgExchange) startReceiveFinishedMsg(ctx context.Context) {
 		for {
 			select {
 			case finishedMsg := <-ex.finishedMsgCh:
-				ex.log.Infof("Node %s receive deal response %d trigger number %d", ex.nodeID, finishedMsg.TriggerNumber)
+				ex.log.Infof("Node %s receive finished message, trigger number %d", ex.nodeID, finishedMsg.TriggerNumber)
 
 				if !ex.dkgCrypt.Finished() {
 					func() {

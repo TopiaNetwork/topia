@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"errors"
 	"math/big"
 
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -21,20 +22,23 @@ func NewDomainConsensusSelector(log tplog.Logger, ledger ledger.Ledger) *domainC
 	}
 }
 
-func (selector *domainConsensusSelector) Select(selfNodeID string) (DKGBls, []*tpcmm.NodeDomainMember, uint32, error) {
-	compStateRN := state.CreateCompositionStateReadonly(selector.log, selector.ledger)
+func (selector *domainConsensusSelector) Select(selfNodeID string, stateBuilderType state.CompStateBuilderType) (DKGBls, []*tpcmm.NodeDomainMember, uint32, error) {
+	compState := state.GetStateBuilder(stateBuilderType).TopCompositionState(selfNodeID)
+	if compState == nil {
+		return nil, nil, 0, errors.New("Top composition state nil")
+	}
 
-	selfNode, err := compStateRN.GetNode(selfNodeID)
+	selfNode, err := compState.GetNode(selfNodeID)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	latestBlock, err := compStateRN.GetLatestBlock()
+	latestBlock, err := compState.GetLatestBlock()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	activeCSDomains, err := compStateRN.GetAllActiveNodeConsensusDomains(latestBlock.Head.Height)
+	activeCSDomains, err := compState.GetAllActiveNodeConsensusDomains(latestBlock.Head.Height)
 	if err != nil {
 		return nil, nil, 0, err
 	}

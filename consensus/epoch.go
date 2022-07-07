@@ -33,6 +33,8 @@ type EpochService interface {
 
 	GetLatestEpoch() *tpcmm.EpochInfo
 
+	SelfSelected() bool
+
 	AddDKGBLSUpdater(updater DKGBLSUpdater)
 
 	UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error
@@ -54,6 +56,7 @@ type activeNodeInfos struct {
 type epochService struct {
 	log                 tplog.Logger
 	nodeID              string
+	stateBuilderType    state.CompStateBuilderType
 	epochInterval       uint64 //the height number between two epochs
 	currentEpoch        *tpcmm.EpochInfo
 	dkgStartBeforeEpoch uint64 //the starting height number of DKG before an epoch
@@ -69,21 +72,15 @@ type epochService struct {
 
 func NewEpochService(log tplog.Logger,
 	nodeID string,
+	stateBuilderType state.CompStateBuilderType,
 	epochInterval uint64,
+	currentEpoch *tpcmm.EpochInfo,
 	dkgStartBeforeEpoch uint64,
 	exeScheduler execution.ExecutionScheduler,
 	ledger ledger.Ledger,
 	dkgExchange *dkgExchange) EpochService {
 	if ledger == nil || dkgExchange == nil {
 		log.Panic("Invalid input parameter and can't create epoch service!")
-	}
-
-	compStateRN := state.CreateCompositionStateReadonly(log, ledger)
-	defer compStateRN.Stop()
-
-	currentEpoch, err := compStateRN.GetLatestEpoch()
-	if err != nil {
-		log.Panicf("Can't get the latest epoch: err=%v", err)
 	}
 
 	anInfos := &activeNodeInfos{}
@@ -93,6 +90,7 @@ func NewEpochService(log tplog.Logger,
 	epochS := &epochService{
 		log:                 log,
 		nodeID:              nodeID,
+		stateBuilderType:    stateBuilderType,
 		epochInterval:       epochInterval,
 		currentEpoch:        currentEpoch,
 		dkgStartBeforeEpoch: dkgStartBeforeEpoch,
@@ -255,7 +253,7 @@ func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.Blo
 			return err
 		}
 
-		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID)
+		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, es.stateBuilderType)
 		if err != nil {
 			es.log.Errorf("Select consensus domain error: %v", err)
 			return err
@@ -290,7 +288,7 @@ func (es *epochService) notifyUpdater(dkgBls DKGBls) {
 func (es *epochService) Start(ctx context.Context) {
 	go func() {
 		for {
-			dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID)
+			dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, es.stateBuilderType)
 			if err != nil {
 				es.log.Errorf("Select consensus domain error: %v", err)
 				continue

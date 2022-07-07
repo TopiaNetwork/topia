@@ -183,7 +183,8 @@ message DKGFinishedMessage {
   uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
   bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
   bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
-  bytes PubPolyCommit     = 6  [(gogoproto.jsontag) = "respData"];
+  bytes NodeID            = 6  [(gogoproto.jsontag) = "nodeID"];
+  bytes PubPolyCommit     = 7  [(gogoproto.jsontag) = "respData"];
 }
 
 

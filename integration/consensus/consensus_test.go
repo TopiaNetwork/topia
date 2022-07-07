@@ -380,9 +380,14 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
 		eventhub.GetEventHubManager().GetEventHub(nParams[i].nodeID).Start(nParams[i].sysActor)
+		cType := state.CompStateBuilderType_Full
+		if nParams[i].nodeType != "executor" {
+			cType = state.CompStateBuilderType_Simple
+		}
 		cs := consensus.NewConsensus(
 			nParams[i].chainID,
 			nParams[i].nodeID,
+			cType,
 			nParams[i].priKey,
 			tplogcmm.InfoLevel,
 			nParams[i].mainLog,

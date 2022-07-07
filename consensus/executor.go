@@ -30,13 +30,17 @@ type consensusExecutor struct {
 	ledger                       ledger.Ledger
 	exeScheduler                 execution.ExecutionScheduler
 	epochService                 EpochService
+	domainCSService              *domainConsensusService
 	deliver                      *messageDeliver
+	finishedMsgCh                chan *DKGFinishedMessage
 	preparePackedMsgExeChan      chan *PreparePackedMessageExe
 	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
 	commitMsgChan                chan *CommitMessage
 	cryptService                 tpcrt.CryptService
 	prepareInterval              time.Duration
 	prepareMsgLunched            *lru.Cache //Key: state version
+	remoteFinishedSync           sync.RWMutex
+	remoteFinished               map[string]*DKGFinishedMessage //nodeID->*DKGFinishedMessage
 }
 
 func newConsensusExecutor(log tplog.Logger,
@@ -47,7 +51,9 @@ func newConsensusExecutor(log tplog.Logger,
 	ledger ledger.Ledger,
 	exeScheduler execution.ExecutionScheduler,
 	epochService EpochService,
+	domainCSService *domainConsensusService,
 	deliver *messageDeliver,
+	finishedMsgCh chan *DKGFinishedMessage,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
 	commitMsgChan chan *CommitMessage,
@@ -65,14 +71,67 @@ func newConsensusExecutor(log tplog.Logger,
 		ledger:                       ledger,
 		exeScheduler:                 exeScheduler,
 		epochService:                 epochService,
+		domainCSService:              domainCSService,
 		deliver:                      deliver,
+		finishedMsgCh:                finishedMsgCh,
 		preparePackedMsgExeChan:      preprePackedMsgExeChan,
 		preparePackedMsgExeIndicChan: preparePackedMsgExeIndicChan,
 		commitMsgChan:                commitMsgChan,
 		cryptService:                 cryptService,
 		prepareInterval:              prepareInterval,
 		prepareMsgLunched:            pMsgLCache,
+		remoteFinished:               make(map[string]*DKGFinishedMessage),
 	}
+}
+
+func (e *consensusExecutor) startReceiveFinishedMsg(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case finishedMsg := <-e.finishedMsgCh:
+				e.log.Infof("Node %s receive dkg finished message, trigger number %d", e.nodeID, finishedMsg.TriggerNumber)
+
+				err := func() error {
+					e.remoteFinishedSync.Lock()
+					defer e.remoteFinishedSync.Unlock()
+
+					if finishedMsg.TriggerNumber != e.domainCSService.triggerNumber {
+						err := fmt.Errorf("Invalid finished message: expected trigger number %d, actual %d, self node %s", e.domainCSService.triggerNumber, finishedMsg.TriggerNumber, e.nodeID)
+						e.log.Errorf("%v", err)
+						return err
+					}
+
+					remoteID := string(finishedMsg.NodeID)
+					if !e.domainCSService.ContainedInCandidateNodes(remoteID) {
+						err := fmt.Errorf("Received finished message which not belongs to any candidate node: remote node %s, self node %s", remoteID, e.nodeID)
+						e.log.Errorf("%v", err)
+						return err
+					}
+
+					if _, ok := e.remoteFinished[remoteID]; !ok {
+						e.remoteFinished[remoteID] = finishedMsg
+						if len(e.remoteFinished) == e.domainCSService.CandidateNodesNumber() {
+							e.log.Infof("Received message count reached the expected: %d", len(e.remoteFinished))
+							e.domainCSService.ProduceAndSaveNodeDomain(0, nil, nil, nil)
+							e.remoteFinished = make(map[string]*DKGFinishedMessage)
+						}
+						return nil
+					} else {
+						err := fmt.Errorf("Received the same dkg finished message: remote node %s, self node %s", remoteID, e.nodeID)
+						e.log.Errorf("%v", err)
+						return err
+					}
+				}()
+
+				if err != nil {
+					continue
+				}
+			case <-ctx.Done():
+				e.log.Info("Executor receiving finished message loop stop")
+				return
+			}
+		}
+	}()
 }
 
 func (e *consensusExecutor) UnmarshalTxsOfPreparePackedMessage(txs [][]byte) ([]*txbasic.Transaction, error) {
@@ -382,6 +441,8 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 }
 
 func (e *consensusExecutor) start(ctx context.Context) {
+	e.startReceiveFinishedMsg(ctx)
+
 	e.receivePreparePackedMessageExeStart(ctx)
 
 	e.receiveCommitMsgStart(ctx)

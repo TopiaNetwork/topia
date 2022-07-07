@@ -52,7 +52,7 @@ func (ns *nodeConsensusDomainState) GetAllActiveNodeConsensusDomains(height uint
 		if err != nil {
 			return
 		}
-		if domainInfo.ValidHeightStart > height && height < domainInfo.ValidHeightEnd && (domainInfo.ValidHeightEnd-tpcmm.EpochSpan) >= 0 {
+		if height > domainInfo.ValidHeightStart && height < domainInfo.ValidHeightEnd && (domainInfo.ValidHeightEnd-tpcmm.EpochSpan) >= 0 {
 			domains = append(domains, &domainInfo)
 		}
 	})

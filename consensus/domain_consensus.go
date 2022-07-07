@@ -25,21 +25,23 @@ const (
 )
 
 type domainConsensusService struct {
-	nodeID         string
-	log            tplog.Logger
-	ledger         ledger.Ledger
-	blockAddedCh   chan *tpchaintypes.Block
-	selector       vrf.RoleSelectorVRF
-	csConfig       *configuration.ConsensusConfiguration
-	triggerNumber  uint64
-	triggerBlock   *tpchaintypes.Block
-	selfSelected   bool
-	candidateNodes []*tpcmm.NodeDomainMember
-	dkgEx          *dkgExchange
+	nodeID           string
+	stateBuilderType state.CompStateBuilderType
+	log              tplog.Logger
+	ledger           ledger.Ledger
+	blockAddedCh     chan *tpchaintypes.Block
+	selector         vrf.RoleSelectorVRF
+	csConfig         *configuration.ConsensusConfiguration
+	triggerNumber    uint64
+	triggerBlock     *tpchaintypes.Block
+	selfSelected     bool
+	candidateNodes   map[string]*tpcmm.NodeDomainMember //nodeID->*tpcmm.NodeDomainMember
+	dkgEx            *dkgExchange
 }
 
 func NewDomainConsensusService(
 	nodeID string,
+	stateBuilderType state.CompStateBuilderType,
 	log tplog.Logger,
 	ledger ledger.Ledger,
 	blockAddedCh chan *tpchaintypes.Block,
@@ -48,13 +50,14 @@ func NewDomainConsensusService(
 	dkgEx *dkgExchange) *domainConsensusService {
 
 	return &domainConsensusService{
-		nodeID:       nodeID,
-		log:          log,
-		ledger:       ledger,
-		blockAddedCh: blockAddedCh,
-		selector:     selector,
-		csConfig:     csConfig,
-		dkgEx:        dkgEx,
+		nodeID:           nodeID,
+		stateBuilderType: stateBuilderType,
+		log:              log,
+		ledger:           ledger,
+		blockAddedCh:     blockAddedCh,
+		selector:         selector,
+		csConfig:         csConfig,
+		dkgEx:            dkgEx,
 	}
 }
 
@@ -198,6 +201,8 @@ func (ds *domainConsensusService) collectConsensusCandidateNodeStart(ctx context
 					continue
 				}
 
+				ds.candidateNodes = make(map[string]*tpcmm.NodeDomainMember, len(propCandidateNodes)+len(valCandidateNodes))
+
 				dkgPartKeyPubs := make(map[string]string, len(propCandidateNodes)+len(valCandidateNodes))
 
 				var propCandNodeIDs []string
@@ -209,7 +214,7 @@ func (ds *domainConsensusService) collectConsensusCandidateNodeStart(ctx context
 						propCandNodeIDs = append(propCandNodeIDs, propCandNode.NodeID)
 					}
 
-					ds.candidateNodes = append(ds.candidateNodes, &tpcmm.NodeDomainMember{NodeID: propCandNode.NodeID, NodeRole: tpcmm.NodeRole_Proposer, Weight: propCandNode.Weight})
+					ds.candidateNodes[propCandNode.NodeID] = &tpcmm.NodeDomainMember{NodeID: propCandNode.NodeID, NodeRole: tpcmm.NodeRole_Proposer, Weight: propCandNode.Weight}
 
 					dkgPartKeyPubs[propCandNode.NodeID] = propCandNode.DKGPartPubKey
 				}
@@ -220,7 +225,7 @@ func (ds *domainConsensusService) collectConsensusCandidateNodeStart(ctx context
 						valCandNodeIDs = append(valCandNodeIDs, valCandNode.NodeID)
 					}
 
-					ds.candidateNodes = append(ds.candidateNodes, &tpcmm.NodeDomainMember{NodeID: valCandNode.NodeID, NodeRole: tpcmm.NodeRole_Validator, Weight: valCandNode.Weight})
+					ds.candidateNodes[valCandNode.NodeID] = &tpcmm.NodeDomainMember{NodeID: valCandNode.NodeID, NodeRole: tpcmm.NodeRole_Validator, Weight: valCandNode.Weight}
 
 					dkgPartKeyPubs[valCandNode.NodeID] = valCandNode.DKGPartPubKey
 				}
@@ -241,7 +246,7 @@ func (ds *domainConsensusService) collectConsensusCandidateNodeStart(ctx context
 	}()
 }
 
-func (ds *domainConsensusService) updateDKGBls(dkgBls DKGBls) {
+func (ds *domainConsensusService) ProduceAndSaveNodeDomain(threshold int, pubKey []byte, priShare []byte, pubShares [][]byte) {
 	ndInfo := &tpcmm.NodeDomainInfo{}
 
 	bHash, _ := ds.triggerBlock.BlockHash()
@@ -253,30 +258,61 @@ func (ds *domainConsensusService) updateDKGBls(dkgBls DKGBls) {
 	}
 	ndInfo.ValidHeightEnd = ndInfo.ValidHeightStart + 50*tpcmm.EpochSpan
 
-	pubKey, _ := dkgBls.PubKey()
-	priShare, _ := dkgBls.PriShare()
-	pubShares, _ := dkgBls.PubShares()
+	index := 0
+	candiNodeSlice := make([]*tpcmm.NodeDomainMember, len(ds.candidateNodes))
+	for _, val := range ds.candidateNodes {
+		candiNodeSlice[index] = val
+		index++
+	}
 
 	csDomainData := &tpcmm.NodeConsensusDomain{
-		Threshold:    dkgBls.Threshold(),
+		Threshold:    threshold,
 		NParticipant: len(ds.candidateNodes),
 		PublicKey:    pubKey,
 		PubShares:    pubShares,
-		Members:      ds.candidateNodes,
+		Members:      candiNodeSlice,
 	}
 
 	ndInfo.CSDomainData = csDomainData
 
-	compState := state.GetStateBuilder(state.CompStateBuilderType_Simple).TopCompositionState(ds.nodeID)
-	if compState == nil {
-		return
+	compState := state.GetStateBuilder(ds.stateBuilderType).TopCompositionState(ds.nodeID)
+	if compState.CompSState() == state.CompSState_Commited {
+		compState = state.GetStateBuilder(ds.stateBuilderType).CreateCompositionState(ds.log, ds.nodeID, ds.ledger, compState.StateVersion()+1, "DomainConsensusService")
 	}
 
-	compState.UpdateDKGPriShare(ds.nodeID, priShare)
+	if priShare != nil {
+		compState.UpdateDKGPriShare(ds.nodeID, priShare)
+	}
+
 	compState.AddNodeDomain(ndInfo)
 }
 
-func (ds domainConsensusService) Trigger(newBlockAdded *tpchaintypes.Block) {
+func (ds *domainConsensusService) updateDKGBls(dkgBls DKGBls) {
+	pubKey, _ := dkgBls.PubKey()
+	priShare, _ := dkgBls.PriShare()
+	pubShares, _ := dkgBls.PubShares()
+	threshold := dkgBls.Threshold()
+
+	ds.ProduceAndSaveNodeDomain(threshold, pubKey, priShare, pubShares)
+
+	ds.log.Infof("Successful generate node consensus domain and saved: self node %s", ds.nodeID)
+}
+
+func (ds *domainConsensusService) ContainedInCandidateNodes(nodeID string) bool {
+	for _, val := range ds.candidateNodes {
+		if val.NodeID == nodeID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (ds *domainConsensusService) CandidateNodesNumber() int {
+	return len(ds.candidateNodes)
+}
+
+func (ds *domainConsensusService) Trigger(newBlockAdded *tpchaintypes.Block) {
 	ds.blockAddedCh <- newBlockAdded
 }
 

@@ -539,7 +539,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 
 	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
 	if compState == nil {
-		err := fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", stateVersion)
+		err := fmt.Errorf("Can't create composition state for Prepare: maxStateVer=%d", stateVersion)
 		e.log.Errorf("%v", err)
 		return err
 	}

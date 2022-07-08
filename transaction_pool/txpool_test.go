@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
+	"runtime/pprof"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/golang/mock/gomock"
 	"github.com/hashicorp/golang-lru"
+	"github.com/pkg/profile"
 	"github.com/stretchr/testify/assert"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -401,7 +404,6 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	log := TpiaLog
-
 	stateService := txpoolmock.NewMockStateQueryService(ctrl)
 	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
 	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
@@ -776,6 +778,11 @@ func Test_transactionPool_all(t *testing.T) {
 	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 
 	pool.TruncateTxPool()
+	defer profile.Start(profile.MemProfile, profile.MemProfileRate(1)).Stop()
+	f, _ := os.OpenFile("cpu.pprof", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+	defer f.Close()
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 
 	//add a local tx
 	pool.AddTx(Tx1, true)
@@ -899,11 +906,11 @@ func Test_transactionPool_all(t *testing.T) {
 	blocks = append(blocks, NewBlock)
 	pool.chanBlocksRevert <- blocks
 	time.Sleep(5 * time.Second)
-	assert.Equal(t, 60, len(pool.GetRemoteTxs()))
+	assert.Equal(t, 20, len(pool.GetRemoteTxs()))
 	//addBlock remove txs
 	pool.chanBlockAdded <- OldBlock
 	time.Sleep(5 * time.Second)
 	assert.Equal(t, 10, len(pool.GetLocalTxs()))
-	assert.Equal(t, 50, len(pool.GetRemoteTxs()))
+	assert.Equal(t, 10, len(pool.GetRemoteTxs()))
 
 }

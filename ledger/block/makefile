@@ -1,14 +1,5 @@
 
 
-update git:
-	cd zstd
-	git pull
-
-compile:
-	gcc -c -o zstd.o zstd.c
-	ar rcs libzstd.a zstd.o
-
-
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 GOOS_GOARCH := $(GOOS)_$(GOARCH)
@@ -22,7 +13,7 @@ BUILDER_IMAGE := local/builder_musl:2.0.0-$(shell echo $(MUSL_BUILDER_IMAGE) | t
 
 libzstd.a: $(LIBZSTD_NAME)
 $(LIBZSTD_NAME):
-ifeq ($(GOOS_GOARCH),$(GOOS_GOARCH_NATIVE))
+ifeq ($(GOOS_GOARCH),amd64)
 	cd zstd/lib && ZSTD_LEGACY_SUPPORT=0 MOREFLAGS=$(MOREFLAGS) $(MAKE) clean libzstd.a
 	mv zstd/lib/libzstd.a $(LIBZSTD_NAME)
 else
@@ -43,6 +34,15 @@ ifeq ($(GOOS_GOARCH),linux_musl_arm64)
 	mv zstd/lib/libzstd.a libzstd_linux_musl_arm64.a
 endif
 endif
+
+update-git:
+	cd zstd
+	git pull
+
+compile:
+	gcc -c -o zstd.o zstd.c
+	ar rcs libzstd.a zstd.o
+
 
 package-builder:
 	(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -q '$(BUILDER_IMAGE)$$') \

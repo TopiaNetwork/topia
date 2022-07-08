@@ -241,6 +241,10 @@ func (v *consensusValidator) receiveBestProposeMsgStart(ctx context.Context) {
 		for {
 			select {
 			case bestPropMsg := <-v.bestProposeMsgChan:
+				if !v.epochService.SelfSelected() {
+					v.log.Warnf("Not selected consensus node and should not receive best propose message: StateVersion %d, self node %s", bestPropMsg.StateVersion, v.nodeID)
+					continue
+				}
 				if ok := v.commitMsg.Contains(bestPropMsg.StateVersion); ok {
 					v.log.Warnf("Validator have received commit message and best propose message will be discard: StateVersion %d, self node %s", bestPropMsg.StateVersion, v.nodeID)
 					continue
@@ -351,6 +355,10 @@ func (v *consensusValidator) receiveProposeMsgStart(ctx context.Context) {
 		for {
 			select {
 			case propMsg := <-v.proposeMsgChan:
+				if !v.epochService.SelfSelected() {
+					v.log.Warnf("Not selected consensus node and should not receive propose message: StateVersion %d, self node %s", propMsg.StateVersion, v.nodeID)
+					continue
+				}
 				if ok := v.commitMsg.Contains(propMsg.StateVersion); ok {
 					v.log.Warnf("Validator have received commit message and propose message will be discarded: StateVersion %d, self node %s", propMsg.StateVersion, v.nodeID)
 					continue

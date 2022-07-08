@@ -43,6 +43,7 @@ type consensusProposer struct {
 	marshaler               codec.Marshaler
 	ledger                  ledger.Ledger
 	cryptService            tpcrt.CryptService
+	epochService            EpochService
 	dkgBls                  DKGBls
 	proposeMaxInterval      time.Duration
 	blockMaxCyclePeriod     time.Duration
@@ -65,6 +66,7 @@ func newConsensusProposer(log tplog.Logger,
 	voteMsgChan chan *VoteMessage,
 	blockAddedCh chan *tpchaintypes.Block,
 	crypt tpcrt.CryptService,
+	epochService EpochService,
 	proposeMaxInterval time.Duration,
 	blockMaxCyclePeriod time.Duration,
 	deliver messageDeliverI,
@@ -86,6 +88,7 @@ func newConsensusProposer(log tplog.Logger,
 		marshaler:               marshaler,
 		ledger:                  ledger,
 		cryptService:            crypt,
+		epochService:            epochService,
 		proposeMaxInterval:      proposeMaxInterval,
 		blockMaxCyclePeriod:     blockMaxCyclePeriod,
 		isProposing:             0,
@@ -175,6 +178,10 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 		for {
 			select {
 			case ppmProp := <-p.preprePackedMsgPropChan:
+				if !p.epochService.SelfSelected() {
+					p.log.Warnf("Not selected consensus node and should not receive prepare message from remote, state version %d self node %s", ppmProp.StateVersion, p.nodeID)
+					continue
+				}
 				p.log.Infof("Received prepare message from remote, state version %d self node %s", ppmProp.StateVersion, p.nodeID)
 				err := func() error {
 					csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
@@ -312,6 +319,10 @@ func (p *consensusProposer) receiveVoteMessageStart(ctx context.Context) {
 		for {
 			select {
 			case voteMsg := <-p.voteMsgChan:
+				if !p.epochService.SelfSelected() {
+					p.log.Warnf("Not selected consensus node and should not receive vote message from remote, state version %d self node %s", voteMsg.StateVersion, p.nodeID)
+					continue
+				}
 				if p.validator.commitMsg.Contains(voteMsg.StateVersion) {
 					p.log.Infof("Have received commit message and the vote message will be discarded: state version %d, self node %s", voteMsg.StateVersion, p.nodeID)
 					continue
@@ -377,6 +388,10 @@ func (p *consensusProposer) bestProposeMsgTimerStart(ctx context.Context) contex
 }
 
 func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, addedBlock *tpchaintypes.Block) error {
+	if !p.epochService.SelfSelected() {
+		return fmt.Errorf("Not selected consensus node: self node %s", p.nodeID)
+	}
+
 	if !atomic.CompareAndSwapUint32(&p.isProposing, 0, 1) {
 		err := fmt.Errorf("Self node %s is proposing", p.nodeID)
 		p.log.Infof("%s", err.Error())

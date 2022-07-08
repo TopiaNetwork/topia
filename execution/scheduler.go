@@ -54,6 +54,8 @@ type ExecutionScheduler interface {
 
 	MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error)
 
+	CompositionStateAtVersion(stateVersion uint64) state.CompositionState
+
 	PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error)
 
 	CompositionStateOfExePackedTxs(stateVersion uint64) (state.CompositionState, error)
@@ -206,6 +208,26 @@ func (scheduler *executionScheduler) MaxStateVersion(latestBlock *tpchaintypes.B
 	}
 
 	return maxStateVersion, nil
+}
+
+func (scheduler *executionScheduler) CompositionStateAtVersion(stateVersion uint64) state.CompositionState {
+	scheduler.executeMutex.RLock()
+	defer scheduler.executeMutex.RUnlock()
+
+	if scheduler.exePackedTxsList.Len() > 0 {
+		exeTxsItem := scheduler.exePackedTxsList.Front()
+		for exeTxsItem != nil {
+			exeTxsF := exeTxsItem.Value.(*executionPackedTxs)
+			if exeTxsF.StateVersion() != stateVersion {
+				exeTxsItem = exeTxsItem.Next()
+			} else if exeTxsF.compState.CompSState() != state.CompSState_Commited {
+				return exeTxsF.compState
+			}
+		}
+		return nil
+	} else {
+		return nil
+	}
 }
 
 func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error) {

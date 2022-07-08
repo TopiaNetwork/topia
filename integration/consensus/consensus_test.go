@@ -380,9 +380,14 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
 		eventhub.GetEventHubManager().GetEventHub(nParams[i].nodeID).Start(nParams[i].sysActor)
+		cType := state.CompStateBuilderType_Full
+		if nParams[i].nodeType != "executor" {
+			cType = state.CompStateBuilderType_Simple
+		}
 		cs := consensus.NewConsensus(
 			nParams[i].chainID,
 			nParams[i].nodeID,
+			cType,
 			nParams[i].priKey,
 			tplogcmm.InfoLevel,
 			nParams[i].mainLog,
@@ -451,7 +456,7 @@ func TestMultiRoleNodes(t *testing.T) {
 
 			latestBlock, _ := csStateRN.GetLatestBlock()
 
-			if nodeP.nodeType != "executor" && nodeP.ledger.State() == tpcmm.LedgerState_Genesis {
+			if nodeP.ledger.State() == tpcmm.LedgerState_Genesis {
 				nodeP.cs.TriggerDKG(latestBlock)
 			}
 		}()

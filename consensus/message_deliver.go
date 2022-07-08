@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"go.uber.org/atomic"
@@ -253,11 +254,11 @@ func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context,
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
 		peerIDsProposer = md.epochService.GetActiveProposerIDs()
-		if len(peerIDsProposer) == 0 {
-			err := fmt.Errorf("Zero active proposer node")
-			md.log.Errorf("%v", err)
-			return err
+		for len(peerIDsProposer) == 0 {
+			time.Sleep(50 * time.Millisecond)
 		}
+		md.log.Infof("Active proposer node: %v", peerIDsProposer)
+
 		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDsProposer)
 	}
 

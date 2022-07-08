@@ -59,6 +59,7 @@ type consensusHandler struct {
 	dealMsgCh                    chan *DKGDealMessage
 	dealRespMsgCh                chan *DKGDealRespMessage
 	finishedMsgCh                chan *DKGFinishedMessage
+	finishedMsgExeCh             chan *DKGFinishedMessage
 	ledger                       ledger.Ledger
 	marshaler                    codec.Marshaler
 	deliver                      messageDeliverI
@@ -80,6 +81,7 @@ func NewConsensusHandler(log tplog.Logger,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
 	finishedMsgCh chan *DKGFinishedMessage,
+	finishedMsgExeCh chan *DKGFinishedMessage,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
 	deliver messageDeliverI,
@@ -100,6 +102,7 @@ func NewConsensusHandler(log tplog.Logger,
 		dealMsgCh:                    dealMsgCh,
 		dealRespMsgCh:                dealRespMsgCh,
 		finishedMsgCh:                finishedMsgCh,
+		finishedMsgExeCh:             finishedMsgExeCh,
 		ledger:                       ledger,
 		marshaler:                    marshaler,
 		deliver:                      deliver,
@@ -225,7 +228,14 @@ func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) err
 }
 
 func (handler *consensusHandler) ProcessDKGFinishedMsg(msg *DKGFinishedMessage) error {
-	handler.finishedMsgCh <- msg
+	id := handler.deliver.deliverNetwork().ID()
+
+	activeExeIds := handler.epochService.GetActiveExecutorIDs()
+	if tpcmm.IsContainString(id, activeExeIds) {
+		handler.finishedMsgExeCh <- msg
+	} else {
+		handler.finishedMsgCh <- msg
+	}
 
 	return nil
 }

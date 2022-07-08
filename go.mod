@@ -34,6 +34,7 @@ require (
 	github.com/miguelmota/go-solidity-sha3 v0.1.1
 	github.com/multiformats/go-multiaddr v0.4.0
 	github.com/orcaman/concurrent-map v0.0.0-20190107190726-7ed82d9cb717
+	github.com/pkg/profile v1.2.1
 	github.com/rs/zerolog v1.26.1
 	github.com/sony/sonyflake v1.0.0
 	github.com/spf13/cobra v1.3.0

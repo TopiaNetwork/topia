@@ -1,38 +1,12 @@
 package block
 
 import (
-	"fmt"
 	"github.com/bits-and-blooms/bitset"
-	"math"
 	"math/bits"
 	"unsafe"
 )
 
 
-//func exist(blockNum types.BlockNum) {
-//
-//
-//	rb1 := roaring.BitmapOf(uint32(blockNum))
-//	fmt.Println(rb1.String())
-//
-//
-//
-//	i := rb1.Iterator()
-//	for i.HasNext() {
-//		fmt.Println(i.Next())
-//	}
-//	fmt.Println()
-//
-//
-//	buf := new(bytes.Buffer)
-//	rb1.WriteTo(buf) // we omit error handling
-//	newrb:= roaring.New()
-//	newrb.ReadFrom(buf)
-//	if rb1.Equals(newrb) {
-//		fmt.Println("")
-//	}
-//
-//}
 
 type BloomFilter struct {
 	m uint
@@ -52,18 +26,21 @@ type digest128 struct {
 	h2 uint64 // Unfinalized running hash part 2.
 }
 
+//m = uint(math.Ceil(-1 * float64(n) * math.Log(p) / math.Pow(math.Log(2), 2)))
+//k = uint(math.Ceil(math.Log(2) * float64(m) / float64(n)))
+
 const (
 	c1_128     = 0x87c37b91114253d5
 	c2_128     = 0x4cf5ad432745937f
 	block_size = 16
 
 	count = 100000000
-	m = 2875517514
-	p = 0.000001
-	k = 20 //19.93
+	m = 4313276270
+	p = 0.000000001
+	k = 30 //29.93
 )
 
-func New(m uint, k uint) *BloomFilter {
+func New() *BloomFilter {
 	return &BloomFilter{max(1, m), max(1, k), bitset.New(m)}
 }
 
@@ -104,7 +81,7 @@ func (f *BloomFilter) location(h [4]uint64, i uint) uint {
 	return uint(location(h, i) % uint64(f.m))
 }
 
-func (f *BloomFilter) Test(data []byte) bool {
+func (f *BloomFilter) Find(data []byte) bool {
 	h := baseHashes(data)
 	for i := uint(0); i < f.k; i++ {
 		if !f.b.Test(f.location(h, i)) {
@@ -117,47 +94,18 @@ func (f *BloomFilter) Cap() uint {
 	return f.m
 }
 
-func (f *BloomFilter) K() uint {
-	return f.k
-}
 
-// BitSet returns the underlying bitset for this filter.
 func (f *BloomFilter) BitSet() *bitset.BitSet {
 	return f.b
 }
 
-func (f *BloomFilter) Copy() *BloomFilter {
-	fc := New(f.m, f.k)
-	fc.Merge(f) // #nosec
-	return fc
-}
-
-func (f *BloomFilter) Merge(g *BloomFilter) error {
-	// Make sure the m's and k's are the same, otherwise merging has no real use.
-	if f.m != g.m {
-		return fmt.Errorf("m's don't match: %d != %d", f.m, g.m)
-	}
-
-	if f.k != g.k {
-		return fmt.Errorf("k's don't match: %d != %d", f.m, g.m)
-	}
-
-	f.b.InPlaceUnion(g.b)
-	return nil
-}
-
-func EstimateParameters(n uint, p float64) (m uint, k uint) {
-	m = uint(math.Ceil(-1 * float64(n) * math.Log(p) / math.Pow(math.Log(2), 2)))
-	k = uint(math.Ceil(math.Log(2) * float64(m) / float64(n)))
-	return
-}
 
 func (d *digest128) sum256(data []byte) (hash1, hash2, hash3, hash4 uint64) {
-	// We always start from zero.
+
 	d.h1, d.h2 = 0, 0
-	// Process as many bytes as possible.
+
 	d.bmix(data)
-	// We have enough to compute the first two 64-bit numbers
+
 	length := uint(len(data))
 	tail_length := length % block_size
 	tail := data[length-tail_length:]
@@ -168,15 +116,14 @@ func (d *digest128) sum256(data []byte) (hash1, hash2, hash3, hash4 uint64) {
 		word1 := *(*uint64)(unsafe.Pointer(&tail[0]))
 		word2 := uint64(*(*uint32)(unsafe.Pointer(&tail[8])))
 		word2 = word2 | (uint64(tail[12]) << 32) | (uint64(tail[13]) << 40) | (uint64(tail[14]) << 48)
-		// We append 1.
+
 		word2 = word2 | (uint64(1) << 56)
-		// We process the resulting 2 words.
+
 		d.bmix_words(word1, word2)
-		tail := data[length:] // empty slice, deliberate.
+		tail := data[length:]
 		hash3, hash4 = d.sum128(false, length+1, tail)
 	} else {
-		// We still have a tail (fewer than 15 bytes) but we
-		// need to append '1' to it.
+
 		hash3, hash4 = d.sum128(true, length+1, tail)
 	}
 
@@ -187,11 +134,11 @@ func (f *BloomFilter) Equal(g *BloomFilter) bool {
 	return f.m == g.m && f.k == g.k && f.b.Equal(g.b)
 }
 
-// Locations returns a list of hash locations representing a data item.
+
 func Locations(data []byte, k uint) []uint64 {
 	locs := make([]uint64, k)
 
-	// calculate locations
+
 	h := baseHashes(data)
 	for i := uint(0); i < k; i++ {
 		locs[i] = location(h, i)

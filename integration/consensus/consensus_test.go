@@ -456,7 +456,7 @@ func TestMultiRoleNodes(t *testing.T) {
 
 			latestBlock, _ := csStateRN.GetLatestBlock()
 
-			if nodeP.nodeType != "executor" && nodeP.ledger.State() == tpcmm.LedgerState_Genesis {
+			if nodeP.ledger.State() == tpcmm.LedgerState_Genesis {
 				nodeP.cs.TriggerDKG(latestBlock)
 			}
 		}()

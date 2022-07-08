@@ -17,9 +17,11 @@ type messageDeliverMock struct {
 	partPKSync       sync.RWMutex
 	dealMsgsync      sync.RWMutex
 	dealRespMsgSync  sync.RWMutex
+	finishedMsgSync  sync.RWMutex
 	partPubKeyChMap  map[string]chan *DKGPartPubKeyMessage
 	dealMsgChMap     map[string]chan *DKGDealMessage
 	dealRespMsgChMap map[string]chan *DKGDealRespMessage
+	finishedMsgChMap map[string]chan *DKGFinishedMessage
 	dkgBls           DKGBls
 }
 
@@ -101,7 +103,7 @@ func (md *messageDeliverMock) deliverDKGDealMessage(ctx context.Context, nodeID 
 
 func (md *messageDeliverMock) deliverDKGDealRespMessage(ctx context.Context, msg *DKGDealRespMessage) error {
 	md.dealRespMsgSync.Lock()
-	md.dealRespMsgSync.Unlock()
+	defer md.dealRespMsgSync.Unlock()
 
 	for nodeIndex, dealRespMsgCh := range md.dealRespMsgChMap {
 		if nodeIndex != md.nodeID {
@@ -111,6 +113,25 @@ func (md *messageDeliverMock) deliverDKGDealRespMessage(ctx context.Context, msg
 	}
 
 	return nil
+}
+
+func (md *messageDeliverMock) deliverDKGFinishedMessage(ctx context.Context, msg *DKGFinishedMessage) error {
+	md.finishedMsgSync.Lock()
+	defer md.finishedMsgSync.Unlock()
+
+	for nodeIndex, finishedMsgCh := range md.finishedMsgChMap {
+		if nodeIndex != md.nodeID {
+			md.log.Infof("DKG finished message %s deliver to %s", md.nodeID, nodeIndex)
+			finishedMsgCh <- msg
+		}
+	}
+
+	return nil
+}
+
+func (md *messageDeliverMock) updateCandNodeIDs(propCandNodeIDs []string, valCandNodeIDs []string) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (md *messageDeliverMock) setEpochService(epService EpochService) {

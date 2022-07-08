@@ -29,28 +29,30 @@ type dkgMessageDeliverI interface {
 }
 
 type dkgMessageDeliver struct {
-	log             tplog.Logger
-	nodeID          string
-	priKey          tpcrtypes.PrivateKey
-	strategy        DeliverStrategy
-	network         tpnet.Network
-	ledger          ledger.Ledger
-	marshaler       codec.Marshaler
-	cryptService    tpcrt.CryptService
-	propCandNodeIDs []string
-	valCandNodeIDs  []string
+	log              tplog.Logger
+	nodeID           string
+	priKey           tpcrtypes.PrivateKey
+	strategy         DeliverStrategy
+	network          tpnet.Network
+	ledger           ledger.Ledger
+	marshaler        codec.Marshaler
+	cryptService     tpcrt.CryptService
+	exeActiveNodeIds []string
+	propCandNodeIDs  []string
+	valCandNodeIDs   []string
 }
 
-func NewDkgMessageDeliver(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network tpnet.Network, marshaler codec.Marshaler, cryptService tpcrt.CryptService, ledger ledger.Ledger) dkgMessageDeliverI {
+func NewDkgMessageDeliver(log tplog.Logger, nodeID string, priKey tpcrtypes.PrivateKey, strategy DeliverStrategy, network tpnet.Network, marshaler codec.Marshaler, cryptService tpcrt.CryptService, ledger ledger.Ledger, exeActiveNodeIds []string) dkgMessageDeliverI {
 	return &dkgMessageDeliver{
-		log:          log,
-		nodeID:       nodeID,
-		priKey:       priKey,
-		strategy:     strategy,
-		network:      network,
-		ledger:       ledger,
-		marshaler:    marshaler,
-		cryptService: cryptService,
+		log:              log,
+		nodeID:           nodeID,
+		priKey:           priKey,
+		strategy:         strategy,
+		network:          network,
+		ledger:           ledger,
+		marshaler:        marshaler,
+		cryptService:     cryptService,
+		exeActiveNodeIds: exeActiveNodeIds,
 	}
 }
 
@@ -231,17 +233,27 @@ func (md *dkgMessageDeliver) deliverDKGFinishedMessage(ctx context.Context, msg 
 		return err
 	}
 
+	exeCtx := ctx
 	propCtx := ctx
 	ValCtx := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
+		exeCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, md.exeActiveNodeIds)
 		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, md.propCandNodeIDs)
 		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, md.valCandNodeIDs)
 	}
 
+	if exeCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
+		exeCtx = context.WithValue(exeCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+		err = deliverSendCommon(exeCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_DKGFinished, msgBytes)
+		if err != nil {
+			md.log.Errorf("Send dkg finished message to execute network failed: err=%v", err)
+		}
+	}
+
 	if propCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
 		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-		err = deliverSendCommon(propCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_DKGDealResp, msgBytes)
+		err = deliverSendCommon(propCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_DKGFinished, msgBytes)
 		if err != nil {
 			md.log.Errorf("Send dkg finished message to propose network failed: err=%v", err)
 		}
@@ -249,7 +261,7 @@ func (md *dkgMessageDeliver) deliverDKGFinishedMessage(ctx context.Context, msg 
 
 	if ValCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
 		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-		err = deliverSendCommon(ValCtx, md.log, md.marshaler, md.network, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_DKGDealResp, msgBytes)
+		err = deliverSendCommon(ValCtx, md.log, md.marshaler, md.network, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_DKGFinished, msgBytes)
 		if err != nil {
 			md.log.Errorf("Send dkg finished message to validate network failed: err=%v", err)
 		}

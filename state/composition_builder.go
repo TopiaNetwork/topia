@@ -5,7 +5,6 @@ import (
 	"github.com/orcaman/concurrent-map"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/TopiaNetwork/topia/ledger"
@@ -61,18 +60,17 @@ func GetStateBuilder(cType CompStateBuilderType) CompositionStateBuilder {
 }
 
 type compositionStateOfNodeFull struct {
-	sync                sync.RWMutex
-	nodeID              string
-	topCompositionState atomic.Value //CompositionState
-	createdRecord       map[uint64]struct{}
+	sync                 sync.RWMutex
+	nodeID               string
+	lastCompositionState CompositionState
+	createdRecord        map[uint64]struct{}
 }
 
 type compositionStateOfNodeSimple struct {
-	nodeID              string
-	isCreating          uint32
-	maxStateVersion     uint64
-	topCompositionState atomic.Value       //CompositionState
-	compStates          cmap.ConcurrentMap //StateVersion->CompositionState
+	nodeID          string
+	isCreating      uint32
+	maxStateVersion uint64
+	compStates      cmap.ConcurrentMap //StateVersion->CompositionState
 }
 
 type CompositionStateBuilder interface {
@@ -80,7 +78,7 @@ type CompositionStateBuilder interface {
 
 	CompositionStateExist(nodeID string, stateVersion uint64) bool
 
-	TopCompositionState(nodeID string) CompositionState
+	CompositionStateAtVersion(nodeID string, stateVersion uint64) CompositionState
 }
 
 type compositionStateBuilderFull struct {
@@ -115,10 +113,15 @@ func (bf *compositionStateBuilderFull) createCompositionStateOfNode(log tplog.Lo
 	if _, ok := compStateOfNode.createdRecord[stateVersion]; !ok {
 		compStateOfNode.createdRecord[stateVersion] = struct{}{}
 		compStateRTN = createCompositionState(log, ledger, stateVersion)
-		compStateOfNode.topCompositionState.Store(compStateRTN)
+		compStateOfNode.lastCompositionState = compStateRTN
 		log.Infof("Create new CompositionState for stateVersion %d，requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
 	} else {
-		log.Warnf("Have created CompositionState for stateVersion %d，so ignore the create request, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+		log.Warnf("Have created CompositionState for stateVersion %d，so use the last, requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
+		if compStateOfNode.lastCompositionState != nil &&
+			compStateOfNode.lastCompositionState.StateVersion() == stateVersion &&
+			compStateOfNode.lastCompositionState.CompSState() != CompSState_Commited {
+			compStateRTN = compStateOfNode.lastCompositionState
+		}
 	}
 
 	return compStateRTN
@@ -143,18 +146,8 @@ func (bf *compositionStateBuilderFull) CompositionStateExist(nodeID string, stat
 	return false
 }
 
-func (bs *compositionStateBuilderFull) TopCompositionState(nodeID string) CompositionState {
-	compStateOfNode := bs.getCompositionStateOfNode(nodeID)
-	if compStateOfNode == nil {
-		return nil
-	}
-
-	topCSVal := compStateOfNode.topCompositionState.Load()
-	if topCSVal == nil {
-		return nil
-	}
-
-	return topCSVal.(CompositionState)
+func (bs *compositionStateBuilderFull) CompositionStateAtVersion(nodeID string, stateVersion uint64) CompositionState {
+	panic("Composition state builder full not support CompositionStateAtVersion")
 }
 
 func (ns *compositionStateOfNodeSimple) maintainTimerStart(ctx context.Context, log tplog.Logger, ledger ledger.Ledger) {
@@ -258,8 +251,6 @@ func (bs *compositionStateBuilderSimple) createCompositionStateOfNode(log tplog.
 
 		compStateOfNode.maxStateVersion = stateVersion
 
-		compStateOfNode.topCompositionState.Store(compStateRTN)
-
 		log.Infof("Create new CompositionState for stateVersion %d，requester=%s, self node %s", stateVersion, requester, compStateOfNode.nodeID)
 		//}
 	}
@@ -291,16 +282,16 @@ func (bs *compositionStateBuilderSimple) CompositionStateExist(nodeID string, st
 	return false
 }
 
-func (bs *compositionStateBuilderSimple) TopCompositionState(nodeID string) CompositionState {
+func (bs *compositionStateBuilderSimple) CompositionStateAtVersion(nodeID string, stateVersion uint64) CompositionState {
 	compStateOfNode := bs.getCompositionStateOfNode(nodeID, nil, nil)
 	if compStateOfNode == nil {
 		return nil
 	}
 
-	topCSVal := compStateOfNode.topCompositionState.Load()
-	if topCSVal == nil {
-		return nil
+	stateVerS := strconv.FormatUint(stateVersion, 10)
+	if topCSVal, ok := compStateOfNode.compStates.Get(stateVerS); ok {
+		return topCSVal.(CompositionState)
 	}
 
-	return topCSVal.(CompositionState)
+	return nil
 }

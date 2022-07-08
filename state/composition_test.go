@@ -1,6 +1,7 @@
 package state
 
 import (
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
@@ -33,6 +34,13 @@ func TestMultiCompositionState(t *testing.T) {
 
 	config.Genesis.Block.Head.Height = 2
 	compState2.SetLatestBlock(config.Genesis.Block)
+	compState2.AddNode(&tpcmm.NodeInfo{
+		NodeID:  "testID",
+		Address: "TestNodeAddr",
+		Weight:  35,
+		State:   tpcmm.NodeState_Active,
+		Role:    tpcmm.NodeRole_Proposer,
+	})
 	compState2.Commit()
 
 	compStateRN := CreateCompositionStateReadonly(testLog, l)
@@ -45,6 +53,9 @@ func TestMultiCompositionState(t *testing.T) {
 	assert.Equal(t, nil, err)
 	latestBlockBeforeCommit, _ := compState3.GetLatestBlock()
 	assert.Equal(t, uint64(3), latestBlockBeforeCommit.Head.Height)
+	nodeInfo, _ := compState3.GetNode("testID")
+	assert.NotEqual(t, nil, nodeInfo)
+	assert.Equal(t, 35, nodeInfo.Weight)
 	err = compState3.Commit()
 	assert.Equal(t, nil, err)
 
@@ -87,4 +98,43 @@ func TestMemCompositionState(t *testing.T) {
 	compStateMem.SetLatestBlock(config.Genesis.Block)
 	latestBlock, _ = compStateMem.GetLatestBlock()
 	assert.Equal(t, uint64(2), latestBlock.Head.Height)
+}
+
+func TestIterate(t *testing.T) {
+	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
+
+	l := ledger.NewLedger("./TestCS", ledger.LedgerID("testledger"), testLog, backend.BackendType_Badger)
+
+	compState := GetStateBuilder(CompStateBuilderType_Full).CreateCompositionState(testLog, "", l, 1, "tester")
+
+	err := compState.AddNode(&tpcmm.NodeInfo{
+		NodeID:  "testID",
+		Address: "TestNodeAddr",
+		Weight:  35,
+		State:   tpcmm.NodeState_Active,
+		Role:    tpcmm.NodeRole_Proposer,
+	})
+	assert.Equal(t, nil, err)
+
+	nodeInfos, err := compState.GetAllActiveProposers()
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(nodeInfos))
+	assert.Equal(t, uint64(35), nodeInfos[0].Weight)
+
+	err = compState.AddNodeDomain(&tpcmm.NodeDomainInfo{
+		ID:               "newblockid",
+		Type:             tpcmm.DomainType_Consensus,
+		ValidHeightStart: 1,
+		ValidHeightEnd:   1000,
+	})
+	assert.Equal(t, nil, err)
+
+	compState.Commit()
+
+	compStateRN := CreateCompositionStateReadonly(testLog, l)
+
+	domainInfos, err := compStateRN.GetAllActiveNodeConsensusDomains(5)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(domainInfos))
+	assert.Equal(t, uint64(1000), domainInfos[0].ValidHeightEnd)
 }

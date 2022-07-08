@@ -243,24 +243,30 @@ func NewNodeNetWorkStateWapper(log tplog.Logger, ledger ledger.Ledger) NodeNetWo
 }
 
 func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64, stateStore tplgss.StateStore) *compositionState {
+	exeNodeDomainState := statedomain.NewNodeExecuteDomainState(stateStore, 2*1024*1024)
+	csNodeDomainState := statedomain.NewNodeConsensusDomainState(stateStore, 2*1024*1024)
+	nodeDomainState := statedomain.NewNodeDomainState(stateStore, exeNodeDomainState, csNodeDomainState, 1024*1024)
 	inactiveState := statenode.NewNodeInactiveState(stateStore, 1024*1024) // 1 Megabyte
 	executorState := statenode.NewNodeExecutorState(stateStore, 2*1024*1024)
 	proposerState := statenode.NewNodeProposerState(stateStore, 2*1024*1024)
 	validatorState := statenode.NewNodeValidatorState(stateStore, 2*1024*1024)
 	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState, 1024*1024)
 	return &compositionState{
-		log:                log,
-		stateVersion:       stateVersion,
-		ledger:             ledger,
-		StateStore:         stateStore,
-		AccountState:       stateaccount.NewAccountState(stateStore, 1024*1024),
-		ChainState:         statechain.NewChainStore(stateStore, ledger, 1024*1024),
-		NodeState:          nodeState,
-		NodeInactiveState:  inactiveState,
-		NodeExecutorState:  executorState,
-		NodeProposerState:  proposerState,
-		NodeValidatorState: validatorState,
-		EpochState:         stateepoch.NewEpochState(stateStore, 1024*1024),
+		log:                      log,
+		stateVersion:             stateVersion,
+		ledger:                   ledger,
+		StateStore:               stateStore,
+		AccountState:             stateaccount.NewAccountState(stateStore, 1024*1024),
+		ChainState:               statechain.NewChainStore(stateStore, ledger, 1024*1024),
+		NodeDomainState:          nodeDomainState,
+		NodeExecuteDomainState:   exeNodeDomainState,
+		NodeConsensusDomainState: csNodeDomainState,
+		NodeState:                nodeState,
+		NodeInactiveState:        inactiveState,
+		NodeExecutorState:        executorState,
+		NodeProposerState:        proposerState,
+		NodeValidatorState:       validatorState,
+		EpochState:               stateepoch.NewEpochState(stateStore, 1024*1024),
 	}
 }
 
@@ -323,6 +329,24 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 		return nil, err
 	}
 
+	domainRoot, err := cs.GetNodeDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node domain state root: %v", err)
+		return nil, err
+	}
+
+	exeDomainRoot, err := cs.GetNodeExecuteDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node execute domain state root: %v", err)
+		return nil, err
+	}
+
+	csDomainRoot, err := cs.GetNodeConsensusDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node consensus domain state root: %v", err)
+		return nil, err
+	}
+
 	inactiveRoot, err := cs.GetNodeInactiveRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get inactive node state root: %v", err)
@@ -362,6 +386,9 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
 	tree.Update(accRoot, accRoot)
 	tree.Update(chainRoot, chainRoot)
+	tree.Update(domainRoot, domainRoot)
+	tree.Update(exeDomainRoot, exeDomainRoot)
+	tree.Update(csDomainRoot, csDomainRoot)
 	tree.Update(inactiveRoot, inactiveRoot)
 	tree.Update(nodeRoot, nodeRoot)
 	tree.Update(nodeExecutorRoot, nodeExecutorRoot)

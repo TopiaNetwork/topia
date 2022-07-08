@@ -1,11 +1,11 @@
 
 
 GOOS ?= $(shell go env GOOS)
+
 GOARCH ?= $(shell go env GOARCH)
 GOOS_GOARCH := $(GOOS)_$(GOARCH)
 GOOS_GOARCH_NATIVE := $(shell go env GOHOSTOS)_$(shell go env GOHOSTARCH)
 LIBZSTD_NAME := libzstd_$(GOOS_GOARCH).a
-ZSTD_VERSION ?= v1.5.2
 MUSL_BUILDER_IMAGE=golang:1.8.1-alpine
 BUILDER_IMAGE := local/builder_musl:2.0.0-$(shell echo $(MUSL_BUILDER_IMAGE) | tr : _)-1
 
@@ -44,12 +44,6 @@ compile:
 	ar rcs libzstd.a zstd.o
 
 
-package-builder:
-	(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -q '$(BUILDER_IMAGE)$$') \
-		|| docker build \
-			--build-arg builder_image=$(MUSL_BUILDER_IMAGE) \
-			--tag $(BUILDER_IMAGE) \
-			builder
 
 package-musl: package-builder
 	docker run --rm \
@@ -75,7 +69,7 @@ clean:
 
 update-zstd:
 	rm -rf zstd-tmp
-	git clone --branch $(ZSTD_VERSION) --depth 1 https://github.com/Facebook/zstd zstd-tmp
+	git clone --branch --depth 1 https://github.com/Facebook/zstd zstd-tmp
 	rm -rf zstd-tmp/.git
 	rm -rf zstd
 	mv zstd-tmp zstd

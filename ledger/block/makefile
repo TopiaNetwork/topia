@@ -40,7 +40,7 @@ update-git:
 	git pull
 
 compile:
-	gcc -c -o zstd.o zstd.c
+	gcc -c -o zstd.o zstd/lib/zstd.h
 	ar rcs libzstd.a zstd.o
 
 

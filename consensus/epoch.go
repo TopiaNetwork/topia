@@ -39,7 +39,7 @@ type EpochService interface {
 
 	UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error
 
-	Start(ctx context.Context)
+	Start(ctx context.Context, latestHeight uint64)
 }
 
 type activeNodeInfos struct {
@@ -260,7 +260,7 @@ func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.Blo
 			return err
 		}
 
-		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, es.stateBuilderType)
+		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
 		if err != nil {
 			es.log.Errorf("Select consensus domain error: %v", err)
 			return err
@@ -292,18 +292,38 @@ func (es *epochService) notifyUpdater(dkgBls DKGBls) {
 	}
 }
 
-func (es *epochService) Start(ctx context.Context) {
+func (es *epochService) Start(ctx context.Context, latestHeight uint64) {
 	go func() {
 		for {
-			dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, es.stateBuilderType)
+			var compState state.CompositionState
+			switch es.stateBuilderType {
+			case state.CompStateBuilderType_Full:
+				compState = es.exeScheduler.CompositionStateAtVersion(latestHeight + 1)
+			case state.CompStateBuilderType_Simple:
+				compState = state.GetStateBuilder(es.stateBuilderType).CompositionStateAtVersion(es.nodeID, latestHeight+1)
+			}
+
+			if compState == nil {
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+
+			es.log.Infof("Fetched composition state: state version %d, self node %s", compState.StateVersion(), es.nodeID)
+
+			dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
 			if err != nil {
 				es.log.Errorf("Select consensus domain error: %v", err)
 				continue
 			}
-			if dkgCPT != nil {
+			if len(members) > 0 {
 				es.activeNodeInfos.update(es.log, es.ledger, members)
-				es.notifyUpdater(dkgCPT)
-				atomic.StoreUint32(&es.selfSelected, selfSelected)
+
+				if dkgCPT != nil {
+					es.activeNodeInfos.update(es.log, es.ledger, members)
+					es.notifyUpdater(dkgCPT)
+					atomic.StoreUint32(&es.selfSelected, selfSelected)
+				}
+
 				return
 			} else {
 				time.Sleep(50 * time.Millisecond)

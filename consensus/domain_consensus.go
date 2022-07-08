@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"github.com/TopiaNetwork/topia/execution"
 	"math"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -32,11 +33,13 @@ type domainConsensusService struct {
 	blockAddedCh     chan *tpchaintypes.Block
 	selector         vrf.RoleSelectorVRF
 	csConfig         *configuration.ConsensusConfiguration
+	lastBlock        *tpchaintypes.Block
 	triggerNumber    uint64
 	triggerBlock     *tpchaintypes.Block
 	selfSelected     bool
 	candidateNodes   map[string]*tpcmm.NodeDomainMember //nodeID->*tpcmm.NodeDomainMember
 	dkgEx            *dkgExchange
+	exeScheduler     execution.ExecutionScheduler
 }
 
 func NewDomainConsensusService(
@@ -47,7 +50,8 @@ func NewDomainConsensusService(
 	blockAddedCh chan *tpchaintypes.Block,
 	selector vrf.RoleSelectorVRF,
 	csConfig *configuration.ConsensusConfiguration,
-	dkgEx *dkgExchange) *domainConsensusService {
+	dkgEx *dkgExchange,
+	exeScheduler execution.ExecutionScheduler) *domainConsensusService {
 
 	return &domainConsensusService{
 		nodeID:           nodeID,
@@ -58,6 +62,7 @@ func NewDomainConsensusService(
 		selector:         selector,
 		csConfig:         csConfig,
 		dkgEx:            dkgEx,
+		exeScheduler:     exeScheduler,
 	}
 }
 
@@ -181,6 +186,8 @@ func (ds *domainConsensusService) collectConsensusCandidateNodeStart(ctx context
 			case newBlock := <-ds.blockAddedCh:
 				ds.log.Infof("Domain service received new block: height %d, self node %s", newBlock.Head.Height, ds.nodeID)
 
+				ds.lastBlock = newBlock
+
 				if ds.dkgEx.getDKGState() != DKGExchangeState_IDLE {
 					ds.log.Warnf("DKG exchange is busy: height %d, self node %s", newBlock.Head.Height, ds.nodeID)
 					continue
@@ -246,6 +253,22 @@ func (ds *domainConsensusService) collectConsensusCandidateNodeStart(ctx context
 	}()
 }
 
+func (ds *domainConsensusService) getRequiredCompositionState(nodeID string, stateVersion uint64) state.CompositionState {
+	var compState state.CompositionState
+	switch ds.stateBuilderType {
+	case state.CompStateBuilderType_Full:
+		compState = ds.exeScheduler.CompositionStateAtVersion(stateVersion)
+	case state.CompStateBuilderType_Simple:
+		compState = state.GetStateBuilder(ds.stateBuilderType).CompositionStateAtVersion(nodeID, stateVersion)
+	}
+
+	if compState == nil {
+		compState = state.GetStateBuilder(ds.stateBuilderType).CreateCompositionState(ds.log, ds.nodeID, ds.ledger, stateVersion, "DomainConsensusService")
+	}
+
+	return compState
+}
+
 func (ds *domainConsensusService) ProduceAndSaveNodeDomain(threshold int, pubKey []byte, priShare []byte, pubShares [][]byte) {
 	ndInfo := &tpcmm.NodeDomainInfo{}
 
@@ -275,16 +298,18 @@ func (ds *domainConsensusService) ProduceAndSaveNodeDomain(threshold int, pubKey
 
 	ndInfo.CSDomainData = csDomainData
 
-	compState := state.GetStateBuilder(ds.stateBuilderType).TopCompositionState(ds.nodeID)
-	if compState.CompSState() == state.CompSState_Commited {
-		compState = state.GetStateBuilder(ds.stateBuilderType).CreateCompositionState(ds.log, ds.nodeID, ds.ledger, compState.StateVersion()+1, "DomainConsensusService")
-	}
+	compState := ds.getRequiredCompositionState(ds.nodeID, ds.lastBlock.Head.Height+1)
+	compState.Lock()
+	defer compState.Unlock()
 
 	if priShare != nil {
 		compState.UpdateDKGPriShare(ds.nodeID, priShare)
 	}
 
-	compState.AddNodeDomain(ndInfo)
+	err := compState.AddNodeDomain(ndInfo)
+	if err != nil {
+		ds.log.Infof("Successful generate node consensus domain and saved: state version %d, self node %s", compState.StateVersion(), ds.nodeID)
+	}
 }
 
 func (ds *domainConsensusService) updateDKGBls(dkgBls DKGBls) {
@@ -294,8 +319,6 @@ func (ds *domainConsensusService) updateDKGBls(dkgBls DKGBls) {
 	threshold := dkgBls.Threshold()
 
 	ds.ProduceAndSaveNodeDomain(threshold, pubKey, priShare, pubShares)
-
-	ds.log.Infof("Successful generate node consensus domain and saved: self node %s", ds.nodeID)
 }
 
 func (ds *domainConsensusService) ContainedInCandidateNodes(nodeID string) bool {

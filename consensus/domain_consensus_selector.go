@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"errors"
 	"math/big"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -23,17 +22,15 @@ func NewDomainConsensusSelector(log tplog.Logger, ledger ledger.Ledger) *domainC
 	}
 }
 
-func (selector *domainConsensusSelector) Select(selfNodeID string, stateBuilderType state.CompStateBuilderType) (DKGBls, []*tpcmm.NodeDomainMember, uint32, error) {
-	compState := state.GetStateBuilder(stateBuilderType).TopCompositionState(selfNodeID)
-	if compState == nil {
-		return nil, nil, 0, errors.New("Top composition state nil")
-	}
+func (selector *domainConsensusSelector) Select(selfNodeID string, compState state.CompositionState) (DKGBls, []*tpcmm.NodeDomainMember, uint32, error) {
 	var selfNode *tpcmm.NodeInfo
 	var latestBlock *tpchaintypes.Block
 	var activeCSDomains []*tpcmm.NodeDomainInfo
 
 	if compState.CompSState() == state.CompSState_Commited {
 		compStateRN := state.CreateCompositionStateReadonly(selector.log, selector.ledger)
+		//selector.log.Infof("Fetched read-only composition state version: %d, number %d, self node %s", compState.StateVersion(), len(activeCSDomains), selfNodeID)
+
 		selfNodeT, err := compStateRN.GetNode(selfNodeID)
 		if err != nil {
 			return nil, nil, 0, err
@@ -50,6 +47,7 @@ func (selector *domainConsensusSelector) Select(selfNodeID string, stateBuilderT
 			return nil, nil, 0, err
 		}
 	} else {
+		//selector.log.Infof("Fetched top state version: %d, number %d, self node %s", compState.StateVersion(), len(activeCSDomains), selfNodeID)
 		selfNodeT, err := compState.GetNode(selfNodeID)
 		if err != nil {
 			return nil, nil, 0, err
@@ -71,7 +69,7 @@ func (selector *domainConsensusSelector) Select(selfNodeID string, stateBuilderT
 		return nil, nil, 0, nil
 	}
 
-	selector.log.Infof("Get available consensus domains: number %d", len(activeCSDomains))
+	selector.log.Infof("Get available consensus domains: number %d, self node %s", len(activeCSDomains), selfNodeID)
 
 	hasher := tpcmm.NewBlake2bHasher(0)
 	hashBytes := hasher.Compute(string(latestBlock.Head.VRFProof))
@@ -81,7 +79,10 @@ func (selector *domainConsensusSelector) Select(selfNodeID string, stateBuilderT
 
 	selectedCSDomain := activeCSDomains[index]
 
-	domainCSCrypt, selfSelected := NewDomainConsensusCrypt(selfNode, selectedCSDomain)
-
-	return domainCSCrypt, selectedCSDomain.CSDomainData.Members, selfSelected, nil
+	if selfNode.Role&tpcmm.NodeRole_Executor == tpcmm.NodeRole_Executor {
+		domainCSCrypt, selfSelected := NewDomainConsensusCrypt(selfNode, selectedCSDomain)
+		return domainCSCrypt, selectedCSDomain.CSDomainData.Members, selfSelected, nil
+	} else {
+		return nil, selectedCSDomain.CSDomainData.Members, 0, nil
+	}
 }

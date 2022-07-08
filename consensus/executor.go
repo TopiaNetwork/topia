@@ -89,7 +89,7 @@ func (e *consensusExecutor) startReceiveFinishedMsg(ctx context.Context) {
 		for {
 			select {
 			case finishedMsg := <-e.finishedMsgCh:
-				e.log.Infof("Node %s receive dkg finished message, trigger number %d", e.nodeID, finishedMsg.TriggerNumber)
+				e.log.Infof("Executor receives dkg finished message: trigger number %d, self node %s", finishedMsg.TriggerNumber, e.nodeID)
 
 				err := func() error {
 					e.remoteFinishedSync.Lock()
@@ -570,7 +570,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 	}
 	e.log.Infof("Executor finishes making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
 
-	activeExecutors, _ := compState.GetActiveExecutorIDs()
+	activeExecutors := e.epochService.GetActiveExecutorIDs()
 
 	var wg sync.WaitGroup
 	wg.Add(1)

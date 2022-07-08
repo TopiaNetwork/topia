@@ -135,7 +135,7 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 
 	epService := NewEpochService(consLog, nodeID, stateBuilderType, csConfig.EpochInterval, currentEpoch, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx, exeActiveNodes)
 
-	csDomainService := NewDomainConsensusService(nodeID, stateBuilderType, log, ledger, blockAddedCSDomain, roleSelector, csConfig, dkgEx)
+	csDomainService := NewDomainConsensusService(nodeID, stateBuilderType, log, ledger, blockAddedCSDomain, roleSelector, csConfig, dkgEx, exeScheduler)
 
 	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, epService, csDomainService, deliver, finishedMsgExeCh, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
 	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, bestProposeMsgChan, commitMsgChan, ledger, deliver, marshaler, epService)
@@ -245,6 +245,12 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 	csStateRN := state.CreateCompositionStateReadonly(cons.log, cons.ledger)
 	defer csStateRN.Stop()
 
+	latestBlock, err := csStateRN.GetLatestBlock()
+	if err != nil {
+		cons.log.Panicf("Get latest block error: %v", err)
+		return err
+	}
+
 	nodeInfo, err := csStateRN.GetNode(cons.nodeID)
 	if err != nil {
 		cons.log.Panicf("Get node error: %v", err)
@@ -268,7 +274,7 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 	}
 
 	cons.csDomainService.Start(ctx)
-	cons.epochService.Start(ctx)
+	cons.epochService.Start(ctx, latestBlock.Head.Height)
 
 	return nil
 }

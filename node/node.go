@@ -240,10 +240,10 @@ func (n *Node) Start() {
 		for !n.network.Ready() {
 			time.Sleep(50 * time.Millisecond)
 		}
+	}
 
-		if n.ledger.State() == tpcmm.LedgerState_Genesis {
-			n.consensus.TriggerDKG(n.latestBlock)
-		}
+	if n.ledger.State() == tpcmm.LedgerState_Genesis {
+		n.consensus.TriggerDKG(n.latestBlock)
 	}
 
 	n.syncer.Start(n.sysActor, n.network)

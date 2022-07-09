@@ -22,6 +22,10 @@ import (
 func (df *FileItem) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, error) {
 
 	var err error
+
+	if df.Bloom.Find(Uint64ToBytes(uint64(blockNum))) == false{
+		return nil, errors.New("Can not find txid")
+	}
 	//indexfilename := filename ,".index")
 	TraceIndex := strings.Index(df.File.Name(), ".")
 	StartBlock := df.File.Name()[:TraceIndex]
@@ -32,6 +36,7 @@ func (df *FileItem) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, er
 		fileindex,
 		FILE_HEADER_SIZE,
 		0,
+		New(),
 	}
 
 
@@ -107,6 +112,8 @@ func (df *FileItem) Writedata(block *types.Block) error {
 
 	_ = df.File.Sync()
 	df.Offset = df.Offset + 28 + size
+
+	df.Bloom.Add(Uint64ToBytes(block.GetHead().Height))
 	return  nil
 }
 

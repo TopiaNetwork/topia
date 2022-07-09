@@ -1,16 +1,6 @@
 package block
 
 
-import (
-"archive/zip"
-"fmt"
-"io"
-"log"
-"os"
-"path/filepath"
-"strings"
-)
-
 //func zipfile() {
 //
 //	var src = "log"
@@ -22,6 +12,6 @@ import (
 //	}
 //}
 
-func (df *FileItem)Zip(src string) (err error) {
-
-}
+//func (df *FileItem)Zip(src string) (err error) {
+//
+//}

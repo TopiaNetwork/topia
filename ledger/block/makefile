@@ -1,7 +1,4 @@
-
-
 GOOS ?= $(shell go env GOOS)
-
 GOARCH ?= $(shell go env GOARCH)
 GOOS_GOARCH := $(GOOS)_$(GOARCH)
 GOOS_GOARCH_NATIVE := $(shell go env GOHOSTOS)_$(shell go env GOHOSTARCH)
@@ -13,7 +10,7 @@ BUILDER_IMAGE := local/builder_musl:2.0.0-$(shell echo $(MUSL_BUILDER_IMAGE) | t
 
 libzstd.a: $(LIBZSTD_NAME)
 $(LIBZSTD_NAME):
-ifeq ($(GOOS_GOARCH),amd64)
+ifeq ($(GOOS_GOARCH),$(GOOS_GOARCH_NATIVE))
 	cd zstd/lib && ZSTD_LEGACY_SUPPORT=0 MOREFLAGS=$(MOREFLAGS) $(MAKE) clean libzstd.a
 	mv zstd/lib/libzstd.a $(LIBZSTD_NAME)
 else
@@ -35,33 +32,6 @@ ifeq ($(GOOS_GOARCH),linux_musl_arm64)
 endif
 endif
 
-update-git:
-	cd zstd
-	git pull
-
-compile:
-	gcc -c -o zstd.o zstd/lib/zstd.h
-	ar rcs libzstd.a zstd.o
-
-
-
-package-musl: package-builder
-	docker run --rm \
-		--user $(shell id -u):$(shell id -g) \
-		--mount type=bind,src="$(shell pwd)",dst=/zstd \
-		-w /zstd \
-		$(DOCKER_OPTS) \
-		$(BUILDER_IMAGE) \
-		sh -c "GOOS=linux_musl make clean libzstd.a"
-	docker run --rm \
-		--user $(shell id -u):$(shell id -g) \
-		--mount type=bind,src="$(shell pwd)",dst=/zstd \
-		--env CC=/opt/cross-builder/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc \
-		-w /zstd \
-		$(DOCKER_OPTS) \
-		$(BUILDER_IMAGE) \
-		sh -c "GOARCH=arm64 GOOS=linux_musl make clean libzstd.a"
-
 
 clean:
 	rm -f $(LIBZSTD_NAME)
@@ -69,7 +39,7 @@ clean:
 
 update-zstd:
 	rm -rf zstd-tmp
-	git clone --branch --depth 1 https://github.com/Facebook/zstd zstd-tmp
+	git clone --branch  --depth 1 https://github.com/Facebook/zstd zstd-tmp
 	rm -rf zstd-tmp/.git
 	rm -rf zstd
 	mv zstd-tmp zstd

@@ -32,10 +32,20 @@ type FileItem struct {
 	File   *os.File
 	Offset uint64
 	HeaderOffset uint64
+	Bloom *BloomFilter
 	//HeaderSize uint64
 
 }
 
+type IndexFileItem struct {
+	//header
+	Filetype FileType //0,data;1,index;2,transactionindex
+	File   *os.File
+	Offset uint64
+	HeaderOffset uint64
+	//HeaderSize uint64
+
+}
 
 type DataItem struct{
 	version uint32
@@ -88,6 +98,7 @@ func NewFile(block *types.Block) (*FileItem, error) {
 		Filetype: DataFileType,
 		File:   file,
 		Offset: FILE_HEADER_SIZE,
+		Bloom: New(),
 	}
 
 	tp.Writedata(block)
@@ -124,6 +135,7 @@ func NewIndexFile(block *types.Block) ( error) {
 		Filetype: IndexFileType,
 		File:   file,
 		Offset: 0,
+
 	}
 	//what's the version ?????
 

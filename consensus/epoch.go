@@ -3,13 +3,13 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/eventhub"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -308,7 +308,7 @@ func (es *epochService) Start(ctx context.Context, latestHeight uint64) {
 				continue
 			}
 
-			es.log.Infof("Fetched composition state: state version %d, self node %s", compState.StateVersion(), es.nodeID)
+			es.log.Infof("Fetched composition state: state version %d, state %d, self node %s", compState.StateVersion(), compState.CompSState(), es.nodeID)
 
 			dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
 			if err != nil {

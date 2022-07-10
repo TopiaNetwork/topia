@@ -257,7 +257,7 @@ func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context,
 		for len(peerIDsProposer) == 0 {
 			time.Sleep(50 * time.Millisecond)
 		}
-		md.log.Infof("Active proposer node: %v", peerIDsProposer)
+		md.log.Infof("Active proposer node: %v, state version %d", peerIDsProposer, msg.StateVersion)
 
 		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDsProposer)
 	}

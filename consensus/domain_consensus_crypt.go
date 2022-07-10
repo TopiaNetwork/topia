@@ -33,6 +33,7 @@ func NewDomainConsensusCrypt(selfNode *tpcmm.NodeInfo, csDomain *tpcmm.NodeDomai
 	}
 
 	var priShare share.PriShare
+	priShare.V = suite.Scalar()
 	priShare.Unmarshal(selfNode.DKGPriShare)
 
 	csDomainCrypt := &domainConsensusCrypt{

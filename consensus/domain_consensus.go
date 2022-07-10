@@ -307,7 +307,7 @@ func (ds *domainConsensusService) ProduceAndSaveNodeDomain(threshold int, pubKey
 	}
 
 	err := compState.AddNodeDomain(ndInfo)
-	if err != nil {
+	if err == nil {
 		ds.log.Infof("Successful generate node consensus domain and saved: state version %d, self node %s", compState.StateVersion(), ds.nodeID)
 	}
 }

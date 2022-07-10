@@ -59,7 +59,7 @@ func (selector *domainConsensusSelector) Select(selfNodeID string, compState sta
 			return nil, nil, 0, err
 		}
 
-		activeCSDomains, err = compState.GetAllActiveNodeConsensusDomains(latestBlock.Head.Height)
+		activeCSDomains, err = compState.GetAllActiveNodeConsensusDomains(latestBlock.Head.Height + 1)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -80,9 +80,9 @@ func (selector *domainConsensusSelector) Select(selfNodeID string, compState sta
 	selectedCSDomain := activeCSDomains[index]
 
 	if selfNode.Role&tpcmm.NodeRole_Executor == tpcmm.NodeRole_Executor {
+		return nil, selectedCSDomain.CSDomainData.Members, 0, nil
+	} else {
 		domainCSCrypt, selfSelected := NewDomainConsensusCrypt(selfNode, selectedCSDomain)
 		return domainCSCrypt, selectedCSDomain.CSDomainData.Members, selfSelected, nil
-	} else {
-		return nil, selectedCSDomain.CSDomainData.Members, 0, nil
 	}
 }

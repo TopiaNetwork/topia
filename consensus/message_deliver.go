@@ -39,6 +39,8 @@ const (
 type messageDeliverI interface {
 	deliverNetwork() tpnet.Network
 
+	deliverConsensusDomainSelectedMessageExe(ctx context.Context, msg *ConsensusDomainSelectedMessage) error
+
 	deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error
 
 	deliverPreparePackagedMessageExeIndication(ctx context.Context, launcherID string, msg *PreparePackedMessageExeIndication) error
@@ -126,7 +128,7 @@ func deliverSendWithRespCommon(ctx context.Context, selfNodeID string, log tplog
 		return nil, err
 	}
 
-	sendCycleMaxCount := 3
+	sendCycleMaxCount := 1
 	for sendCycleMaxCount > 0 {
 		sendCycleMaxCount--
 		resps, err := network.SendWithResponse(ctx, protocolID, moduleName, csMsgBytes)
@@ -148,6 +150,49 @@ func deliverSendWithRespCommon(ctx context.Context, selfNodeID string, log tplog
 
 	return nil, fmt.Errorf("Network exception and can't get the final response: protocolID %s, consensusMsg %s, self node %s", protocolID, msgType.String(), selfNodeID)
 
+}
+
+func (md *messageDeliver) deliverConsensusDomainSelectedMessageExe(ctx context.Context, msg *ConsensusDomainSelectedMessage) error {
+	sigData, err := md.cryptService.Sign(md.priKey, msg.DataBytes())
+	if err != nil {
+		md.log.Errorf("Can't sign when deliver PreparePackedMessageExe err: %v", err)
+		return err
+	}
+	pubKey, err := md.cryptService.ConvertToPublic(md.priKey)
+	if err != nil {
+		md.log.Errorf("Can't convert to pub key when deliver PreparePackedMessageExe err: %v", err)
+		return err
+	}
+
+	msg.Signature = sigData
+	msg.PubKey = pubKey
+
+	msgBytes, err := md.marshaler.Marshal(msg)
+	if err != nil {
+		md.log.Errorf("Deliver PreparePackedMessageExe marshal err: %v", err)
+		return err
+	}
+
+	var peerIDsExecutor []string
+	switch md.strategy {
+	case DeliverStrategy_Specifically:
+		peerIDsExecutor = md.epochService.GetActiveExecutorIDs()
+		if len(peerIDsExecutor) == 0 {
+			err := fmt.Errorf("Zero active executor node")
+			md.log.Errorf("%v", err)
+			return err
+		}
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDsExecutor)
+	}
+
+	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+	err = deliverSendCommon(ctx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_CSDomainSel, msgBytes)
+	if err != nil {
+		md.log.Errorf("Send prepare packed message to execute network failed: err=%v", err)
+		return err
+	}
+
+	return nil
 }
 
 func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error {
@@ -256,6 +301,7 @@ func (md *messageDeliver) deliverPreparePackagedMessageProp(ctx context.Context,
 		peerIDsProposer = md.epochService.GetActiveProposerIDs()
 		for len(peerIDsProposer) == 0 {
 			time.Sleep(50 * time.Millisecond)
+			peerIDsProposer = md.epochService.GetActiveProposerIDs()
 		}
 		md.log.Infof("Active proposer node: %v, state version %d", peerIDsProposer, msg.StateVersion)
 

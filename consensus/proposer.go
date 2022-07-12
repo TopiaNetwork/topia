@@ -518,12 +518,12 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 
 	voteMsg, err := p.validator.produceVoteMsg(proposeBlock)
 	if err != nil {
-		p.log.Errorf("Can't produce vote msg: err=%v", err)
+		p.log.Errorf("Can't produce vote msg: err=%v, self node %s", err, p.nodeID)
 		return err
 	}
 	sigData, pubKey, err := p.dkgBls.Sign(voteMsg.BlockHead)
 	if err != nil {
-		p.log.Errorf("DKG sign VoteMessage err: %v", err)
+		p.log.Errorf("DKG sign VoteMessage err: %v, self node %s", err, p.nodeID)
 		return err
 	}
 	voteMsg.Signature = sigData

@@ -12,18 +12,19 @@ import "gogo.proto";
 message ConsensusMessage {
   enum Type {
     Unknown = 0;
-    PrepareExe = 1;
-    PrepareExeIndic = 2;
-    PrepareProp = 3;
-    Propose = 4;
-    ExeRSValidateReq = 5;
-    BestPropose = 6;
-    Vote    = 7;
-    Commit  = 8;
-    PartPubKey = 9;
-    DKGDeal = 10;
-    DKGDealResp = 11;
-    DKGFinished = 12;
+    CSDomainSel = 1;
+    PrepareExe = 2;
+    PrepareExeIndic = 3;
+    PrepareProp = 4;
+    Propose = 5;
+    ExeRSValidateReq = 6;
+    BestPropose = 7;
+    Vote    = 8;
+    Commit  = 9;
+    PartPubKey = 10;
+    DKGDeal = 11;
+    DKGDealResp = 12;
+    DKGFinished = 13;
   }
   Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
   bytes Data = 2  [(gogoproto.jsontag) = "data"];
@@ -186,5 +187,18 @@ message DKGFinishedMessage {
   bytes NodeID            = 6  [(gogoproto.jsontag) = "nodeID"];
   bytes PubPolyCommit     = 7  [(gogoproto.jsontag) = "respData"];
 }
+
+message ConsensusDomainSelectedMessage {
+  bytes  ChainID            = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version            = 2  [(gogoproto.jsontag) = "version"];
+  bytes Signature           = 3  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey              = 4  [(gogoproto.jsontag) = "pubKey"];
+  bytes DomainID            = 5  [(gogoproto.jsontag) = "domainID"];
+  uint32 MemberNumber       = 6  [(gogoproto.jsontag) = "memberNumber"];
+  bytes NodeIDOfMember      = 7  [(gogoproto.jsontag) = "nodeIDOfMember"];
+  uint64 NodeRoleOfMember   = 8  [(gogoproto.jsontag) = "nodeRoleOfMember"];
+  uint64 NodeWeightOfMember = 9  [(gogoproto.jsontag) = "nodeWeightOfMember"];
+}
+
 
 

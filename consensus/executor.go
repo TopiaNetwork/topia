@@ -2,8 +2,10 @@ package consensus
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"fmt"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"sync"
 	"time"
 
@@ -30,17 +32,17 @@ type consensusExecutor struct {
 	ledger                       ledger.Ledger
 	exeScheduler                 execution.ExecutionScheduler
 	epochService                 EpochService
-	domainCSService              *domainConsensusService
 	deliver                      *messageDeliver
-	finishedMsgCh                chan *DKGFinishedMessage
+	csDomainSelectedMsgCh        chan *ConsensusDomainSelectedMessage
 	preparePackedMsgExeChan      chan *PreparePackedMessageExe
 	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
 	commitMsgChan                chan *CommitMessage
 	cryptService                 tpcrt.CryptService
 	prepareInterval              time.Duration
 	prepareMsgLunched            *lru.Cache //Key: state version
-	remoteFinishedSync           sync.RWMutex
-	remoteFinished               map[string]*DKGFinishedMessage //nodeID->*DKGFinishedMessage
+	csDomainSelSync              sync.RWMutex
+	csDomainSelMsgList           *list.List //*ConsensusDomainSelectedMessage
+	csDomainSelMembers           []*tpcmm.NodeDomainMember
 }
 
 func newConsensusExecutor(log tplog.Logger,
@@ -51,9 +53,8 @@ func newConsensusExecutor(log tplog.Logger,
 	ledger ledger.Ledger,
 	exeScheduler execution.ExecutionScheduler,
 	epochService EpochService,
-	domainCSService *domainConsensusService,
 	deliver *messageDeliver,
-	finishedMsgCh chan *DKGFinishedMessage,
+	csDomainSelectedMsgCh chan *ConsensusDomainSelectedMessage,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
 	commitMsgChan chan *CommitMessage,
@@ -71,63 +72,72 @@ func newConsensusExecutor(log tplog.Logger,
 		ledger:                       ledger,
 		exeScheduler:                 exeScheduler,
 		epochService:                 epochService,
-		domainCSService:              domainCSService,
 		deliver:                      deliver,
-		finishedMsgCh:                finishedMsgCh,
+		csDomainSelectedMsgCh:        csDomainSelectedMsgCh,
 		preparePackedMsgExeChan:      preprePackedMsgExeChan,
 		preparePackedMsgExeIndicChan: preparePackedMsgExeIndicChan,
 		commitMsgChan:                commitMsgChan,
 		cryptService:                 cryptService,
 		prepareInterval:              prepareInterval,
 		prepareMsgLunched:            pMsgLCache,
-		remoteFinished:               make(map[string]*DKGFinishedMessage),
+		csDomainSelMsgList:           list.New(),
 	}
 }
 
-func (e *consensusExecutor) startReceiveFinishedMsg(ctx context.Context) {
+func (e *consensusExecutor) startConsensusDomainSelectedMsg(ctx context.Context) {
 	go func() {
 		for {
 			select {
-			case finishedMsg := <-e.finishedMsgCh:
-				e.log.Infof("Executor receives dkg finished message: trigger number %d, self node %s", finishedMsg.TriggerNumber, e.nodeID)
+			case csDomainSelMsg := <-e.csDomainSelectedMsgCh:
+				e.log.Infof("Executor receives consensus domain selected message: domain ID %s, member number %d, member node %s, self node %s", string(csDomainSelMsg.DomainID), csDomainSelMsg.MemberNumber, string(csDomainSelMsg.NodeIDOfMember),
+					e.nodeID)
 
 				err := func() error {
-					e.remoteFinishedSync.Lock()
-					defer e.remoteFinishedSync.Unlock()
+					e.csDomainSelSync.Lock()
+					defer e.csDomainSelSync.Unlock()
+					requiredMemberNumber := csDomainSelMsg.MemberNumber
+					lastEle := e.csDomainSelMsgList.Back()
+					if lastEle != nil {
+						lastCSDomainSelMsg := lastEle.Value.(*ConsensusDomainSelectedMessage)
 
-					if finishedMsg.TriggerNumber != e.domainCSService.triggerNumber {
-						err := fmt.Errorf("Invalid finished message: expected trigger number %d, actual %d, self node %s", e.domainCSService.triggerNumber, finishedMsg.TriggerNumber, e.nodeID)
-						e.log.Errorf("%v", err)
-						return err
-					}
-
-					remoteID := string(finishedMsg.NodeID)
-					if !e.domainCSService.ContainedInCandidateNodes(remoteID) {
-						err := fmt.Errorf("Received finished message which not belongs to any candidate node: remote node %s, self node %s", remoteID, e.nodeID)
-						e.log.Errorf("%v", err)
-						return err
-					}
-
-					if _, ok := e.remoteFinished[remoteID]; !ok {
-						e.remoteFinished[remoteID] = finishedMsg
-						if len(e.remoteFinished) == e.domainCSService.CandidateNodesNumber() {
-							e.log.Infof("Received message count reached the expected: %d", len(e.remoteFinished))
-							e.domainCSService.ProduceAndSaveNodeDomain(0, nil, nil, nil)
-							e.remoteFinished = make(map[string]*DKGFinishedMessage)
+						if bytes.Equal(csDomainSelMsg.DomainID, lastCSDomainSelMsg.DomainID) &&
+							csDomainSelMsg.MemberNumber == lastCSDomainSelMsg.MemberNumber {
+							if bytes.Equal(csDomainSelMsg.NodeIDOfMember, lastCSDomainSelMsg.NodeIDOfMember) {
+								err := fmt.Errorf("Executor receives the same consensus domain selected message: domain ID %s, member number %d, member node %s, self node %s", string(csDomainSelMsg.DomainID), csDomainSelMsg.MemberNumber, string(csDomainSelMsg.NodeIDOfMember), e.nodeID)
+								e.log.Warnf("%s", err.Error())
+								return err
+							} else {
+								requiredMemberNumber = lastCSDomainSelMsg.MemberNumber
+							}
+						} else {
+							err := fmt.Errorf("Executor receives invalid consensus domain selected message: domain ID %s(expected %s), member number %d(expected %d), member node %s, self node %s", string(csDomainSelMsg.DomainID), string(lastCSDomainSelMsg.DomainID), csDomainSelMsg.MemberNumber, lastCSDomainSelMsg.MemberNumber, string(csDomainSelMsg.NodeIDOfMember), e.nodeID)
+							e.log.Errorf("%s", err.Error())
+							return err
 						}
-						return nil
-					} else {
-						err := fmt.Errorf("Received the same dkg finished message: remote node %s, self node %s", remoteID, e.nodeID)
-						e.log.Errorf("%v", err)
-						return err
 					}
+
+					e.csDomainSelMsgList.PushBack(csDomainSelMsg)
+					e.csDomainSelMembers = append(e.csDomainSelMembers, &tpcmm.NodeDomainMember{
+						NodeID:   string(csDomainSelMsg.NodeIDOfMember),
+						NodeRole: tpcmm.NodeRole(csDomainSelMsg.NodeRoleOfMember),
+						Weight:   csDomainSelMsg.NodeWeightOfMember,
+					})
+
+					if uint32(e.csDomainSelMsgList.Len()) == requiredMemberNumber {
+						e.log.Infof("Executor receives expected consensus domain selected message: member number %d, self node %s", requiredMemberNumber, e.nodeID)
+						e.epochService.UpdateData(e.log, e.ledger, e.csDomainSelMembers)
+						e.csDomainSelMsgList.Init()
+						e.csDomainSelMembers = e.csDomainSelMembers[:0]
+						return nil
+					}
+					return nil
 				}()
 
 				if err != nil {
 					continue
 				}
 			case <-ctx.Done():
-				e.log.Info("Executor receiving finished message loop stop")
+				e.log.Info("Executor receiving consensus domain selected message loop stop")
 				return
 			}
 		}
@@ -441,7 +451,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 }
 
 func (e *consensusExecutor) start(ctx context.Context) {
-	e.startReceiveFinishedMsg(ctx)
+	e.startConsensusDomainSelectedMsg(ctx)
 
 	e.receivePreparePackedMessageExeStart(ctx)
 

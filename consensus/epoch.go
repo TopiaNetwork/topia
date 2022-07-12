@@ -37,6 +37,8 @@ type EpochService interface {
 
 	AddDKGBLSUpdater(updater DKGBLSUpdater)
 
+	UpdateData(log tplog.Logger, ledger ledger.Ledger, csDomainMember []*tpcmm.NodeDomainMember)
+
 	UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error
 
 	Start(ctx context.Context, latestHeight uint64)
@@ -62,6 +64,7 @@ type epochService struct {
 	dkgStartBeforeEpoch uint64 //the starting height number of DKG before an epoch
 	exeScheduler        execution.ExecutionScheduler
 	ledger              ledger.Ledger
+	deliver             messageDeliverI
 	dkgExchange         *dkgExchange
 	csDomainSelector    *domainConsensusSelector
 	activeNodeInfos     *activeNodeInfos
@@ -78,6 +81,7 @@ func NewEpochService(log tplog.Logger,
 	dkgStartBeforeEpoch uint64,
 	exeScheduler execution.ExecutionScheduler,
 	ledger ledger.Ledger,
+	deliver messageDeliverI,
 	dkgExchange *dkgExchange,
 	exeActiveNodeIds []*tpcmm.NodeInfo) EpochService {
 	if ledger == nil || dkgExchange == nil {
@@ -103,6 +107,7 @@ func NewEpochService(log tplog.Logger,
 		dkgStartBeforeEpoch: dkgStartBeforeEpoch,
 		exeScheduler:        exeScheduler,
 		ledger:              ledger,
+		deliver:             deliver,
 		dkgExchange:         dkgExchange,
 		csDomainSelector:    csDomainSel,
 		activeNodeInfos:     anInfos,
@@ -246,6 +251,10 @@ func (es *epochService) SelfSelected() bool {
 	return atomic.LoadUint32(&es.selfSelected) == 1
 }
 
+func (es *epochService) UpdateData(log tplog.Logger, ledger ledger.Ledger, csDomainMember []*tpcmm.NodeDomainMember) {
+	es.activeNodeInfos.update(log, ledger, csDomainMember)
+}
+
 func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error {
 	deltaH := int(newBH.Height) - int(es.currentEpoch.StartHeight)
 	if deltaH == int(es.epochInterval) {
@@ -260,7 +269,7 @@ func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.Blo
 			return err
 		}
 
-		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
+		domainID, dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
 		if err != nil {
 			es.log.Errorf("Select consensus domain error: %v", err)
 			return err
@@ -268,7 +277,25 @@ func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.Blo
 		if dkgCPT != nil {
 			es.activeNodeInfos.update(es.log, es.ledger, members)
 			es.notifyUpdater(dkgCPT)
-			atomic.StoreUint32(&es.selfSelected, selfSelected)
+			if selfSelected != nil {
+				atomic.StoreUint32(&es.selfSelected, 1)
+
+				csDomainSelectedMsg := &ConsensusDomainSelectedMessage{
+					ChainID:            []byte(compState.ChainID()),
+					Version:            CONSENSUS_VER,
+					DomainID:           []byte(domainID),
+					MemberNumber:       uint32(len(members)),
+					NodeIDOfMember:     []byte(selfSelected.NodeID),
+					NodeRoleOfMember:   uint64(selfSelected.NodeRole),
+					NodeWeightOfMember: selfSelected.Weight,
+				}
+				err = es.deliver.deliverConsensusDomainSelectedMessageExe(ctx, csDomainSelectedMsg)
+				if err == nil {
+					es.log.Infof("Successfully deliver consensus domain selected message to execute network")
+				}
+			} else {
+				atomic.StoreUint32(&es.selfSelected, 0)
+			}
 		}
 
 		eventhub.GetEventHubManager().GetEventHub(es.nodeID).Trig(ctx, eventhub.EventName_EpochNew, newEpoch)
@@ -308,9 +335,9 @@ func (es *epochService) Start(ctx context.Context, latestHeight uint64) {
 				continue
 			}
 
-			es.log.Infof("Fetched composition state: state version %d, state %d, self node %s", compState.StateVersion(), compState.CompSState(), es.nodeID)
+			//es.log.Infof("Fetched composition state: state version %d, state %d, self node %s", compState.StateVersion(), compState.CompSState(), es.nodeID)
 
-			dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
+			domainID, dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
 			if err != nil {
 				es.log.Errorf("Select consensus domain error: %v", err)
 				continue
@@ -321,7 +348,25 @@ func (es *epochService) Start(ctx context.Context, latestHeight uint64) {
 				if dkgCPT != nil {
 					es.activeNodeInfos.update(es.log, es.ledger, members)
 					es.notifyUpdater(dkgCPT)
-					atomic.StoreUint32(&es.selfSelected, selfSelected)
+					if selfSelected != nil {
+						atomic.StoreUint32(&es.selfSelected, 1)
+
+						csDomainSelectedMsg := &ConsensusDomainSelectedMessage{
+							ChainID:            []byte(compState.ChainID()),
+							Version:            CONSENSUS_VER,
+							DomainID:           []byte(domainID),
+							MemberNumber:       uint32(len(members)),
+							NodeIDOfMember:     []byte(selfSelected.NodeID),
+							NodeRoleOfMember:   uint64(selfSelected.NodeRole),
+							NodeWeightOfMember: selfSelected.Weight,
+						}
+						err = es.deliver.deliverConsensusDomainSelectedMessageExe(ctx, csDomainSelectedMsg)
+						if err == nil {
+							es.log.Infof("Successfully deliver consensus domain selected message to execute networkz: self node %s", es.nodeID)
+						}
+					} else {
+						atomic.StoreUint32(&es.selfSelected, 0)
+					}
 				}
 
 				return

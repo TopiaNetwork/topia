@@ -312,7 +312,7 @@ func (v *consensusValidator) validateAndCollectProposeMsg(ctx context.Context, m
 	exeRSValidate := newExecutionResultValidate(v.log, v.nodeID, v.deliver)
 	executor, ok, err := exeRSValidate.Validate(ctx, propMsg)
 	if !ok {
-		v.log.Errorf("Propose block validate err by executor %s: %v", err, executor)
+		v.log.Errorf("Propose block validate err by executor %s: %v", executor, err)
 		return false, canCollectStart
 	}
 

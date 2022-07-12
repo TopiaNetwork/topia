@@ -100,8 +100,8 @@ github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMx
 github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6/go.mod h1:3eOhrUMpNV+6aFIbp5/iudMxNCF27Vw2OZgy4xEx0Fg=
 github.com/TopiaNetwork/go-bls v0.0.1 h1:S06fx8q7WwkmoS+qwN/SG7WUSW0EusCkSyNzqFXPyrg=
 github.com/TopiaNetwork/go-bls v0.0.1/go.mod h1:PJSh6ls8RFHCIsnjeQzW5ueBhJT8yV9wx/3Q9RuzXB4=
-github.com/TopiaNetwork/kyber/v3 v3.7.9 h1:TjwYxHigr4gYa9VyfwlOrIZP1H7cnJCPMG04uZX75zc=
-github.com/TopiaNetwork/kyber/v3 v3.7.9/go.mod h1:sqPlJrUGzS0bKnBGFxXozAWFfYAhyptMpWY7ER/xOUo=
+github.com/TopiaNetwork/kyber/v3 v3.8.0 h1:7vEGGtqpokTjU087eU7m9nQg4dPzA4hdrQ52ZrGMTf0=
+github.com/TopiaNetwork/kyber/v3 v3.8.0/go.mod h1:sqPlJrUGzS0bKnBGFxXozAWFfYAhyptMpWY7ER/xOUo=
 github.com/VictoriaMetrics/fastcache v1.6.0/go.mod h1:0qHz5QP0GMX4pfmMA/zt5RgfNuXJrTP0zS7DqpHGGTw=
 github.com/VividCortex/gohistogram v1.0.0/go.mod h1:Pf5mBqqDxYaXu3hDrrU+w6nw50o/4+TcAqDqk/vUH7g=
 github.com/Workiva/go-datastructures v1.0.53 h1:J6Y/52yX10Xc5JjXmGtWoSSxs3mZnGSaq37xZZh7Yig=

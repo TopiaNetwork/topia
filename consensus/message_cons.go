@@ -8,6 +8,18 @@ import (
 	"github.com/lazyledger/smt"
 )
 
+func (m *ConsensusDomainSelectedMessage) DataBytes() []byte {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, m.MemberNumber)
+
+	var dataBytes []byte
+	dataBytes = append(dataBytes, m.DomainID...)
+	dataBytes = append(dataBytes, b...)
+	dataBytes = append(dataBytes, m.NodeIDOfMember...)
+
+	return dataBytes
+}
+
 func (m *PreparePackedMessageExe) TxsData() []byte {
 	var txsData []byte
 	for _, txData := range m.Txs {

@@ -13,7 +13,7 @@ const (
 	PubSubMaxMsgSize = 5 * mb
 	StreamMaxMsgSize = gb
 	WriteReqDeadline = 5 * time.Second
-	ReadResDeadline  = WriteReqDeadline
+	ReadResDeadline  = WriteReqDeadline * 10
 	ReadResMinSpeed  = 50 << 10
 	WaitRespTimeout  = 30 * time.Second
 )

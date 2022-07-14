@@ -2,6 +2,7 @@ package block
 
 import (
 	"encoding/binary"
+	"strings"
 
 	//"encoding/json"
 
@@ -61,4 +62,21 @@ func Uint64ToBytes(i uint64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, i)
 	return buf
+}
+
+func GetStartblockFromFilename(file *FileItem) string{
+	TraceIndex := strings.Index(file.File.Name(), ".")
+	StartBlock := file.File.Name()[:TraceIndex]
+	return StartBlock
+}
+
+func GetIndexFilename(file *FileItem) string{
+	StartBlock := GetStartblockFromFilename(file)
+	return StartBlock + ".index"
+}
+
+
+func GetDataFilename(file *FileItem) string{
+	StartBlock := GetStartblockFromFilename(file)
+	return StartBlock + ".data"
 }

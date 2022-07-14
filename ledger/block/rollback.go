@@ -4,9 +4,17 @@ import (
 	"github.com/TopiaNetwork/topia/chain/types"
 	"launchpad.net/gommap"
 	"os"
+	"strings"
 	"syscall"
 )
 
+
+type RollbackData struct {
+	version uint32
+	Startfromblock uint64
+	datatime uint64
+
+}
 func NewRollback(blocknum types.BlockNum) error{
 
 }
@@ -27,7 +35,15 @@ func (Rfile *FileItem)AddRollback(blocknum types.BlockNum) error{
 
 }
 
-func Removeblock(Datafile *FileItem,blocknum types.BlockNum)error{
+func RemoveBlockdata(Datafile *FileItem,blocknum types.BlockNum)error{
+
+	//find the data file and remove
+
+
+	copy(mmap[df.Offset:df.Offset+4],versionbyte)
+
+
+
 
 
 }
@@ -44,6 +60,8 @@ func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
 		}
 		alloffset = index.offset + alloffset
 		startoffset = index.offset
+
+		RemoveBlockdata(&Indexfile.File.Name(),index.offset)
 	}
 
 	filedata, err := os.OpenFile(Indexfile.File.Name(), os.O_RDWR, 0644)
@@ -55,7 +73,7 @@ func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
 		panic(err)
 	}
 
-	
+	copy()
 
 
 

@@ -3,3 +3,6 @@
 /historystore/
 /blockstore/
 /statestore/
+
+.vscode/
+.VSCodeCounter/

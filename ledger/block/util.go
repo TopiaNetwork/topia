@@ -80,3 +80,5 @@ func GetDataFilename(file *FileItem) string{
 	StartBlock := GetStartblockFromFilename(file)
 	return StartBlock + ".data"
 }
+
+func Getmmap(file *FileItem)

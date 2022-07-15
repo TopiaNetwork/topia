@@ -40,9 +40,10 @@ func RemoveBlockdata(Datafile *FileItem,blocknum types.BlockNum)error{
 	//find the data file and remove
 
 
+
 	copy(mmap[df.Offset:df.Offset+4],versionbyte)
 
-
+	
 
 
 
@@ -80,7 +81,7 @@ func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
 	return nil
 }
 
-func EmptyRollback(blocknum types.BlockNum)error{
+func (RollFile *FileItem)EmptyRollback(blocknum types.BlockNum)error{
 
 }
 

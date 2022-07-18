@@ -33,11 +33,13 @@ type EpochService interface {
 
 	GetLatestEpoch() *tpcmm.EpochInfo
 
+	SelfSelected() bool
+
 	AddDKGBLSUpdater(updater DKGBLSUpdater)
 
 	UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error
 
-	Start(ctx context.Context)
+	Start(ctx context.Context, latestHeight uint64)
 }
 
 type activeNodeInfos struct {
@@ -54,6 +56,7 @@ type activeNodeInfos struct {
 type epochService struct {
 	log                 tplog.Logger
 	nodeID              string
+	stateBuilderType    state.CompStateBuilderType
 	epochInterval       uint64 //the height number between two epochs
 	currentEpoch        *tpcmm.EpochInfo
 	dkgStartBeforeEpoch uint64 //the starting height number of DKG before an epoch
@@ -69,30 +72,32 @@ type epochService struct {
 
 func NewEpochService(log tplog.Logger,
 	nodeID string,
+	stateBuilderType state.CompStateBuilderType,
 	epochInterval uint64,
+	currentEpoch *tpcmm.EpochInfo,
 	dkgStartBeforeEpoch uint64,
 	exeScheduler execution.ExecutionScheduler,
 	ledger ledger.Ledger,
-	dkgExchange *dkgExchange) EpochService {
+	dkgExchange *dkgExchange,
+	exeActiveNodeIds []*tpcmm.NodeInfo) EpochService {
 	if ledger == nil || dkgExchange == nil {
 		log.Panic("Invalid input parameter and can't create epoch service!")
 	}
 
-	compStateRN := state.CreateCompositionStateReadonly(log, ledger)
-	defer compStateRN.Stop()
-
-	currentEpoch, err := compStateRN.GetLatestEpoch()
-	if err != nil {
-		log.Panicf("Can't get the latest epoch: err=%v", err)
-	}
-
 	anInfos := &activeNodeInfos{}
+	anInfos.nodeWeights = make(map[string]uint64)
+	for _, executorInfo := range exeActiveNodeIds {
+		anInfos.activeExecutorIDs = append(anInfos.activeExecutorIDs, executorInfo.NodeID)
+		anInfos.activeExecutorWeights += executorInfo.Weight
+		anInfos.nodeWeights[executorInfo.NodeID] = executorInfo.Weight
+	}
 
 	csDomainSel := NewDomainConsensusSelector(log, ledger)
 
 	epochS := &epochService{
 		log:                 log,
 		nodeID:              nodeID,
+		stateBuilderType:    stateBuilderType,
 		epochInterval:       epochInterval,
 		currentEpoch:        currentEpoch,
 		dkgStartBeforeEpoch: dkgStartBeforeEpoch,
@@ -255,7 +260,7 @@ func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.Blo
 			return err
 		}
 
-		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID)
+		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
 		if err != nil {
 			es.log.Errorf("Select consensus domain error: %v", err)
 			return err
@@ -287,20 +292,42 @@ func (es *epochService) notifyUpdater(dkgBls DKGBls) {
 	}
 }
 
-func (es *epochService) Start(ctx context.Context) {
-	for {
-		dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID)
-		if err != nil {
-			es.log.Errorf("Select consensus domain error: %v", err)
-			continue
+func (es *epochService) Start(ctx context.Context, latestHeight uint64) {
+	go func() {
+		for {
+			var compState state.CompositionState
+			switch es.stateBuilderType {
+			case state.CompStateBuilderType_Full:
+				compState = es.exeScheduler.CompositionStateAtVersion(latestHeight + 1)
+			case state.CompStateBuilderType_Simple:
+				compState = state.GetStateBuilder(es.stateBuilderType).CompositionStateAtVersion(es.nodeID, latestHeight+1)
+			}
+
+			if compState == nil {
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+
+			es.log.Infof("Fetched composition state: state version %d, self node %s", compState.StateVersion(), es.nodeID)
+
+			dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
+			if err != nil {
+				es.log.Errorf("Select consensus domain error: %v", err)
+				continue
+			}
+			if len(members) > 0 {
+				es.activeNodeInfos.update(es.log, es.ledger, members)
+
+				if dkgCPT != nil {
+					es.activeNodeInfos.update(es.log, es.ledger, members)
+					es.notifyUpdater(dkgCPT)
+					atomic.StoreUint32(&es.selfSelected, selfSelected)
+				}
+
+				return
+			} else {
+				time.Sleep(50 * time.Millisecond)
+			}
 		}
-		if dkgCPT != nil {
-			es.activeNodeInfos.update(es.log, es.ledger, members)
-			es.notifyUpdater(dkgCPT)
-			atomic.StoreUint32(&es.selfSelected, selfSelected)
-			return
-		} else {
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
+	}()
 }

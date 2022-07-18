@@ -2,10 +2,11 @@ package block
 
 import (
 	"github.com/TopiaNetwork/topia/chain/types"
-	"launchpad.net/gommap"
+	//"launchpad.net/gommap"
 	"os"
-	"strings"
-	"syscall"
+	"strconv"
+	//"strings"
+	//"syscall"
 )
 
 
@@ -15,8 +16,28 @@ type RollbackData struct {
 	datatime uint64
 
 }
-func NewRollback(blocknum types.BlockNum) error{
+func NewRollback(blocknum types.BlockNum) (*FileItem, error){
 
+	filepath := strconv.FormatInt(int64(blocknum), 10) + ".index"
+
+	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	file.Write(make([]byte, FILE_SIZE))
+	if err != nil {
+		return  nil,err
+	}
+
+	//stat, err := os.Stat(filepath)
+
+
+	var tp  = FileItem{
+		Filetype: RollbackFileType,
+		File:   file,
+		Offset: 0,
+
+	}
+
+
+	return &tp,nil
 }
 
 
@@ -29,23 +50,40 @@ func (Rfile *FileItem)AddRollback(blocknum types.BlockNum) error{
 	fd.Write(Uint64ToBytes(uint64(blocknum)))
 
 
+	return nil
+}
+
+func RemoveBlockhead(datafile *FileItem,offset uint64)error{
 
 
+	StartBlock := GetStartblockFromFilename(datafile)
+	n, err := strconv.ParseInt(StartBlock, 10, 64)
+	if err == nil {
+		return nil
+	}
+	datammap := Getmmap(datafile.File.Name())
 
+	size := offset - uint64(n)
+	buf := make([]byte, size)
+	copy(datammap[offset:offset+size], buf)
+
+	return nil
 
 }
 
-func RemoveBlockdata(Datafile *FileItem,blocknum types.BlockNum)error{
+
+func RemoveBlockdata(indexfile *FileItem,offset uint64)error{
 
 	//find the data file and remove
 
+	datafile := GetDataFilename(indexfile)
+	size := GetSize(datafile,offset)
 
+	datammap := Getmmap(datafile)
+	buf := make([]byte, size)
+	copy(datammap[offset:offset+size], buf)
 
-	copy(mmap[df.Offset:df.Offset+4],versionbyte)
-
-	
-
-
+	return nil
 
 }
 
@@ -62,26 +100,25 @@ func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
 		alloffset = index.offset + alloffset
 		startoffset = index.offset
 
-		RemoveBlockdata(&Indexfile.File.Name(),index.offset)
+		RemoveBlockdata(Indexfile,index.offset)
 	}
 
-	filedata, err := os.OpenFile(Indexfile.File.Name(), os.O_RDWR, 0644)
-	if err != nil{
-		panic(err)
-	}
-	indexmmap, err := gommap.Map(filedata.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
-	if err != nil{
-		panic(err)
-	}
+	indexmmap := Getmmap(Indexfile.File.Name())
 
-	copy()
-
+	buf := make([]byte, alloffset)
+	copy(indexmmap[startoffset:startoffset+alloffset],buf)
 
 
 	return nil
 }
 
 func (RollFile *FileItem)EmptyRollback(blocknum types.BlockNum)error{
+	//get the file and
+	rollmmap := Getmmap(RollFile.File.Name())
+	buf := make([]byte, RollFile.Offset)
+	copy(rollmmap[0:RollFile.Offset],buf)
+
+	return nil
 
 }
 

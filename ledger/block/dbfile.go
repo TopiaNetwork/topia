@@ -19,7 +19,7 @@ const (
 	DataFileType       FileType = 0
 	IndexFileType      FileType = 1
 	DataHeaderType      FileType = 2
-	BackFileType      FileType = 3
+	RollbackFileType      FileType = 3
 )
 
 var FileNameOpening = ""

@@ -234,8 +234,16 @@ func OutSize(filepath string)(bool){
 }
 
 
+func GetSize(Datafile string, offset uint64)uint64{
+
+	//need todo
+	return offset
+}
 
 
-
+func GetFilename(blocknum types.BlockNum) string{
+	//need todo
+	return string(blocknum)
+}
 
 

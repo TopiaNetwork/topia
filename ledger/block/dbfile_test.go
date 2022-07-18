@@ -110,6 +110,7 @@ func TestTopiaFile_Findindex(t *testing.T) {
 		file,
 		FILE_HEADER_SIZE,
 		0,
+		nil,
 
 	}
 	tpindex,_ :=to.Findindex(1817128)
@@ -178,6 +179,7 @@ func TestFindBlock(t *testing.T) {
 		file,
 		0,
 		0,
+		nil,
 
 	}
 	tpdata,_ :=to.FindBlockbyNumber(1817128)

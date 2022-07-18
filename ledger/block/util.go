@@ -2,7 +2,9 @@ package block
 
 import (
 	"encoding/binary"
+	"os"
 	"strings"
+	"syscall"
 
 	//"encoding/json"
 
@@ -81,4 +83,19 @@ func GetDataFilename(file *FileItem) string{
 	return StartBlock + ".data"
 }
 
-func Getmmap(file *FileItem)
+func GetRollbackFilename(file *FileItem) string{
+	StartBlock := GetStartblockFromFilename(file)
+	return StartBlock + ".rollback"
+}
+
+func Getmmap(file string)gommap.MMap{
+	fd, err := os.OpenFile(file, os.O_RDWR, 0644)
+	if err != nil{
+		panic(err)
+	}
+	mmap, err := gommap.Map(fd.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+	if err != nil{
+		panic(err)
+	}
+	return mmap
+}

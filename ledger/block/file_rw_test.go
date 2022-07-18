@@ -18,6 +18,7 @@ func TestReaddata(t *testing.T) {
 		file,
 		1,
 		1,
+		nil,
 
 	}
 	err =to.Writedata(&block_all)
@@ -39,6 +40,7 @@ func TestWritedata(t *testing.T) {
 		file,
 		1,
 		1,
+		nil,
 
 	}
 	err =to.Writedata(&block_all)
@@ -59,6 +61,7 @@ func TestFileItem_Writeindex(t *testing.T) {
 		file,
 		1,
 		1,
+		nil,
 
 	}
 	err =to.Writedata(&block_all)

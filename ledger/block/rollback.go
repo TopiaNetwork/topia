@@ -26,14 +26,10 @@ func NewRollback(blocknum types.BlockNum) (*FileItem, error){
 		return  nil,err
 	}
 
-	//stat, err := os.Stat(filepath)
-
-
 	var tp  = FileItem{
 		Filetype: RollbackFileType,
 		File:   file,
 		Offset: 0,
-
 	}
 
 
@@ -54,8 +50,6 @@ func (Rfile *FileItem)AddRollback(blocknum types.BlockNum) error{
 }
 
 func RemoveBlockhead(datafile *FileItem,offset uint64)error{
-
-
 	StartBlock := GetStartblockFromFilename(datafile)
 	n, err := strconv.ParseInt(StartBlock, 10, 64)
 	if err == nil {
@@ -73,9 +67,6 @@ func RemoveBlockhead(datafile *FileItem,offset uint64)error{
 
 
 func RemoveBlockdata(indexfile *FileItem,offset uint64)error{
-
-	//find the data file and remove
-
 	datafile := GetDataFilename(indexfile)
 	size := GetSize(datafile,offset)
 
@@ -88,7 +79,6 @@ func RemoveBlockdata(indexfile *FileItem,offset uint64)error{
 }
 
 func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
-
 	var alloffset uint64 = 0
 	var startoffset uint64 = 0
 	for _,blocknum := range blocknums{
@@ -104,10 +94,8 @@ func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
 	}
 
 	indexmmap := Getmmap(Indexfile.File.Name())
-
 	buf := make([]byte, alloffset)
 	copy(indexmmap[startoffset:startoffset+alloffset],buf)
-
 
 	return nil
 }

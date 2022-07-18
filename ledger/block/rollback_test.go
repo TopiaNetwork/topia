@@ -11,6 +11,9 @@ import (
 
 var blocknum uint64 = 123456
 
+//func init(t *testing.T) {
+//
+//}
 
 func TestNewRollback(t *testing.T) {
 	rollback,_ := NewRollback(types.BlockNum(blocknum))

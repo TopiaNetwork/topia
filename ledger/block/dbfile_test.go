@@ -111,7 +111,6 @@ func TestTopiaFile_Findindex(t *testing.T) {
 		FILE_HEADER_SIZE,
 		0,
 		nil,
-
 	}
 	tpindex,_ :=to.Findindex(1817128)
 	//if err != nil{
@@ -161,12 +160,6 @@ func TestTopiaFile_Findindex(t *testing.T) {
 //
 func TestFindBlock(t *testing.T) {
 
-	//k := reflect.TypeOf(blockhead1)
-	//v := reflect.ValueOf(blockhead1)
-	//
-	//fmt.Println("",k)
-	//fmt.Println("",v)
-
 	filename := FilenameNow + ".topia"
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 
@@ -183,17 +176,8 @@ func TestFindBlock(t *testing.T) {
 
 	}
 	tpdata,_ :=to.FindBlockbyNumber(1817128)
-	//if err != nil{
-	//	panic(err)
-	//}
 	fmt.Println(tpdata)
 }
-
-
-
-//func TestnewDataFile(t *testing.T) {
-//
-//}
 
 
 

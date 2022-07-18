@@ -58,10 +58,17 @@ enum {
 import "C"
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"golang.org/x/crypto/curve25519"
 	"unsafe"
 )
+
+type asyEncryContent struct {
+	Pubkey     tpcrtypes.PublicKey `json:"pubkey"`
+	Ciphertext []byte              `json:"ciphertext"`
+}
 
 func generateKeyPair() (sec []byte, pub []byte, err error) {
 	sec = make([]byte, PrivateKeyBytes)
@@ -181,24 +188,34 @@ func toCurve25519(sec []byte, pub []byte) (curveSec []byte, curvePub []byte, err
 	return curveSec, curvePub, nil
 }
 
-func streamEncrypt(password []byte, msg []byte) (encryptedData []byte, err error) {
-	if password == nil || msg == nil {
+func streamEncrypt(pub []byte, msg []byte) (encryptedData []byte, err error) {
+	if len(pub) != PublicKeyBytes || msg == nil {
 		return nil, errors.New("StreamEncrypt input isn't valid argument")
 	}
 
 	var state C.crypto_secretstream_xchacha20poly1305_state
 	var header = make([]byte, C.crypto_secretstream_xchacha20poly1305_HEADERBYTES)
 
-	encryptedData = make([]byte, len(header)+len(msg)+C.crypto_secretstream_xchacha20poly1305_ABYTES)
+	ciphertext := make([]byte, len(header)+len(msg)+C.crypto_secretstream_xchacha20poly1305_ABYTES)
 
-	key := sha256.Sum256(password)
+	var c CryptServiceEd25519
+	secIn, pubIn, err := c.GeneratePriPubKey()
+	secCurveIn, pubCurve, err := toCurve25519(secIn, pub)
+
+	keySeed, err := curve25519.X25519(secCurveIn, pubCurve)
+	if err != nil {
+		return nil, err
+	}
+
+	key := sha256.Sum256(keySeed)
+
 	C.crypto_secretstream_xchacha20poly1305_init_push(&state, (*C.uchar)(unsafe.Pointer(&header[0])), (*C.uchar)(unsafe.Pointer(&key[0])))
 
-	copy(encryptedData, header)
+	copy(ciphertext, header)
 
 	C.crypto_secretstream_xchacha20poly1305_push(
 		&state,
-		(*C.uchar)(unsafe.Pointer(&encryptedData[len(header)])),
+		(*C.uchar)(unsafe.Pointer(&ciphertext[len(header)])),
 		nil,
 		(*C.uchar)(unsafe.Pointer(&msg[0])),
 		C.ulonglong(uint64(len(msg))),
@@ -206,21 +223,38 @@ func streamEncrypt(password []byte, msg []byte) (encryptedData []byte, err error
 		0,
 		C.crypto_secretstream_xchacha20poly1305_TAG_FINAL)
 
-	return encryptedData, nil
+	return json.Marshal(asyEncryContent{
+		Pubkey:     pubIn,
+		Ciphertext: ciphertext,
+	})
+
 }
 
-func streamDecrypt(password []byte, encryptedData []byte) (decryptedMsg []byte, err error) {
-	if password == nil || encryptedData == nil {
+func streamDecrypt(sec []byte, encryptedData []byte) (decryptedMsg []byte, err error) {
+	if len(sec) != PrivateKeyBytes || encryptedData == nil {
 		return nil, errors.New("StreamDecrypt input isn't valid argument")
 	}
 	var state C.crypto_secretstream_xchacha20poly1305_state
 	var header = make([]byte, C.crypto_secretstream_xchacha20poly1305_HEADERBYTES)
-	copy(header, encryptedData[:C.crypto_secretstream_xchacha20poly1305_HEADERBYTES])
-	var tag uint8 //= C.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+	var tag uint8 // = C.crypto_secretstream_xchacha20poly1305_TAG_FINAL
 
-	decryptedMsg = make([]byte, len(encryptedData)-C.crypto_secretstream_xchacha20poly1305_HEADERBYTES-C.crypto_secretstream_xchacha20poly1305_ABYTES)
+	var receiver asyEncryContent
+	err = json.Unmarshal(encryptedData, &receiver)
+	if err != nil {
+		return nil, err
+	}
+	secCurve, pubCurveIn, err := toCurve25519(sec, receiver.Pubkey)
+	keySeed, err := curve25519.X25519(secCurve, pubCurveIn)
+	if err != nil {
+		return nil, err
+	}
 
-	key := sha256.Sum256(password)
+	copy(header, receiver.Ciphertext[:C.crypto_secretstream_xchacha20poly1305_HEADERBYTES])
+
+	key := sha256.Sum256(keySeed)
+
+	decryptedMsg = make([]byte, len(receiver.Ciphertext)-C.crypto_secretstream_xchacha20poly1305_HEADERBYTES-C.crypto_secretstream_xchacha20poly1305_ABYTES)
+
 	if C.crypto_secretstream_xchacha20poly1305_init_pull(&state, (*C.uchar)(unsafe.Pointer(&header[0])), (*C.uchar)(unsafe.Pointer(&key[0]))) != 0 {
 		return nil, errors.New("StreamDecrypt init err: incomplete header")
 	}
@@ -230,8 +264,8 @@ func streamDecrypt(password []byte, encryptedData []byte) (decryptedMsg []byte, 
 		(*C.uchar)(unsafe.Pointer(&decryptedMsg[0])),
 		nil,
 		(*C.uchar)(&tag),
-		(*C.uchar)(unsafe.Pointer(&encryptedData[len(header)])),
-		(C.ulonglong)(uint64(len(encryptedData)-len(header))),
+		(*C.uchar)(unsafe.Pointer(&receiver.Ciphertext[len(header)])),
+		(C.ulonglong)(uint64(len(receiver.Ciphertext)-len(header))),
 		nil,
 		0) != 0 {
 		return nil, errors.New("StreamDecrypt pull err")

@@ -50,11 +50,8 @@ func (c *CryptServiceEd25519) GeneratePriPubKey() (tpcrtypes.PrivateKey, tpcrtyp
 	if _, err := rand.Read(seed); err != nil {
 		return nil, nil, errors.New("fill random seed err")
 	}
-	sec, pub, err := generateKeyPairFromSeed(seed)
-	if err != nil {
-		return nil, nil, err
-	}
-	return sec, pub, nil
+
+	return generateKeyPairFromSeed(seed)
 }
 
 func (c *CryptServiceEd25519) GeneratePriPubKeyBySeed(seed []byte) (tpcrtypes.PrivateKey, tpcrtypes.PublicKey, error) {
@@ -62,33 +59,23 @@ func (c *CryptServiceEd25519) GeneratePriPubKeyBySeed(seed []byte) (tpcrtypes.Pr
 		return nil, nil, errors.New("input seed length err")
 	}
 
-	sec, pub, err := generateKeyPairFromSeed(seed)
-	if err != nil {
-		return nil, nil, err
-	}
-	return sec, pub, nil
+	return generateKeyPairFromSeed(seed)
 }
 
 func (c *CryptServiceEd25519) ConvertToPublic(priKey tpcrtypes.PrivateKey) (tpcrtypes.PublicKey, error) {
 	if len(priKey) != PrivateKeyBytes {
 		return nil, errors.New("input invalid privateKey")
 	}
-	pub, err := seckeyToPubkey(priKey)
-	if err != nil {
-		return nil, err
-	}
-	return pub, nil
+
+	return seckeyToPubkey(priKey)
 }
 
 func (c *CryptServiceEd25519) Sign(priKey tpcrtypes.PrivateKey, msg []byte) (tpcrtypes.Signature, error) {
 	if len(priKey) != PrivateKeyBytes || len(msg) == 0 {
 		return nil, errors.New("input invalid argument")
 	}
-	sig, err := signDetached(priKey, msg)
-	if err != nil {
-		return nil, err
-	}
-	return sig, nil
+
+	return signDetached(priKey, msg)
 }
 
 func (c *CryptServiceEd25519) Verify(addr tpcrtypes.Address, msg []byte, signData tpcrtypes.Signature) (bool, error) {
@@ -101,11 +88,7 @@ func (c *CryptServiceEd25519) Verify(addr tpcrtypes.Address, msg []byte, signDat
 		return false, err
 	}
 
-	retBool, err := verifyDetached(pubKey, msg, signData)
-	if err != nil {
-		return false, err
-	}
-	return retBool, nil
+	return verifyDetached(pubKey, msg, signData)
 }
 
 func (c *CryptServiceEd25519) BatchVerify(addrs []tpcrtypes.Address, msgs [][]byte, signDatas []tpcrtypes.Signature) (bool, error) {
@@ -120,7 +103,6 @@ func (c *CryptServiceEd25519) BatchVerify(addrs []tpcrtypes.Address, msgs [][]by
 
 	pubKeys := make([]tpcrtypes.PublicKey, len(addrs))
 	for i := range pubKeys {
-		//pubKeys[i] = make(tpcrtypes.PublicKey, PublicKeyBytes) todo maybe delete
 		tempPubkey, err := pubKeyFromAddr(addrs[i])
 		if err != nil {
 			return false, err
@@ -128,8 +110,7 @@ func (c *CryptServiceEd25519) BatchVerify(addrs []tpcrtypes.Address, msgs [][]by
 		pubKeys[i] = tempPubkey
 	}
 
-	retbool := batchVerify(pubKeys, msgs, signDatas)
-	return retbool, nil
+	return batchVerify(pubKeys, msgs, signDatas), nil
 }
 
 func (c *CryptServiceEd25519) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
@@ -172,16 +153,16 @@ func ToCurve25519(sec tpcrtypes.PrivateKey, pub tpcrtypes.PublicKey) (curveSec [
 	return curveSec, curvePub, err
 }
 
-func StreamEncrypt(password []byte, msg []byte) (encryptedData []byte, err error) {
-	if len(password) == 0 || len(msg) == 0 {
+func (c *CryptServiceEd25519) StreamEncrypt(pubKey tpcrtypes.PublicKey, msg []byte) (encryptedData []byte, err error) {
+	if len(msg) == 0 {
 		return nil, errors.New("input invalid argument")
 	}
-	return streamEncrypt(password, msg)
+	return streamEncrypt(pubKey, msg)
 }
 
-func StreamDecrypt(password []byte, encryptedData []byte) (decryptedMsg []byte, err error) {
-	if len(password) == 0 || len(encryptedData) == 0 {
+func (c *CryptServiceEd25519) StreamDecrypt(priKey tpcrtypes.PrivateKey, encryptedData []byte) (decryptedMsg []byte, err error) {
+	if len(encryptedData) == 0 {
 		return nil, errors.New("input invalid argument")
 	}
-	return streamDecrypt(password, encryptedData)
+	return streamDecrypt(priKey, encryptedData)
 }

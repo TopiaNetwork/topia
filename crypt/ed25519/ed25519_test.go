@@ -119,3 +119,23 @@ func TestCreateAddress(t *testing.T) {
 	_, err = c.CreateAddress(pub)
 	assert.Equal(t, nil, err, "CreateAddress err")
 }
+
+func TestStreamEncryptDecrypt(t *testing.T) {
+	var c CryptServiceEd25519
+	msg := "This is the message to be en-and-de-crypted"
+
+	sec, pub, err := c.GeneratePriPubKey()
+	assert.Nil(t, err, "GeneratePriPubKey err", err)
+
+	encryptedData, err := c.StreamEncrypt(pub, []byte(msg))
+	assert.Nil(t, err, "StreamEncrypt err", err)
+
+	decryptedMsg, err := c.StreamDecrypt(sec, encryptedData)
+	assert.Nil(t, err, "StreamDecrypt err", err)
+	assert.Equal(t, msg, string(decryptedMsg), "decryptedMsg is not equal to msg")
+
+	secWrong, _, _ := c.GeneratePriPubKey()
+	wrongDe, err := c.StreamDecrypt(secWrong, encryptedData)
+	assert.NotNil(t, err, "StreamDecrypt err", err)
+	assert.NotEqual(t, msg, string(wrongDe), "wrong key shouldn't decrypt right")
+}

@@ -1,6 +1,11 @@
 package secp256
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	tpcmm "github.com/TopiaNetwork/topia/common"
@@ -19,6 +24,12 @@ const (
 
 type CryptServiceSecp256 struct {
 	log tplog.Logger
+}
+
+type asyEncryContent struct {
+	Nonce      []byte              `json:"nonce"`
+	Pubkey     tpcrtypes.PublicKey `json:"pubkey"`
+	Ciphertext []byte              `json:"ciphertext"`
 }
 
 func New(log tplog.Logger) *CryptServiceSecp256 {
@@ -83,16 +94,13 @@ func (c *CryptServiceSecp256) GeneratePriPubKeyBySeed(seed []byte) (tpcrtypes.Pr
 	}
 
 	for i := 0; i < maxLoopCreateSeckey; i++ {
-		if err := fillRandom(seckey[:]); err != nil {
-			c.log.Error(err.Error())
-			return nil, nil, err
-		}
+		seckey = sha256.Sum256(seed)
 		verifyOK, err := ecSeckeyVerify(ctx, seckey[:])
 		if err != nil {
 			c.log.Error(err.Error())
 			return nil, nil, err
 		}
-		if verifyOK == true {
+		if verifyOK {
 			break
 		}
 	}
@@ -158,17 +166,79 @@ func (c *CryptServiceSecp256) RecoverPublicKey(msg []byte, signData tpcrtypes.Si
 	return pubkeyArr[:], nil
 }
 
-//func (c *CryptServiceSecp256) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-//	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_Secp256).Compute(string(pubKey))
-//	if len(addressHash) != tpcrtypes.AddressLen_Secp256 {
-//		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_Secp256)
-//	}
-//	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Secp256, addressHash)
-//}
+func (c *CryptServiceSecp256) StreamEncrypt(pubKey tpcrtypes.PublicKey, msg []byte) (encryptedData []byte, err error) {
+	if len(pubKey) != PublicKeyBytes || msg == nil {
+		return nil, errors.New("input invalid argument")
+	}
+
+	secIn, pubIn, err := c.GeneratePriPubKey()
+
+	keySeed, err := ecPubkeyTweakMul(ctx, pubKey, secIn)
+	if err != nil {
+		return nil, err
+	}
+	key := sha256.Sum256(keySeed)
+
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return nil, err
+	}
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, 12)
+	_, err = rand.Read(nonce)
+	if err != nil {
+		return nil, err
+	}
+
+	ciphertext := aesgcm.Seal(nil, nonce, msg, nil)
+
+	return json.Marshal(asyEncryContent{
+		Nonce:      nonce,
+		Pubkey:     pubIn,
+		Ciphertext: ciphertext,
+	})
+}
+
+func (c *CryptServiceSecp256) StreamDecrypt(priKey tpcrtypes.PrivateKey, encryptedData []byte) (decryptedMsg []byte, err error) {
+	if len(priKey) != PrivateKeyBytes || encryptedData == nil {
+		return nil, errors.New("input invalid argument")
+	}
+
+	var receiver asyEncryContent
+	err = json.Unmarshal(encryptedData, &receiver)
+	if err != nil {
+		return nil, err
+	}
+
+	keySeed, err := ecPubkeyTweakMul(ctx, receiver.Pubkey, priKey)
+	if err != nil {
+		return nil, err
+	}
+
+	key := sha256.Sum256(keySeed)
+
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return nil, err
+	}
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	return aesgcm.Open(nil, receiver.Nonce, receiver.Ciphertext, nil)
+}
 
 func (c *CryptServiceSecp256) CreateAddress(pubKey tpcrtypes.PublicKey) (tpcrtypes.Address, error) {
-	if len(pubKey) != PublicKeyBytes {
-		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid pubKey: len %d, expected %d", len(pubKey), PublicKeyBytes)
+	addressHash := tpcmm.NewBlake2bHasher(tpcrtypes.AddressLen_Secp256).Compute(string(pubKey))
+	if len(addressHash) != tpcrtypes.AddressLen_Secp256 {
+		return tpcrtypes.UndefAddress, fmt.Errorf("Invalid addressHash: len %d, expected %d", len(addressHash), tpcrtypes.AddressLen_Secp256)
 	}
-	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Secp256, pubKey)
+	return tpcrtypes.NewAddress(tpcrtypes.CryptType_Secp256, addressHash)
 }

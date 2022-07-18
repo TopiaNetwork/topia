@@ -152,3 +152,26 @@ func ecdsaRecoverPubkey(ctx secp256k1ContextPointer, msg []byte, signData []byte
 	}
 	return pubkey, nil
 }
+
+// ecPubkeyTweakMul won't modify input pubkey and tweak, just generate multiplied result.
+func ecPubkeyTweakMul(ctx secp256k1ContextPointer, pubkey []byte, tweak []byte) (muled []byte, err error) {
+	if len(tweak) != PrivateKeyBytes {
+		return nil, errors.New("input invalid argument")
+	}
+
+	var pub secp256k1Pubkey
+	if !(C._Bool)(C.intToBoolSecp256(C.secp256k1_ec_pubkey_parse(ctx.p, &pub.v, (*C.uchar)(unsafe.Pointer(&pubkey[0])), C.size_t(uint(len(pubkey)))))) {
+		return nil, errors.New("parse pubkey err")
+	}
+
+	if !(C._Bool)(C.intToBoolSecp256(C.secp256k1_ec_pubkey_tweak_mul(ctx.p, &pub.v, (*C.uchar)(unsafe.Pointer(&tweak[0]))))) {
+		return nil, errors.New("tweak pubkey err")
+	}
+
+	muled = make([]byte, PublicKeyBytes)
+	pubkeyLen := uint(PublicKeyBytes)
+	if !(C._Bool)(C.intToBoolSecp256(C.secp256k1_ec_pubkey_serialize(ctx.p, (*C.uchar)(unsafe.Pointer(&muled[0])), (*C.size_t)(unsafe.Pointer(&pubkeyLen)), &pub.v, C.SECP256K1_EC_UNCOMPRESSED))) {
+		return nil, errors.New("failed to serialize pubkey")
+	}
+	return muled, nil
+}

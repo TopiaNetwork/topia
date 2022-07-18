@@ -61,23 +61,3 @@ func BenchmarkBatchVerifyOneByOne100(b *testing.B) {
 		assert.Equal(b, nil, err, "BatchVerify err")
 	}
 }
-
-func TestStreamEncryptDecrypt(t *testing.T) {
-	password := []byte("this is password1")
-	msg := []byte("this is the msg to steam encrypt")
-	encryptedMsg, err := StreamEncrypt(password, msg)
-	assert.Nil(t, err, "StreamEncrypt err:", err)
-
-	decryptedMsg, err := StreamDecrypt(password, encryptedMsg)
-	assert.Nil(t, err, "StreamDecrypt err:", err)
-	assert.Equal(t, string(msg), string(decryptedMsg), "StreamDecrypt failed")
-
-	password2 := []byte("this is password2")
-	msg2 := []byte("this is the 2 msg to steam encrypt")
-	encryptedMsg2, err := StreamEncrypt(password2, msg2)
-	assert.Nil(t, err, "StreamEncrypt err:", err)
-
-	decryptedMsg2, err := StreamDecrypt(password2, encryptedMsg2)
-	assert.Nil(t, err, "StreamDecrypt err:", err)
-	assert.Equal(t, string(msg2), string(decryptedMsg2), "StreamDecrypt failed")
-}

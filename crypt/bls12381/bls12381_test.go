@@ -41,7 +41,10 @@ func TestVerify(t *testing.T) {
 	sig, err := c.Sign(sec, []byte(msgToSign))
 	assert.Equal(t, nil, err, "TestVerify Sign failed.")
 
-	b, err := c.Verify(pub, []byte(msgToSign), sig)
+	addr, err := c.CreateAddress(pub)
+	assert.Nil(t, err, "TestVerify CreateAddress failed.")
+
+	b, err := c.Verify(addr, []byte(msgToSign), sig)
 	assert.Equal(t, true, b, "TestVerify Verify failed.")
 	assert.Equal(t, nil, err, "TestVerify Verify failed.")
 }
@@ -53,4 +56,24 @@ func TestCreateAddress(t *testing.T) {
 
 	_, err = c.CreateAddress(pub)
 	assert.Equal(t, nil, err, "TestCreateAddress CreateAddress failed.")
+}
+
+func TestStreamEncryptDecrypt(t *testing.T) {
+	var c CryptServiceBLS12381
+	msg := "This is the message to be en-and-de-crypted"
+
+	sec, pub, err := c.GeneratePriPubKey()
+	assert.Nil(t, err, "GeneratePriPubKey err", err)
+
+	encryptedData, err := c.StreamEncrypt(pub, []byte(msg))
+	assert.Nil(t, err, "StreamEncrypt err", err)
+
+	decryptedMsg, err := c.StreamDecrypt(sec, encryptedData)
+	assert.Nil(t, err, "StreamDecrypt err", err)
+	assert.Equal(t, msg, string(decryptedMsg), "decryptedMsg is not equal to msg")
+
+	secWrong, _, _ := c.GeneratePriPubKey()
+	wrongDe, err := c.StreamDecrypt(secWrong, encryptedData)
+	assert.NotNil(t, err, "StreamDecrypt err", err)
+	assert.NotEqual(t, msg, string(wrongDe), "wrong key shouldn't decrypt right")
 }

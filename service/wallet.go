@@ -8,9 +8,11 @@ import (
 type WalletService interface {
 	Create(cryptType tpcrtypes.CryptType) (tpcrtypes.Address, error)
 
+	CreateMnemonic(cryptType tpcrtypes.CryptType, passphrase string, mnemonicAmounts int) (mnemonic string, err error)
+
 	Recovery(cryptType tpcrtypes.CryptType, mnemonic string, passphrase string) (tpcrtypes.Address, error)
 
-	Import(privKey tpcrtypes.PrivateKey) (tpcrtypes.Address, error)
+	Import(cryptType tpcrtypes.CryptType, privKey tpcrtypes.PrivateKey) (tpcrtypes.Address, error)
 
 	Delete(tpcrtypes.Address) error
 

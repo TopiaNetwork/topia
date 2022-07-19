@@ -99,3 +99,5 @@ func Getmmap(file string)gommap.MMap{
 	}
 	return mmap
 }
+
+//func GetFile

@@ -101,7 +101,7 @@ func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
 }
 
 func (RollFile *FileItem)EmptyRollback(blocknum types.BlockNum)error{
-	//get the file and
+
 	rollmmap := Getmmap(RollFile.File.Name())
 	buf := make([]byte, RollFile.Offset)
 	copy(rollmmap[0:RollFile.Offset],buf)

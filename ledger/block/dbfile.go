@@ -172,22 +172,21 @@ func NewIndexFile(block *types.Block) ( error) {
 //}
 
 
-func newtestfile()*FileItem{
-	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+func newtestfile(filename string,filetype FileType)*FileItem{
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	file.Write(make([]byte, FILE_SIZE))
 	if err != nil {
-		return  err
+		return  nil
 	}
-
-	//stat, err := os.Stat(filepath)
-	//if err != nil {
-	//	return nil, err
-	//}
 
 	var tp  = FileItem{
-		Filetype: IndexFileType,
-		File:   file,
-		Offset: 0,
+		filetype,
+		file,
+		0,
+		0,
+		nil,
+
 
 	}
+	return &tp
 }

@@ -75,7 +75,6 @@ func RemoveBlockdata(indexfile *FileItem,offset uint64)error{
 	copy(datammap[offset:offset+size], buf)
 
 	return nil
-
 }
 
 func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {

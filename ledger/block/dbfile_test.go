@@ -62,13 +62,13 @@ var FilenameNow = "1817128"
 
 
 
-func TestOutSize(t *testing.T) {
-
-	b := OutSize("text.txt")
-	fmt.Printf("%t",b)
-
-
-}
+//func TestOutSize(t *testing.T) {
+//
+//	b := OutSize("text.txt")
+//	fmt.Printf("%t",b)
+//
+//
+//}
 
 func TestEncodeblock(t *testing.T) {
 	res,err := Encodeblock(&block_all)
@@ -87,11 +87,6 @@ func TestNewFile(t *testing.T) {
 	topia,_ := NewFile(&block_all)
 	fmt.Println("",topia)
 
-	//index,_ := NewFile(&block_all,1)
-	//fmt.Println("",index)
-	//
-	//trans,_ := NewFile(&block_all,2)
-	//fmt.Println("",trans)
 }
 
 //
@@ -119,44 +114,48 @@ func TestTopiaFile_Findindex(t *testing.T) {
 	fmt.Println(tpindex)
 }
 
-//func TestWriteindex(t *testing.T) {
-//	file, err := os.OpenFile("test.index", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+func TestWriteindex(t *testing.T) {
+	file, err := os.OpenFile("test.index", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+
+	if err != nil{
+		panic(err)
+	}
+
+	var to = FileItem{
+		1,
+		file,
+		1,
+		0,
+		nil,
+
+	}
+	err =to.Writedata(&block_all)
+	if err != nil{
+		panic(err)
+	}
+}
 //
-//	if err != nil{
-//		panic(err)
-//	}
 //
-//	var to = FileItem{
-//		1,
-//		file,
-//		1,
-//
-//	}
-//	err =to.Writedata(&block_all)
-//	if err != nil{
-//		panic(err)
-//	}
-//}
-//
-//
-//func TestWritetrans(t *testing.T) {
-//	file, err := os.OpenFile("test.trans", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
-//
-//	if err != nil{
-//		panic(err)
-//	}
-//
-//	var to = TopiaFile{
-//		1,
-//		file,
-//		1,
-//
-//	}
-//	err =to.Writedata(&block_all)
-//	if err != nil{
-//		panic(err)
-//	}
-//}
+func TestWritetrans(t *testing.T) {
+	file, err := os.OpenFile("test.trans", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+
+	if err != nil{
+		panic(err)
+	}
+
+	var to = FileItem{
+		1,
+		file,
+		1,
+		1,
+		nil,
+
+	}
+	err =to.Writedata(&block_all)
+	if err != nil{
+		panic(err)
+	}
+}
 //
 func TestFindBlock(t *testing.T) {
 

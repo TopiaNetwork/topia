@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -243,7 +244,8 @@ func GetSize(Datafile string, offset uint64)uint64{
 
 func GetFilename(blocknum types.BlockNum) string{
 	//need todo
-	return string(blocknum)
+	//return string(blocknum)
+	return strconv.Itoa(int(blocknum))
 }
 
 

@@ -5,10 +5,10 @@ go 1.17
 require (
 	github.com/AsynkronIT/protoactor-go v0.0.0-20211217071430-1b4f403946c3
 	github.com/Gurpartap/async v0.0.0-20180927173644-4f7f499dd9ee
-	github.com/RoaringBitmap/roaring v1.2.1
 	github.com/TopiaNetwork/go-bls v0.0.1
 	github.com/TopiaNetwork/kyber/v3 v3.7.9
 	github.com/beevik/ntp v0.3.0
+	github.com/bits-and-blooms/bitset v1.2.0
 	github.com/bluele/gcache v0.0.2
 	github.com/btcsuite/btcd v0.22.0-beta
 	github.com/coocood/freecache v1.2.1
@@ -51,9 +51,7 @@ require (
 )
 
 require (
-	github.com/bits-and-blooms/bitset v1.2.0 // indirect
 	github.com/lucas-clemente/quic-go v0.24.0 // indirect
-	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 )
 

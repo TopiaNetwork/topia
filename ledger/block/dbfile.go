@@ -2,11 +2,9 @@ package block
 
 import (
 	"fmt"
+	"github.com/TopiaNetwork/topia/chain/types"
 	"os"
 	"strconv"
-
-
-	"github.com/TopiaNetwork/topia/chain/types"
 )
 
 
@@ -33,8 +31,6 @@ type FileItem struct {
 	Offset uint64
 	HeaderOffset uint64
 	Bloom *BloomFilter
-	//HeaderSize uint64
-
 }
 
 type IndexFileItem struct {
@@ -74,7 +70,6 @@ type TransIndex struct{
 
 func NewFile(block *types.Block) (*FileItem, error) {
 	var err error
-	//blockKey,_ := block.HashHex()
 	blockKey := block.GetHead().GetHeight()
 
 	fmt.Println("",blockKey)
@@ -102,15 +97,11 @@ func NewFile(block *types.Block) (*FileItem, error) {
 	}
 
 	tp.Writedata(block)
-
-
 	err = NewIndexFile(block)
 
 	if err != nil{
 		panic(err)
 	}
-
-
 	return &tp, nil
 }
 
@@ -140,8 +131,6 @@ func NewIndexFile(block *types.Block) ( error) {
 	//what's the version ?????
 
 	tp.Writeindex(88,0)
-
-
 	return nil
 }
 

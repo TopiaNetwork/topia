@@ -22,21 +22,24 @@ func TestNewRollback(t *testing.T) {
 }
 
 
-func TestFileItem_AddRollback(t *testing.T) {
-	newtestfile(string(blocknum),4)
-
-
-}
+//func TestFileItem_AddRollback(t *testing.T) {
+//	newtestfile(string(blocknum),4)
+//
+//
+//}
 
 func TestRemoveBlockhead(t *testing.T) {
-	
+
+
 }
 
 func TestRemoveBlockdata(t *testing.T) {
 
+
 }
 
 func TestRemoveindex(t *testing.T) {
+
 
 }
 

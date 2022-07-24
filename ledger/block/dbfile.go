@@ -90,10 +90,11 @@ func NewFile(block *types.Block) (*FileItem, error) {
 	FileNameOpening = filepath
 
 	tp := FileItem{
-		Filetype: DataFileType,
-		File:   file,
-		Offset: FILE_HEADER_SIZE,
-		Bloom: New(),
+		DataFileType,
+		file,
+		FILE_HEADER_SIZE,
+		0,
+		New(),
 	}
 
 	tp.Writedata(block)
@@ -117,18 +118,14 @@ func NewIndexFile(block *types.Block) ( error) {
 		return  err
 	}
 
-	//stat, err := os.Stat(filepath)
-	//if err != nil {
-	//	return nil, err
-	//}
-
 	var tp  = FileItem{
-		Filetype: IndexFileType,
-		File:   file,
-		Offset: 0,
+		IndexFileType,
+		file,
+		FILE_HEADER_SIZE,
+		0,
+		nil,
 
 	}
-	//what's the version ?????
 
 	tp.Writeindex(88,0)
 	return nil

@@ -101,7 +101,6 @@ func (df *FileItem) Writedata(block *types.Block) error {
 	hasher := tpcmm.NewBlake2bHasher(0)
 	crcbyte := hasher.Compute(string(buf))
 
-
 	size := uint64(len(buf))
 	sizebyte := Uint64ToBytes(size)
 

@@ -107,58 +107,36 @@ func TestTopiaFile_Findindex(t *testing.T) {
 		0,
 		nil,
 	}
-	tpindex,_ :=to.Findindex(1817128)
-	//if err != nil{
-	//	panic(err)
-	//}
-	fmt.Println(tpindex)
+	//tpindex,_ :=to.Findindex(1817128)
+
+	//fmt.Println("tpindex: ",tpindex)
+	fmt.Println("tpindex: ",to)
 }
 
-func TestWriteindex(t *testing.T) {
-	file, err := os.OpenFile("test.index", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 
-	if err != nil{
-		panic(err)
-	}
-
-	var to = FileItem{
-		1,
-		file,
-		1,
-		0,
-		nil,
-
-	}
-	err =to.Writedata(&block_all)
-	if err != nil{
-		panic(err)
-	}
-}
+//func TestWriteindex(t *testing.T) {
+//	filename := FilenameNow + ".topia"
+//	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 //
+//	if err != nil{
+//		panic(err)
+//	}
 //
-func TestWritetrans(t *testing.T) {
-	file, err := os.OpenFile("test.trans", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
-
-	if err != nil{
-		panic(err)
-	}
-
-	var to = FileItem{
-		1,
-		file,
-		1,
-		1,
-		nil,
-
-	}
-	err =to.Writedata(&block_all)
-	if err != nil{
-		panic(err)
-	}
-}
+//	var to = FileItem{
+//		1,
+//		file,
+//		FILE_HEADER_SIZE,
+//		0,
+//		nil,
 //
-func TestFindBlock(t *testing.T) {
+//	}
+//	err =to.Writedata(&block_all)
+//	if err != nil{
+//		panic(err)
+//	}
+//}
 
+func TestFileItem_WriteHeader(t *testing.T) {
 	filename := FilenameNow + ".topia"
 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 
@@ -167,18 +145,77 @@ func TestFindBlock(t *testing.T) {
 	}
 
 	var to = FileItem{
-		0,
+		1,
 		file,
-		0,
+		FILE_HEADER_SIZE,
 		0,
 		nil,
-
 	}
-	tpdata,_ :=to.FindBlockbyNumber(1817128)
-	fmt.Println(tpdata)
+	err =to.WriteHeader(&block_all)
+	if err != nil{
+		panic(err)
+	}
 }
+//
+//
+//func TestWritetrans(t *testing.T) {
+//	file, err := os.OpenFile("test.trans", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//
+//	if err != nil{
+//		panic(err)
+//	}
+//
+//	var to = FileItem{
+//		1,
+//		file,
+//		1,
+//		1,
+//		nil,
+//
+//	}
+//	err =to.Writedata(&block_all)
+//	if err != nil{
+//		panic(err)
+//	}
+//}
+//
+//func TestFindBlock(t *testing.T) {
+//
+//	filename := FilenameNow + ".topia"
+//	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//
+//	if err != nil{
+//		panic(err)
+//	}
+//
+//	var to = FileItem{
+//		0,
+//		file,
+//		0,
+//		0,
+//		nil,
+//
+//	}
+//	tpdata,_ :=to.FindBlockbyNumber(1817128)
+//	fmt.Println(tpdata)
+//}
 
-
-
-
-
+func TestNewIndexFile(t *testing.T) {
+	type args struct {
+		block *types.Block
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := NewIndexFile(tt.args.block); (err != nil) != tt.wantErr {
+				t.Errorf("NewIndexFile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

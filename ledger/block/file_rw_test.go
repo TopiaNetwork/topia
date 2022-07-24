@@ -16,10 +16,9 @@ func TestReaddata(t *testing.T) {
 	var to = FileItem{
 		1,
 		file,
-		1,
+		FILE_HEADER_SIZE,
 		1,
 		nil,
-
 	}
 	err =to.Writedata(&block_all)
 	if err != nil{

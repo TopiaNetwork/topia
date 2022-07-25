@@ -168,11 +168,9 @@ func newtestfile(filename string,filetype FileType)*FileItem{
 	var tp  = FileItem{
 		filetype,
 		file,
+		FILE_HEADER_SIZE,
 		0,
-		0,
-		nil,
-
-
+		New(),
 	}
 	return &tp
 }

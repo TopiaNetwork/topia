@@ -18,7 +18,7 @@ type RollbackData struct {
 }
 func NewRollback(blocknum types.BlockNum) (*FileItem, error){
 
-	filepath := strconv.FormatInt(int64(blocknum), 10) + ".index"
+	filepath := strconv.FormatInt(int64(blocknum), 10) + ".roll"
 
 	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	file.Write(make([]byte, FILE_SIZE))
@@ -31,7 +31,6 @@ func NewRollback(blocknum types.BlockNum) (*FileItem, error){
 		File:   file,
 		Offset: 0,
 	}
-
 
 	return &tp,nil
 }
@@ -77,11 +76,12 @@ func RemoveBlockdata(indexfile *FileItem,offset uint64)error{
 	return nil
 }
 
-func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
+//func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
+func Removeindex(Indexfile *FileItem, blocknums []uint64, size uint64) error {
 	var alloffset uint64 = 0
 	var startoffset uint64 = 0
 	for _,blocknum := range blocknums{
-		index, err := Indexfile.Findindex(blocknum)
+		index, err := Indexfile.Findindex(types.BlockNum(blocknum))
 
 		if err != nil {
 			return err

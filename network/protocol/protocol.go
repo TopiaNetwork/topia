@@ -15,7 +15,7 @@ const (
 	WriteReqDeadline = 5 * time.Second
 	ReadResDeadline  = WriteReqDeadline * 10
 	ReadResMinSpeed  = 50 << 10
-	WaitRespTimeout  = 30 * time.Second
+	WaitRespTimeout  = 5 * time.Second
 )
 
 const (

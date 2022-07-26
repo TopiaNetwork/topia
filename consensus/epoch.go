@@ -130,7 +130,7 @@ func (an *activeNodeInfos) update(log tplog.Logger, ledger ledger.Ledger, csDoma
 
 	an.activeExecutorIDs = an.activeExecutorIDs[:0]
 	an.activeProposerIDs = an.activeProposerIDs[:0]
-	an.activeExecutorIDs = an.activeValidatorIDs[:0]
+	an.activeValidatorIDs = an.activeValidatorIDs[:0]
 
 	an.nodeWeights = make(map[string]uint64)
 
@@ -144,10 +144,6 @@ func (an *activeNodeInfos) update(log tplog.Logger, ledger ledger.Ledger, csDoma
 		an.activeExecutorIDs = append(an.activeExecutorIDs, executorInfo.NodeID)
 		an.activeExecutorWeights += executorInfo.Weight
 		an.nodeWeights[executorInfo.NodeID] = executorInfo.Weight
-	}
-
-	if len(an.activeProposerIDs) != 0 {
-		panic("")
 	}
 
 	for _, domainMember := range csDomainMember {
@@ -342,31 +338,27 @@ func (es *epochService) Start(ctx context.Context, latestHeight uint64) {
 				es.log.Errorf("Select consensus domain error: %v", err)
 				continue
 			}
-			if len(members) > 0 {
+			if len(members) > 0 && dkgCPT != nil {
 				es.activeNodeInfos.update(es.log, es.ledger, members)
+				es.notifyUpdater(dkgCPT)
+				if selfSelected != nil {
+					atomic.StoreUint32(&es.selfSelected, 1)
 
-				if dkgCPT != nil {
-					es.activeNodeInfos.update(es.log, es.ledger, members)
-					es.notifyUpdater(dkgCPT)
-					if selfSelected != nil {
-						atomic.StoreUint32(&es.selfSelected, 1)
-
-						csDomainSelectedMsg := &ConsensusDomainSelectedMessage{
-							ChainID:            []byte(compState.ChainID()),
-							Version:            CONSENSUS_VER,
-							DomainID:           []byte(domainID),
-							MemberNumber:       uint32(len(members)),
-							NodeIDOfMember:     []byte(selfSelected.NodeID),
-							NodeRoleOfMember:   uint64(selfSelected.NodeRole),
-							NodeWeightOfMember: selfSelected.Weight,
-						}
-						err = es.deliver.deliverConsensusDomainSelectedMessageExe(ctx, csDomainSelectedMsg)
-						if err == nil {
-							es.log.Infof("Successfully deliver consensus domain selected message to execute networkz: self node %s", es.nodeID)
-						}
-					} else {
-						atomic.StoreUint32(&es.selfSelected, 0)
+					csDomainSelectedMsg := &ConsensusDomainSelectedMessage{
+						ChainID:            []byte(compState.ChainID()),
+						Version:            CONSENSUS_VER,
+						DomainID:           []byte(domainID),
+						MemberNumber:       uint32(len(members)),
+						NodeIDOfMember:     []byte(selfSelected.NodeID),
+						NodeRoleOfMember:   uint64(selfSelected.NodeRole),
+						NodeWeightOfMember: selfSelected.Weight,
 					}
+					err = es.deliver.deliverConsensusDomainSelectedMessageExe(ctx, csDomainSelectedMsg)
+					if err == nil {
+						es.log.Infof("Successfully deliver consensus domain selected message to execute network: self node %s", es.nodeID)
+					}
+				} else {
+					atomic.StoreUint32(&es.selfSelected, 0)
 				}
 
 				return

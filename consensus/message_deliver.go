@@ -128,6 +128,9 @@ func deliverSendWithRespCommon(ctx context.Context, selfNodeID string, log tplog
 		return nil, err
 	}
 
+	var respBytes [][]byte
+	var respErrs []string
+
 	sendCycleMaxCount := 1
 	for sendCycleMaxCount > 0 {
 		sendCycleMaxCount--
@@ -135,7 +138,7 @@ func deliverSendWithRespCommon(ctx context.Context, selfNodeID string, log tplog
 		if err != nil {
 			return nil, err
 		}
-		_, respBytes, respErrs := tpnetmsg.ParseSendResp(resps)
+		_, respBytes, respErrs = tpnetmsg.ParseSendResp(resps)
 		rtnBytes := [][]byte(nil)
 		for i, respErr := range respErrs {
 			if respErr == "" {
@@ -148,8 +151,7 @@ func deliverSendWithRespCommon(ctx context.Context, selfNodeID string, log tplog
 		}
 	}
 
-	return nil, fmt.Errorf("Network exception and can't get the final response: protocolID %s, consensusMsg %s, self node %s", protocolID, msgType.String(), selfNodeID)
-
+	return nil, fmt.Errorf("Network exception and can't get the final response: errs %v, protocolID %s, consensusMsg %s, self node %s", respErrs, protocolID, msgType.String(), selfNodeID)
 }
 
 func (md *messageDeliver) deliverConsensusDomainSelectedMessageExe(ctx context.Context, msg *ConsensusDomainSelectedMessage) error {
@@ -376,9 +378,17 @@ func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, m
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
 		peerIDs := md.epochService.GetActiveExecutorIDs()
+		if len(peerIDs) == 0 {
+			md.log.Warnf("Active executor nodes count 0: self node %s", md.nodeID)
+		}
+
 		randIndexs := tpcmm.GenerateRandomNumber(0, len(peerIDs), TxsResultValidity_MaxExecutor)
 		for i := 0; i < len(randExecutorID); i++ {
 			randExecutorID[i] = peerIDs[randIndexs[i]]
+		}
+
+		if len(randExecutorID) == 0 {
+			md.log.Warnf("Randomly selected executor nodes count 0: self node %s", md.nodeID)
 		}
 
 		md.log.Debugf("Rand active executor nodes: %v", randExecutorID)
@@ -411,7 +421,7 @@ func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, m
 	}
 
 	if len(resp) <= 0 {
-		err = fmt.Errorf("Received execution result validate request resp %d from executor %s", len(resp), randExecutorID)
+		err = fmt.Errorf("Received execution result validate request resp %d from executor %v", len(resp), randExecutorID)
 		return nil, err
 	}
 
@@ -438,8 +448,7 @@ func (md *messageDeliver) deliverResultValidateRespMessage(actorCtx actor.Contex
 
 		respDataBytes, _ := json.Marshal(&respData)
 		actorCtx.Respond(respDataBytes)
-		md.log.Infof("Successfully deliver result validate resp message: state version %d, self node %s", msg.StateVersion, md.nodeID)
-
+		md.log.Infof("Successfully deliver result validate resp message: state version %d, executor %s, self node %s", msg.StateVersion, string(msg.Executor), md.nodeID)
 	}()
 
 	if errRtn != nil {

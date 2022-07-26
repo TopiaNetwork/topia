@@ -125,22 +125,23 @@ func (ps *P2PStreamService) handleIncomingStreamWithResp(stream network.Stream) 
 }
 
 func (ps *P2PStreamService) handleStreamMessageWithResp(stream network.Stream, streamMsg *message.NetworkMessage) error {
-	if streamMsg.ModuleName == "" {
-		err := fmt.Errorf("invalid module name for stream message %s", stream.ID())
-		ps.log.Error(err.Error())
-		return err
-	}
-
-	resp, err := ps.p2pService.dispatchAndWaitResp(streamMsg.ModuleName, streamMsg)
-	if err != nil {
-		return err
-	}
-
 	respMsg := &message.NetworkMessage{
 		FromPeerID: ps.p2pService.host.ID().String(),
 		ProtocolID: string(stream.Protocol()),
 		ModuleName: streamMsg.ModuleName,
-		Data:       resp.([]byte),
+	}
+
+	if streamMsg.ModuleName == "" {
+		err := fmt.Errorf("invalid module name for stream message %s", stream.ID())
+		ps.log.Error(err.Error())
+		respMsg.ErrDesc = err.Error()
+	} else {
+		resp, err := ps.p2pService.dispatchAndWaitResp(streamMsg.ModuleName, streamMsg)
+		if err != nil {
+			respMsg.ErrDesc = err.Error()
+		} else {
+			respMsg.Data = resp.([]byte)
+		}
 	}
 
 	return ps.writeMessage(stream, respMsg)

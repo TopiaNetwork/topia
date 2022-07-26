@@ -233,22 +233,12 @@ func (md *dkgMessageDeliver) deliverDKGFinishedMessage(ctx context.Context, msg 
 		return err
 	}
 
-	exeCtx := ctx
 	propCtx := ctx
 	ValCtx := ctx
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		exeCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, md.exeActiveNodeIds)
 		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_PeerList, md.propCandNodeIDs)
 		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, md.valCandNodeIDs)
-	}
-
-	if exeCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {
-		exeCtx = context.WithValue(exeCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-		err = deliverSendCommon(exeCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_DKGFinished, msgBytes)
-		if err != nil {
-			md.log.Errorf("Send dkg finished message to execute network failed: err=%v", err)
-		}
 	}
 
 	if propCtx.Value(tpnetcmn.NetContextKey_PeerList) != nil {

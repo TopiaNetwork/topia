@@ -242,7 +242,7 @@ func (n *Node) Start() {
 		}
 	}
 
-	if n.ledger.State() == tpcmm.LedgerState_Genesis {
+	if n.role != "executor" && n.ledger.State() == tpcmm.LedgerState_Genesis {
 		n.consensus.TriggerDKG(n.latestBlock)
 	}
 

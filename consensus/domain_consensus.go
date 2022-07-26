@@ -302,17 +302,21 @@ func (ds *domainConsensusService) ProduceAndSaveNodeDomain(threshold int, pubKey
 	compState.Lock()
 	defer compState.Unlock()
 
+	ds.log.Infof("Domain consensus service get composition state lock: state version %d, self node %s", compState.StateVersion(), ds.nodeID)
+
 	if priShare != nil {
 		compState.UpdateDKGPriShare(ds.nodeID, priShare)
 	}
 
 	err := compState.AddNodeDomain(ndInfo)
-	if err != nil {
+	if err == nil {
 		ds.log.Infof("Successful generate node consensus domain and saved: state version %d, self node %s", compState.StateVersion(), ds.nodeID)
 	}
 }
 
 func (ds *domainConsensusService) updateDKGBls(dkgBls DKGBls) {
+	ds.log.Infof("Domain consensus service update DKG BLS: self node %s", ds.nodeID)
+
 	pubKey, _ := dkgBls.PubKey()
 	priShare, _ := dkgBls.PriShare()
 	pubShares, _ := dkgBls.PubShares()

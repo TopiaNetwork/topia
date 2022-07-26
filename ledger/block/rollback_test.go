@@ -3,13 +3,15 @@ package block
 import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
+	"strconv"
+
 	//"os"
 	"testing"
 )
 
 
 var blocknum uint64 = 123456;
-var blocknum_array = [3]uint64{123456,123457,123458}
+var blocknum_array = []uint64{123456,123457,123458}
 
 //func init(t *testing.T) {
 //
@@ -22,7 +24,7 @@ func TestNewRollback(t *testing.T) {
 
 
 func TestFileItem_AddRollback(t *testing.T) {
-	newtestfile(string(blocknum),4)
+	newtestfile(strconv.FormatUint(blocknum,10),4)
 
 	rollback,_ := NewRollback(types.BlockNum(blocknum))
 
@@ -30,7 +32,7 @@ func TestFileItem_AddRollback(t *testing.T) {
 }
 
 func TestRemoveBlockhead(t *testing.T) {
-	datafile := newtestfile(string(blocknum),1)
+	datafile := newtestfile(strconv.FormatUint(blocknum,10),1)
 
 	err := RemoveBlockhead(datafile,blocknum)
 	panic(err)
@@ -39,7 +41,7 @@ func TestRemoveBlockhead(t *testing.T) {
 }
 
 func TestRemoveBlockdata(t *testing.T) {
-	datafile := newtestfile(string(blocknum),1)
+	datafile := newtestfile(strconv.FormatUint(blocknum,10),1)
 
 	err := RemoveBlockdata(datafile,blocknum)
 	panic(err)
@@ -48,9 +50,9 @@ func TestRemoveBlockdata(t *testing.T) {
 
 func TestRemoveindex(t *testing.T) {
 
-	datafile := newtestfile(string(blocknum),2)
+	datafile := newtestfile(strconv.FormatUint(blocknum,10),2)
 
-	err := Removeindex(datafile, blocknum_array,3)
+	err := Removeindex(datafile, blocknum_array)
 	panic(err)
 }
 

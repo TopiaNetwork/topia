@@ -110,7 +110,7 @@ func NewFile(block *types.Block) (*FileItem, error) {
 
 func NewIndexFile(block *types.Block) ( error) {
 	blockKey := block.GetHead().GetHeight()
-	filepath := strconv.FormatInt(int64(blockKey), 10) + ".index"
+	filepath := strconv.FormatUint(blockKey, 10) + ".index"
 
 	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	file.Write(make([]byte, FILE_SIZE))

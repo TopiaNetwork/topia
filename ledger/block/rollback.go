@@ -77,7 +77,7 @@ func RemoveBlockdata(indexfile *FileItem,offset uint64)error{
 }
 
 //func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
-func Removeindex(Indexfile *FileItem, blocknums []uint64, size uint64) error {
+func Removeindex(Indexfile *FileItem, blocknums []uint64) error {
 	var alloffset uint64 = 0
 	var startoffset uint64 = 0
 	for _,blocknum := range blocknums{

@@ -18,7 +18,7 @@ type domainConsensusCrypt struct {
 	pubShares    []*share.PubShare
 }
 
-func NewDomainConsensusCrypt(selfNode *tpcmm.NodeInfo, csDomain *tpcmm.NodeDomainInfo) (DKGBls, uint32) {
+func NewDomainConsensusCrypt(selfNode *tpcmm.NodeInfo, csDomain *tpcmm.NodeDomainInfo) (DKGBls, *tpcmm.NodeDomainMember) {
 	suite := bn256.NewSuiteG2()
 	pubKey := suite.Point()
 	err := pubKey.UnmarshalBinary(csDomain.CSDomainData.PublicKey)
@@ -29,10 +29,12 @@ func NewDomainConsensusCrypt(selfNode *tpcmm.NodeInfo, csDomain *tpcmm.NodeDomai
 	pubShares := make([]*share.PubShare, len(csDomain.CSDomainData.PubShares))
 	for i, pubShareBytes := range csDomain.CSDomainData.PubShares {
 		pubShares[i] = &share.PubShare{}
+		pubShares[i].V = suite.Point()
 		pubShares[i].Unmarshal(pubShareBytes)
 	}
 
 	var priShare share.PriShare
+	priShare.V = suite.Scalar()
 	priShare.Unmarshal(selfNode.DKGPriShare)
 
 	csDomainCrypt := &domainConsensusCrypt{
@@ -44,11 +46,13 @@ func NewDomainConsensusCrypt(selfNode *tpcmm.NodeInfo, csDomain *tpcmm.NodeDomai
 		pubShares:    pubShares,
 	}
 
-	if tpcmm.IsContainString(selfNode.NodeID, tpcmm.NodeIDs(csDomain.CSDomainData.Members)) {
-		return csDomainCrypt, 1
+	for _, ndMember := range csDomain.CSDomainData.Members {
+		if ndMember.NodeID == selfNode.NodeID {
+			return csDomainCrypt, ndMember
+		}
 	}
 
-	return csDomainCrypt, 0
+	return csDomainCrypt, nil
 }
 
 func (d *domainConsensusCrypt) PubKey() ([]byte, error) {

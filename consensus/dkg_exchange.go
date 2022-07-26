@@ -324,13 +324,34 @@ func (ex *dkgExchange) callBackWhenFinished(ctx context.Context) {
 		NodeID:        []byte(ex.nodeID),
 		PubPolyCommit: pubPolicyComm,
 	}
-
 	ex.log.Infof("Node send finished message to other participants: trigger number %d, self node %s", ex.dkgCrypt.triggerNumber, ex.nodeID)
-
 	err = ex.deliver.deliverDKGFinishedMessage(ctx, finishedMsg)
 	if err != nil {
 		ex.log.Panicf("Can't deliver finished message: %d, trigger number %d", err, ex.dkgCrypt.triggerNumber)
 	}
+
+	func() {
+		ex.dkgCrypt.remoteFinishedSync.Lock()
+		defer ex.dkgCrypt.remoteFinishedSync.Unlock()
+
+		if len(ex.dkgCrypt.remoteFinished) < ex.dkgCrypt.nParticipant-1 {
+			return
+		}
+
+		selfPubPolicyCommt, err := ex.dkgCrypt.PubKey()
+		if err != nil {
+			ex.log.Panicf("Can't get public policy commit: %v, trgger number %d, self node %s", err, finishedMsg.TriggerNumber, ex.nodeID)
+		}
+
+		for _, rFinishedMsg := range ex.dkgCrypt.remoteFinished {
+			if !bytes.Equal(selfPubPolicyCommt, rFinishedMsg.PubPolyCommit) {
+				ex.log.Panicf("Received invalid finished message: trigger number %d, self node %s", rFinishedMsg.TriggerNumber, ex.nodeID)
+			}
+		}
+
+		ex.updateDKGState(DKGExchangeState_IDLE)
+		ex.notifyUpdater()
+	}()
 }
 
 func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {

@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"net"
 	"sort"
@@ -606,7 +607,7 @@ func (p2p *P2PService) dispatchAndWaitResp(moduleName string, streamMsg *message
 		//if err == nil {
 		result, err := p2p.sysActor.Root.RequestFuture(pid, streamMsg.Data, tpnetprotoc.WaitRespTimeout).Result()
 		if err != nil {
-			p2p.log.Errorf("RequestFuture err(%s) module name =%s", err.Error(), moduleName)
+			p2p.log.Errorf("RequestFuture err(%s), module name %s, self node %s", err.Error(), moduleName, p2p.host.ID())
 			return nil, err
 		} else {
 			return result, nil
@@ -862,6 +863,9 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 			resp, err := p2p.streamService.readMessage(stream)
 			if err == nil {
 				sendResp.RespData = resp.Data
+				if resp.ErrDesc != "" {
+					sendResp.Err = errors.New(resp.ErrDesc)
+				}
 				respCh <- sendResp
 				p2p.host.ConnManager().TagPeer(peerID, "SendSync", 25)
 			} else {

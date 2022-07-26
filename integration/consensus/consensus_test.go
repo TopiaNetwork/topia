@@ -12,6 +12,7 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
+	actorlog "github.com/AsynkronIT/protoactor-go/log"
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -285,6 +286,8 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 		config := tpconfig.GetConfiguration()
 
 		sysActor := actor.NewActorSystem()
+
+		actor.SetLogLevel(actorlog.DebugLevel)
 
 		l := createLedger(testMainLog, "./TestConsensus", backend.BackendType_Badger, i, nodeType)
 

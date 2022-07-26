@@ -63,6 +63,8 @@ func (ev *executionResultValidate) resultValidateDataRequest(ctx context.Context
 
 	validateResp, err := ev.deliver.deliverResultValidateReqMessage(ctx, validateReq)
 
+	ev.log.Infof("Successfully send result validate req: state version %d, validator %s, self node %s", validateReq.StateVersion, ev.nodeID, ev.nodeID)
+
 	return validateResp, randTxHashs, randTxRSHashs, err
 }
 

@@ -302,6 +302,8 @@ func (ds *domainConsensusService) ProduceAndSaveNodeDomain(threshold int, pubKey
 	compState.Lock()
 	defer compState.Unlock()
 
+	ds.log.Infof("Domain consensus service get composition state lock: state version %d, self node %s", compState.StateVersion(), ds.nodeID)
+
 	if priShare != nil {
 		compState.UpdateDKGPriShare(ds.nodeID, priShare)
 	}
@@ -313,6 +315,8 @@ func (ds *domainConsensusService) ProduceAndSaveNodeDomain(threshold int, pubKey
 }
 
 func (ds *domainConsensusService) updateDKGBls(dkgBls DKGBls) {
+	ds.log.Infof("Domain consensus service update DKG BLS: self node %s", ds.nodeID)
+
 	pubKey, _ := dkgBls.PubKey()
 	priShare, _ := dkgBls.PriShare()
 	pubShares, _ := dkgBls.PubShares()

@@ -16,8 +16,8 @@ type FileType uint16
 const (
 	DataFileType       FileType = 0
 	IndexFileType      FileType = 1
-	DataHeaderType      FileType = 2
-	RollbackFileType      FileType = 3
+	//DataHeaderType      FileType = 2
+	RollbackFileType      FileType = 2
 )
 
 var FileNameOpening = ""
@@ -159,7 +159,17 @@ func NewIndexFile(block *types.Block) ( error) {
 
 
 func newtestfile(filename string,filetype FileType)*FileItem{
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	suffix := ""
+	switch{
+	case filetype == 0:
+		suffix = ".topia"
+	case filetype == 1:
+		suffix = ".index"
+	case filetype == 2:
+		suffix = ".roll"
+	}
+
+	file, err := os.OpenFile(filename+suffix, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	file.Write(make([]byte, FILE_SIZE))
 	if err != nil {
 		return  nil

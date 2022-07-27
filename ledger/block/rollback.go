@@ -1,6 +1,7 @@
 package block
 
 import (
+	"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
 	//"launchpad.net/gommap"
 	"os"
@@ -50,28 +51,28 @@ func (Rfile *FileItem)AddRollback(blocknum types.BlockNum) error{
 
 func RemoveBlockhead(datafile *FileItem,offset uint64)error{
 	StartBlock := GetStartblockFromFilename(datafile)
-	n, err := strconv.ParseInt(StartBlock, 10, 64)
-	if err == nil {
+	n, err := strconv.ParseUint(StartBlock, 10, 64)
+	if err != nil {
 		return nil
 	}
+	fmt.Println(n)
 	datammap := Getmmap(datafile.File.Name())
 
-	size := offset - uint64(n)
+	size := offset - n
 	buf := make([]byte, size)
 	copy(datammap[offset:offset+size], buf)
 
 	return nil
-
 }
 
 
-func RemoveBlockdata(indexfile *FileItem,offset uint64)error{
-	datafile := GetDataFilename(indexfile)
-	size := GetSize(datafile,offset)
+func RemoveBlockdata(datafile *FileItem,offset uint64)error{
+	file := GetDataFilename(datafile)
+	size := GetSize(file,offset)
 
-	datammap := Getmmap(datafile)
+	datammap := Getmmap(file)
 	buf := make([]byte, size)
-	copy(datammap[offset:offset+size], buf)
+	copy(datammap[offset:size], buf)
 
 	return nil
 }

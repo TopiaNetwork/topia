@@ -25,7 +25,7 @@ func (df *FileItem) RollBackIndex() (error) {
 
 	TraceIndex := strings.Index(df.File.Name(), ".")
 	StartBlock := df.File.Name()[:TraceIndex]
-	fileback, err := os.OpenFile(StartBlock+".back", os.O_RDWR, 0644)
+	fileback, err := os.OpenFile(StartBlock+".roll", os.O_RDWR, 0644)
 	if err != nil{
 		panic(err)
 	}
@@ -65,42 +65,42 @@ func (df *FileItem) RollBackIndex() (error) {
 }
 
 func (df *FileItem) RollBackHeader() ( error) {
-	var err error
-
-	TraceIndex := strings.Index(df.File.Name(), ".")
-	StartBlock := df.File.Name()[:TraceIndex]
-	fileback, err := os.OpenFile(StartBlock+".back", os.O_RDWR, 0644)
-	if err != nil{
-		panic(err)
-	}
-
-	datammap, err := gommap.Map(fileback.Fd(), syscall.PROT_READ, syscall.MAP_SHARED)
-	if err != nil{
-		panic(err)
-	}
-	defer datammap.UnsafeUnmap()
-
-	fileindex, err := os.OpenFile(StartBlock+".topia", os.O_RDWR, 0644)
-	if err != nil{
-		panic(err)
-	}
-
-	indexmmap, err := gommap.Map(fileindex.Fd(), syscall.PROT_READ, syscall.MAP_SHARED)
-	if err != nil{
-		panic(err)
-	}
-	defer indexmmap.UnsafeUnmap()
-
-	var byte0 []byte
-	for i :=0; i*20 < int(df.HeaderOffset); i++ {
-		filetype := binary.BigEndian.Uint16(datammap[i*20+2:i*20 + 4])
-		if  FileType(filetype) == DataHeaderType{
-			startindex := binary.BigEndian.Uint64(datammap[i*20+4:i*20 + 12])
-			endindex := binary.BigEndian.Uint64(datammap[i*20+12:i*20 + 20])
-
-			copy(indexmmap[startindex:endindex],byte0)
-		}
-	}
+	//var err error
+	//
+	//TraceIndex := strings.Index(df.File.Name(), ".")
+	//StartBlock := df.File.Name()[:TraceIndex]
+	//fileback, err := os.OpenFile(StartBlock+".back", os.O_RDWR, 0644)
+	//if err != nil{
+	//	panic(err)
+	//}
+	//
+	//datammap, err := gommap.Map(fileback.Fd(), syscall.PROT_READ, syscall.MAP_SHARED)
+	//if err != nil{
+	//	panic(err)
+	//}
+	//defer datammap.UnsafeUnmap()
+	//
+	//fileindex, err := os.OpenFile(StartBlock+".topia", os.O_RDWR, 0644)
+	//if err != nil{
+	//	panic(err)
+	//}
+	//
+	//indexmmap, err := gommap.Map(fileindex.Fd(), syscall.PROT_READ, syscall.MAP_SHARED)
+	//if err != nil{
+	//	panic(err)
+	//}
+	//defer indexmmap.UnsafeUnmap()
+	//
+	//var byte0 []byte
+	//for i :=0; i*20 < int(df.HeaderOffset); i++ {
+	//	filetype := binary.BigEndian.Uint16(datammap[i*20+2:i*20 + 4])
+	//	if  FileType(filetype) == DataHeaderType{
+	//		startindex := binary.BigEndian.Uint64(datammap[i*20+4:i*20 + 12])
+	//		endindex := binary.BigEndian.Uint64(datammap[i*20+12:i*20 + 20])
+	//
+	//		copy(indexmmap[startindex:endindex],byte0)
+	//	}
+	//}
 
 	return nil
 }

@@ -80,7 +80,7 @@ func GetIndexFilename(file *FileItem) string{
 
 func GetDataFilename(file *FileItem) string{
 	StartBlock := GetStartblockFromFilename(file)
-	return StartBlock + ".data"
+	return StartBlock + ".topia"
 }
 
 func GetRollbackFilename(file *FileItem) string{

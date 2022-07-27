@@ -2,11 +2,9 @@ package block
 
 import (
 	"encoding/binary"
-	"fmt"
 	"strconv"
 	"strings"
 	"syscall"
-
 
 	"github.com/TopiaNetwork/topia/chain/types"
 	"launchpad.net/gommap"
@@ -51,8 +49,8 @@ func (df *FileItem) Writeindex(version uint16,offset uint64) error {
 	//fmt.Println("",offsetbyte)
 	//fmt.Println("",offsetindex)
 
-	versionint := int16(binary.BigEndian.Uint16(versionbyte))
-	fmt.Println(versionint)
+	//versionint := int16(binary.BigEndian.Uint16(versionbyte))
+	//fmt.Println(versionint)
 
 	mmap, _ := gommap.Map(df.File.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	defer mmap.UnsafeUnmap()

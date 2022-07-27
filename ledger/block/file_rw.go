@@ -114,6 +114,12 @@ func (df *FileItem) Writedata(block *types.Block) error {
 	df.Offset = df.Offset + 28 + size
 
 	df.Bloom.Add(Uint64ToBytes(block.GetHead().Height))
+
+	err = df.WriteHeader(block)
+	if err != nil{
+		panic(err)
+	}
+
 	return  nil
 }
 
@@ -123,17 +129,17 @@ func (df *FileItem) WriteHeader(block *types.Block) error {
 
 	//
 	txids := block.GetData().GetTxs()
-	if txids == nil{
-		return nil
-	}
+	//if txids == nil{
+	//	return nil
+	//}
 
 	blockKey := block.GetHead().GetHeight()
 
-	index,err := df.Findindex(types.BlockNum(blockKey))
-
-	if err != nil{
-		panic(err)
-	}
+	//index,err := df.Findindex(types.BlockNum(blockKey))
+	//
+	//if err != nil{
+	//	panic(err)
+	//}
 
 
 
@@ -144,10 +150,10 @@ func (df *FileItem) WriteHeader(block *types.Block) error {
 	defer mmap.UnsafeUnmap()
 	txid_len := len(txids)
 	for i:=0;i < txid_len;i++ {
-		copy(mmap[df.Offset:df.Offset+2], versionbyte)
-		copy(mmap[df.Offset+2:df.Offset+10],txids[i])
-		copy(mmap[df.Offset+10:df.Offset+18], Uint64ToBytes(blockKey))
-		copy(mmap[df.Offset+18:df.Offset+26], Uint64ToBytes(index.offset))
+		copy(mmap[df.HeaderOffset:df.HeaderOffset+2], versionbyte)
+		copy(mmap[df.HeaderOffset+2:df.HeaderOffset+10],txids[i])
+		copy(mmap[df.HeaderOffset+10:df.HeaderOffset+18], Uint64ToBytes(blockKey))
+		copy(mmap[df.HeaderOffset+18:df.HeaderOffset+26], Uint64ToBytes(df.Offset)) // header trans-offset???
 	}
 
 	_ = df.File.Sync()

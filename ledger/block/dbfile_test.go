@@ -39,9 +39,16 @@ var blockhead1 = types.BlockHead{
 	nil,
 	20,
 }
-var blockdata = types.BlockData{
+var txddata = [][]byte{
+	{0,0,0,0,0},
+	{1,1,1,1,1},
+	{0,0,0,0,0},
+	{0,0,0,0,0},
+	{0,0,0,0,0},
+}
+var blockdata1 = types.BlockData{
 	6,
-	nil,
+	txddata,
 	struct{}{},
 	nil,
 	1,
@@ -49,7 +56,7 @@ var blockdata = types.BlockData{
 
 var block_all = types.Block{
 	&blockhead1,
-	&blockdata,
+	&blockdata1,
 	struct{}{},
 	nil,
 	100,

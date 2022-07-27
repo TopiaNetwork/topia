@@ -50,20 +50,20 @@ func TestNewRollback(t *testing.T) {
 		0,
 		New(),
 	}
-	for i:=0; i < 5000;i++ {
+	for i:=0; i < 500;i++ {
 		err = testdatafile.Writedata(&block_all)
 		err = testindexfile.Writeindex(1,testdatafile.Offset)
 		blockhead1.Height = blockhead1.Height + 1
 		block_all = types.Block{
 			&blockhead1,
-			&blockdata,
+			&blockdata1,
 			struct{}{},
 			nil,
 			100,
 		}
 	}
-
 }
+
 
 
 //func TestFileItem_AddRollback(t *testing.T) {

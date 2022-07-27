@@ -85,7 +85,7 @@ func (df *FileItem) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, er
 func (df *FileItem) Writedata(block *types.Block) error {
 	var err error
 	versionbyte := Uint32ToBytes(block.GetHead().Version)
-	fmt.Println(versionbyte)
+	//fmt.Println(versionbyte)
 	offsetbyte := Uint64ToBytes(df.Offset)
 
 	mmap, err := gommap.Map(df.File.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)

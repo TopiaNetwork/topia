@@ -29,26 +29,26 @@ func TestReaddata(t *testing.T) {
 }
 
 
-func TestWritedata(t *testing.T) {
-	file, err := os.OpenFile("test.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
-
-	if err != nil{
-		panic(err)
-	}
-
-	var to = FileItem{
-		1,
-		file,
-		FILE_HEADER_SIZE,
-		0,
-		nil,
-
-	}
-	err =to.Writedata(&block_all)
-	if err != nil{
-		panic(err)
-	}
-}
+//func TestWritedata(t *testing.T) {
+//	file, err := os.OpenFile("test.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//
+//	if err != nil{
+//		panic(err)
+//	}
+//
+//	var to = FileItem{
+//		1,
+//		file,
+//		FILE_HEADER_SIZE,
+//		0,
+//		nil,
+//
+//	}
+//	err =to.Writedata(&block_all)
+//	if err != nil{
+//		panic(err)
+//	}
+//}
 
 //func TestFileItem_Writeindex(t *testing.T) {
 //	file, err := os.OpenFile("test.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)

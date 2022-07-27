@@ -47,10 +47,9 @@ func (df *FileItem) Writeindex(version uint16,offset uint64) error {
 	offsetbyte := Uint64ToBytes(offset)
 	offsetindex := Uint64ToBytes(df.Offset)
 
-	fmt.Println(versionbyte)
-	fmt.Println("",offsetbyte)
-	fmt.Println("",offsetindex)
-
+	//fmt.Println(versionbyte)
+	//fmt.Println("",offsetbyte)
+	//fmt.Println("",offsetindex)
 
 	versionint := int16(binary.BigEndian.Uint16(versionbyte))
 	fmt.Println(versionint)
@@ -65,7 +64,6 @@ func (df *FileItem) Writeindex(version uint16,offset uint64) error {
 	Indexoffset = Indexoffset + 6
 	df.Offset = df.Offset + 6
 	return  nil
-
 }
 
 

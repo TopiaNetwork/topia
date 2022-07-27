@@ -2,9 +2,8 @@ package consensus
 
 import (
 	"context"
-	"github.com/TopiaNetwork/topia/consensus/vrf"
-
 	"github.com/AsynkronIT/protoactor-go/actor"
+	"github.com/TopiaNetwork/topia/consensus/vrf"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
@@ -104,7 +103,7 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 	dealMsgCh := make(chan *DKGDealMessage, DealMSGChannel_Size)
 	dealRespMsgCh := make(chan *DKGDealRespMessage, DealRespMsgChannel_Size)
 	finishedMsgCh := make(chan *DKGFinishedMessage, FinishedMsgChannel_Size)
-	finishedMsgExeCh := make(chan *DKGFinishedMessage, FinishedMsgChannel_Size)
+	csDomainSelectedMsgCh := make(chan *ConsensusDomainSelectedMessage, FinishedMsgChannel_Size)
 
 	csConfig := config.CSConfig
 
@@ -133,16 +132,16 @@ func NewConsensus(chainID tpchaintypes.ChainID,
 
 	dkgEx := newDKGExchange(consLog, chainID, nodeID, partPubKey, dealMsgCh, dealRespMsgCh, finishedMsgCh, csConfig.InitDKGPrivKey, dkgDeliver, ledger)
 
-	epService := NewEpochService(consLog, nodeID, stateBuilderType, csConfig.EpochInterval, currentEpoch, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, dkgEx, exeActiveNodes)
+	epService := NewEpochService(consLog, nodeID, stateBuilderType, csConfig.EpochInterval, currentEpoch, csConfig.DKGStartBeforeEpoch, exeScheduler, ledger, deliver, dkgEx, exeActiveNodes)
 
 	csDomainService := NewDomainConsensusService(nodeID, stateBuilderType, log, ledger, blockAddedCSDomain, roleSelector, csConfig, dkgEx, exeScheduler)
 
-	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, epService, csDomainService, deliver, finishedMsgExeCh, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
+	executor := newConsensusExecutor(consLog, nodeID, priKey, txPool, marshaler, ledger, exeScheduler, epService, deliver, csDomainSelectedMsgCh, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, commitMsgChan, cryptS, csConfig.ExecutionPrepareInterval)
 	validator := newConsensusValidator(consLog, nodeID, proposeMsgChan, bestProposeMsgChan, commitMsgChan, ledger, deliver, marshaler, epService)
 	proposer := newConsensusProposer(consLog, nodeID, priKey, preparePackedMsgPropChan, voteMsgChan, blockAddedProposerCh, cryptS, epService, csConfig.ProposerBlockMaxInterval, csConfig.BlockMaxCyclePeriod, deliver, ledger, marshaler, validator)
 
 	deliver.setEpochService(epService)
-	csHandler := NewConsensusHandler(consLog, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, preparePackedMsgPropChan, proposeMsgChan, bestProposeMsgChan, voteMsgChan, commitMsgChan, blockAddedCSDomain, blockAddedProposerCh, partPubKey, dealMsgCh, dealRespMsgCh, finishedMsgCh, finishedMsgExeCh, ledger, marshaler, deliver, exeScheduler, epService)
+	csHandler := NewConsensusHandler(consLog, preparePackedMsgExeChan, preparePackedMsgExeIndicChan, preparePackedMsgPropChan, proposeMsgChan, bestProposeMsgChan, voteMsgChan, commitMsgChan, blockAddedCSDomain, blockAddedProposerCh, partPubKey, dealMsgCh, dealRespMsgCh, finishedMsgCh, csDomainSelectedMsgCh, ledger, marshaler, deliver, exeScheduler, epService)
 
 	epService.AddDKGBLSUpdater(deliver)
 	epService.AddDKGBLSUpdater(proposer)
@@ -173,6 +172,10 @@ func (cons *consensus) VerifyBlock(block *tpchaintypes.Block) error {
 	return cons.handler.VerifyBlock(block)
 }
 
+func (cons *consensus) ProcessCSDomainSelectedMsg(msg *ConsensusDomainSelectedMessage) error {
+	return cons.handler.ProcessCSDomainSelectedMsg(msg)
+}
+
 func (cons *consensus) ProcessPreparePackedExe(msg *PreparePackedMessageExe) error {
 	return cons.handler.ProcessPreparePackedMsgExe(msg)
 }
@@ -189,8 +192,8 @@ func (cons *consensus) ProcessPropose(msg *ProposeMessage) error {
 	return cons.handler.ProcessPropose(msg)
 }
 
-func (cons *consensus) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
-	return cons.handler.ProcesExeResultValidateReq(actorCtx, msg)
+func (cons *consensus) ProcessExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
+	return cons.handler.ProcessExeResultValidateReq(actorCtx, msg)
 }
 
 func (cons *consensus) ProcessBestPropose(msg *BestProposeMessage) error {
@@ -271,10 +274,10 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 
 		cons.validator.start(ctx)
 		cons.dkgEx.startLoop(ctx)
-	}
 
-	cons.csDomainService.Start(ctx)
-	cons.epochService.Start(ctx, latestBlock.Head.Height)
+		cons.csDomainService.Start(ctx)
+		cons.epochService.Start(ctx, latestBlock.Head.Height)
+	}
 
 	return nil
 }
@@ -283,7 +286,7 @@ func (cons *consensus) TriggerDKG(newBlock *tpchaintypes.Block) {
 	cons.csDomainService.Trigger(newBlock)
 }
 
-func (cons *consensus) dispatch(actorCtx actor.Context, data []byte) {
+func (cons *consensus) dispatch(ctx context.Context, actorCtx actor.Context, data []byte) {
 	var consMsg ConsensusMessage
 	err := cons.marshaler.Unmarshal(data, &consMsg)
 	if err != nil {
@@ -291,97 +294,120 @@ func (cons *consensus) dispatch(actorCtx actor.Context, data []byte) {
 		return
 	}
 
-	switch consMsg.MsgType {
-	case ConsensusMessage_PrepareExe:
-		var msg PreparePackedMessageExe
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+	finishedCh := make(chan bool)
+	go func() {
+		switch consMsg.MsgType {
+		case ConsensusMessage_CSDomainSel:
+			var msg ConsensusDomainSelectedMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessCSDomainSelectedMsg(&msg)
+		case ConsensusMessage_PrepareExe:
+			var msg PreparePackedMessageExe
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessPreparePackedExe(&msg)
+		case ConsensusMessage_PrepareExeIndic:
+			var msg PreparePackedMessageExeIndication
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessPreparePackedExeIndication(&msg)
+		case ConsensusMessage_PrepareProp:
+			var msg PreparePackedMessageProp
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessPreparePackedProp(&msg)
+		case ConsensusMessage_Propose:
+			var msg ProposeMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessPropose(&msg)
+		case ConsensusMessage_ExeRSValidateReq:
+			var msg ExeResultValidateReqMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.log.Infof("Received execute result validate msg: state version %d, validator %s, self node %s", msg.StateVersion, string(msg.Validator), cons.nodeID)
+			cons.ProcessExeResultValidateReq(actorCtx, &msg)
+			cons.log.Infof("Finished result validate msg: state version %d, validator %s, self node %s", msg.StateVersion, string(msg.Validator), cons.nodeID)
+		case ConsensusMessage_BestPropose:
+			var msg BestProposeMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessBestPropose(&msg)
+		case ConsensusMessage_Vote:
+			var msg VoteMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessVote(&msg)
+		case ConsensusMessage_Commit:
+			var msg CommitMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessCommit(&msg)
+		case ConsensusMessage_DKGDeal:
+			var msg DKGDealMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessDKGDeal(&msg)
+		case ConsensusMessage_DKGDealResp:
+			var msg DKGDealRespMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessDKGDealResp(&msg)
+		case ConsensusMessage_DKGFinished:
+			var msg DKGFinishedMessage
+			err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
+			if err != nil {
+				cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
+				return
+			}
+			cons.ProcessDKGFinishedMsg(&msg)
+		default:
+			cons.log.Errorf("Consensus receive invalid msg %d", consMsg.MsgType.String())
 			return
 		}
-		cons.ProcessPreparePackedExe(&msg)
-	case ConsensusMessage_PrepareExeIndic:
-		var msg PreparePackedMessageExeIndication
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessPreparePackedExeIndication(&msg)
-	case ConsensusMessage_PrepareProp:
-		var msg PreparePackedMessageProp
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessPreparePackedProp(&msg)
-	case ConsensusMessage_Propose:
-		var msg ProposeMessage
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessPropose(&msg)
-	case ConsensusMessage_ExeRSValidateReq:
-		var msg ExeResultValidateReqMessage
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcesExeResultValidateReq(actorCtx, &msg)
-	case ConsensusMessage_BestPropose:
-		var msg BestProposeMessage
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessBestPropose(&msg)
-	case ConsensusMessage_Vote:
-		var msg VoteMessage
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessVote(&msg)
-	case ConsensusMessage_Commit:
-		var msg CommitMessage
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessCommit(&msg)
-	case ConsensusMessage_DKGDeal:
-		var msg DKGDealMessage
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessDKGDeal(&msg)
-	case ConsensusMessage_DKGDealResp:
-		var msg DKGDealRespMessage
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessDKGDealResp(&msg)
-	case ConsensusMessage_DKGFinished:
-		var msg DKGFinishedMessage
-		err := cons.marshaler.Unmarshal(consMsg.Data, &msg)
-		if err != nil {
-			cons.log.Errorf("Consensus unmarshal msg %s err %v", consMsg.MsgType.String(), err)
-			return
-		}
-		cons.ProcessDKGFinishedMsg(&msg)
-	default:
-		cons.log.Errorf("Consensus receive invalid msg %d", consMsg.MsgType)
+
+		finishedCh <- true
+	}()
+
+	select {
+	case <-finishedCh:
+		return
+	case <-ctx.Done():
+		cons.log.Errorf("Msg handler timeout: %s, self node %s", consMsg.MsgType.String(), cons.nodeID)
 		return
 	}
 }

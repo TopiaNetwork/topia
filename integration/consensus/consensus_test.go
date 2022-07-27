@@ -12,6 +12,7 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
+	actorlog "github.com/AsynkronIT/protoactor-go/log"
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -286,6 +287,8 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		sysActor := actor.NewActorSystem()
 
+		actor.SetLogLevel(actorlog.DebugLevel)
+
 		l := createLedger(testMainLog, "./TestConsensus", backend.BackendType_Badger, i, nodeType)
 
 		network := tpnet.NewNetwork(context.Background(), testMainLog, config.NetConfig, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
@@ -456,7 +459,7 @@ func TestMultiRoleNodes(t *testing.T) {
 
 			latestBlock, _ := csStateRN.GetLatestBlock()
 
-			if nodeP.ledger.State() == tpcmm.LedgerState_Genesis {
+			if nodeP.nodeType != "executor" && nodeP.ledger.State() == tpcmm.LedgerState_Genesis {
 				nodeP.cs.TriggerDKG(latestBlock)
 			}
 		}()

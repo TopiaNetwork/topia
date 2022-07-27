@@ -17,6 +17,8 @@ import (
 type ConsensusHandler interface {
 	VerifyBlock(block *tpchaintypes.Block) error
 
+	ProcessCSDomainSelectedMsg(msg *ConsensusDomainSelectedMessage) error
+
 	ProcessPreparePackedMsgExe(msg *PreparePackedMessageExe) error
 
 	ProcessPreparePackedMsgExeIndication(msg *PreparePackedMessageExeIndication) error
@@ -25,7 +27,7 @@ type ConsensusHandler interface {
 
 	ProcessPropose(msg *ProposeMessage) error
 
-	ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error
+	ProcessExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error
 
 	ProcessBestPropose(msg *BestProposeMessage) error
 
@@ -59,7 +61,7 @@ type consensusHandler struct {
 	dealMsgCh                    chan *DKGDealMessage
 	dealRespMsgCh                chan *DKGDealRespMessage
 	finishedMsgCh                chan *DKGFinishedMessage
-	finishedMsgExeCh             chan *DKGFinishedMessage
+	csDomainSelectedMsgCh        chan *ConsensusDomainSelectedMessage
 	ledger                       ledger.Ledger
 	marshaler                    codec.Marshaler
 	deliver                      messageDeliverI
@@ -81,7 +83,7 @@ func NewConsensusHandler(log tplog.Logger,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
 	finishedMsgCh chan *DKGFinishedMessage,
-	finishedMsgExeCh chan *DKGFinishedMessage,
+	csDomainSelectedMsgCh chan *ConsensusDomainSelectedMessage,
 	ledger ledger.Ledger,
 	marshaler codec.Marshaler,
 	deliver messageDeliverI,
@@ -102,7 +104,7 @@ func NewConsensusHandler(log tplog.Logger,
 		dealMsgCh:                    dealMsgCh,
 		dealRespMsgCh:                dealRespMsgCh,
 		finishedMsgCh:                finishedMsgCh,
-		finishedMsgExeCh:             finishedMsgExeCh,
+		csDomainSelectedMsgCh:        csDomainSelectedMsgCh,
 		ledger:                       ledger,
 		marshaler:                    marshaler,
 		deliver:                      deliver,
@@ -113,6 +115,12 @@ func NewConsensusHandler(log tplog.Logger,
 
 func (handler *consensusHandler) VerifyBlock(block *tpchaintypes.Block) error {
 	panic("implement me")
+}
+
+func (handler *consensusHandler) ProcessCSDomainSelectedMsg(msg *ConsensusDomainSelectedMessage) error {
+	handler.csDomainSelectedMsgCh <- msg
+
+	return nil
 }
 
 func (handler *consensusHandler) ProcessPreparePackedMsgExe(msg *PreparePackedMessageExe) error {
@@ -163,7 +171,7 @@ func (handler *consensusHandler) ProcessPropose(msg *ProposeMessage) error {
 	return nil
 }
 
-func (handler *consensusHandler) ProcesExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
+func (handler *consensusHandler) ProcessExeResultValidateReq(actorCtx actor.Context, msg *ExeResultValidateReqMessage) error {
 	txProofs, txRSProofs, err := handler.exeScheduler.PackedTxProofForValidity(context.Background(), msg.StateVersion, msg.TxHashs, msg.TxResultHashs)
 
 	validateResp := &ExeResultValidateRespMessage{
@@ -228,14 +236,7 @@ func (handler *consensusHandler) ProcessDKGDealResp(msg *DKGDealRespMessage) err
 }
 
 func (handler *consensusHandler) ProcessDKGFinishedMsg(msg *DKGFinishedMessage) error {
-	id := handler.deliver.deliverNetwork().ID()
-
-	activeExeIds := handler.epochService.GetActiveExecutorIDs()
-	if tpcmm.IsContainString(id, activeExeIds) {
-		handler.finishedMsgExeCh <- msg
-	} else {
-		handler.finishedMsgCh <- msg
-	}
+	handler.finishedMsgCh <- msg
 
 	return nil
 }

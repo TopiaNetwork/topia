@@ -75,8 +75,9 @@ func NewBadgerBackend(log tplog.Logger, name string, path string, cacheSize int)
 	}
 
 	opts := badger.DefaultOptions(path)
-	opts.SyncWrites = false // note that we have Sync methods
-	opts.Logger = nil       // badger is too chatty by default
+	opts.SyncWrites = false       // note that we have Sync methods
+	opts.Logger = nil             // badger is too chatty by default
+	opts.MemTableSize = 128 << 20 //128MB
 	return NewDBWithOptions(log, opts, cacheSize)
 }
 

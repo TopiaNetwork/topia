@@ -243,21 +243,21 @@ func NewNodeNetWorkStateWapper(log tplog.Logger, ledger ledger.Ledger) NodeNetWo
 }
 
 func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64, stateStore tplgss.StateStore) *compositionState {
-	exeNodeDomainState := statedomain.NewNodeExecuteDomainState(stateStore, 2*1024*1024)
-	csNodeDomainState := statedomain.NewNodeConsensusDomainState(stateStore, 2*1024*1024)
-	nodeDomainState := statedomain.NewNodeDomainState(stateStore, exeNodeDomainState, csNodeDomainState, 1024*1024)
-	inactiveState := statenode.NewNodeInactiveState(stateStore, 1024*1024) // 1 Megabyte
-	executorState := statenode.NewNodeExecutorState(stateStore, 2*1024*1024)
-	proposerState := statenode.NewNodeProposerState(stateStore, 2*1024*1024)
-	validatorState := statenode.NewNodeValidatorState(stateStore, 2*1024*1024)
-	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState, 1024*1024)
+	exeNodeDomainState := statedomain.NewNodeExecuteDomainState(stateStore, 1)
+	csNodeDomainState := statedomain.NewNodeConsensusDomainState(stateStore, 1)
+	nodeDomainState := statedomain.NewNodeDomainState(stateStore, exeNodeDomainState, csNodeDomainState, 1)
+	inactiveState := statenode.NewNodeInactiveState(stateStore, 1) // 1 Megabyte
+	executorState := statenode.NewNodeExecutorState(stateStore, 1)
+	proposerState := statenode.NewNodeProposerState(stateStore, 1)
+	validatorState := statenode.NewNodeValidatorState(stateStore, 1)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState, 1)
 	return &compositionState{
 		log:                      log,
 		stateVersion:             stateVersion,
 		ledger:                   ledger,
 		StateStore:               stateStore,
-		AccountState:             stateaccount.NewAccountState(stateStore, 1024*1024),
-		ChainState:               statechain.NewChainStore(stateStore, ledger, 1024*1024),
+		AccountState:             stateaccount.NewAccountState(stateStore, 1),
+		ChainState:               statechain.NewChainStore(stateStore, ledger, 1),
 		NodeDomainState:          nodeDomainState,
 		NodeExecuteDomainState:   exeNodeDomainState,
 		NodeConsensusDomainState: csNodeDomainState,
@@ -266,7 +266,7 @@ func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger
 		NodeExecutorState:        executorState,
 		NodeProposerState:        proposerState,
 		NodeValidatorState:       validatorState,
-		EpochState:               stateepoch.NewEpochState(stateStore, 1024*1024),
+		EpochState:               stateepoch.NewEpochState(stateStore, 1),
 	}
 }
 

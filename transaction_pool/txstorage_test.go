@@ -3,220 +3,143 @@ package transactionpool
 import (
 	"io/ioutil"
 	"reflect"
+	"sync/atomic"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/TopiaNetwork/topia/codec"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txpoolmock "github.com/TopiaNetwork/topia/transaction_pool/mock"
 )
 
 func Test_transactionPool_AddLocal(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+	assert.Equal(t, int64(0), pool1.Count())
 
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	assert.Equal(t, int64(0), pool.Count())
-
-	pool.AddTx(Tx1, true)
-	assert.Equal(t, int64(1), pool.poolCount)
-	assert.Equal(t, int64(Tx1.Size()), pool.Size())
-	assert.Equal(t, 1, len(pool.GetLocalTxs()))
-	pool.AddTx(Tx2, true)
-	assert.Equal(t, int64(2), pool.poolCount)
-	assert.Equal(t, int64(Tx1.Size()+Tx2.Size()), pool.Size())
-	assert.Equal(t, 2, len(pool.GetLocalTxs()))
+	pool1.AddTx(Tx1, true)
+	assert.Equal(t, int64(1), pool1.poolCount)
+	assert.Equal(t, int64(Tx1.Size()), pool1.Size())
+	assert.Equal(t, 1, len(pool1.GetLocalTxs()))
+	pool1.AddTx(Tx2, true)
+	assert.Equal(t, int64(2), pool1.poolCount)
+	assert.Equal(t, int64(Tx1.Size()+Tx2.Size()), pool1.Size())
+	assert.Equal(t, 2, len(pool1.GetLocalTxs()))
 }
 
 func Test_TransactionPool_AddLocals(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
+	pool1.TruncateTxPool()
 
-	assert.Equal(t, int64(0), pool.Count())
+	assert.Equal(t, int64(0), pool1.Count())
 
 	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, Tx1)
 	txs = append(txs, Tx2)
 
-	pool.addTxs(txs, true)
-	assert.Equal(t, int64(2), pool.poolCount)
-	assert.Equal(t, int64(TxR1.Size()+TxR2.Size()), pool.Size())
-	assert.Equal(t, 2, len(pool.GetLocalTxs()))
+	pool1.addTxs(txs, true)
+	assert.Equal(t, int64(2), pool1.poolCount)
+	assert.Equal(t, int64(Tx1.Size()+Tx2.Size()), pool1.Size())
+	assert.Equal(t, 2, len(pool1.GetLocalTxs()))
 
 }
 func Test_transactionPool_AddRemote(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+	assert.Equal(t, int64(0), pool1.Count())
 
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	assert.Equal(t, int64(0), pool.Count())
-
-	pool.AddTx(TxR1, false)
-	assert.Equal(t, int64(1), pool.poolCount)
-	assert.Equal(t, int64(TxR1.Size()), pool.Size())
-	assert.Equal(t, 1, len(pool.GetRemoteTxs()))
-	pool.AddTx(TxR2, false)
-	assert.Equal(t, int64(2), pool.poolCount)
-	assert.Equal(t, int64(TxR1.Size()+TxR2.Size()), pool.Size())
-	assert.Equal(t, 2, len(pool.GetRemoteTxs()))
+	pool1.AddTx(TxR1, false)
+	assert.Equal(t, int64(1), pool1.poolCount)
+	assert.Equal(t, int64(TxR1.Size()), pool1.Size())
+	assert.Equal(t, 1, len(pool1.GetRemoteTxs()))
+	pool1.AddTx(TxR2, false)
+	assert.Equal(t, int64(2), pool1.poolCount)
+	assert.Equal(t, int64(TxR1.Size()+TxR2.Size()), pool1.Size())
+	assert.Equal(t, 2, len(pool1.GetRemoteTxs()))
 
 }
 
 func Test_TransactionPool_AddRemotes(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	assert.Equal(t, int64(0), pool.Count())
+	assert.Equal(t, int64(0), pool1.Count())
 
 	txs := make([]*txbasic.Transaction, 0)
 	txs = append(txs, TxR1)
 	txs = append(txs, TxR2)
 
-	pool.addTxs(txs, false)
-	assert.Equal(t, int64(2), pool.poolCount)
-	assert.Equal(t, int64(TxR1.Size()+TxR2.Size()), pool.Size())
-	assert.Equal(t, 2, len(pool.GetRemoteTxs()))
+	pool1.addTxs(txs, false)
+	assert.Equal(t, int64(2), pool1.poolCount)
+	assert.Equal(t, int64(TxR1.Size()+TxR2.Size()), pool1.Size())
+	assert.Equal(t, 2, len(pool1.GetRemoteTxs()))
 
 }
 
 func Test_transactionPool_SaveTxsData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+	assert.Equal(t, int64(0), pool1.Count())
 
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
+	pool1.AddTx(Tx1, true)
+	pool1.AddTx(Tx2, true)
+	pool1.AddTx(TxR1, false)
+	pool1.AddTx(TxR2, false)
 
-	assert.Equal(t, int64(0), pool.Count())
-
-	pool.AddTx(Tx1, true)
-	pool.AddTx(Tx2, true)
-	pool.AddTx(TxR1, false)
-	pool.AddTx(TxR2, false)
-
-	if err := pool.SaveAllLocalTxsData(pool.config.PathTxsStorage); err != nil {
+	if err := pool1.SaveAllLocalTxsData(pool1.config.PathTxsStorage); err != nil {
 		t.Error("want", nil, "got", err)
 	}
 
-	pool.TruncateTxPool()
-
-	if err := pool.LoadLocalTxsData(pool.config.PathTxsStorage); err != nil {
+	pool1.pending = newAccTxs()
+	pool1.prepareTxs = newAccTxs()
+	pool1.allWrappedTxs = newAllLookupTxs()
+	pool1.pendingNonces = newAccountNonce(pool1.txServant.getStateQuery())
+	atomic.StoreInt64(&pool1.pendingCount, 0)
+	atomic.StoreInt64(&pool1.pendingSize, 0)
+	atomic.StoreInt64(&pool1.poolCount, 0)
+	atomic.StoreInt64(&pool1.poolSize, 0)
+	pool1.txCache.Purge()
+	if err := pool1.LoadLocalTxsData(pool1.config.PathTxsStorage); err != nil {
 		t.Error("want", nil, "got", err)
 
 	}
-	assert.Equal(t, int64(2), pool.poolCount)
+	assert.Equal(t, int64(2), pool1.poolCount)
 
 }
 
 func Test_transactionPool_PublishTx(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+	assert.Equal(t, int64(0), pool1.Count())
 
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	assert.Equal(t, int64(0), pool.Count())
-
-	if err := pool.txServant.PublishTx(pool.ctx, Tx1); err != nil {
+	if err := pool1.txServant.PublishTx(pool1.ctx, Tx1); err != nil {
 		t.Error("want", nil, "got", err)
 	}
 }
 
 func Test_transactionPool_ClearLocalFile(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+	assert.Equal(t, int64(0), pool1.Count())
 
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	assert.Equal(t, int64(0), pool.Count())
-
-	pool.AddTx(Tx1, true)
-	pool.AddTx(Tx2, true)
-	pool.AddTx(Tx3, true)
-	pool.AddTx(TxR2, false)
+	pool1.AddTx(Tx1, true)
+	pool1.AddTx(Tx2, true)
+	pool1.AddTx(Tx3, true)
+	pool1.AddTx(TxR2, false)
 
 	locals := make([]*txbasic.Transaction, 0)
 	locals = append(locals, Tx1)
 	locals = append(locals, Tx2)
 	locals = append(locals, Tx3)
 
-	if err := pool.SaveAllLocalTxsData(pool.config.PathTxsStorage); err != nil {
+	if err := pool1.SaveAllLocalTxsData(pool1.config.PathTxsStorage); err != nil {
 		t.Error("want", nil, "got", err)
 	}
-	pathIndex := pool.config.PathTxsStorage + "index.json"
-	pathData := pool.config.PathTxsStorage + "data.json"
+	pathIndex := pool1.config.PathTxsStorage + "index.json"
+	pathData := pool1.config.PathTxsStorage + "data.json"
 	_, err := ioutil.ReadFile(pathIndex)
 	assert.Equal(t, err, nil)
 	_, err = ioutil.ReadFile(pathData)
 	assert.Equal(t, err, nil)
 
-	pool.ClearLocalFile(pathIndex)
+	pool1.ClearLocalFile(pathIndex)
 	_, err = ioutil.ReadFile(pathIndex)
 	var isEmpty bool
 	if err != nil {
@@ -227,14 +150,13 @@ func Test_transactionPool_ClearLocalFile(t *testing.T) {
 
 	}
 
-	pool.ClearLocalFile(pathData)
+	pool1.ClearLocalFile(pathData)
 	_, err = ioutil.ReadFile(pathData)
 	if err != nil {
 		isEmpty = true
 	}
 	if !reflect.DeepEqual(true, isEmpty) {
 		t.Error("want", true, "got", isEmpty)
-
 	}
 
 }

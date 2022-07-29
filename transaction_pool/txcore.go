@@ -2,18 +2,27 @@ package transactionpool
 
 import (
 	"container/heap"
+	"container/list"
 	"encoding/json"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/service"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
+
+type addTxsItem struct {
+	txs     []*txbasic.Transaction
+	isLocal bool
+}
 
 type TxByGasAndTime []*txbasic.Transaction
 
@@ -56,68 +65,151 @@ func (h *nonceHeap) Pop() interface{} {
 }
 
 type mapNonceTxs struct {
-	items map[uint64]*txbasic.Transaction
-	index *nonceHeap
-	cache []*txbasic.Transaction
-	cnt   int64
+	items       map[uint64]*txbasic.Transaction
+	index       *nonceHeap
+	cache       []*txbasic.Transaction
+	cnt         int64
+	maxPrice    uint64
+	isMaxChange bool
+	lock        sync.RWMutex
 }
 
 func newMapNonceTxs() *mapNonceTxs {
 	return &mapNonceTxs{
-		items: make(map[uint64]*txbasic.Transaction),
+		items: make(map[uint64]*txbasic.Transaction, 0),
 		index: new(nonceHeap),
-		cnt:   0,
+		lock:  sync.RWMutex{},
 	}
 }
 func (m *mapNonceTxs) Get(nonce uint64) *txbasic.Transaction {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	return m.items[nonce]
+}
+func (m *mapNonceTxs) isExist(nonce uint64) bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	_, ok := m.items[nonce]
+	return ok
 }
 
 func (m *mapNonceTxs) Put(tx *txbasic.Transaction) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	isNil := len(m.items) == 0
 	nonce := tx.Head.Nonce
 	if m.items[nonce] == nil {
 		heap.Push(m.index, nonce)
 		atomic.AddInt64(&m.cnt, 1)
+		m.items[nonce], m.cache = tx, nil
+	} else {
+		m.items[nonce], m.cache = tx, nil
 	}
-	m.items[nonce], m.cache = tx, nil
+
+	if GasPrice(tx) > m.maxPrice {
+		m.maxPrice = GasPrice(tx)
+		if !isNil {
+			m.isMaxChange = true
+		}
+	}
 }
 
 func (m *mapNonceTxs) Remove(nonce uint64) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if len(m.items) == 0 {
+		return false
+	}
 	if _, ok := m.items[nonce]; !ok {
 		return false
 	}
-	for i := 0; i < m.index.Len(); i++ {
-		if (*m.index)[i] == nonce {
 
-			atomic.AddInt64(&m.cnt, -1)
-			heap.Remove(m.index, i)
-			break
+	oldMaxPrice := GasPrice(m.items[nonce])
+
+	if oldMaxPrice < m.maxPrice {
+		for i := 0; i < m.index.Len(); i++ {
+			if (*m.index)[i] == nonce {
+				atomic.AddInt64(&m.cnt, -1)
+				heap.Remove(m.index, i)
+				break
+			}
+		}
+	} else if oldMaxPrice == m.maxPrice {
+		m.maxPrice = 0
+		for i := 0; i < m.index.Len(); i++ {
+			if (*m.index)[i] == nonce {
+				if GasPrice(m.items[(*m.index)[i]]) > m.maxPrice {
+					m.maxPrice = GasPrice(m.items[(*m.index)[i]])
+				}
+				atomic.AddInt64(&m.cnt, -1)
+				heap.Remove(m.index, i)
+			}
+
+		}
+		if m.maxPrice < oldMaxPrice {
+			m.isMaxChange = true
 		}
 	}
+
 	delete(m.items, nonce)
 	m.cache = nil
-
 	return true
 }
 
-func (m *mapNonceTxs) dropLowNonceTx(thresholdNonce uint64) []*txbasic.Transaction {
-	var removed []*txbasic.Transaction
+func (m *mapNonceTxs) Filter(fil func(tx *txbasic.Transaction) bool) ([]*txbasic.Transaction, int64) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
-	// Pop off heap items until the threshold is reached
-	for m.index.Len() > 0 && (*m.index)[0] < thresholdNonce {
-		nonce := heap.Pop(m.index).(uint64)
-		removed = append(removed, m.items[nonce])
-		atomic.AddInt64(&m.cnt, -1)
-		delete(m.items, nonce)
+	removed, removedSize := m.filter(fil)
+	if len(removed) > 0 {
+		m.reHeap()
 	}
-	// If we had a cached order, shift the front
-	if m.cache != nil {
-		m.cache = m.cache[len(removed):]
+	return removed, removedSize
+}
+
+func (m *mapNonceTxs) reHeap() {
+
+	*m.index = make([]uint64, 0, len(m.items))
+	for nonce := range m.items {
+		*m.index = append(*m.index, nonce)
 	}
-	return removed
+	heap.Init(m.index)
+	m.cache = nil
+}
+
+func (m *mapNonceTxs) filter(fil func(tx *txbasic.Transaction) bool) ([]*txbasic.Transaction, int64) {
+
+	var removed []*txbasic.Transaction
+	var filterSize int64
+	oldMaxPrice := m.maxPrice
+	m.maxPrice = 0
+	for nonce, tx := range m.items {
+		if fil(tx) {
+			removed = append(removed, tx)
+			filterSize += int64(tx.Size())
+			atomic.AddInt64(&m.cnt, -1)
+			delete(m.items, nonce)
+		} else {
+			if GasPrice(tx) > m.maxPrice {
+				m.maxPrice = GasPrice(tx)
+			}
+		}
+	}
+	if oldMaxPrice != m.maxPrice {
+		m.isMaxChange = true
+	}
+	if len(removed) > 0 {
+		m.cache = nil
+	}
+	return removed, filterSize
 }
 
 func (m *mapNonceTxs) Len() int {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	return len(m.items)
 }
 
@@ -132,126 +224,282 @@ func (m *mapNonceTxs) flatten() []*txbasic.Transaction {
 	return m.cache
 }
 
-type pendingTxList struct {
-	mu      sync.RWMutex
-	addrTxs map[tpcrtypes.Address]*mapNonceTxs
+type accTxs struct {
+	addrTxs *tpcmm.ShrinkableMap
 }
 
-func newPending() *pendingTxList {
-
-	pd := &pendingTxList{
-		addrTxs: make(map[tpcrtypes.Address]*mapNonceTxs, 0),
+func newAccTxs() *accTxs {
+	accList := &accTxs{
+		addrTxs: tpcmm.NewShrinkMap(),
 	}
-	return pd
+	return accList
 }
-func (pd *pendingTxList) addTxsToPending(txs []*txbasic.Transaction, isPackaged func(id txbasic.TxID) bool, isLocal bool) (dropOldTxID []txbasic.TxID, dropOldSize int64, dropNewTxs []*txbasic.Transaction) {
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	var dropTxs []*txbasic.Transaction
-	var dropTxIDs []txbasic.TxID
-	var dropSize int64
+
+func (atx *accTxs) addTxToPrepared(address tpcrtypes.Address, isLocal bool, tx *txbasic.Transaction,
+	callBackdropOldTx func(txbasic.TxID),
+	callBackAddTxInfo func(isLocal bool, tx *txbasic.Transaction),
+	callBackAddSize func(pendingCnt, pendingSize, poolCnt, poolSize int64)) (added bool) {
+
+	listInf, ok := atx.addrTxs.Get(address)
+	var list *mapNonceTxs
+	if !ok {
+		list = newMapNonceTxs()
+	} else {
+		list = listInf.(*mapNonceTxs)
+	}
+	if isLocal {
+		if txOld := list.Get(tx.Head.Nonce); txOld != nil {
+			if GasPrice(txOld) < GasPrice(tx) {
+				oldTxID, _ := txOld.TxID()
+				callBackdropOldTx(oldTxID)
+				dltSize := int64(tx.Size() - txOld.Size())
+				callBackAddTxInfo(isLocal, tx)
+				callBackAddSize(0, 0, 0, dltSize)
+
+				list.Put(tx)
+				atx.addrTxs.Set(address, list)
+				return true
+			} else {
+				return false
+			}
+		} else {
+			list.Put(tx)
+			atx.addrTxs.Set(address, list)
+			callBackAddTxInfo(true, tx)
+			callBackAddSize(0, 0, 1, int64(tx.Size()))
+			return true
+		}
+	} else {
+		if txOld := list.Get(tx.Head.Nonce); txOld != nil {
+			return false
+		} else {
+			list.Put(tx)
+			atx.addrTxs.Set(address, list)
+			callBackAddTxInfo(false, tx)
+			callBackAddSize(0, 0, 1, int64(tx.Size()))
+			return true
+		}
+	}
+}
+
+func (atx *accTxs) fetchTxsToPending(address tpcrtypes.Address, nonce uint64) []*txbasic.Transaction {
+
+	listInf, ok := atx.addrTxs.Get(address)
+	var list *mapNonceTxs
+	if !ok {
+		list = newMapNonceTxs()
+	} else {
+		list = listInf.(*mapNonceTxs)
+	}
+	var txs []*txbasic.Transaction
+	for {
+		if tx := list.Get(nonce + 1); tx != nil {
+			txs = append(txs, tx)
+			list.Remove(nonce + 1)
+			nonce += 1
+		} else {
+			break
+		}
+	}
+
+	if list.Len() == 0 {
+		atx.addrTxs.Del(address)
+	} else {
+		atx.addrTxs.Set(address, list)
+	}
+	if len(txs) > 0 {
+		return txs
+	} else {
+		return nil
+	}
+}
+
+func (atx *accTxs) removeAddr(addr tpcrtypes.Address, txs []*txbasic.Transaction, callBackdropTx func(id txbasic.TxID)) (rmCnt, rmSize int64) {
+	listInf, ok := atx.addrTxs.Get(addr)
+	if !ok {
+		return int64(0), int64(0)
+	}
+	list := listInf.(*mapNonceTxs)
+
+	atx.addrTxs.Del(addr)
+
 	for _, tx := range txs {
-		txID, _ := tx.TxID()
+		id, _ := tx.TxID()
+		ok := list.Remove(tx.Head.Nonce)
+		if ok {
+			rmCnt += int64(1)
+			rmSize += int64(tx.Size())
+			callBackdropTx(id)
+		}
+	}
+
+	if len(list.items) == 0 {
+		atx.addrTxs.Del(addr)
+	} else {
+		list.reHeap()
+		atx.addrTxs.Set(addr, list)
+	}
+
+	return rmCnt, rmSize
+}
+
+func (atx *accTxs) addTxsToPending(txs []*txbasic.Transaction, isLocal bool,
+	getPendingNonce func(addr tpcrtypes.Address) (uint64, error), setPendingNonce func(tpcrtypes.Address, uint64),
+	isPackaged func(id txbasic.TxID) bool,
+	callBackdropOldTx func(txbasic.TxID),
+	callBackAddTxInfo func(isLocal bool, tx *txbasic.Transaction),
+	callBackAddSize func(pendingCnt, pendingSize, poolCnt, poolSize int64),
+	addIntoSorted func(addr tpcrtypes.Address, masPrice uint64, isMaxPriceChanged bool, txs []*txbasic.Transaction) bool,
+	fetchTxsPrepared func(address tpcrtypes.Address, nonce uint64) []*txbasic.Transaction,
+	insertToPrepare func(address tpcrtypes.Address, isLocal bool, tx *txbasic.Transaction, dropOldTx func(id txbasic.TxID), addTxInfo func(isLocal bool, tx *txbasic.Transaction), addSize func(pendingCnt, pendingSize, poolCnt, poolSize int64))) {
+
+	for _, tx := range txs {
 		address := tpcrtypes.Address(tx.Head.FromAddr)
-		list, ok := pd.addrTxs[address]
-		if !ok {
-			list = newMapNonceTxs()
+		pendingNonce, err := getPendingNonce(address)
+
+		if err != nil {
+			//the first tx for address
+			listInf, ok := atx.addrTxs.Get(address)
+			var list *mapNonceTxs
+			if !ok {
+				list = newMapNonceTxs()
+			} else {
+				list = listInf.(*mapNonceTxs)
+			}
+			list.Put(tx)
+
+			setPendingNonce(address, tx.Head.Nonce)
+
+			callBackAddTxInfo(isLocal, tx)
+
+			callBackAddSize(int64(1), int64(tx.Size()), int64(1), int64(tx.Size()))
+
+			txsPrepare := fetchTxsPrepared(address, tx.Head.Nonce)
+
+			if len(txsPrepare) > 0 {
+				for _, txPrepare := range txsPrepare {
+					list.Put(txPrepare)
+					setPendingNonce(address, txPrepare.Head.Nonce)
+					callBackAddSize(int64(1), int64(txPrepare.Size()), int64(0), int64(0))
+				}
+			}
+			list.reHeap()
+			atx.addrTxs.Set(address, list)
+			addIntoSorted(address, list.maxPrice, list.isMaxChange, list.flatten())
+			continue
 		}
 
-		if txOld := list.Get(tx.Head.Nonce); txOld != nil {
-			if isLocal {
-				if GasPrice(txOld) < GasPrice(tx) {
-					oldTxID, _ := txOld.TxID()
-					if isPackaged(oldTxID) {
-						dropTxs = append(dropTxs, tx)
+		if tx.Head.Nonce == pendingNonce+1 {
+			//insert the next nonce tx
+			listInf, ok := atx.addrTxs.Get(address)
+			var list *mapNonceTxs
+			if !ok {
+				list = newMapNonceTxs()
+			} else {
+				list = listInf.(*mapNonceTxs)
+			}
+			list.Put(tx)
+			setPendingNonce(address, tx.Head.Nonce)
+			callBackAddTxInfo(isLocal, tx)
+			callBackAddSize(int64(1), int64(tx.Size()), int64(1), int64(tx.Size()))
+			txsPrepare := fetchTxsPrepared(address, tx.Head.Nonce)
+			if len(txsPrepare) > 0 {
+				for _, txPrepared := range txsPrepare {
+					list.Put(txPrepared)
+					setPendingNonce(address, txPrepared.Head.Nonce)
+					callBackAddSize(int64(1), int64(tx.Size()), int64(0), int64(0))
+				}
+			}
+			list.reHeap()
+			atx.addrTxs.Set(address, list)
+			addIntoSorted(address, list.maxPrice, list.isMaxChange, list.flatten())
+
+			continue
+		}
+		// replace local tx if gasPrice is higher
+		if isLocal {
+			if tx.Head.Nonce <= pendingNonce {
+				listInf, ok := atx.addrTxs.Get(address)
+				var list *mapNonceTxs
+				if !ok {
+					list = newMapNonceTxs()
+				} else {
+					list = listInf.(*mapNonceTxs)
+				}
+				if txOld := list.Get(tx.Head.Nonce); txOld != nil {
+					if GasPrice(txOld) < GasPrice(tx) {
+						oldTxID, _ := txOld.TxID()
+						if isPackaged(oldTxID) {
+							continue
+						}
+						list.Put(tx)
+						list.reHeap()
+						atx.addrTxs.Set(address, list)
+						callBackdropOldTx(oldTxID)
+						dltSize := int64(tx.Size() - txOld.Size())
+						callBackAddTxInfo(isLocal, tx)
+						callBackAddSize(int64(0), dltSize, int64(0), dltSize)
+						addIntoSorted(address, list.maxPrice, list.isMaxChange, list.flatten())
+
 						continue
 					}
-					list.Remove(tx.Head.Nonce)
-					list.Put(tx)
-					pd.addrTxs[address] = list
-					dropTxIDs = append(dropTxIDs, txID)
-					dropSize += int64(txOld.Size())
-				} else {
-					dropTxs = append(dropTxs, tx)
 					continue
 				}
-			} else {
-				dropTxs = append(dropTxs, tx)
+			}
+		} else {
+			if tx.Head.Nonce <= pendingNonce {
 				continue
 			}
 		}
-		list.Put(tx)
-		pd.addrTxs[address] = list
+		//nonce is too big insert to prepareTxs
+		insertToPrepare(address, isLocal, tx, callBackdropOldTx, callBackAddTxInfo, callBackAddSize)
 	}
-	return dropTxIDs, dropSize, dropTxs
 }
 
-func (pd *pendingTxList) addTxToPending(tx *txbasic.Transaction, isPackaged func(id txbasic.TxID) bool, isLocal bool) (replaced bool, oldTxID txbasic.TxID, oldSize int) {
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	address := tpcrtypes.Address(tx.Head.FromAddr)
-	list, ok := pd.addrTxs[address]
+func (atx *accTxs) reInjectTxsToPrepare(addr tpcrtypes.Address, txs []*txbasic.Transaction) {
+
+	listInf, ok := atx.addrTxs.Get(addr)
+	var list *mapNonceTxs
 	if !ok {
 		list = newMapNonceTxs()
+	} else {
+		list = listInf.(*mapNonceTxs)
 	}
-
-	if txOld := list.Get(tx.Head.Nonce); txOld != nil {
-		if isLocal {
-			if GasPrice(txOld) < GasPrice(tx) {
-				oldTxID, _ := txOld.TxID()
-				if isPackaged(oldTxID) {
-					return false, "", 0
-				}
-				list.Remove(tx.Head.Nonce)
-				list.Put(tx)
-				pd.addrTxs[address] = list
-				return true, oldTxID, txOld.Size()
-			} else {
-				return false, "", 0
-			}
-		} else {
-			return false, "", 0
-		}
-
+	for _, tx := range txs {
+		list.Put(tx)
 	}
-	list.Put(tx)
-	pd.addrTxs[address] = list
-	return false, "", 0
+	atx.addrTxs.Set(addr, list)
 }
-func (pd *pendingTxList) getTxsByAddr(address tpcrtypes.Address) ([]*txbasic.Transaction, error) {
-	pd.mu.RLock()
-	defer pd.mu.RUnlock()
 
-	list, ok := pd.addrTxs[address]
+func (atx *accTxs) getTxsByAddr(address tpcrtypes.Address) ([]*txbasic.Transaction, error) {
+
+	listInf, ok := atx.addrTxs.Get(address)
+	var list *mapNonceTxs
 	if !ok {
-		return nil, ErrAddrNotExist
+		list = newMapNonceTxs()
+	} else {
+		list = listInf.(*mapNonceTxs)
 	}
 	return list.flatten(), nil
 }
-func (pd *pendingTxList) accountTxCnt(address tpcrtypes.Address) int64 {
-	pd.mu.RLock()
-	defer pd.mu.RUnlock()
-	return atomic.LoadInt64(&pd.addrTxs[address].cnt)
-}
 
-func (pd *pendingTxList) isNonceContinuous(address tpcrtypes.Address) (bool, error) {
-	pd.mu.RLock()
-	defer pd.mu.RUnlock()
-	list, ok := pd.addrTxs[address]
+func (atx *accTxs) accountTxCnt(address tpcrtypes.Address) int64 {
+	listInf, ok := atx.addrTxs.Get(address)
 	if !ok {
-		return false, ErrAddrNotExist
+		return 0
 	}
-
-	flatTxs := list.flatten()
-	if flatTxs[0].Head.Nonce+uint64(len(flatTxs))-1 == flatTxs[len(flatTxs)-1].Head.Nonce {
-		return true, nil
-	}
-	return false, ErrTxsNotContinuous
+	return atomic.LoadInt64(&listInf.(*mapNonceTxs).cnt)
 }
-func (pd *pendingTxList) removeTxsForRevert(removeCnt int64, isLocal func(id txbasic.TxID) bool, removeWrappedTx func(id txbasic.TxID), removeCache func(id txbasic.TxID), remoteTxs func() []*txbasic.Transaction) (cnt int64, isEnough bool) {
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	for addr, txList := range pd.addrTxs {
+
+func (atx *accTxs) removeTxsForRevert(removeCnt int64, isLocal func(id txbasic.TxID) bool,
+	rmTxInfo func(id txbasic.TxID), delFromSorted func(addr tpcrtypes.Address), addToSorted func(addr tpcrtypes.Address, maxPrice uint64, isMaxChange bool, txs []*txbasic.Transaction) bool,
+	remoteTxs func() []*txbasic.Transaction) (cnt int64, isEnough bool) {
+	var delAddrs []tpcrtypes.Address
+	if removeCnt == 0 {
+		return int64(0), true
+	}
+	callBackRemove := func(k interface{}, v interface{}) {
+		addr, txList := k.(tpcrtypes.Address), v.(*mapNonceTxs)
 		if removeCnt > 0 {
 			flatTxs := txList.flatten()
 			if flatTxs[0].Head.Nonce+uint64(len(flatTxs))-1 != flatTxs[len(flatTxs)-1].Head.Nonce {
@@ -263,32 +511,44 @@ func (pd *pendingTxList) removeTxsForRevert(removeCnt int64, isLocal func(id txb
 				}
 				for _, tx := range flatTxs {
 					txID, _ := tx.TxID()
-					removeWrappedTx(txID)
-					removeCache(txID)
+					rmTxInfo(txID)
+
 					removeCnt -= 1
 				}
-				delete(pd.addrTxs, addr)
+				delAddrs = append(delAddrs, addr)
 			}
 		forNextAddr:
-		} else {
-			return int64(0), true
 		}
 	}
+	atx.addrTxs.IterateCallback(callBackRemove)
+	if len(delAddrs) > 0 {
+		for _, addr := range delAddrs {
+			atx.addrTxs.Del(addr)
+			delFromSorted(addr)
+		}
+	}
+
 	if removeCnt > 0 {
 		remotes := remoteTxs()
 		sort.Sort(TxByGasAndTime(remotes))
 		for _, tx := range remotes {
 			if removeCnt > 0 {
 				txID, _ := tx.TxID()
-				list := pd.addrTxs[tpcrtypes.Address(tx.Head.FromAddr)]
+				listInf, ok := atx.addrTxs.Get(tpcrtypes.Address(tx.Head.FromAddr))
+				if !ok {
+					continue
+				}
+				list := listInf.(*mapNonceTxs)
 				list.Remove(tx.Head.Nonce)
 				if list.Len() == 0 {
-					delete(pd.addrTxs, tpcrtypes.Address(tx.Head.FromAddr))
+					atx.addrTxs.Del(tpcrtypes.Address(tx.Head.FromAddr))
+					delFromSorted(tpcrtypes.Address(tx.Head.FromAddr))
 				} else {
-					pd.addrTxs[tpcrtypes.Address(tx.Head.FromAddr)] = list
+					list.reHeap()
+					atx.addrTxs.Set(tpcrtypes.Address(tx.Head.FromAddr), list)
+					addToSorted(tpcrtypes.Address(tx.Head.FromAddr), list.maxPrice, list.isMaxChange, list.flatten())
 				}
-				removeWrappedTx(txID)
-				removeCache(txID)
+				rmTxInfo(txID)
 				removeCnt -= 1
 			} else {
 				return int64(0), true
@@ -298,87 +558,260 @@ func (pd *pendingTxList) removeTxsForRevert(removeCnt int64, isLocal func(id txb
 	return removeCnt, false
 }
 
-func (pd *pendingTxList) getAllCommitTxs(lastNonce func(address tpcrtypes.Address) (uint64, error), packagedTxs func(txs []*txbasic.Transaction)) (txs []*txbasic.Transaction, dropTxCnt, dropTxSize int) {
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	dropTxCnt, dropTxSize = 0, 0
-	for addr, list := range pd.addrTxs {
-		nonce, _ := lastNonce(addr)
-		dropped := list.dropLowNonceTx(nonce)
-		if len(dropped) > 0 {
-			for _, tx := range dropped {
-				dropTxCnt += 1
-				dropTxSize += tx.Size()
-			}
-		}
-		flatTxs := list.flatten()
-		if flatTxs[0].Head.Nonce+uint64(len(flatTxs))-1 == flatTxs[len(flatTxs)-1].Head.Nonce {
-			txs = append(txs, flatTxs...)
-			packagedTxs(txs)
-		}
-		pd.addrTxs[addr] = list
-	}
-	return txs, dropTxCnt, dropTxSize
-}
+func (atx *accTxs) prepareTxsRemoveTx(address tpcrtypes.Address, nonce uint64) error {
 
-func (pd *pendingTxList) removeTx(address tpcrtypes.Address, txID txbasic.TxID, nonce uint64, force bool) error {
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	list, ok := pd.addrTxs[address]
+	listInf, ok := atx.addrTxs.Get(address)
 	if !ok {
 		return ErrAddrNotExist
 	}
-	if !force {
-		flatTxs := list.flatten()
-		if flatTxs[0].Head.Nonce+uint64(len(flatTxs))-1 != flatTxs[len(flatTxs)-1].Head.Nonce {
-			return ErrTxsNotContinuous
-		}
-		if nonce != flatTxs[0].Head.Nonce {
-			return ErrNonceNotMin
-		}
-		oldTxID, _ := flatTxs[0].TxID()
-		if txID != oldTxID {
-			return ErrTxIDDiff
-		}
-		list.Remove(nonce)
-		if list.Len() == 0 {
-			delete(pd.addrTxs, address)
-		} else {
-			pd.addrTxs[address] = list
-		}
-		return nil
-	}
-	oldTxID, _ := list.Get(nonce).TxID()
-	if txID != oldTxID {
-		return ErrTxIDDiff
+	list := listInf.(*mapNonceTxs)
+	if !list.isExist(nonce) {
+		return ErrTxNotExist
 	}
 	list.Remove(nonce)
 	if list.Len() == 0 {
-		delete(pd.addrTxs, address)
+		atx.addrTxs.Del(address)
 	} else {
-		pd.addrTxs[address] = list
+		atx.addrTxs.Set(address, list)
+	}
+	return nil
+
+}
+
+func (atx *accTxs) pendingRemoveTx(address tpcrtypes.Address, nonce uint64, reInjectToPrepare func(tpcrtypes.Address, []*txbasic.Transaction, int64),
+	setPendingNonce func(address tpcrtypes.Address, nonce uint64),
+	delFromSorted func(addr tpcrtypes.Address),
+	addIntoSorted func(addr tpcrtypes.Address, maxPrice uint64, isMaxPriceChanged bool, txs []*txbasic.Transaction) bool) error {
+
+	listInf, ok := atx.addrTxs.Get(address)
+
+	if !ok {
+		return ErrAddrNotExist
+	}
+	list := listInf.(*mapNonceTxs)
+	curTx := list.Get(nonce)
+
+	if curTx == nil {
+		return ErrTxNotExist
+	}
+	curTxSize := curTx.Size()
+
+	ok = list.Remove(nonce)
+
+	setPendingNonce(address, nonce-1)
+
+	pickHighNonce := func(tx *txbasic.Transaction) bool {
+		return tx.Head.Nonce > nonce
+	}
+	pickOutTxs, removedSize := list.Filter(pickHighNonce)
+	if list.Len() == 0 {
+		atx.addrTxs.Del(address)
+		delFromSorted(address)
+	} else {
+		list.reHeap()
+		atx.addrTxs.Set(address, list)
+		addIntoSorted(address, list.maxPrice, list.isMaxChange, list.flatten())
+	}
+
+	if len(pickOutTxs) > 0 {
+
+		reInjectToPrepare(address, pickOutTxs, removedSize+int64(curTxSize))
+	} else {
+
+		reInjectToPrepare("", nil, int64(curTxSize))
+
 	}
 	return nil
 }
 
-func (pd *pendingTxList) removeTxs(address tpcrtypes.Address, list []*txbasic.Transaction, removeCache func(id txbasic.TxID), removeLookup func(id txbasic.TxID)) (dropCnt, dropSize int64) {
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	nonceTxs := pd.addrTxs[address]
-	for _, tx := range list {
-		nonceTxs.Remove(tx.Head.Nonce)
-		dropCnt += 1
-		dropSize += int64(tx.Size())
-		txID, _ := tx.TxID()
-		removeCache(txID)
-		removeLookup(txID)
+type sortedItem struct {
+	account           tpcrtypes.Address
+	maxPrice          uint64
+	isMaxPriceChanged bool
+	txs               []*txbasic.Transaction
+}
+
+type sortedTxItem struct {
+	account  tpcrtypes.Address
+	maxPrice uint64
+	txs      []*txbasic.Transaction
+}
+
+type sortedByPolicy byte
+
+const (
+	sortedByMaxGasPrice sortedByPolicy = iota
+	sortedByAvgGasPrice
+	sortedByTime
+)
+
+type sortedTxList struct {
+	sortedBy sortedByPolicy
+	txList   *list.List
+}
+
+func newSortedTxList(policy sortedByPolicy) *sortedTxList {
+	sorted := &sortedTxList{
+		sortedBy: policy,
+		txList:   list.New(),
 	}
-	if nonceTxs.Len() == 0 {
-		delete(pd.addrTxs, address)
-	} else {
-		pd.addrTxs[address] = nonceTxs
+	return sorted
+}
+func (st *sortedTxList) addAccTx(addr tpcrtypes.Address, maxPrice uint64, isChangeMaxPrice bool, txs []*txbasic.Transaction) {
+	item := &sortedTxItem{
+		account:  addr,
+		maxPrice: maxPrice,
+		txs:      txs,
 	}
-	return
+	if st.txList.Len() == 0 {
+		st.txList.PushFront(item)
+		return
+	}
+	if len(txs) == 1 {
+		if !isChangeMaxPrice {
+			//first insert to sortedTxList
+			for e := st.txList.Front(); e != nil; e = e.Next() {
+				if maxPrice < e.Value.(*sortedTxItem).maxPrice {
+					if e.Next() == nil {
+						st.txList.PushBack(item)
+						return
+					}
+					if maxPrice >= e.Next().Value.(*sortedTxItem).maxPrice {
+						st.txList.InsertAfter(item, e)
+						return
+					}
+				} else if maxPrice == e.Value.(*sortedTxItem).maxPrice {
+					st.txList.InsertBefore(item, e)
+				} else if maxPrice > e.Value.(*sortedTxItem).maxPrice {
+					if e.Prev() == nil {
+						st.txList.PushFront(item)
+						return
+					}
+					if maxPrice <= e.Prev().Value.(*sortedTxItem).maxPrice {
+						st.txList.InsertBefore(item, e)
+						return
+					}
+				}
+			}
+		} else {
+			// update the only tx in pending
+			for e := st.txList.Front(); e != nil; e = e.Next() {
+				if e.Value.(*sortedTxItem).account == addr {
+					e.Value = item
+					for {
+						if e.Prev() == nil {
+							return
+						}
+
+						if e.Prev().Value.(*sortedTxItem).maxPrice >= maxPrice {
+							return
+						} else if e.Prev().Value.(*sortedTxItem).maxPrice < maxPrice {
+							st.txList.MoveBefore(e, e.Prev())
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if len(txs) > 1 {
+		for e := st.txList.Front(); e != nil; e = e.Next() {
+			if !isChangeMaxPrice {
+				// just update txs
+				for e := st.txList.Front(); e != nil; e = e.Next() {
+					if e.Value.(*sortedTxItem).account == addr {
+						e.Value = item
+						return
+					}
+				}
+			} else {
+				// update maxPrice change pos for account if needed
+				for e := st.txList.Front(); e != nil; e = e.Next() {
+					if e.Value.(*sortedTxItem).account == addr {
+						e.Value = item
+						for {
+							if e.Prev() == nil {
+								return
+							}
+							if e.Prev().Value.(*sortedTxItem).maxPrice >= maxPrice {
+								return
+							} else if e.Prev().Value.(*sortedTxItem).maxPrice < maxPrice {
+								st.txList.MoveBefore(e, e.Prev())
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func (st *sortedTxList) removeAddr(addr tpcrtypes.Address) {
+	if st.txList.Len() == 0 {
+		return
+	}
+
+	for e := st.txList.Front(); e != nil; e = e.Next() {
+
+		if e.Value.(*sortedTxItem).account == addr {
+			st.txList.Remove(e)
+			return
+		}
+
+	}
+}
+
+func (st *sortedTxList) sortAndPickTxs(callBackRemoveAddr func(addr tpcrtypes.Address, txs []*txbasic.Transaction)) []*txbasic.Transaction {
+
+	var txs []*txbasic.Transaction
+	var item *sortedTxItem
+	switch st.sortedBy {
+	case sortedByMaxGasPrice:
+		if st.txList.Len() == 0 {
+			return nil
+		}
+		for {
+			e := st.txList.Front()
+			if e == nil {
+				break
+			}
+			item = e.Value.(*sortedTxItem)
+			txs = append(txs, item.txs...)
+			callBackRemoveAddr(item.account, item.txs)
+			st.txList.Remove(e)
+		}
+	}
+	return txs
+}
+
+type accountNonce struct {
+	accNonce *lru.Cache
+	state    service.StateQueryService
+}
+
+func newAccountNonce(state service.StateQueryService) *accountNonce {
+	accN := &accountNonce{
+		state: state,
+	}
+	accN.accNonce, _ = lru.New(AccountNonceCacheSize)
+	return accN
+}
+
+func (accN *accountNonce) get(addr tpcrtypes.Address) (uint64, error) {
+	if _, ok := accN.accNonce.Get(addr); !ok {
+		nonce, err := accN.state.GetNonce(addr)
+		if err != nil {
+			return 0, err
+		} else {
+			accN.accNonce.Add(addr, nonce)
+		}
+	}
+	n, _ := accN.accNonce.Get(addr)
+	return n.(uint64), nil
+}
+
+func (accN *accountNonce) set(addr tpcrtypes.Address, nonce uint64) {
+	accN.accNonce.Add(addr, nonce)
 }
 
 type allLookupTxs struct {
@@ -403,38 +836,16 @@ func (all *allLookupTxs) Get(id txbasic.TxID) (*wrappedTx, bool) {
 	}
 	return nil, false
 }
-func (all *allLookupTxs) isRepublished(id txbasic.TxID) (bool, error) {
-	if value, ok := all.localTxs.Get(id); ok {
-		return value.(*wrappedTx).IsRepublished, nil
-	}
-	if value, ok := all.remoteTxs.Get(id); ok {
-		return value.(*wrappedTx).IsRepublished, nil
-	}
-	return false, ErrTxNotExist
-}
-func (all *allLookupTxs) setPublishTag(id txbasic.TxID) {
-	if value, ok := all.localTxs.Get(id); ok {
-		value.(*wrappedTx).IsRepublished = true
-		all.localTxs.CallBackSetNoLock(id, value)
-	}
-	if value, ok := all.remoteTxs.Get(id); ok {
-		value.(*wrappedTx).IsRepublished = true
-		all.localTxs.CallBackSetNoLock(id, value)
-	}
-}
 
 func (all *allLookupTxs) Del(id txbasic.TxID) {
-	all.localTxs.Del(id)
-	all.remoteTxs.Del(id)
-}
-
-func (all *allLookupTxs) callBackDel(id txbasic.TxID, isLocal bool) {
-	if isLocal {
-		all.localTxs.CallBackDelNoLock(id)
-	} else {
-		all.remoteTxs.CallBackDelNoLock(id)
+	if all.localTxs.Size() > 0 {
+		all.localTxs.Del(id)
+	}
+	if all.remoteTxs.Size() > 0 {
+		all.remoteTxs.Del(id)
 	}
 }
+
 func (all *allLookupTxs) Set(id txbasic.TxID, value *wrappedTx) {
 	if value.IsLocal {
 		all.localTxs.Set(id, value)

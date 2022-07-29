@@ -2,13 +2,12 @@ package transactionpool
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
@@ -32,30 +31,37 @@ type TransactionPoolServant interface {
 	loadAndSetPoolConfig(path string, marshaler codec.Marshaler, setConf func(config txpooli.TransactionPoolConfig)) error
 
 	saveLocalTxs(path string, marshaler codec.Marshaler, wrappedTxs []*wrappedTx) error
-	saveAllLocalTxs(path string, marshaler codec.Marshaler, getLocals func() *tpcmm.ShrinkableMap) error
+	saveAllLocalTxs(isLocalsNotNil func() bool, saveAllLocals func() error) error
 	delLocalTxs(path string, marshaler codec.Marshaler, ids []txbasic.TxID) error
 	loadAndAddLocalTxs(path string, marshaler codec.Marshaler, addLocalTx func(txID txbasic.TxID, txWrap *wrappedTx)) error
 
 	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
 	UnSubscribe(topic string) error
+
+	getStateQuery() service.StateQueryService
 }
 
 func newTransactionPoolServant(stateQueryService service.StateQueryService, blockService service.BlockService,
 	network tpnet.Network) TransactionPoolServant {
 	txpoolservant := &transactionPoolServant{
-		StateQueryService: stateQueryService,
-		BlockService:      blockService,
-		Network:           network,
+		state:        stateQueryService,
+		BlockService: blockService,
+		Network:      network,
+		mu:           sync.RWMutex{},
 	}
 	return txpoolservant
 }
 
 type transactionPoolServant struct {
-	service.StateQueryService
+	state service.StateQueryService
 	service.BlockService
 	tpnet.Network
+	mu sync.RWMutex
 }
 
+func (servant *transactionPoolServant) getStateQuery() service.StateQueryService {
+	return servant.state
+}
 func (servant *transactionPoolServant) CurrentHeight() (uint64, error) {
 	curBlock, err := servant.GetLatestBlock()
 	if err != nil {
@@ -65,6 +71,14 @@ func (servant *transactionPoolServant) CurrentHeight() (uint64, error) {
 	return curHeight, nil
 }
 
+func (servant *transactionPoolServant) GetNonce(addr tpcrtypes.Address) (uint64, error) {
+	return servant.state.GetNonce(addr)
+}
+
+func (servant *transactionPoolServant) GetLatestBlock() (*tpchaintypes.Block, error) {
+	return servant.state.GetLatestBlock()
+
+}
 func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
 	if tx == nil {
 		return ErrTxIsNil
@@ -83,6 +97,7 @@ func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasi
 	var toModuleName []string
 	toModuleName = append(toModuleName, txpooli.MOD_NAME)
 	servant.Network.Publish(ctx, toModuleName, protocol.SyncProtocolID_Msg, sendData)
+
 	return nil
 }
 
@@ -123,6 +138,9 @@ func (servant *transactionPoolServant) loadAndSetPoolConfig(path string, marshal
 }
 
 func (servant *transactionPoolServant) delLocalTxs(path string, marshaler codec.Marshaler, ids []txbasic.TxID) error {
+	servant.mu.Lock()
+	defer servant.mu.Unlock()
+
 	pathIndex := path + "index.json"
 	txIndexFile, err := os.Open(pathIndex)
 	if err != nil {
@@ -150,6 +168,9 @@ func (servant *transactionPoolServant) delLocalTxs(path string, marshaler codec.
 }
 
 func (servant *transactionPoolServant) saveLocalTxs(path string, marshaler codec.Marshaler, wrappedTxs []*wrappedTx) error {
+	servant.mu.Lock()
+	defer servant.mu.Unlock()
+
 	pathIndex := path + "index.json"
 	pathData := path + "data.json"
 	txIndexFile, _ := os.Open(pathIndex)
@@ -190,59 +211,22 @@ func (servant *transactionPoolServant) saveLocalTxs(path string, marshaler codec
 	return nil
 }
 
-func (servant *transactionPoolServant) saveAllLocalTxs(path string, marshaler codec.Marshaler, getLocals func() *tpcmm.ShrinkableMap) error {
+func (servant *transactionPoolServant) saveAllLocalTxs(isLocalsNil func() bool, saveAllLocals func() error) error {
+	servant.mu.Lock()
+	defer servant.mu.Unlock()
 
-	TxsLocal := getLocals()
-	if len(TxsLocal.AllKeys()) == 0 {
+	if isLocalsNil() {
 		return ErrTxNotExist
 	}
-	var allTxInfo []*wrappedTxData
-	getAllTxInfo := func(k interface{}, v interface{}) {
-		TxInfo := v.(*wrappedTx)
-		txByte, _ := marshaler.Marshal(TxInfo.Tx)
-		txData := &wrappedTxData{
-			TxID:          TxInfo.TxID,
-			IsLocal:       TxInfo.IsLocal,
-			LastTime:      TxInfo.LastTime,
-			LastHeight:    TxInfo.LastHeight,
-			TxState:       TxInfo.TxState,
-			IsRepublished: TxInfo.IsRepublished,
-			Tx:            txByte,
-		}
-		allTxInfo = append(allTxInfo, txData)
-	}
 
-	TxsLocal.IterateCallback(getAllTxInfo)
-
-	pathIndex := path + "index.json"
-	pathData := path + "data.json"
-	fileIndex, err := os.OpenFile(pathIndex, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-	if err != nil {
-		return err
-	}
-	fileData, err := os.OpenFile(pathData, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-
-	if err != nil {
-		return err
-	}
-	txIndex := newTxStorageIndex()
-	for _, v := range allTxInfo {
-		ByteV, _ := marshaler.Marshal(v)
-		n, err := fileData.Write(ByteV)
-		if err != nil {
-			fmt.Println("writeData error", err)
-		}
-		txIndex.set(string(v.TxID), [2]int{txIndex.LastPos, n})
-	}
-	txInByte, _ := marshaler.Marshal(txIndex)
-	fileIndex.Write(txInByte)
-
-	fileIndex.Close()
-	fileData.Close()
-	return nil
+	err := saveAllLocals()
+	return err
 }
 
 func (servant *transactionPoolServant) loadAndAddLocalTxs(path string, marshaler codec.Marshaler, addLocalTx func(txID txbasic.TxID, txWrap *wrappedTx)) error {
+	servant.mu.Lock()
+	defer servant.mu.Unlock()
+
 	if path == "" {
 		return ErrTxStoragePath
 	}
@@ -307,7 +291,7 @@ type txMsgSubProcessor struct {
 	nodeID string
 }
 
-func (msgSub *txMsgSubProcessor) GetLoger() tplog.Logger {
+func (msgSub *txMsgSubProcessor) GetLogger() tplog.Logger {
 	return msgSub.log
 }
 func (msgSub *txMsgSubProcessor) GetNodeID() string {
@@ -343,7 +327,7 @@ func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sen
 	}
 	if !isLocal {
 		ac := transaction.CreatTransactionAction(tx)
-		verifyResult := ac.Verify(ctx, msgSub.GetLoger(), msgSub.GetNodeID(), nil)
+		verifyResult := ac.Verify(ctx, msgSub.GetLogger(), msgSub.GetNodeID(), nil)
 		switch verifyResult {
 		case txbasic.VerifyResult_Accept:
 			return message.ValidationAccept
@@ -356,17 +340,16 @@ func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sen
 	return message.ValidationAccept
 }
 func (msgSub *txMsgSubProcessor) Process(ctx context.Context, subMsgTxMessage *TxMessage) error {
+
 	var tx *txbasic.Transaction
-	txId, _ := tx.TxID()
-	err := tx.Unmarshal(subMsgTxMessage.Data)
+	if subMsgTxMessage == nil {
+		return ErrTxIsNil
+	}
+	err := msgSub.txPool.marshaler.Unmarshal(subMsgTxMessage.Data, &tx)
 	if err != nil {
-		msgSub.log.Error("txmessage data error")
+		msgSub.log.Error("txMessage data error")
 		return err
 	}
-
 	msgSub.txPool.AddTx(tx, false)
-	if _, ok := msgSub.txPool.Get(txId); ok {
-		msgSub.txPool.txCache.Add(txId, txpooli.StateTxAdded)
-	}
 	return nil
 }

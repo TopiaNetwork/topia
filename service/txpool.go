@@ -11,9 +11,9 @@ import (
 type TxPoolService interface {
 	AddTx(tx *txbasic.Transaction, local bool) error
 
-	RemoveTxByKey(key txbasic.TxID, force bool) error
+	RemoveTxByKey(key txbasic.TxID) error
 
-	RemoveTxHashes(hashes []txbasic.TxID, force bool) error
+	RemoveTxHashes(hashes []txbasic.TxID) []error
 
 	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
 

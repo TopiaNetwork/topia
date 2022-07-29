@@ -4,7 +4,6 @@ import (
 	"os"
 	"sync"
 
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
@@ -22,10 +21,52 @@ func (pool *transactionPool) loadAndSetPoolConfig(path string) error {
 }
 
 func (pool *transactionPool) SaveAllLocalTxsData(path string) error {
-	getLocals := func() *tpcmm.ShrinkableMap {
-		return pool.allWrappedTxs.localTxs
+	var allTxInfo []*wrappedTxData
+	isLocalsNil := func() bool {
+		return pool.allWrappedTxs.localTxs.Size() == 0
 	}
-	return pool.txServant.saveAllLocalTxs(path, pool.marshaler, getLocals)
+	saveAllLocals := func() error {
+		getAllTxInfo := func(k interface{}, v interface{}) {
+			TxInfo := v.(*wrappedTx)
+			txByte, _ := pool.marshaler.Marshal(TxInfo.Tx)
+			txData := &wrappedTxData{
+				TxID:          TxInfo.TxID,
+				IsLocal:       TxInfo.IsLocal,
+				LastTime:      TxInfo.LastTime,
+				LastHeight:    TxInfo.LastHeight,
+				TxState:       TxInfo.TxState,
+				IsRepublished: TxInfo.IsRepublished,
+				Tx:            txByte,
+			}
+			allTxInfo = append(allTxInfo, txData)
+		}
+
+		pool.allWrappedTxs.localTxs.IterateCallback(getAllTxInfo)
+
+		pathIndex := path + "index.json"
+		pathData := path + "data.json"
+		fileIndex, err := os.OpenFile(pathIndex, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			return err
+		}
+		fileData, err := os.OpenFile(pathData, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+
+		if err != nil {
+			return err
+		}
+		txIndex := newTxStorageIndex()
+		for _, v := range allTxInfo {
+			ByteV, _ := pool.marshaler.Marshal(v)
+			n, _ := fileData.Write(ByteV)
+			txIndex.set(string(v.TxID), [2]int{txIndex.LastPos, n})
+		}
+		txInByte, _ := pool.marshaler.Marshal(txIndex)
+		fileIndex.Write(txInByte)
+		fileIndex.Close()
+		fileData.Close()
+		return nil
+	}
+	return pool.txServant.saveAllLocalTxs(isLocalsNil, saveAllLocals)
 }
 func (pool *transactionPool) SaveLocalTxsData(path string, wrappedTxs []*wrappedTx) error {
 

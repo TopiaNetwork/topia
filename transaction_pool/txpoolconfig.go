@@ -26,33 +26,34 @@ const (
 )
 
 const (
-	ChanBlockAddedSize   = 64
-	ChanBlocksRevertSize = 64
-	ChanDelTxsStorage    = 20 * 1024
-	ChanSaveTxsStorage   = 20 * 1024
-	TxCacheSize          = 36000000
-	MaxUint64            = 1<<64 - 1
+	ChanAddTxsSize        = 1024 * 1024
+	ChanBlockAddedSize    = 64
+	ChanDelTxsStorage     = 20 * 1024
+	ChanSaveTxsStorage    = 20 * 1024
+	TxCacheSize           = 1024 * 1024
+	AccountNonceCacheSize = 40 * 1024
+	MaxUint64             = 1<<64 - 1
 )
 
 var (
-	RemoveTxInterval         = 15 * time.Second // Time interval to check for remove transactions
-	SaveTxStorageInterval    = 50 * time.Millisecond
-	delTxFromStorageInterval = 100 * time.Millisecond
-	RepublishTxInterval      = 3 * time.Second //30000 * time.Millisecond  //time interval to check transaction lifetime for report
+	RemoveTxInterval         = 30011 * time.Millisecond // Time interval to check for remove transactions
+	SaveTxStorageInterval    = 101 * time.Millisecond
+	delTxFromStorageInterval = 151 * time.Millisecond
+	RepublishTxInterval      = 1499 * time.Millisecond //30000 * time.Millisecond  //time interval to check transaction lifetime for report
 
 	ObsID string
 
-	ErrAlreadyKnown     = errors.New("transaction is already know")
-	ErrTxNotExist       = errors.New("transaction not found")
-	ErrAddrNotExist     = errors.New("address not found")
-	ErrTxsNotContinuous = errors.New("transactions in pending is not continuous")
-	ErrNonceNotMin      = errors.New("nonce is not min when remove tx")
-	ErrTxIDDiff         = errors.New("TxID is different for the same nonce ")
-	ErrTxIsPackaged     = errors.New("transaction is packaged can't be replaced")
-	ErrTxIsNil          = errors.New("transaction is nil")
-	ErrUnRooted         = errors.New("UnRooted new chain")
-	ErrTxStoragePath    = errors.New("error tx storage path")
-	ErrTxPoolFull       = errors.New("tx pool is full")
+	ErrAlreadyKnown  = errors.New("transaction is already know")
+	ErrTxNotExist    = errors.New("transaction not found")
+	ErrAddrNotExist  = errors.New("address not found")
+	ErrNoTxAdded     = errors.New("no transactions add to txPool")
+	ErrNonceNotMin   = errors.New("nonce is not min when remove tx")
+	ErrTxIDDiff      = errors.New("TxID is different for the same nonce ")
+	ErrTxIsPackaged  = errors.New("transaction is packaged can't be replaced")
+	ErrTxIsNil       = errors.New("transaction is nil")
+	ErrUnRooted      = errors.New("UnRooted new chain")
+	ErrTxStoragePath = errors.New("error tx storage path")
+	ErrTxPoolFull    = errors.New("tx pool is full")
 )
 
 type BlockAddedEvent struct{ Block *tpchaintypes.Block }

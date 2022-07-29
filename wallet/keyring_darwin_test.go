@@ -15,4 +15,7 @@ func TestKeyringWithBKD_Keychain(t *testing.T) {
 	err := initWithBackendX(&kri, keyring.KeychainBackend, testFolderPath())
 	assert.Equal(t, nil, err, "init with backend:", keyring.FileBackend, "err:", err)
 	testSetGetRemove(kri, t)
+
+	err = os.RemoveAll(filepath.Join(testFolderPath(), topiaKeysFolderName))
+	assert.Nil(t, err, "remove wallet folder err", err)
 }

@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"errors"
 	"fmt"
 	"github.com/TopiaNetwork/topia/crypt/ed25519"
 	"github.com/TopiaNetwork/topia/crypt/secp256"
@@ -16,17 +17,21 @@ import (
 )
 
 func TestWallet_Function(t *testing.T) {
-	var keyFolderName string
 
 	ews := []EncryptWayOfWallet{getTestEncrytWayInstance_ed25519(t), getTestEncrytWayInstance_secp256(t)}
-
 	for i := range ews {
-		w, err := NewWallet(tplogcmm.NoLevel, nil, testFolderPath(), ews[i])
-		assert.Nil(t, err, "NewWallet err", err)
+		cleanCache()
+
+		var keyFolderName string
+
+		walletBackendConfig.RootPath = testFolderPath() // only for test
+		w, err := NewWallet(tplogcmm.NoLevel, nil, ews[i])
+		assert.Nil(t, err, "NewWallet err")
+
 		wImp, ok := w.(*wallet)
 		assert.Equal(t, true, ok, "cannot happen")
 
-		switch wImp.ws.(type) {
+		switch wImp.ks.(type) {
 		case *fileKeyStore:
 			keyFolderName = topiaKeysFolderName
 		case *keyringImp:
@@ -43,6 +48,7 @@ func TestWallet_Function(t *testing.T) {
 
 		err = w.SetDefault(addr)
 		assert.Equal(t, nil, err, "SetDefault addr err:", err)
+
 		defaultAddr, err := w.Default()
 		assert.Equal(t, addr, defaultAddr, "get Default addr err:", err)
 		assert.Equal(t, nil, err, "get Default addr err:", err)
@@ -79,18 +85,22 @@ func TestWallet_Function(t *testing.T) {
 		err = w.Enable(true)
 		assert.Equal(t, nil, err, "enable wallet err", err)
 
-		err = os.RemoveAll(filepath.Join(testFolderPath(), keyFolderName))
-		assert.Nil(t, err, "should not happen:", err)
+		err = removeTestWalletFolder(w, filepath.Join(testFolderPath(), keyFolderName))
+		assert.Nil(t, err, err)
 	}
 
 }
 
 func TestMnemonic(t *testing.T) {
+	cleanCache()
+
 	passphrase := "this is test passphrase"
 
 	var ct = tpcrtypes.CryptType_Ed25519
 
-	w, err := NewWallet(tplogcmm.NoLevel, nil, testFolderPath(), getTestEncrytWayInstance_ed25519(t))
+	walletBackendConfig.RootPath = testFolderPath() // only for test
+	w, err := NewWallet(tplogcmm.NoLevel, nil, getTestEncrytWayInstance_ed25519(t))
+
 	assert.Nil(t, err, "NewWallet err", err)
 
 	mnemonic12, err := w.CreateMnemonic(ct, passphrase, 12)
@@ -113,8 +123,8 @@ func TestMnemonic(t *testing.T) {
 	err = w.Delete(addr24)
 	assert.Nil(t, err, "delete addr err", err)
 
-	err = os.RemoveAll(filepath.Join(testFolderPath(), "wallet"))
-	assert.Nil(t, err, "remove test wallet err", err)
+	err = removeTestWalletFolder(w, filepath.Join(testFolderPath(), "wallet"))
+	assert.Nil(t, err, err)
 }
 
 //return path string of the folder which this file is in.
@@ -150,4 +160,36 @@ func getTestEncrytWayInstance_secp256(t *testing.T) EncryptWayOfWallet {
 		Pubkey:    pub,
 		Seckey:    sec,
 	}
+}
+
+// removeTestWalletFolder just for Test.
+func removeTestWalletFolder(w Wallet, path string) error {
+	if !isValidFolderPath(path) {
+		return errors.New("invalid folder path:" + path)
+	}
+
+	wImp := w.(*wallet)
+
+	if fks, ok := wImp.ks.(*fileKeyStore); ok {
+		fks.mutex.Lock()
+		defaultAddrFile_mutex.Lock()
+		err := os.RemoveAll(path)
+		if err != nil {
+			return err
+		}
+		defaultAddrFile_mutex.Unlock()
+		fks.mutex.Unlock()
+	} else if kri, ok := wImp.ks.(*keyringImp); ok {
+		kri.mutex.Lock()
+		defaultAddrFile_mutex.Lock()
+		err := os.RemoveAll(path)
+		if err != nil {
+			return err
+		}
+		defaultAddrFile_mutex.Unlock()
+		kri.mutex.Unlock()
+	} else {
+		return errors.New("wallet imp err")
+	}
+	return nil
 }

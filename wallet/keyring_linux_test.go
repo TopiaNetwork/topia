@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/99designs/keyring"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -21,6 +23,9 @@ func TestKeyringWithBKD_KWallet(t *testing.T) {
 			err := initWithBackendX(&kri, keyring.KWalletBackend, testFolderPath())
 			assert.Equal(t, nil, err, "init with backend:", keyring.KWalletBackend, "err:", err)
 			testSetGetRemove(kri, t)
+
+			err = os.RemoveAll(filepath.Join(testFolderPath(), topiaKeysFolderName))
+			assert.Nil(t, err, "remove wallet folder err", err)
 		}
 	}
 
@@ -40,6 +45,9 @@ func TestKeyringWithBKD_KeyCtl(t *testing.T) {
 			err := initWithBackendX(&kri, keyring.KeyCtlBackend, testFolderPath())
 			assert.Nil(t, err, "init with KeyCtlBackend err", err)
 			testSetGetRemove(kri, t)
+
+			err = os.Remove(filepath.Join(testFolderPath(), topiaKeysFolderName))
+			assert.Nil(t, err, "remove wallet folder err", err)
 		}
 	}
 

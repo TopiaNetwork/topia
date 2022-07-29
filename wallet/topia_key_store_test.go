@@ -9,50 +9,49 @@ import (
 )
 
 func TestTopiaFileKeyStoreFunction(t *testing.T) {
+	cleanCache()
+
 	var fks fileKeyStore
 
+	testAddr := "whatever_Addr"
 	initArgument := initArg{
 		RootPath:           testFolderPath(),
-		EncryptWayOfWallet: getTestEncrytWayInstance_ed25519(t),
+		EncryptWayOfWallet: getTestEncrytWayInstance_secp256(t),
 	}
+	defaultAddr := "whatever_defaultAddr"
+
 	err := fks.Init(initArgument)
 	assert.Nil(t, err, "fileKeyStore init err", err)
 
-	item := addrItem{
-		Addr:       "whatever",
-		AddrLocked: false,
-		Seckey:     []byte("whatever"),
-		Pubkey:     []byte("whatever"),
-		CryptType:  tpcrtypes.CryptType_Ed25519, // Any valid type is fine.
+	item := keyItem{
+		Seckey:    []byte("whatever"),
+		CryptType: tpcrtypes.CryptType_Ed25519, // Any valid type is fine.
 	}
-	err = fks.SetWalletEnable(true)
+	err = fks.SetEnable(true)
 	assert.Nil(t, err, "fileKeyStore SetWalletEnable err", err)
 
-	err = fks.SetDefaultAddr(item.Addr)
+	err = setDefaultAddr(defaultAddr)
 	assert.Nil(t, err, "fileKeyStore SetDefaultAddr err:", err)
-	err = fks.SetAddr(item)
+	err = fks.SetAddr(testAddr, item)
 	assert.Equal(t, nil, err, "fileKeyStore set addr err:", err)
-	getItem, err := fks.GetAddr(item.Addr)
+	getItem, err := fks.GetAddr(testAddr)
 	assert.Equal(t, nil, err, "fileKeyStore get addr err:", err)
-	assert.Equal(t, item.AddrLocked, getItem.AddrLocked)
 	assert.Equal(t, item.CryptType, getItem.CryptType)
 	for i := range item.Seckey {
 		assert.Equal(t, item.Seckey[i], getItem.Seckey[i])
 	}
-	for i := range item.Pubkey {
-		assert.Equal(t, item.Pubkey[i], getItem.Pubkey[i])
-	}
 
-	_, err = fks.GetWalletEnable()
+	_, err = fks.GetEnable()
 	assert.Equal(t, nil, err, "fileKeyStore get wallet enable err:", err)
-	_, err = fks.GetDefaultAddr()
-	assert.Equal(t, nil, err, "fileKeyStore get default addr err:", err)
+	getDA := getDefaultAddr()
+	assert.Equal(t, defaultAddr, getDA, "fileKeyStore get default addr err:", err)
 
-	err = fks.RemoveItem(item.Addr)
+	err = fks.Remove(testAddr)
 	assert.Nil(t, err, "remove addr err:", err)
-	err = fks.RemoveItem(walletEnableKey)
+	err = fks.Remove(walletEnableKey)
 	assert.Nil(t, err, "remove walletEnableKey err:", err)
-	err = fks.RemoveItem(defaultAddrKey)
+
+	err = removeDefaultAddr()
 	assert.Nil(t, err, "remove defaultAddrKey err:", err)
 
 	err = os.RemoveAll(filepath.Join(testFolderPath(), topiaKeysFolderName))

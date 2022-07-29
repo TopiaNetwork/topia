@@ -11,44 +11,42 @@ import (
 )
 
 func TestKeyring_File(t *testing.T) {
+	cleanCache()
+
 	var kri keyringImp
 	err := initWithBackendX(&kri, keyring.FileBackend, testFolderPath())
 	assert.Equal(t, nil, err, "init with backend:", keyring.FileBackend, "err:", err)
-	item := addrItem{
-		Addr:       "whatever",
-		AddrLocked: false,
-		Seckey:     []byte("whatever"),
-		Pubkey:     []byte("whatever"),
-		CryptType:  tpcrtypes.CryptType_Ed25519, // Any valid type is fine.
-	}
 
-	err = kri.SetWalletEnable(true)
+	testAddr := "whatever_Addr"
+	item := keyItem{
+		Seckey:    []byte("whatever"),
+		CryptType: tpcrtypes.CryptType_Ed25519, // Any valid type is fine.
+	}
+	defaultAddr := "whatever_defaultAddr"
+
+	err = kri.SetEnable(true)
 	assert.Nil(t, err, "SetWalletEnable err:", err)
-	err = kri.SetDefaultAddr(item.Addr)
+	err = setDefaultAddr(defaultAddr)
 	assert.Nil(t, err, "SetDefaultAddr err:", err)
-	err = kri.SetAddr(item)
+	err = kri.SetAddr(testAddr, item)
 	assert.Equal(t, nil, err, "set addr err:", err)
-	getItem, err := kri.GetAddr(item.Addr)
+	getItem, err := kri.GetAddr(testAddr)
 	assert.Equal(t, nil, err, "get addr err:", err)
-	assert.Equal(t, item.AddrLocked, getItem.AddrLocked)
 	assert.Equal(t, item.CryptType, getItem.CryptType)
 	for i := range item.Seckey {
 		assert.Equal(t, item.Seckey[i], getItem.Seckey[i])
 	}
-	for i := range item.Pubkey {
-		assert.Equal(t, item.Pubkey[i], getItem.Pubkey[i])
-	}
 
-	_, err = kri.GetWalletEnable()
+	_, err = kri.GetEnable()
 	assert.Equal(t, nil, err, "get wallet enable err:", err)
-	_, err = kri.GetDefaultAddr()
-	assert.Equal(t, nil, err, "get default addr err:", err)
+	getDA := getDefaultAddr()
+	assert.Equal(t, defaultAddr, getDA, "get default addr err:", err)
 
-	err = kri.RemoveItem(item.Addr)
+	err = kri.Remove(testAddr)
 	assert.Nil(t, err, "remove addr err:", err)
-	err = kri.RemoveItem(walletEnableKey)
+	err = kri.Remove(walletEnableKey)
 	assert.Nil(t, err, "remove walletEnableKey err:", err)
-	err = kri.RemoveItem(defaultAddrKey)
+	err = removeDefaultAddr()
 	assert.Nil(t, err, "remove defaultAddrKey err:", err)
 
 	err = os.RemoveAll(filepath.Join(testFolderPath(), keyringKeysFolderName))
@@ -75,8 +73,6 @@ func initWithBackendX(kri *keyringImp, bkd keyring.BackendType, fileFolderPath s
 		KWalletFolder:                  "TopiaKWallet",
 		WinCredPrefix:                  "", // default "keyring"
 	}
-	kri.mutex.Lock()
-	defer kri.mutex.Unlock()
 
 	tempKeyring, err := keyring.Open(config)
 	if err != nil {
@@ -84,27 +80,10 @@ func initWithBackendX(kri *keyringImp, bkd keyring.BackendType, fileFolderPath s
 	}
 	kri.k = tempKeyring
 
-	if _, err = kri.k.Get(walletEnableKey); err != nil { // if walletEnableKey hasn't been set, set it
-		tempItem := keyring.Item{
-			Key:         walletEnableKey,
-			Data:        []byte(walletEnabled),
-			Label:       "",
-			Description: "",
-		}
-		if err = kri.k.Set(tempItem); err != nil {
-			return errors.New("set walletEnable Item err: " + err.Error())
-		}
-	}
-
-	if _, err = kri.k.Get(defaultAddrKey); err != nil { // if walletDefaultAddrKey hasn't been set, set it
-		tempItem := keyring.Item{
-			Key:         defaultAddrKey,
-			Data:        []byte("please_set_default_address"),
-			Label:       "",
-			Description: "",
-		}
-		if err = kri.k.Set(tempItem); err != nil {
-			return errors.New("set walletDefaultAddr Item err: " + err.Error())
+	if _, err = kri.getEnableFromBackend(); err != nil { // if walletEnableKey hasn't been set, set it
+		err = kri.SetEnable(true)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -112,41 +91,38 @@ func initWithBackendX(kri *keyringImp, bkd keyring.BackendType, fileFolderPath s
 }
 
 func testSetGetRemove(kri keyringImp, t *testing.T) {
-	item := addrItem{
-		Addr:       "whatever",
-		AddrLocked: false,
-		Seckey:     []byte("whatever"),
-		Pubkey:     []byte("whatever"),
-		CryptType:  tpcrtypes.CryptType_Ed25519, // Any valid CryptType is fine.
+	testAddr := "whatever_Addr"
+	item := keyItem{
+		Seckey:    []byte("whatever"),
+		CryptType: tpcrtypes.CryptType_Ed25519, // Any valid CryptType is fine.
 	}
 
-	err := kri.SetWalletEnable(true)
+	defaultAddr := "whatever_defaultAddr"
+
+	err := kri.SetEnable(true)
 	assert.Nil(t, err, "SetWalletEnable err:", err)
-	err = kri.SetDefaultAddr(item.Addr)
+	err = setDefaultAddr(defaultAddr)
 	assert.Nil(t, err, "SetDefaultAddr err:", err)
-	err = kri.SetAddr(item)
+	err = kri.SetAddr(testAddr, item)
 	assert.Equal(t, nil, err, "set addr err:", err)
-	getItem, err := kri.GetAddr(item.Addr)
+	getItem, err := kri.GetAddr(testAddr)
 	assert.Equal(t, nil, err, "get addr err:", err)
-	assert.Equal(t, item.AddrLocked, getItem.AddrLocked)
 	assert.Equal(t, item.CryptType, getItem.CryptType)
 	for i := range item.Seckey {
 		assert.Equal(t, item.Seckey[i], getItem.Seckey[i])
 	}
-	for i := range item.Pubkey {
-		assert.Equal(t, item.Pubkey[i], getItem.Pubkey[i])
-	}
 
-	_, err = kri.GetWalletEnable()
+	_, err = kri.GetEnable()
 	assert.Equal(t, nil, err, "get wallet enable err:", err)
-	_, err = kri.GetDefaultAddr()
-	assert.Equal(t, nil, err, "get default addr err:", err)
+	getDA := getDefaultAddr()
+	assert.Equal(t, defaultAddr, getDA, "get default addr err:", err)
 
-	err = kri.RemoveItem(item.Addr)
+	err = kri.Remove(testAddr)
 	assert.Nil(t, err, "remove addr err:", err)
-	err = kri.RemoveItem(walletEnableKey)
+	err = kri.Remove(walletEnableKey)
 	assert.Nil(t, err, "remove walletEnableKey err:", err)
-	err = kri.RemoveItem(defaultAddrKey)
+
+	err = removeDefaultAddr()
 	assert.Nil(t, err, "remove defaultAddrKey err:", err)
 
 }

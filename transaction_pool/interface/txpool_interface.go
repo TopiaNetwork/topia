@@ -15,9 +15,10 @@ const MOD_NAME = "TransactionPool"
 type TransactionState string
 
 const (
-	StateTxAdded       TransactionState = "transaction Added"
-	StateTxRepublished                  = "transaction republished"
-	StateTxNil                          = "no transaction state for this tx "
+	StateTxAdded              TransactionState = "transaction Added"
+	StateTxRepublished                         = "transaction republished"
+	StateTxNil                                 = "no transaction state for this tx "
+	StateDroppedForTxPoolFull                  = "transaction dropped for txPool is full"
 )
 
 type TransactionPoolConfig struct {
@@ -31,6 +32,8 @@ type TransactionPoolConfig struct {
 	MaxSizeOfEachTx     int64
 	TxPoolMaxSize       int64
 	TxPoolMaxCnt        int64
+	PendingMaxSize      int64
+	PendingMaxCnt       int64
 	MaxCntOfEachAccount int64 // Maximum size of transaction per account
 
 	LifetimeForTx          time.Duration
@@ -42,19 +45,22 @@ type TransactionPoolConfig struct {
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
 	PathTxsStorage: "StorageInfo/StorageTxs",
 	PathConf:       "StorageInfo/StorageConfig.json",
-	ReStoredDur:    120 * time.Second, //30 * time.Minute,
+	ReStoredDur:    2000003 * time.Microsecond, //2 * time.Second,
 
 	GasPriceLimit: 1000, // 1000
 
-	MaxSizeOfEachTx:     2 * 1024,
-	TxPoolMaxSize:       20 * 1024 * 1024,
-	TxPoolMaxCnt:        40 * 1024,
+	MaxSizeOfEachTx: 2 * 1024,
+	TxPoolMaxSize:   20 * 1024 * 1024,
+	TxPoolMaxCnt:    40 * 1024,
+	PendingMaxSize:  10 * 1024 * 1024,
+	PendingMaxCnt:   20 * 1024,
+
 	MaxCntOfEachAccount: 32,
 
-	LifetimeForTx:          15 * time.Minute, //15 * time.Minute,
+	LifetimeForTx:          15 * time.Second, // 15 * time.Second
 	LifeHeight:             uint64(30 * 60),
-	TxTTLTimeOfRepublish:   30 * time.Second, //30011 * time.Millisecond, //Prime Numbers 30second
-	TxTTLHeightOfRepublish: 30,
+	TxTTLTimeOfRepublish:   5 * time.Second, //5 * time.Second
+	TxTTLHeightOfRepublish: 5,
 }
 
 func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
@@ -72,6 +78,13 @@ func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
 	if conf.TxPoolMaxCnt < DefaultTransactionPoolConfig.TxPoolMaxCnt {
 		conf.TxPoolMaxCnt = DefaultTransactionPoolConfig.TxPoolMaxCnt
 	}
+	if conf.PendingMaxSize < DefaultTransactionPoolConfig.PendingMaxSize {
+		conf.PendingMaxSize = DefaultTransactionPoolConfig.PendingMaxSize
+	}
+	if conf.PendingMaxCnt < DefaultTransactionPoolConfig.PendingMaxCnt {
+		conf.PendingMaxCnt = DefaultTransactionPoolConfig.PendingMaxCnt
+	}
+
 	if conf.LifetimeForTx < DefaultTransactionPoolConfig.LifetimeForTx {
 		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
 	}
@@ -91,9 +104,9 @@ func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
 type TransactionPool interface {
 	AddTx(tx *txbasic.Transaction, isLocal bool) error
 
-	RemoveTxByKey(key txbasic.TxID, force bool) error
+	RemoveTxByKey(key txbasic.TxID) error
 
-	RemoveTxHashes(hashes []txbasic.TxID, force bool) error
+	RemoveTxHashes(hashes []txbasic.TxID) []error
 
 	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
 

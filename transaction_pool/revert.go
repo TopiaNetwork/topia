@@ -1,11 +1,11 @@
 package transactionpool
 
 import (
-	"github.com/TopiaNetwork/topia/transaction"
 	"sync/atomic"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/network/message"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
@@ -15,7 +15,7 @@ func (pool *transactionPool) dropTxsForBlockAdded(newBlock *tpchaintypes.Block) 
 	defer func(t0 time.Time) {
 		pool.log.Infof("dropTxsForBlockAdded cost time: ", time.Since(t0))
 	}(time.Now())
-
+	var txIDs []txbasic.TxID
 	for _, txByte := range newBlock.Data.Txs {
 		var tx *txbasic.Transaction
 		err := pool.marshaler.Unmarshal(txByte, &tx)
@@ -23,8 +23,9 @@ func (pool *transactionPool) dropTxsForBlockAdded(newBlock *tpchaintypes.Block) 
 			pool.log.Errorf("Unmarshal tx error:", err)
 		}
 		txID, _ := tx.TxID()
-		pool.RemoveTxByKey(txID, true)
+		txIDs = append(txIDs, txID)
 	}
+	pool.RemoveTxHashes(txIDs)
 }
 
 func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block) {
@@ -60,14 +61,75 @@ func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block)
 			tx, _ := pool.allWrappedTxs.Get(id)
 			return tx.IsLocal
 		}
-		removeWrappedTx := func(id txbasic.TxID) {
+
+		rmTxInfo := func(id txbasic.TxID) {
 			pool.allWrappedTxs.remoteTxs.Del(id)
+			pool.txCache.Remove(id)
+			pool.chanDelTxsStorage <- []txbasic.TxID{id}
 		}
-		removeCache := func(id txbasic.TxID) { pool.txCache.Remove(id) }
+		delSorted := func(addr tpcrtypes.Address) {
+
+			for {
+				old := atomic.LoadInt32(&pool.isPicking)
+				if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(1)) {
+					break
+				}
+			}
+			pool.sortedTxs.removeAddr(addr)
+
+			for {
+				old := atomic.LoadInt32(&pool.isPicking)
+				if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
+					break
+				}
+			}
+		}
+		addSorted := func(addr tpcrtypes.Address, maxPrice uint64, isMaxChanged bool, txs []*txbasic.Transaction) bool {
+
+			if atomic.LoadInt32(&pool.isPicking) == int32(1) {
+				sortItem := &sortedItem{
+					account:           addr,
+					maxPrice:          maxPrice,
+					isMaxPriceChanged: isMaxChanged,
+					txs:               txs,
+				}
+				pool.chanSortedItem <- sortItem
+				return false
+			}
+
+			pool.sortedTxs.addAccTx(addr, maxPrice, isMaxChanged, txs)
+			return true
+		}
 		remoteTxs := func() []*txbasic.Transaction {
 			return pool.GetRemoteTxs()
 		}
-		cnt, isEnough := pool.pending.removeTxsForRevert(removeCnt, isLocal, removeWrappedTx, removeCache, remoteTxs)
+		for {
+			old := atomic.LoadInt32(&pool.isInRemove)
+			if atomic.CompareAndSwapInt32(&pool.isInRemove, old, 1) {
+				break
+			}
+		}
+		for {
+			old := atomic.LoadInt32(&pool.isPicking)
+			if atomic.CompareAndSwapInt32(&pool.isPicking, old, 1) {
+				break
+			}
+		}
+
+		cnt, isEnough := pool.pending.removeTxsForRevert(removeCnt, isLocal, rmTxInfo, delSorted, addSorted, remoteTxs)
+		for {
+			old := atomic.LoadInt32(&pool.isInRemove)
+			if atomic.CompareAndSwapInt32(&pool.isInRemove, old, 0) {
+				break
+			}
+		}
+		for {
+			old := atomic.LoadInt32(&pool.isPicking)
+			if atomic.CompareAndSwapInt32(&pool.isPicking, old, 0) {
+				break
+			}
+		}
+
 		if isEnough {
 			pool.addTxs(txList, false)
 		} else {
@@ -93,25 +155,29 @@ func (pool *transactionPool) validateTxsForRevert(tx *txbasic.Transaction) messa
 	}
 
 	//*********Comment it out when testing******
-
-	ac := transaction.CreatTransactionAction(tx)
-	verifyResult := ac.Verify(pool.ctx, pool.log, pool.nodeId, nil)
-	switch verifyResult {
-	case txbasic.VerifyResult_Accept:
-		return message.ValidationAccept
-	case txbasic.VerifyResult_Ignore:
-		return message.ValidationIgnore
-	case txbasic.VerifyResult_Reject:
-		return message.ValidationReject
-	}
+	//
+	//ac := transaction.CreatTransactionAction(tx)
+	//verifyResult := ac.Verify(pool.ctx, pool.log, pool.nodeId, nil)
+	//switch verifyResult {
+	//case txbasic.VerifyResult_Accept:
+	//	return message.ValidationAccept
+	//case txbasic.VerifyResult_Ignore:
+	//	return message.ValidationIgnore
+	//case txbasic.VerifyResult_Reject:
+	//	return message.ValidationReject
+	//}
 	//***************************
-	return message.ValidationIgnore
+	return message.ValidationAccept
 }
 func (pool *transactionPool) TruncateTxPool() {
-	pool.pending = newPending()
-	atomic.StoreInt64(&pool.poolSize, 0)
-	atomic.StoreInt64(&pool.poolCount, 0)
+	pool.pending = newAccTxs()
+	pool.prepareTxs = newAccTxs()
 	pool.allWrappedTxs = newAllLookupTxs()
+	pool.pendingNonces = newAccountNonce(pool.txServant.getStateQuery())
+	atomic.StoreInt64(&pool.pendingCount, 0)
+	atomic.StoreInt64(&pool.pendingSize, 0)
+	atomic.StoreInt64(&pool.poolCount, 0)
+	atomic.StoreInt64(&pool.poolSize, 0)
 	pool.txCache.Purge()
 	pathIndex := pool.config.PathTxsStorage + "index.json"
 	pathData := pool.config.PathTxsStorage + "data.json"

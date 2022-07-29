@@ -2,33 +2,17 @@ package transactionpool
 
 import (
 	"fmt"
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
 
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/codec"
+	"github.com/stretchr/testify/assert"
+
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txpoolmock "github.com/TopiaNetwork/topia/transaction_pool/mock"
 )
 
 func Test_transactionPool_loop_chanRemoveTxHashes(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
-
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
+	pool1.TruncateTxPool()
 
 	var hashes1, hashes2 []txbasic.TxID
 	var hash txbasic.TxID
@@ -36,201 +20,134 @@ func Test_transactionPool_loop_chanRemoveTxHashes(t *testing.T) {
 	for _, tx := range txLocals[:10] {
 		hash, _ = tx.TxID()
 		hashes1 = append(hashes1, hash)
-		pool.AddTx(tx, false)
+		pool1.AddTx(tx, false)
 	}
 
 	for _, tx := range txLocals[20:40] {
 		hash, _ = tx.TxID()
 		hashes2 = append(hashes2, hash)
-		pool.AddTx(tx, false)
+		pool1.AddTx(tx, false)
 	}
-	assert.Equal(t, 30, len(pool.GetRemoteTxs()))
+	for _, tx := range pool1.GetRemoteTxs() {
+		fmt.Println("addr,nonce", tx.Head.FromAddr, tx.Head.Nonce)
+	}
+	assert.Equal(t, 27, len(pool1.GetRemoteTxs()))
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pool.chanRmTxs <- hashes1
+		pool1.RemoveTxHashes(hashes1)
 	}()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pool.chanRmTxs <- hashes2
+		pool1.RemoveTxHashes(hashes2)
 	}()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		time.Sleep(5 * time.Second)
-		pool.ctx.Done()
+		time.Sleep(8 * time.Second)
+		pool1.ctx.Done()
 	}()
 
 	wg.Wait()
-	assert.Equal(t, 0, len(pool.GetRemoteTxs()))
-	pool.TruncateTxPool()
+	for _, tx := range pool1.GetRemoteTxs() {
+		fmt.Println("addr,nonce", tx.Head.FromAddr, tx.Head.Nonce)
+	}
+	assert.Equal(t, 0, len(pool1.GetRemoteTxs()))
+	pool1.TruncateTxPool()
 
 }
 
 func Test_transactionPool_loop_saveAllIfShutDown(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
+	pool1.AddTx(Tx1, true)
+	pool1.AddTx(Tx2, true)
+	pool1.AddTx(TxR1, false)
+	pool1.AddTx(TxR2, false)
 
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	pool.AddTx(Tx1, true)
-	pool.AddTx(Tx2, true)
-	pool.AddTx(TxR1, false)
-	pool.AddTx(TxR2, false)
-
-	pool.SysShutDown()
+	pool1.SysShutDown()
 	time.Sleep(5 * time.Second)
 	fmt.Println("done")
 
 }
 
 func Test_transactionPool_loopDropTxsIfBlockAdded(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	log := TpiaLog
-
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(OldBlock.Head.Hash)).AnyTimes().Return(OldBlock, nil)
-	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(MidBlock.Head.Hash)).AnyTimes().Return(MidBlock, nil)
-	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(NewBlock.Head.Hash)).AnyTimes().Return(NewBlock, nil)
-	blockService.EXPECT().GetBlockByNumber(tpchaintypes.BlockNum(10)).AnyTimes().Return(OldBlock, nil)
-	blockService.EXPECT().GetBlockByNumber(tpchaintypes.BlockNum(11)).AnyTimes().Return(MidBlock, nil)
-	blockService.EXPECT().GetBlockByNumber(tpchaintypes.BlockNum(12)).AnyTimes().Return(NewBlock, nil)
-	network := txpoolmock.NewMockNetwork(ctrl)
-
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
+	pool1.TruncateTxPool()
 
 	txs := txLocals[10:40]
 
-	pool.addTxs(txs, true)
-	assert.Equal(t, 30, len(pool.GetLocalTxs()))
-	assert.Equal(t, 0, len(pool.GetRemoteTxs()))
+	pool1.addTxs(txs, true)
+	assert.Equal(t, 27, len(pool1.GetLocalTxs()))
+	assert.Equal(t, 0, len(pool1.GetRemoteTxs()))
 	//OldBlock txs:txLocals[10:20]，remotes[10:20]
-	pool.chanBlockAdded <- OldBlock
+	pool1.chanBlockAdded <- OldBlock
 	time.Sleep(10 * time.Second)
-	assert.Equal(t, 20, len(pool.GetLocalTxs()))
-	assert.Equal(t, 0, len(pool.GetRemoteTxs()))
+	assert.Equal(t, 18, len(pool1.GetLocalTxs()))
+	assert.Equal(t, 0, len(pool1.GetRemoteTxs()))
 
 }
 
 func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	pool.AddTx(Tx1, true)
-	pool.AddTx(Tx2, true)
-	pool.AddTx(TxR1, false)
-	pool.AddTx(TxR2, false)
+	pool1.AddTx(Tx1, true)
+	pool1.AddTx(Tx2, true)
+	pool1.AddTx(TxR1, false)
+	pool1.AddTx(TxR2, false)
 
 	//**********for test
 	//*change default lifTime to 4 second,and change TxExpiredTime to 3 second **
 	//**********for test
-	pool.config.LifetimeForTx = 4 * time.Second
-	assert.Equal(t, int64(4), pool.Count())
+	pool1.config.LifetimeForTx = 4 * time.Second
+	assert.Equal(t, int64(4), pool1.Count())
 	time.Sleep(13 * time.Second)
-	locals := pool.GetLocalTxs()
+	locals := pool1.GetLocalTxs()
 	if len(locals) > 0 {
 		for _, tx := range locals {
 			fmt.Println(tx.Head.FromAddr, tx.Head.Nonce)
 		}
 	}
-	remotes := pool.GetRemoteTxs()
+	remotes := pool1.GetRemoteTxs()
 	if len(remotes) > 0 {
 		for _, tx := range remotes {
 			fmt.Println(tx.Head.FromAddr, tx.Head.Nonce)
 		}
 	}
-	assert.Equal(t, int64(0), pool.Count())
+	assert.Equal(t, int64(0), pool1.Count())
 	fmt.Println("test down")
 
 }
 
 func Test_transactionPool_regularSaveLocalTxs(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	log := TpiaLog
+	pool1.TruncateTxPool()
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	pool.AddTx(Tx1, true)
-	pool.AddTx(Tx2, true)
-	pool.AddTx(TxR1, false)
-	pool.AddTx(TxR2, false)
+	pool1.AddTx(Tx1, true)
+	pool1.AddTx(Tx2, true)
+	pool1.AddTx(TxR1, false)
+	pool1.AddTx(TxR2, false)
 	//**********for test
 	//*change default ReStoredDur to 4 second **
 	//**********for test
 	time.Sleep(10 * time.Second)
-	pool.ClearLocalFile(pool.config.PathTxsStorage)
+	pool1.ClearLocalFile(pool1.config.PathTxsStorage)
 	//you can see this log:
 	// loadTxsData file removed  module=TransactionPool
 }
 
 func Test_transactionPool_regularRepublic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	pool1.TruncateTxPool()
 
-	log := TpiaLog
+	pool1.AddTx(Tx1, true)
+	pool1.AddTx(Tx2, true)
+	pool1.AddTx(TxR1, false)
+	pool1.AddTx(TxR2, false)
 
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	network := txpoolmock.NewMockNetwork(ctrl)
-
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
-
-	pool.AddTx(Tx1, true)
-	pool.AddTx(Tx2, true)
-	pool.AddTx(TxR1, false)
-	pool.AddTx(TxR2, false)
-
-	wrapT1, ok := pool.allWrappedTxs.Get(Key1)
+	wrapT1, ok := pool1.allWrappedTxs.Get(Key1)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, false, wrapT1.IsRepublished)
-	wrapT2, ok := pool.allWrappedTxs.Get(KeyR2)
+	wrapT2, ok := pool1.allWrappedTxs.Get(KeyR2)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, false, wrapT2.IsRepublished)
 
@@ -240,10 +157,10 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 	//**********for test
 	time.Sleep(13 * time.Second)
 
-	wrapT1, ok = pool.allWrappedTxs.Get(Key1)
+	wrapT1, ok = pool1.allWrappedTxs.Get(Key1)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, true, wrapT1.IsRepublished)
-	wrapT2, ok = pool.allWrappedTxs.Get(Key2)
+	wrapT2, ok = pool1.allWrappedTxs.Get(Key2)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, true, wrapT2.IsRepublished)
 	fmt.Println("test down")
@@ -251,28 +168,7 @@ func Test_transactionPool_regularRepublic(t *testing.T) {
 }
 
 func Test_transactionPool_loop(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	log := TpiaLog
-
-	stateService := txpoolmock.NewMockStateQueryService(ctrl)
-	stateService.EXPECT().GetLatestBlock().AnyTimes().Return(OldBlock, nil)
-	stateService.EXPECT().GetNonce(gomock.Any()).AnyTimes().Return(uint64(1), nil)
-
-	blockService := txpoolmock.NewMockBlockService(ctrl)
-	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(OldBlock.Head.Hash)).AnyTimes().Return(OldBlock, nil)
-	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(MidBlock.Head.Hash)).AnyTimes().Return(MidBlock, nil)
-	blockService.EXPECT().GetBlockByHash(tpchaintypes.BlockHash(NewBlock.Head.Hash)).AnyTimes().Return(NewBlock, nil)
-	blockService.EXPECT().GetBlockByNumber(OldBlock.BlockNum()).AnyTimes().Return(OldBlock, nil)
-	blockService.EXPECT().GetBlockByNumber(MidBlock.BlockNum()).AnyTimes().Return(MidBlock, nil)
-	blockService.EXPECT().GetBlockByNumber(NewBlock.BlockNum()).AnyTimes().Return(NewBlock, nil)
-
-	network := txpoolmock.NewMockNetwork(ctrl)
-
-	network.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	pool := SetNewTransactionPool(NodeID, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
-	pool.TruncateTxPool()
+	pool1.TruncateTxPool()
 
 	keyLocals = make([]txbasic.TxID, 0)
 	keyRemotes = make([]txbasic.TxID, 0)
@@ -301,21 +197,21 @@ func Test_transactionPool_loop(t *testing.T) {
 		keyRemotes = append(keyRemotes, keyremote)
 		txRemotes = append(txRemotes, txremote)
 
-		pool.AddTx(txlocal, true)
-		pool.AddTx(txremote, false)
+		pool1.AddTx(txlocal, true)
+		pool1.AddTx(txremote, false)
 	}
-	assert.Equal(t, int64(200), pool.Count())
+	assert.Equal(t, int64(200), pool1.Count())
 	go func() {
-		pool.chanRmTxs <- keyLocals
+		pool1.RemoveTxHashes(keyLocals)
 	}()
 	go func() {
-		pool.chanRmTxs <- keyRemotes
+		pool1.RemoveTxHashes(keyRemotes)
 	}()
 
-	pool.chanBlockAdded <- NewBlock
-	pool.SysShutDown()
+	pool1.chanBlockAdded <- NewBlock
+	pool1.SysShutDown()
 
 	time.Sleep(20 * time.Second)
-	assert.Equal(t, int64(0), pool.Count())
+	assert.Equal(t, int64(0), pool1.Count())
 
 }

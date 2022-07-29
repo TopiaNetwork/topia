@@ -50,32 +50,6 @@ func (m *ShrinkableMap) Del(key interface{}) {
 	m.lock.Unlock()
 }
 
-func (m *ShrinkableMap) CallBackDelNoLock(key interface{}) {
-	if _, ok := m.dirtyOld[key]; ok {
-		delete(m.dirtyOld, key)
-		m.deletionOld++
-	} else if _, ok := m.dirtyNew[key]; ok {
-		delete(m.dirtyNew, key)
-		m.deletionNew++
-	}
-	if m.deletionOld >= maxDeletion && len(m.dirtyOld) < copyThreshold {
-		for k, v := range m.dirtyOld {
-			m.dirtyNew[k] = v
-		}
-		m.dirtyOld = m.dirtyNew
-		m.deletionOld = m.deletionNew
-		m.dirtyNew = make(map[interface{}]interface{})
-		m.deletionNew = 0
-	}
-	if m.deletionNew >= maxDeletion && len(m.dirtyNew) < copyThreshold {
-		for k, v := range m.dirtyNew {
-			m.dirtyOld[k] = v
-		}
-		m.dirtyNew = make(map[interface{}]interface{})
-		m.deletionNew = 0
-	}
-}
-
 func (m *ShrinkableMap) Get(key interface{}) (interface{}, bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
@@ -136,22 +110,6 @@ func (m *ShrinkableMap) Set(key, value interface{}) {
 		m.dirtyNew[key] = value
 	}
 	m.lock.Unlock()
-}
-
-func (m *ShrinkableMap) CallBackSetNoLock(key, value interface{}) {
-	if m.deletionOld <= maxDeletion {
-		if _, ok := m.dirtyNew[key]; ok {
-			delete(m.dirtyNew, key)
-			m.deletionNew++
-		}
-		m.dirtyOld[key] = value
-	} else {
-		if _, ok := m.dirtyOld[key]; ok {
-			delete(m.dirtyOld, key)
-			m.deletionOld++
-		}
-		m.dirtyNew[key] = value
-	}
 }
 
 func (m *ShrinkableMap) Size() int {

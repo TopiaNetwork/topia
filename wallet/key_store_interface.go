@@ -3,43 +3,32 @@ package wallet
 import tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 
 /*
-walletStore needs to store 3 kinds of items as below.
+keyStore needs to store 2 kinds of items as below.
 
 Address item:
 	key: 	user account's address
-	value: 	addrItem
+	value: 	keyItem
 
 WalletEnable item:
 	key: 	indicator of WalletEnable, such as string "wallet_Enable"
 	value: 	WalletEnable state, enabled or disabled
 
-DefaultAddr item:
-	key:	indicator of DefaultAddr, such as string "default_Addr"
-	value:	user's default address of the Wallet
 */
-type walletStore interface {
-	Init(arg interface{}) error
+type keyStore interface {
+	SetAddr(addr string, item keyItem) error
+	GetAddr(addr string) (keyItem, error)
 
-	SetAddr(item addrItem) error
-	GetAddr(addr string) (addrItem, error)
-	List() (addrs []string, err error) // Show all addrs stored in wallet.
+	SetEnable(set bool) error
+	GetEnable() (bool, error)
 
-	SetWalletEnable(set bool) error
-	GetWalletEnable() (bool, error)
+	Keys() (addrs []string, err error) // Show all addrs stored in wallet.
 
-	SetDefaultAddr(defaultAddr string) error
-	GetDefaultAddr() (defaultAddr string, err error)
-
-	RemoveItem(key string) error
+	Remove(key string) error
 }
 
-type addrItem struct {
-	Addr string
-
-	AddrLocked bool
-	Seckey     tpcrtypes.PrivateKey
-	Pubkey     tpcrtypes.PublicKey
-	CryptType  tpcrtypes.CryptType
+type keyItem struct {
+	CryptType tpcrtypes.CryptType  `json:"cryptType"`
+	Seckey    tpcrtypes.PrivateKey `json:"seckey"`
 }
 
 const (

@@ -1,8 +1,7 @@
 package wallet
 
 import (
-	"bytes"
-	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"github.com/TopiaNetwork/topia/crypt"
 	"github.com/TopiaNetwork/topia/crypt/ed25519"
@@ -28,10 +27,12 @@ type initArg struct {
 const topiaKeysFolderName = "wallet"
 
 var (
-	walletEnableKeyNotSetErr = errors.New("wallet enable key hasn't been set yet")
-	defaultAddrNotSetErr     = errors.New("default addr hasn't been set yet")
-	addrNotExistErr          = errors.New("addr doesn't exist in wallet")
+	enableKeyNotSetErr   = errors.New("enable key hasn't been set")
+	defaultAddrNotSetErr = errors.New("default addr hasn't been set")
+	addrNotExistErr      = errors.New("addr doesn't exist")
 )
+
+var _ keyStore = (*fileKeyStore)(nil)
 
 func (f *fileKeyStore) Init(arg interface{}) error {
 	initArgument, ok := arg.(initArg)
@@ -59,18 +60,7 @@ func (f *fileKeyStore) Init(arg interface{}) error {
 		return err
 	}
 	if !exist { // if walletEnableKey hasn't been set, set it
-		err = f.SetWalletEnable(true)
-		if err != nil {
-			return err
-		}
-	}
-
-	exist, err = isPathExist(filepath.Join(f.fileFolderPath, defaultAddrKey))
-	if err != nil {
-		return err
-	}
-	if !exist { // if walletDefaultAddrKey hasn't been set, set it
-		err = f.SetDefaultAddr("please_set_your_default_addr")
+		err = f.SetEnable(true)
 		if err != nil {
 			return err
 		}
@@ -79,20 +69,20 @@ func (f *fileKeyStore) Init(arg interface{}) error {
 	return nil
 }
 
-func (f *fileKeyStore) SetAddr(item addrItem) error {
-	if len(item.Addr) == 0 || item.CryptType == tpcrtypes.CryptType_Unknown || item.Seckey == nil || item.Pubkey == nil {
+func (f *fileKeyStore) SetAddr(addr string, item keyItem) error {
+	if len(addr) == 0 || item.CryptType == tpcrtypes.CryptType_Unknown || item.Seckey == nil {
 		return errors.New("input invalid addrItem")
 	}
 
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	bs, err := addrItemToByteSlice(item)
+	bs, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
 
-	addrFilePath := filepath.Join(f.fileFolderPath, item.Addr)
+	addrFilePath := filepath.Join(f.fileFolderPath, addr)
 
 	exist, err := isPathExist(addrFilePath)
 	if err != nil {
@@ -131,61 +121,32 @@ func (f *fileKeyStore) SetAddr(item addrItem) error {
 	if err != nil {
 		return err
 	}
+
+	cacheMutex.Lock()
+	addr_Cache[addr] = addrItemInCache{
+		keyItem: item,
+		lock:    false,
+	}
+	cacheMutex.Unlock()
 	return nil
 }
 
-func (f *fileKeyStore) GetAddr(addr string) (addrItem, error) {
-	f.mutex.RLock()
-	defer f.mutex.RUnlock()
-
-	addrFilePath := filepath.Join(f.fileFolderPath, addr)
-	exist, err := isPathExist(addrFilePath)
-	if err != nil {
-		return addrItem{}, err
-	}
-	if !exist {
-		return addrItem{}, addrNotExistErr
+func (f *fileKeyStore) GetAddr(addr string) (keyItem, error) {
+	if len(addr) == 0 {
+		return keyItem{}, errors.New("input invalid addr")
 	}
 
-	data, err := ioutil.ReadFile(addrFilePath)
-	if err != nil {
-		return addrItem{}, err
-	}
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
 
-	var c crypt.CryptService
-	switch f.CryptType {
-	case tpcrtypes.CryptType_Secp256:
-		c = new(secp256.CryptServiceSecp256)
-	case tpcrtypes.CryptType_Ed25519:
-		c = new(ed25519.CryptServiceEd25519)
-	default:
-		return addrItem{}, errors.New("unsupported CryptType")
+	ret, ok := addr_Cache[addr]
+	if !ok {
+		return keyItem{}, addrNotExistErr
 	}
-	decryptedAddr, err := c.StreamDecrypt(f.Seckey, data)
-	if err != nil {
-		return addrItem{}, err
-	}
-
-	return byteSliceToAddrItem(decryptedAddr)
+	return ret.keyItem, nil
 }
 
-func (f *fileKeyStore) List() (addrs []string, err error) {
-	f.mutex.RLock()
-	defer f.mutex.RUnlock()
-
-	files, err := ioutil.ReadDir(f.fileFolderPath)
-	if err != nil {
-		return nil, err
-	}
-	for _, file := range files {
-		if file.Name() != walletEnableKey && file.Name() != defaultAddrKey {
-			addrs = append(addrs, file.Name())
-		}
-	}
-	return addrs, nil
-}
-
-func (f *fileKeyStore) SetWalletEnable(set bool) error {
+func (f *fileKeyStore) SetEnable(set bool) error {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
@@ -232,10 +193,111 @@ func (f *fileKeyStore) SetWalletEnable(set bool) error {
 	if err != nil {
 		return err
 	}
+
+	cacheMutex.Lock()
+	enable_Cache = set
+	cacheMutex.Unlock()
 	return nil
 }
 
-func (f *fileKeyStore) GetWalletEnable() (bool, error) {
+func (f *fileKeyStore) GetEnable() (bool, error) {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+
+	return enable_Cache, nil
+}
+
+func (f *fileKeyStore) Keys() (addrs []string, err error) {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+
+	for k := range addr_Cache {
+		addrs = append(addrs, k)
+	}
+
+	return addrs, nil
+}
+
+func (f *fileKeyStore) Remove(key string) error {
+	if len(key) == 0 {
+		return errors.New("input invalid addr")
+	}
+
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	fp := filepath.Join(f.fileFolderPath, key)
+
+	exist, err := isPathExist(fp)
+	if err != nil {
+		return err
+	}
+	if !exist {
+		return addrNotExistErr
+	}
+
+	err = os.Remove(fp)
+	if err != nil {
+		return err
+	}
+
+	cacheMutex.Lock()
+	if key == walletEnableKey {
+		enable_Cache = false
+	} else {
+		delete(addr_Cache, key)
+	}
+	cacheMutex.Unlock()
+
+	return nil
+
+}
+
+func (f *fileKeyStore) getAddrItemFromBackend(addr string) (keyItem, error) {
+	if len(addr) == 0 {
+		return keyItem{}, errors.New("invalid addr")
+	}
+
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	addrFilePath := filepath.Join(f.fileFolderPath, addr)
+	exist, err := isPathExist(addrFilePath)
+	if err != nil {
+		return keyItem{}, err
+	}
+	if !exist {
+		return keyItem{}, addrNotExistErr
+	}
+
+	data, err := ioutil.ReadFile(addrFilePath)
+	if err != nil {
+		return keyItem{}, err
+	}
+
+	var c crypt.CryptService
+	switch f.CryptType {
+	case tpcrtypes.CryptType_Secp256:
+		c = new(secp256.CryptServiceSecp256)
+	case tpcrtypes.CryptType_Ed25519:
+		c = new(ed25519.CryptServiceEd25519)
+	default:
+		return keyItem{}, errors.New("unsupported CryptType")
+	}
+	decryptedAddr, err := c.StreamDecrypt(f.Seckey, data)
+	if err != nil {
+		return keyItem{}, err
+	}
+
+	var ret keyItem
+	err = json.Unmarshal(decryptedAddr, &ret)
+	if err != nil {
+		return keyItem{}, err
+	}
+	return ret, nil
+}
+
+func (f *fileKeyStore) getEnableFromBackend() (bool, error) {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
 
@@ -246,7 +308,7 @@ func (f *fileKeyStore) GetWalletEnable() (bool, error) {
 		return false, err
 	}
 	if !exist {
-		return false, walletEnableKeyNotSetErr
+		return false, enableKeyNotSetErr
 	}
 
 	we, err := ioutil.ReadFile(weFile)
@@ -273,135 +335,28 @@ func (f *fileKeyStore) GetWalletEnable() (bool, error) {
 	} else if string(decryptedWE) == walletDisabled {
 		return false, nil
 	} else {
-		return false, walletEnableKeyNotSetErr
+		return false, enableKeyNotSetErr
 	}
 }
 
-func (f *fileKeyStore) SetDefaultAddr(defaultAddr string) error {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-
-	daFilePath := filepath.Join(f.fileFolderPath, defaultAddrKey)
-
-	exist, err := isPathExist(daFilePath)
-	if err != nil {
-		return err
-	}
-	var daFile *os.File
-	if !exist { // don't find defaultAddrKey then create it
-		daFile, err = os.Create(daFilePath)
-	} else {
-		daFile, err = os.OpenFile(daFilePath, os.O_RDWR|os.O_TRUNC, 0644)
-	}
-	defer daFile.Close()
-
-	if err != nil {
-		return err
-	}
-
-	var c crypt.CryptService
-	switch f.CryptType {
-	case tpcrtypes.CryptType_Secp256:
-		c = new(secp256.CryptServiceSecp256)
-	case tpcrtypes.CryptType_Ed25519:
-		c = new(ed25519.CryptServiceEd25519)
-	default:
-		return errors.New("unsupported CryptType")
-	}
-	encryptedDA, err := c.StreamEncrypt(f.Pubkey, []byte(defaultAddr))
-	if err != nil {
-		return err
-	}
-	_, err = daFile.Write(encryptedDA)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (f *fileKeyStore) GetDefaultAddr() (defaultAddr string, err error) {
+func (f *fileKeyStore) listAddrsFromBackend() (addrs []string, err error) {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
 
-	daFilePath := filepath.Join(f.fileFolderPath, defaultAddrKey)
-
-	exist, err := isPathExist(daFilePath)
-	if err != nil {
-		return "", err
-	}
-	if !exist {
-		return "", defaultAddrNotSetErr
-	} else {
-		bs, err := ioutil.ReadFile(daFilePath)
-		if err != nil {
-			return "", err
-		}
-
-		var c crypt.CryptService
-		switch f.CryptType {
-		case tpcrtypes.CryptType_Secp256:
-			c = new(secp256.CryptServiceSecp256)
-		case tpcrtypes.CryptType_Ed25519:
-			c = new(ed25519.CryptServiceEd25519)
-		default:
-			return "", errors.New("unsupported CryptType")
-		}
-		decryptedDA, err := c.StreamDecrypt(f.Seckey, bs)
-		if err != nil {
-			return "", err
-		}
-		return string(decryptedDA), nil
-	}
-}
-
-func (f *fileKeyStore) RemoveItem(key string) error {
-	if len(key) == 0 {
-		return errors.New("input invalid addr")
-	}
-
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-
-	fp := filepath.Join(f.fileFolderPath, key)
-
-	exist, err := isPathExist(fp)
-	if err != nil {
-		return err
-	}
-	if !exist {
-		return addrNotExistErr
-	}
-
-	return os.Remove(fp)
-
-}
-
-func addrItemToByteSlice(item addrItem) (ret []byte, err error) {
-	if item.Seckey == nil || item.Pubkey == nil || item.CryptType == tpcrtypes.CryptType_Unknown {
-		return nil, errors.New("input invalid itemData")
-	}
-
-	var b bytes.Buffer
-	enc := gob.NewEncoder(&b)
-	err = enc.Encode(item)
+	files, err := ioutil.ReadDir(f.fileFolderPath)
 	if err != nil {
 		return nil, err
 	}
-	return b.Bytes(), nil
-}
-
-func byteSliceToAddrItem(data []byte) (ret addrItem, err error) {
-	if data == nil {
-		return ret, errors.New("input nil data")
+	for _, file := range files {
+		if file.IsDir() { // skip dir
+			continue
+		}
+		if !isValidTopiaAddr(tpcrtypes.Address(file.Name())) { // skip irrelevant file
+			continue
+		}
+		addrs = append(addrs, file.Name())
 	}
-
-	buf := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(buf)
-	err = dec.Decode(&ret)
-	if err != nil {
-		return ret, err
-	}
-	return ret, nil
+	return addrs, nil
 }
 
 func isPathExist(path string) (bool, error) {

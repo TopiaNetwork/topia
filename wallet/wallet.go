@@ -53,7 +53,7 @@ type Wallet interface {
 	IsEnable() (bool, error)
 }
 
-// EncryptWayOfWallet hold keys' file encryption and decryption arguments when using "topiaKeyStore" as walletBackend.
+// EncryptWayOfWallet hold keys' file encryption and decryption arguments.
 type EncryptWayOfWallet struct {
 	CryptType tpcrtypes.CryptType
 	Pubkey    tpcrtypes.PublicKey
@@ -63,15 +63,23 @@ type EncryptWayOfWallet struct {
 type wallet struct {
 	log      tplog.Logger
 	rootPath string
-	ws       walletStore
+	ks       keyStore
 }
 
-type userConfig struct {
+const syncCachePeriod = 60 // second
+
+// walletBackendConfig hold configs from wallet_json. Just be written in init func.
+// Won't be modified anywhere else(except for test)
+var walletBackendConfig struct {
+	RootPath       string `json:"rootPath"`
 	WalletBackend  string `json:"walletBackend"`
 	KeyringBackend string `json:"keyringBackend"`
 }
 
-var walletBackendConfig userConfig
+var (
+	walletNotEnableErr = errors.New("wallet is not enabled")
+	addrLockedErr      = errors.New("this addr has been locked")
+)
 
 func init() { // load wallet config json
 	var log tplog.Logger
@@ -87,29 +95,31 @@ func init() { // load wallet config json
 	}
 }
 
-func NewWallet(level tplogcmm.LogLevel, log tplog.Logger, rootPath string, encryptWay EncryptWayOfWallet) (Wallet, error) {
+func NewWallet(level tplogcmm.LogLevel, log tplog.Logger, encryptWay EncryptWayOfWallet) (Wallet, error) {
 	wLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 
-	wsImp, err := loadWalletConfig(rootPath, encryptWay)
+	ksImp, err := loadWalletConfig(encryptWay)
 	if err != nil {
 		return nil, err
 	}
 	var w = wallet{
 		log:      wLog,
-		rootPath: rootPath,
-		ws:       wsImp,
+		rootPath: walletBackendConfig.RootPath,
+		ks:       ksImp,
 	}
+
+	runSyncCacheRoutineOnce(syncCachePeriod, ksImp, wLog)
 
 	return &w, nil
 }
 
 func (w *wallet) Create(cryptType tpcrtypes.CryptType) (tpcrtypes.Address, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return "", err
 	}
-	if walletEnable != true {
-		return "", errors.New("wallet is not enabled")
+	if !walletEnable {
+		return "", walletNotEnableErr
 	}
 
 	var c crypt.CryptService
@@ -129,12 +139,9 @@ func (w *wallet) Create(cryptType tpcrtypes.CryptType) (tpcrtypes.Address, error
 	if err != nil {
 		return "", err
 	}
-	err = w.ws.SetAddr(addrItem{
-		Addr:       string(addr),
-		AddrLocked: false,
-		Seckey:     sec,
-		Pubkey:     pub,
-		CryptType:  c.CryptType(),
+	err = w.ks.SetAddr(string(addr), keyItem{
+		Seckey:    sec,
+		CryptType: c.CryptType(),
 	})
 	if err != nil {
 		return "", err
@@ -143,12 +150,20 @@ func (w *wallet) Create(cryptType tpcrtypes.CryptType) (tpcrtypes.Address, error
 }
 
 func (w *wallet) CreateMnemonic(cryptType tpcrtypes.CryptType, passphrase string, mnemonicAmounts int) (string, error) {
+	walletEnable, err := w.ks.GetEnable()
+	if err != nil {
+		return "", err
+	}
+	if !walletEnable {
+		return "", walletNotEnableErr
+	}
+
 	if mnemonicAmounts != 12 && mnemonicAmounts != 24 {
 		return "", errors.New("don't support input mnemonic amounts other than 12 and 24")
 	}
 
 	randomNum := make([]byte, mnemonicAmounts/12*16)
-	_, err := rand.Read(randomNum)
+	_, err = rand.Read(randomNum)
 	if err != nil {
 		return "", err
 	}
@@ -177,14 +192,11 @@ func (w *wallet) CreateMnemonic(cryptType tpcrtypes.CryptType, passphrase string
 	if err != nil {
 		return "", err
 	}
-	item := addrItem{
-		Addr:       string(addr),
-		AddrLocked: false,
-		Seckey:     sec,
-		Pubkey:     pub,
-		CryptType:  cryptType,
+	item := keyItem{
+		Seckey:    sec,
+		CryptType: cryptType,
 	}
-	err = w.ws.SetAddr(item)
+	err = w.ks.SetAddr(string(addr), item)
 	if err != nil {
 		return "", err
 	}
@@ -192,6 +204,14 @@ func (w *wallet) CreateMnemonic(cryptType tpcrtypes.CryptType, passphrase string
 }
 
 func (w *wallet) Recovery(cryptType tpcrtypes.CryptType, mnemonic string, passphrase string) (tpcrtypes.Address, error) {
+	walletEnable, err := w.ks.GetEnable()
+	if err != nil {
+		return "", err
+	}
+	if !walletEnable {
+		return "", walletNotEnableErr
+	}
+
 	seed := pbkdf2.Key([]byte(mnemonic), []byte("mnemonic"+passphrase), 4096, 32, sha256.New)
 
 	var c crypt.CryptService
@@ -212,16 +232,13 @@ func (w *wallet) Recovery(cryptType tpcrtypes.CryptType, mnemonic string, passph
 		return "", err
 	}
 
-	_, err = w.ws.GetAddr(string(addr))
+	_, err = w.ks.GetAddr(string(addr))
 	if err != nil {
-		item := addrItem{
-			Addr:       string(addr),
-			AddrLocked: false,
-			Seckey:     sec,
-			Pubkey:     pub,
-			CryptType:  cryptType,
+		item := keyItem{
+			Seckey:    sec,
+			CryptType: cryptType,
 		}
-		err = w.ws.SetAddr(item)
+		err = w.ks.SetAddr(string(addr), item)
 		if err != nil {
 			return "", err
 		}
@@ -231,12 +248,12 @@ func (w *wallet) Recovery(cryptType tpcrtypes.CryptType, mnemonic string, passph
 }
 
 func (w *wallet) Import(cryptType tpcrtypes.CryptType, privKey tpcrtypes.PrivateKey) (tpcrtypes.Address, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return "", err
 	}
-	if walletEnable != true {
-		return "", errors.New("wallet is not enabled")
+	if !walletEnable {
+		return "", walletNotEnableErr
 	}
 
 	var c crypt.CryptService
@@ -257,12 +274,9 @@ func (w *wallet) Import(cryptType tpcrtypes.CryptType, privKey tpcrtypes.Private
 	if err != nil {
 		return "", err
 	}
-	err = w.ws.SetAddr(addrItem{
-		Addr:       string(addr),
-		AddrLocked: false,
-		Seckey:     privKey,
-		Pubkey:     pub,
-		CryptType:  c.CryptType(),
+	err = w.ks.SetAddr(string(addr), keyItem{
+		Seckey:    privKey,
+		CryptType: c.CryptType(),
 	})
 	if err != nil {
 		return "", err
@@ -271,23 +285,23 @@ func (w *wallet) Import(cryptType tpcrtypes.CryptType, privKey tpcrtypes.Private
 }
 
 func (w *wallet) Delete(address tpcrtypes.Address) error {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return err
 	}
-	if walletEnable != true {
-		return errors.New("wallet is not enabled")
+	if !walletEnable {
+		return walletNotEnableErr
 	}
 
-	item, err := w.ws.GetAddr(string(address))
+	lock, err := getAddrLock(string(address))
 	if err != nil {
 		return err
 	}
-	if item.AddrLocked {
-		return errors.New("this addr has been locked")
+	if lock {
+		return addrLockedErr
 	}
 
-	err = w.ws.RemoveItem(string(address))
+	err = w.ks.Remove(string(address))
 	if err != nil {
 		return err
 	}
@@ -295,80 +309,87 @@ func (w *wallet) Delete(address tpcrtypes.Address) error {
 }
 
 func (w *wallet) SetDefault(address tpcrtypes.Address) error {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return err
 	}
-	if walletEnable != true {
-		return errors.New("wallet is not enabled")
+	if !walletEnable {
+		return walletNotEnableErr
 	}
 
-	item, err := w.ws.GetAddr(string(address))
+	lock, err := getAddrLock(string(address))
 	if err != nil {
 		return err
 	}
-	if item.AddrLocked {
-		return errors.New("this addr has been locked")
+	if lock {
+		return addrLockedErr
 	}
 
-	err = w.ws.SetDefaultAddr(string(address))
+	err = setDefaultAddr(string(address))
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func (w *wallet) Default() (tpcrtypes.Address, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return "", err
 	}
-	if walletEnable != true {
-		return "", errors.New("wallet is not enabled")
+	if !walletEnable {
+		return "", walletNotEnableErr
 	}
 
-	addr, err := w.ws.GetDefaultAddr()
-	if err != nil {
-		return "", err
-	}
-	return tpcrtypes.Address(addr), nil
+	return tpcrtypes.Address(getDefaultAddr()), nil
 }
 
 func (w *wallet) Export(address tpcrtypes.Address) (tpcrtypes.PrivateKey, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return nil, err
 	}
-	if walletEnable != true {
-		return nil, errors.New("wallet is not enabled")
+	if !walletEnable {
+		return nil, walletNotEnableErr
 	}
 
-	item, err := w.ws.GetAddr(string(address))
+	lock, err := getAddrLock(string(address))
 	if err != nil {
 		return nil, err
 	}
-	if item.AddrLocked {
-		return nil, errors.New("this addr has been locked")
+	if lock {
+		return nil, addrLockedErr
+	}
+
+	item, err := w.ks.GetAddr(string(address))
+	if err != nil {
+		return nil, err
 	}
 
 	return item.Seckey, nil
 }
 
 func (w *wallet) Sign(addr tpcrtypes.Address, msg []byte) (tpcrtypes.SignatureInfo, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return tpcrtypes.SignatureInfo{}, err
 	}
-	if walletEnable != true {
-		return tpcrtypes.SignatureInfo{}, errors.New("wallet is not enabled")
+	if !walletEnable {
+		return tpcrtypes.SignatureInfo{}, walletNotEnableErr
 	}
 
-	item, err := w.ws.GetAddr(string(addr))
+	lock, err := getAddrLock(string(addr))
 	if err != nil {
 		return tpcrtypes.SignatureInfo{}, err
 	}
-	if item.AddrLocked {
-		return tpcrtypes.SignatureInfo{}, errors.New("this addr has been locked")
+	if lock {
+		return tpcrtypes.SignatureInfo{}, addrLockedErr
+	}
+
+	item, err := w.ks.GetAddr(string(addr))
+	if err != nil {
+		return tpcrtypes.SignatureInfo{}, err
 	}
 
 	var c crypt.CryptService
@@ -384,19 +405,23 @@ func (w *wallet) Sign(addr tpcrtypes.Address, msg []byte) (tpcrtypes.SignatureIn
 	if err != nil {
 		return tpcrtypes.SignatureInfo{}, err
 	}
-	return tpcrtypes.SignatureInfo{SignData: sig, PublicKey: item.Pubkey}, nil
+	publicKey, err := c.ConvertToPublic(item.Seckey)
+	if err != nil {
+		return tpcrtypes.SignatureInfo{}, err
+	}
+	return tpcrtypes.SignatureInfo{SignData: sig, PublicKey: publicKey}, nil
 }
 
 func (w *wallet) Has(address tpcrtypes.Address) (bool, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return false, err
 	}
-	if walletEnable != true {
-		return false, errors.New("wallet is not enabled")
+	if !walletEnable {
+		return false, walletNotEnableErr
 	}
 
-	_, err = w.ws.GetAddr(string(address))
+	_, err = w.ks.GetAddr(string(address))
 	if err != nil {
 		return false, err
 	}
@@ -404,15 +429,15 @@ func (w *wallet) Has(address tpcrtypes.Address) (bool, error) {
 }
 
 func (w *wallet) List() ([]tpcrtypes.Address, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return nil, err
 	}
-	if walletEnable != true {
-		return nil, errors.New("wallet is not enabled")
+	if !walletEnable {
+		return nil, walletNotEnableErr
 	}
 
-	addrs, err := w.ws.List()
+	addrs, err := w.ks.Keys()
 	if err != nil {
 		return nil, err
 	}
@@ -424,61 +449,47 @@ func (w *wallet) List() ([]tpcrtypes.Address, error) {
 }
 
 func (w *wallet) Lock(addr tpcrtypes.Address, lock bool) error {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return err
 	}
-	if walletEnable != true {
-		return errors.New("wallet is not enabled")
+	if !walletEnable {
+		return walletNotEnableErr
 	}
 
-	item, err := w.ws.GetAddr(string(addr))
-	if err != nil {
-		return err
-	}
-
-	if item.AddrLocked == lock {
-		return nil
-	}
-
-	item.AddrLocked = lock
-	err = w.ws.SetAddr(item)
-	if err != nil {
-		return err
-	}
-	return nil
+	return setAddrLock(string(addr), lock)
 }
 
 func (w *wallet) IsLocked(addr tpcrtypes.Address) (bool, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return true, err
 	}
-	if walletEnable != true {
-		return true, errors.New("wallet is not enabled")
+	if !walletEnable {
+		return true, walletNotEnableErr
 	}
 
-	item, err := w.ws.GetAddr(string(addr))
-	if err != nil {
-		return true, err
-	}
-	return item.AddrLocked, nil
+	return getAddrLock(string(addr))
 }
 
 func (w *wallet) Enable(set bool) error {
-	return w.ws.SetWalletEnable(set)
+	return w.ks.SetEnable(set)
 }
 
 func (w *wallet) IsEnable() (bool, error) {
-	walletEnable, err := w.ws.GetWalletEnable()
+	walletEnable, err := w.ks.GetEnable()
 	if err != nil {
 		return false, err
 	}
 	return walletEnable, nil
 }
 
-func loadWalletConfig(rootPath string, encryptWay EncryptWayOfWallet) (wsImp walletStore, err error) {
+func loadWalletConfig(encryptWay EncryptWayOfWallet) (ksImp keyStore, err error) {
 	var initArgument interface{}
+	if !isValidFolderPath(walletBackendConfig.RootPath) {
+		return nil, errors.New("invalid rootPath, try to check wallet_config.json")
+	}
+
 	if walletBackendConfig.WalletBackend == "topiaKeyStore" {
 		var c crypt.CryptService
 		switch encryptWay.CryptType {
@@ -498,23 +509,49 @@ func loadWalletConfig(rootPath string, encryptWay EncryptWayOfWallet) (wsImp wal
 			return nil, errors.New("input keypair is not valid")
 		}
 
-		wsImp = new(fileKeyStore)
+		fks := new(fileKeyStore)
 		initArgument = initArg{
-			RootPath:           rootPath,
+			RootPath:           walletBackendConfig.RootPath,
 			EncryptWayOfWallet: encryptWay,
 		}
-	} else if walletBackendConfig.WalletBackend == "keyring" {
-		wsImp = new(keyringImp)
-		initArgument = keyringInitArg{
-			RootPath: rootPath,
-			Backend:  walletBackendConfig.KeyringBackend,
+		err = fks.Init(initArgument)
+		if err != nil {
+			return nil, err
 		}
+
+		err = initDefaultAddrFile()
+		if err != nil {
+			return nil, err
+		}
+		err = loadKeysToCache(fks)
+		if err != nil {
+			return nil, err
+		}
+		return fks, nil
+
+	} else if walletBackendConfig.WalletBackend == "keyring" {
+		ki := new(keyringImp)
+		initArgument = keyringInitArg{
+			RootPath:           walletBackendConfig.RootPath,
+			Backend:            walletBackendConfig.KeyringBackend,
+			EncryptWayOfWallet: encryptWay,
+		}
+		err = ki.Init(initArgument)
+		if err != nil {
+			return nil, err
+		}
+
+		err = initDefaultAddrFile()
+		if err != nil {
+			return nil, err
+		}
+		err = loadKeysToCache(ki)
+		if err != nil {
+			return nil, err
+		}
+		return ki, nil
+
 	} else {
 		return nil, errors.New("unknown wallet backend, please check wallet config file")
 	}
-
-	if err = wsImp.Init(initArgument); err != nil {
-		return nil, err
-	}
-	return wsImp, nil
 }

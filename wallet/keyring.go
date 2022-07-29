@@ -1,8 +1,7 @@
 package wallet
 
 import (
-	"bytes"
-	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"github.com/99designs/keyring"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -15,17 +14,11 @@ import (
 Item is a thing stored on the keyring.
 type Item struct {
 	Key         string --- to store Addr
-	Data        []byte --- to store itemData
+	Data        []byte --- to store keyItem
 	Label       string
 	Description string
 }
 */
-type itemData struct {
-	Lock      bool
-	Seckey    tpcrtypes.PrivateKey
-	Pubkey    tpcrtypes.PublicKey
-	CryptType tpcrtypes.CryptType
-}
 
 type keyringImp struct {
 	k     keyring.Keyring
@@ -33,6 +26,8 @@ type keyringImp struct {
 }
 
 type keyringInitArg struct {
+	EncryptWayOfWallet
+
 	RootPath string
 	Backend  string
 }
@@ -40,6 +35,8 @@ type keyringInitArg struct {
 const (
 	keyringKeysFolderName = "wallet"
 )
+
+var _ keyStore = (*keyringImp)(nil)
 
 func isValidFolderPath(path string) bool {
 	s, err := os.Stat(path)
@@ -84,8 +81,7 @@ func (ki *keyringImp) Init(arg interface{}) error {
 		KeychainTrustApplication:       true,
 		KeychainSynchronizable:         true,
 		KeychainAccessibleWhenUnlocked: true,
-		KeychainPasswordFunc:           keyring.FixedStringPrompt("password"),
-		FilePasswordFunc:               keyring.FixedStringPrompt("password"),
+		FilePasswordFunc:               keyring.FixedStringPrompt(string(initArgument.Seckey)),
 		FileDir:                        filepath.Join(fileFolderPath, keyringKeysFolderName),
 		KeyCtlScope:                    "thread",
 		KeyCtlPerm:                     0x3f3f0000, // "alswrvalswrv------------",
@@ -93,124 +89,74 @@ func (ki *keyringImp) Init(arg interface{}) error {
 		KWalletFolder:                  "TopiaKWallet",
 		WinCredPrefix:                  "", // default "keyring"
 	}
-	ki.mutex.Lock()
-	defer ki.mutex.Unlock()
+
 	tempKeyring, err := keyring.Open(config)
 	if err != nil {
 		return errors.New("open keyring err: " + err.Error())
 	}
 	ki.k = tempKeyring
 
-	if _, err = ki.k.Get(walletEnableKey); err != nil { // if walletEnableKey hasn't been set, set it
-		tempItem := keyring.Item{
-			Key:  walletEnableKey,
-			Data: []byte(walletEnabled),
-		}
-		if err = ki.k.Set(tempItem); err != nil {
-			return errors.New("set walletEnable Item err: " + err.Error())
-		}
-	}
-
-	if _, err = ki.k.Get(defaultAddrKey); err != nil { // if walletDefaultAddrKey hasn't been set, set it
-		tempItem := keyring.Item{
-			Key:  defaultAddrKey,
-			Data: []byte("please_set_default_address"),
-		}
-		if err = ki.k.Set(tempItem); err != nil {
-			return errors.New("set walletDefaultAddr Item err: " + err.Error())
+	if _, err = ki.getEnableFromBackend(); err != nil { // if walletEnableKey hasn't been set, set it
+		err = ki.SetEnable(true)
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (ki *keyringImp) SetAddr(item addrItem) error {
-	if len(item.Addr) == 0 || item.CryptType == tpcrtypes.CryptType_Unknown || item.Seckey == nil || item.Pubkey == nil {
+func (ki *keyringImp) SetAddr(addr string, item keyItem) error {
+	if len(addr) == 0 || item.CryptType == tpcrtypes.CryptType_Unknown || item.Seckey == nil {
 		return errors.New("input invalid addrItem")
 	}
 
 	ki.mutex.Lock()
 	defer ki.mutex.Unlock()
 
-	dataItem := itemData{
-		Lock:      item.AddrLocked,
+	dataItem := keyItem{
 		Seckey:    item.Seckey,
-		Pubkey:    item.Pubkey,
 		CryptType: item.CryptType,
 	}
-	bs, err := itemDataToByteSlice(dataItem)
+	bs, err := json.Marshal(dataItem)
 	if err != nil {
 		return err
 	}
 	keyringItem := keyring.Item{
-		Key:  item.Addr,
+		Key:  addr,
 		Data: bs,
 	}
 	err = ki.k.Set(keyringItem)
 	if err != nil {
 		return err
 	}
+
+	cacheMutex.Lock()
+	addr_Cache[addr] = addrItemInCache{
+		keyItem: item,
+		lock:    false,
+	}
+	cacheMutex.Unlock()
+
 	return nil
 }
 
-func (ki *keyringImp) GetAddr(addr string) (addrItem, error) {
+func (ki *keyringImp) GetAddr(addr string) (keyItem, error) {
 	if len(addr) == 0 {
-		return addrItem{}, errors.New("input invalid addr")
+		return keyItem{}, errors.New("input invalid addr")
 	}
 
-	ki.mutex.RLock()
-	defer ki.mutex.RUnlock()
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
 
-	item, err := ki.k.Get(addr)
-	if err != nil {
-		return addrItem{}, err
+	ret, ok := addr_Cache[addr]
+	if !ok {
+		return keyItem{}, addrNotExistErr
 	}
-	dataItem, err := byteSliceToItemData(item.Data)
-	if err != nil {
-		return addrItem{}, err
-	}
-	return addrItem{
-		Addr:       item.Key,
-		AddrLocked: dataItem.Lock,
-		Seckey:     dataItem.Seckey,
-		Pubkey:     dataItem.Pubkey,
-		CryptType:  dataItem.CryptType,
-	}, nil
+	return ret.keyItem, nil
 }
 
-func (ki *keyringImp) RemoveItem(key string) error {
-	if len(key) == 0 {
-		return errors.New("input invalid addr")
-	}
-
-	ki.mutex.Lock()
-	defer ki.mutex.Unlock()
-
-	return ki.k.Remove(key)
-}
-
-func (ki *keyringImp) List() (addrs []string, err error) {
-	ki.mutex.RLock()
-	defer ki.mutex.RUnlock()
-
-	keys, err := ki.k.Keys()
-	if err != nil {
-		return nil, err
-	}
-
-	totalNum := len(keys)
-	for i := 0; i < totalNum; i++ {
-		if keys[i] == walletEnableKey || keys[i] == defaultAddrKey {
-			keys = append(keys[:i], keys[i+1:]...)
-			totalNum--
-			i--
-		}
-	}
-
-	return keys, nil
-}
-
-func (ki *keyringImp) SetWalletEnable(set bool) error {
+func (ki *keyringImp) SetEnable(set bool) error {
 	ki.mutex.Lock()
 	defer ki.mutex.Unlock()
 
@@ -230,10 +176,84 @@ func (ki *keyringImp) SetWalletEnable(set bool) error {
 		return ki.k.Set(item)
 	}
 	item.Data = temp
-	return ki.k.Set(item)
+
+	err = ki.k.Set(item)
+	if err != nil {
+		return err
+	}
+
+	cacheMutex.Lock()
+	enable_Cache = set
+	cacheMutex.Unlock()
+
+	return nil
 }
 
-func (ki *keyringImp) GetWalletEnable() (bool, error) {
+func (ki *keyringImp) GetEnable() (bool, error) {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+
+	return enable_Cache, nil
+}
+
+func (ki *keyringImp) Keys() (addrs []string, err error) {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+
+	for k := range addr_Cache {
+		addrs = append(addrs, k)
+	}
+
+	return addrs, nil
+}
+
+func (ki *keyringImp) Remove(key string) error {
+	if len(key) == 0 {
+		return errors.New("input invalid addr")
+	}
+
+	ki.mutex.Lock()
+	defer ki.mutex.Unlock()
+
+	err := ki.k.Remove(key)
+	if err != nil {
+		return err
+	}
+
+	cacheMutex.Lock()
+	if key == walletEnableKey {
+		enable_Cache = false
+	} else {
+		delete(addr_Cache, key)
+	}
+	cacheMutex.Unlock()
+
+	return nil
+}
+
+func (ki *keyringImp) getAddrItemFromBackend(addr string) (keyItem, error) {
+	if len(addr) == 0 {
+		return keyItem{}, errors.New("input invalid addr")
+	}
+
+	ki.mutex.RLock()
+	defer ki.mutex.RUnlock()
+
+	item, err := ki.k.Get(addr)
+	if err != nil {
+		return keyItem{}, err
+	}
+
+	var addrItem keyItem
+	err = json.Unmarshal(item.Data, &addrItem)
+	if err != nil {
+		return keyItem{}, err
+	}
+
+	return addrItem, nil
+}
+
+func (ki *keyringImp) getEnableFromBackend() (bool, error) {
 	ki.mutex.RLock()
 	defer ki.mutex.RUnlock()
 
@@ -251,60 +271,20 @@ func (ki *keyringImp) GetWalletEnable() (bool, error) {
 	}
 }
 
-func (ki *keyringImp) SetDefaultAddr(defaultAddr string) error {
-	if len(defaultAddr) == 0 {
-		return errors.New("input invalid addr")
-	}
-	ki.mutex.Lock()
-	defer ki.mutex.Unlock()
-
-	item, err := ki.k.Get(defaultAddrKey)
-	if err != nil {
-		item = keyring.Item{
-			Key:  defaultAddrKey,
-			Data: []byte(defaultAddr),
-		}
-		return ki.k.Set(item)
-	}
-	item.Data = []byte(defaultAddr)
-	return ki.k.Set(item)
-}
-
-func (ki *keyringImp) GetDefaultAddr() (defaultAddr string, err error) {
+func (ki *keyringImp) listAddrsFromBackend() (addrs []string, err error) {
 	ki.mutex.RLock()
 	defer ki.mutex.RUnlock()
 
-	item, err := ki.k.Get(defaultAddrKey)
-	if err != nil {
-		return "", err
-	}
-	return string(item.Data), nil
-}
-
-func byteSliceToItemData(data []byte) (ret itemData, err error) {
-	if data == nil {
-		return ret, errors.New("input nil data")
-	}
-
-	buf := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(buf)
-	err = dec.Decode(&ret)
-	if err != nil {
-		return ret, err
-	}
-	return ret, nil
-}
-
-func itemDataToByteSlice(data itemData) (ret []byte, err error) {
-	if data.Seckey == nil || data.Pubkey == nil || data.CryptType == tpcrtypes.CryptType_Unknown {
-		return nil, errors.New("input invalid itemData")
-	}
-
-	var b bytes.Buffer
-	enc := gob.NewEncoder(&b)
-	err = enc.Encode(data)
+	keys, err := ki.k.Keys()
 	if err != nil {
 		return nil, err
 	}
-	return b.Bytes(), nil
+
+	for _, key := range keys {
+		if !isValidTopiaAddr(tpcrtypes.Address(key)) { // skip irrelevant file
+			continue
+		}
+		addrs = append(addrs, key)
+	}
+	return addrs, nil
 }

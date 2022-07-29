@@ -30,7 +30,7 @@ func TestReaddata(t *testing.T) {
 
 
 //func TestWritedata(t *testing.T) {
-//	file, err := os.OpenFile("test.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//	file, err := os.OpenFile("123456.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 //
 //	if err != nil{
 //		panic(err)
@@ -49,9 +49,9 @@ func TestReaddata(t *testing.T) {
 //		panic(err)
 //	}
 //}
-
+//
 //func TestFileItem_Writeindex(t *testing.T) {
-//	file, err := os.OpenFile("test.topia", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//	file, err := os.OpenFile("123456.index", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 //
 //	if err != nil{
 //		panic(err)
@@ -60,12 +60,12 @@ func TestReaddata(t *testing.T) {
 //	var to = FileItem{
 //		1,
 //		file,
-//		1,
-//		1,
+//		0,
+//		0,
 //		nil,
 //
 //	}
-//	err =to.Writedata(&block_all)
+//	err =to.Writeindex(1,1)
 //	if err != nil{
 //		panic(err)
 //	}

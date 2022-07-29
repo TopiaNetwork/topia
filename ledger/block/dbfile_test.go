@@ -114,9 +114,6 @@ func TestTopiaFile_Findindex(t *testing.T) {
 		0,
 		nil,
 	}
-	//tpindex,_ :=to.Findindex(1817128)
-
-	//fmt.Println("tpindex: ",tpindex)
 	fmt.Println("tpindex: ",to)
 }
 

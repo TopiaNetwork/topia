@@ -158,29 +158,32 @@ func NewIndexFile(block *types.Block) ( error) {
 //}
 
 
-func newtestfile(filename string,filetype FileType)*FileItem{
+func newtestfile(filename string,filetype FileType)FileItem{
 	suffix := ""
+	var offset uint64 = FILE_HEADER_SIZE
 	switch{
 	case filetype == 0:
 		suffix = ".topia"
 	case filetype == 1:
 		suffix = ".index"
+		offset = 0
 	case filetype == 2:
 		suffix = ".roll"
+		offset = 0
 	}
 
-	file, err := os.OpenFile(filename+suffix, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	file, _ := os.OpenFile(filename+suffix, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	file.Write(make([]byte, FILE_SIZE))
-	if err != nil {
-		return  nil
-	}
+	//if err != nil {
+	//	return  nil
+	//}
 
 	var tp  = FileItem{
 		filetype,
 		file,
-		FILE_HEADER_SIZE,
+		offset,
 		0,
 		New(),
 	}
-	return &tp
+	return tp
 }

@@ -3,7 +3,6 @@ package block
 import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
-	"os"
 	"strconv"
 
 	//"os"
@@ -14,8 +13,8 @@ import (
 var blocknum uint64 = 123456;
 var blocknum_array = []uint64{123456,123457,123458}
 
-var testdatafile = FileItem{}
-var testindexfile = FileItem{}
+var TESTDATAFILE = FileItem{}
+var TESTINDEXFILE = FileItem{}
 var testrollfile = FileItem{}
 //f unc init(t *testing.T) {
 //
@@ -24,47 +23,53 @@ var testrollfile = FileItem{}
 func TestNewRollback(t *testing.T) {
 	rollback,_ := NewRollback(types.BlockNum(blocknum))
 	fmt.Println("",rollback)
-	datafile := newtestfile(strconv.FormatUint(blocknum,10),0)
-	indexfile := newtestfile(strconv.FormatUint(blocknum,10),1)
+	TESTDATAFILE = newtestfile(strconv.FormatUint(blocknum,10),0)
+	TESTINDEXFILE = newtestfile(strconv.FormatUint(blocknum,10),1)
 
 
-	file, err := os.OpenFile(datafile.File.Name(), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
-	file2, err := os.OpenFile(indexfile.File.Name(), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	//file, err := os.OpenFile(datafile.File.Name(), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	//file2, err := os.OpenFile(indexfile.File.Name(), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	//
+	//if err != nil{
+	//	panic(err)
+	//}
 
-	if err != nil{
-		panic(err)
-	}
-
-	testdatafile = FileItem{
-		0,
-		file,
-		FILE_HEADER_SIZE,
-		0,
-		New(),
-	}
-
-	testindexfile = FileItem{
-		1,
-		file2,
-		0,
-		0,
-		New(),
-	}
-	for i:=0; i < 500;i++ {
-		err = testdatafile.Writedata(&block_all)
-		err = testindexfile.Writeindex(1,testdatafile.Offset)
+	//testdatafile = FileItem{
+	//	0,
+	//	file,
+	//	FILE_HEADER_SIZE,
+	//	0,
+	//	New(),
+	//}
+	//
+	//testindexfile = FileItem{
+	//	1,
+	//	file2,
+	//	0,
+	//	0,
+	//	New(),
+	//}
+	for i:=0; i < 2;i++ {
+		TESTDATAFILE.Writedata(&block_all)
+		TESTINDEXFILE.Writeindex(1,TESTDATAFILE.Offset)
 		blockhead1.Height = blockhead1.Height + 1
 		block_all = types.Block{
 			&blockhead1,
 			&blockdata1,
-			struct{}{},
-			nil,
+			struct{}{}, nil,
 			100,
 		}
 	}
 }
 
 
+func TestReaddata1(t *testing.T) {
+ 	n,_:= TESTINDEXFILE.Findindex(123457)
+	fmt.Println(n)
+
+	m,_ := TESTDATAFILE.FindBlockbyNumber(123457)
+	fmt.Println(m)
+}
 
 //func TestFileItem_AddRollback(t *testing.T) {
 //	newtestfile(strconv.FormatUint(blocknum,10),2)

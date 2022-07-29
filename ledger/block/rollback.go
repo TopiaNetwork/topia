@@ -113,8 +113,8 @@ func RemoveBlock(Indexfile *FileItem,blocknum types.BlockNum) error {
 		return nil
 	}
 	indexmmap := Getmmap(Indexfile.File.Name())
-	start := (uint64(blocknum)-n)*26
-	indexlen := (Indexfile.Offset + 1 -n)*26
+	start := (uint64(blocknum)-n)*INDEX_SLICE_SIZE
+	indexlen := Indexfile.Offset - start + INDEX_SLICE_SIZE
 	buf := make([]byte, indexlen)
 	copy(indexmmap[start:start + indexlen],buf)
 

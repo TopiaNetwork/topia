@@ -84,7 +84,9 @@ func TestRemoveBlock(t *testing.T) {
 	//datafile := newtestfile(strconv.FormatUint(blocknum,10),1)
 
 	err := RemoveBlock(&TESTINDEXFILE, types.BlockNum(testblocknum))
-	panic(err)
+	if err != nil {
+		panic(err)
+	}
 }
 
 

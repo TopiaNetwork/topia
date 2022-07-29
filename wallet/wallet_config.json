@@ -1,4 +1,5 @@
 {
+  "rootPath": "",
   "walletBackend": "topiaKeyStore",
   "keyringBackend": ""
 }

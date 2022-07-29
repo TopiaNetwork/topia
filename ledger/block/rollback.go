@@ -17,15 +17,15 @@ type RollbackData struct {
 	datatime uint64
 
 }
-func NewRollback(blocknum types.BlockNum) (*FileItem, error){
+func NewRollback(blocknum types.BlockNum) (FileItem, error){
 
 	filepath := strconv.FormatInt(int64(blocknum), 10) + ".roll"
 
-	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	file, _ := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	file.Write(make([]byte, FILE_SIZE))
-	if err != nil {
-		return  nil,err
-	}
+	//if err != nil {
+	//	return  nil,err
+	//}
 
 	var tp  = FileItem{
 		Filetype: RollbackFileType,
@@ -33,7 +33,7 @@ func NewRollback(blocknum types.BlockNum) (*FileItem, error){
 		Offset: 0,
 	}
 
-	return &tp,nil
+	return tp,nil
 }
 
 
@@ -42,8 +42,16 @@ func (Rfile *FileItem)AddRollback(blocknum types.BlockNum) error{
 	if err != nil{
 		return  err
 	}
+	indxfilename := GetIndexFilename(Rfile)
+	StartBlock := GetStartblockFromFilenamestring(indxfilename)
+	n, err := strconv.ParseUint(StartBlock, 10, 64)
+	if err != nil {
+		return nil
+	}
 
-	fd.Write(Uint64ToBytes(uint64(blocknum)))
+	indexfile := getIndexfile(strconv.FormatUint(n, 10))
+	// add latestblock
+	fd.Write(Uint64ToBytes(n + indexfile.Offset))
 
 
 	return nil
@@ -59,8 +67,10 @@ func RemoveBlockhead(datafile *FileItem,offset uint64)error{
 	datammap := Getmmap(datafile.File.Name())
 
 	size := offset - n
-	buf := make([]byte, size)
-	copy(datammap[offset:offset+size], buf)
+	start := size*uint64(HEADER_SLICE_SIZE)
+	buf := make([]byte, FILE_HEADER_SIZE-start)
+
+	copy(datammap[start:FILE_HEADER_SIZE], buf)
 
 	return nil
 }
@@ -68,34 +78,45 @@ func RemoveBlockhead(datafile *FileItem,offset uint64)error{
 
 func RemoveBlockdata(datafile *FileItem,offset uint64)error{
 	file := GetDataFilename(datafile)
-	size := GetSize(file,offset)
-
+	//size := GetSize(file,offset)
+	StartBlock := GetStartblockFromFilenamestring(file)
+	n, err := strconv.ParseUint(StartBlock, 10, 64)
+	if err != nil {
+		return nil
+	}
+	Nowdatafile := getDatafile(strconv.FormatUint(n, 10))
 	datammap := Getmmap(file)
-	buf := make([]byte, size)
-	copy(datammap[offset:size], buf)
+	buf := make([]byte, Nowdatafile.Offset-offset+10000)// ???? empty all the block
+	copy(datammap[offset:Nowdatafile.Offset+10000], buf)
 
 	return nil
 }
 
 //func Removeindex(Indexfile *FileItem, blocknums []types.BlockNum)error {
-func Removeindex(Indexfile *FileItem, blocknums []uint64) error {
-	var alloffset uint64 = 0
-	var startoffset uint64 = 0
-	for _,blocknum := range blocknums{
-		index, err := Indexfile.Findindex(types.BlockNum(blocknum))
+func RemoveBlock(Indexfile *FileItem,blocknum types.BlockNum) error {
 
-		if err != nil {
-			return err
-		}
-		alloffset = index.offset + alloffset
-		startoffset = index.offset
+	//var startoffset uint64 = 0
 
-		RemoveBlockdata(Indexfile,index.offset)
+	index, err := Indexfile.Findindex(blocknum)
+
+	if err != nil {
+		return err
 	}
 
+	//startoffset = index.position
+
+	RemoveBlockdata(Indexfile,index.position)
+
+	StartBlock := GetStartblockFromFilenamestring(Indexfile.File.Name())
+	n, err := strconv.ParseUint(StartBlock, 10, 64)
+	if err != nil {
+		return nil
+	}
 	indexmmap := Getmmap(Indexfile.File.Name())
-	buf := make([]byte, alloffset)
-	copy(indexmmap[startoffset:startoffset+alloffset],buf)
+	start := (uint64(blocknum)-n)*26
+	indexlen := (Indexfile.Offset + 1 -n)*26
+	buf := make([]byte, indexlen)
+	copy(indexmmap[start:start + indexlen],buf)
 
 	return nil
 }

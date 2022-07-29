@@ -10,19 +10,20 @@ import (
 )
 
 
-var blocknum uint64 = 123456;
+var blocknum uint64 = 123456
+var testblocknum uint64 = 123500
 var blocknum_array = []uint64{123456,123457,123458}
 
 var TESTDATAFILE = FileItem{}
 var TESTINDEXFILE = FileItem{}
-var testrollfile = FileItem{}
+var TESTROLLFILE = FileItem{}
 //f unc init(t *testing.T) {
 //
 //}
 
 func TestNewRollback(t *testing.T) {
-	rollback,_ := NewRollback(types.BlockNum(blocknum))
-	fmt.Println("",rollback)
+	TESTROLLFILE,_ = NewRollback(types.BlockNum(blocknum))
+	fmt.Println("",TESTROLLFILE)
 	TESTDATAFILE = newtestfile(strconv.FormatUint(blocknum,10),0)
 	TESTINDEXFILE = newtestfile(strconv.FormatUint(blocknum,10),1)
 
@@ -30,25 +31,6 @@ func TestNewRollback(t *testing.T) {
 	//file, err := os.OpenFile(datafile.File.Name(), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	//file2, err := os.OpenFile(indexfile.File.Name(), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	//
-	//if err != nil{
-	//	panic(err)
-	//}
-
-	//testdatafile = FileItem{
-	//	0,
-	//	file,
-	//	FILE_HEADER_SIZE,
-	//	0,
-	//	New(),
-	//}
-	//
-	//testindexfile = FileItem{
-	//	1,
-	//	file2,
-	//	0,
-	//	0,
-	//	New(),
-	//}
 	for i:=0; i < 500;i++ {
 		TESTINDEXFILE.Writeindex(1,TESTDATAFILE.Offset)
 		TESTDATAFILE.Writedata(&block_all)
@@ -72,43 +54,38 @@ func TestReaddata1(t *testing.T) {
 	fmt.Println(m)
 }
 
-//func TestFileItem_AddRollback(t *testing.T) {
-//	newtestfile(strconv.FormatUint(blocknum,10),2)
-//
-//	rollback,_ := NewRollback(types.BlockNum(blocknum))
-//
-//	rollback.AddRollback(types.BlockNum(blocknum))
-//}
-//
-//func TestRemoveBlockhead(t *testing.T) {
-//	//datafile := newtestfile(strconv.FormatUint(blocknum,10),0)
-//
-//
-//	err := RemoveBlockhead(&testdatafile,blocknum)
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//
-//}
-//
+func TestFileItem_AddRollback(t *testing.T) {
+
+	TESTROLLFILE.AddRollback(types.BlockNum(testblocknum))
+}
+
+func TestRemoveBlockhead(t *testing.T) {
+	//datafile := newtestfile(strconv.FormatUint(blocknum,10),0)
+
+	err := RemoveBlockhead(&TESTDATAFILE,testblocknum)
+	if err != nil {
+		panic(err)
+	}
+
+}
+
 //func TestRemoveBlockdata(t *testing.T) {
 //	//datafile := newtestfile(strconv.FormatUint(blocknum,10),0)
 //
-//	err := RemoveBlockdata(&testdatafile,testdatafile.Offset)
+//	err := RemoveBlockdata(&TESTDATAFILE,TESTDATAFILE.Offset)
 //	if err != nil {
 //		panic(err)
 //	}
 //
 //}
-//
-//func TestRemoveindex(t *testing.T) {
-//
-//	//datafile := newtestfile(strconv.FormatUint(blocknum,10),1)
-//
-//	err := Removeindex(&testdatafile, blocknum_array)
-//	panic(err)
-//}
+
+func TestRemoveBlock(t *testing.T) {
+
+	//datafile := newtestfile(strconv.FormatUint(blocknum,10),1)
+
+	err := RemoveBlock(&TESTINDEXFILE, types.BlockNum(testblocknum))
+	panic(err)
+}
 
 
 

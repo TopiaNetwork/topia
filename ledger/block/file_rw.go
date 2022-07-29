@@ -141,8 +141,6 @@ func (df *FileItem) WriteHeader(block *types.Block) error {
 	//	panic(err)
 	//}
 
-
-
 	mmap, err := gommap.Map(df.File.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	if err != nil{
 		panic(err)

@@ -5,11 +5,14 @@ import (
 	"github.com/TopiaNetwork/topia/chain/types"
 	"os"
 	"strconv"
+	"sync"
 )
 
 
 const FILE_SIZE = 10000 * 1000
 const FILE_HEADER_SIZE = 10000
+const HEADER_SLICE_SIZE = 26
+const INDEX_SLICE_SIZE = 18
 
 type FileType uint16
 
@@ -66,7 +69,10 @@ type TransIndex struct{
 	Offset uint64
 }
 
-
+var DatafileSingle *FileItem
+var IndexfileSingle *FileItem
+var RollfileSigle *FileItem
+var lock = &sync.Mutex{}
 
 func NewFile(block *types.Block) (*FileItem, error) {
 	var err error
@@ -157,20 +163,83 @@ func NewIndexFile(block *types.Block) ( error) {
 //	return nil
 //}
 
+func getDatafile(filename string) *FileItem {
+
+	if DatafileSingle == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if DatafileSingle == nil {
+			fmt.Println("Creating single instance now.")
+			DatafileSingle = newFileitem(filename,0)
+		} else {
+			fmt.Println("Single instance already created.")
+		}
+	} else {
+		fmt.Println("Single instance already created.")
+	}
+
+	return DatafileSingle
+}
+
+func getIndexfile(filename string) *FileItem {
+
+	if IndexfileSingle == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if IndexfileSingle == nil {
+			fmt.Println("Creating single instance now.")
+			IndexfileSingle = newFileitem(filename,1)
+		} else {
+			fmt.Println("Single instance already created.")
+		}
+	} else {
+		fmt.Println("Single instance already created.")
+	}
+
+	return IndexfileSingle
+}
+
+func getRollfile(filename string) *FileItem {
+
+	if IndexfileSingle == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if IndexfileSingle == nil {
+			fmt.Println("Creating single instance now.")
+			IndexfileSingle = newFileitem(filename,2)
+		} else {
+			fmt.Println("Single instance already created.")
+		}
+	} else {
+		fmt.Println("Single instance already created.")
+	}
+
+	return IndexfileSingle
+}
+
+
+func newFileitem(filename string,filetype FileType)*FileItem{
+	suffix,offset := GetFilesuffix(filetype)
+
+	file, _ := os.OpenFile(filename+suffix, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	file.Write(make([]byte, FILE_SIZE))
+	//if err != nil {
+	//	return  nil
+	//}
+
+	var tp  = FileItem{
+		filetype,
+		file,
+		offset,
+		0,
+		New(),
+	}
+	return &tp
+}
+
 
 func newtestfile(filename string,filetype FileType)FileItem{
-	suffix := ""
-	var offset uint64 = FILE_HEADER_SIZE
-	switch{
-	case filetype == 0:
-		suffix = ".topia"
-	case filetype == 1:
-		suffix = ".index"
-		offset = 0
-	case filetype == 2:
-		suffix = ".roll"
-		offset = 0
-	}
+	suffix,offset := GetFilesuffix(filetype)
 
 	file, _ := os.OpenFile(filename+suffix, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	file.Write(make([]byte, FILE_SIZE))

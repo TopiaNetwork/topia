@@ -72,6 +72,12 @@ func GetStartblockFromFilename(file *FileItem) string{
 	return StartBlock
 }
 
+func GetStartblockFromFilenamestring(file string) string{
+	TraceIndex := strings.Index(file, ".")
+	StartBlock := file[:TraceIndex]
+	return StartBlock
+}
+
 func GetIndexFilename(file *FileItem) string{
 	StartBlock := GetStartblockFromFilename(file)
 	return StartBlock + ".index"
@@ -93,11 +99,26 @@ func Getmmap(file string)gommap.MMap{
 	if err != nil{
 		panic(err)
 	}
-	mmap, err := gommap.Map(fd.Fd(),syscall.PROT_READ, syscall.MAP_SHARED)
+	mmap, err := gommap.Map(fd.Fd(),syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	if err != nil{
 		panic(err)
 	}
 	return mmap
 }
 
+func GetFilesuffix(filetype FileType)(string, uint64){
+	suffix := ""
+	var offset uint64 = FILE_HEADER_SIZE
+	switch{
+	case filetype == 0:
+		suffix = ".topia"
+	case filetype == 1:
+		suffix = ".index"
+		offset = 0
+	case filetype == 2:
+		suffix = ".roll"
+		offset = 0
+	}
+	return suffix,offset
+}
 //func GetFile

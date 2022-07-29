@@ -49,9 +49,10 @@ func TestNewRollback(t *testing.T) {
 	//	0,
 	//	New(),
 	//}
-	for i:=0; i < 2;i++ {
-		TESTDATAFILE.Writedata(&block_all)
+	for i:=0; i < 500;i++ {
 		TESTINDEXFILE.Writeindex(1,TESTDATAFILE.Offset)
+		TESTDATAFILE.Writedata(&block_all)
+
 		blockhead1.Height = blockhead1.Height + 1
 		block_all = types.Block{
 			&blockhead1,
@@ -64,10 +65,10 @@ func TestNewRollback(t *testing.T) {
 
 
 func TestReaddata1(t *testing.T) {
- 	n,_:= TESTINDEXFILE.Findindex(123457)
+ 	n,_:= TESTINDEXFILE.Findindex(123500)
 	fmt.Println(n)
 
-	m,_ := TESTDATAFILE.FindBlockbyNumber(123457)
+	m,_ := TESTDATAFILE.FindBlockbyNumber(123500)
 	fmt.Println(m)
 }
 

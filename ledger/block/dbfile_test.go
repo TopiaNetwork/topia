@@ -3,7 +3,6 @@ package block
 import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/chain/types"
-	"os"
 	"testing"
 	//"github.com/fatih/structs"
 	//"reflecting"
@@ -15,7 +14,7 @@ import (
 var blockhead1 = types.BlockHead{
 	nil,
 	5,
-	1817128,
+	123456,
 	0,
 	1,
 	nil,
@@ -90,32 +89,32 @@ func TestEncodeblock(t *testing.T) {
 	fmt.Println("",b)
 }
 
-func TestNewFile(t *testing.T) {
-	topia,_ := NewFile(&block_all)
-	fmt.Println("",topia)
-
-}
+//func TestNewFile(t *testing.T) {
+//	topia,_ := NewFile(&block_all)
+//	fmt.Println("",topia)
+//
+//}
 
 //
 
 //
-func TestTopiaFile_Findindex(t *testing.T) {
-	filename := FilenameNow + ".index"
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
-
-	if err != nil{
-		panic(err)
-	}
-
-	var to = FileItem{
-		1,
-		file,
-		FILE_HEADER_SIZE,
-		0,
-		nil,
-	}
-	fmt.Println("tpindex: ",to)
-}
+//func TestTopiaFile_Findindex(t *testing.T) {
+//	filename := FilenameNow + ".index"
+//	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//
+//	if err != nil{
+//		panic(err)
+//	}
+//
+//	var to = FileItem{
+//		1,
+//		file,
+//		FILE_HEADER_SIZE,
+//		0,
+//		nil,
+//	}
+//	fmt.Println("tpindex: ",to)
+//}
 
 
 //func TestWriteindex(t *testing.T) {
@@ -140,26 +139,27 @@ func TestTopiaFile_Findindex(t *testing.T) {
 //	}
 //}
 
-func TestFileItem_WriteHeader(t *testing.T) {
-	filename := FilenameNow + ".topia"
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//func TestFileItem_WriteHeader(t *testing.T) {
+//	filename := FilenameNow + ".topia"
+//	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+//
+//	if err != nil{
+//		panic(err)
+//	}
+//
+//	var to = FileItem{
+//		1,
+//		file,
+//		FILE_HEADER_SIZE,
+//		0,
+//		nil,
+//	}
+//	err =to.WriteHeader(&block_all)
+//	if err != nil{
+//		panic(err)
+//	}
+//}
 
-	if err != nil{
-		panic(err)
-	}
-
-	var to = FileItem{
-		1,
-		file,
-		FILE_HEADER_SIZE,
-		0,
-		nil,
-	}
-	err =to.WriteHeader(&block_all)
-	if err != nil{
-		panic(err)
-	}
-}
 //
 //
 //func TestWritetrans(t *testing.T) {

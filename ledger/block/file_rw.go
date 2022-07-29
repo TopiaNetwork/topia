@@ -46,7 +46,7 @@ func (df *FileItem) FindBlockbyNumber(blockNum types.BlockNum) (*types.Block, er
 
 	fmt.Println(tpindex)
 
-	dataoffset := tpindex.offset
+	dataoffset := tpindex.position
 
 
 	filedata, err := os.OpenFile(df.File.Name(), os.O_RDWR, 0644)
@@ -113,7 +113,7 @@ func (df *FileItem) Writedata(block *types.Block) error {
 	_ = df.File.Sync()
 	df.Offset = df.Offset + 28 + size
 
-	df.Bloom.Add(Uint64ToBytes(block.GetHead().Height))
+	df.Bloom.Add(Uint64ToBytes(block.GetHead().GetHeight()))
 
 	err = df.WriteHeader(block)
 	if err != nil{

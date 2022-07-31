@@ -2,7 +2,6 @@ package badger
 
 import (
 	"bytes"
-	"context"
 	"encoding/csv"
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
@@ -11,26 +10,32 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-
-	"github.com/dgraph-io/badger/v3"
-	bpb "github.com/dgraph-io/badger/v3/pb"
-	"github.com/dgraph-io/ristretto/z"
+	"time"
 
 	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
 	tplog "github.com/TopiaNetwork/topia/log"
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 )
 
 var (
 	versionsFilename = "versions.csv"
 )
 
+var ErrClosed = errors.New("datastore closed")
+
 type BadgerBackend struct {
-	log         tplog.Logger
-	db          *badger.DB
-	vmgr        *versionManager
-	mtx         sync.RWMutex
-	openWriters int32
-	cache       *lru.ARCCache
+	log            tplog.Logger
+	gcDiscardRatio float64
+	gcSleep        time.Duration
+	gcInterval     time.Duration
+	closing        chan struct{}
+	db             *badger.DB
+	dbOpts         *badger.Options
+	vmgr           *versionManager
+	mtx            sync.RWMutex
+	openWriters    int32
+	cache          *lru.ARCCache
 }
 
 type badgerTxn struct {
@@ -77,7 +82,31 @@ func NewBadgerBackend(log tplog.Logger, name string, path string, cacheSize int)
 	opts := badger.DefaultOptions(path)
 	opts.SyncWrites = false       // note that we have Sync methods
 	opts.Logger = nil             // badger is too chatty by default
-	opts.MemTableSize = 128 << 20 //128MB
+	opts.MaxTableSize = 128 << 20 //128MBx
+	opts.NumCompactors = 20
+
+	// Blockstore values are immutable; therefore we do not expect any
+	// conflicts to emerge.
+	opts.DetectConflicts = false
+
+	// This is to optimize the database on close so it can be opened
+	// read-only and efficiently queried.
+	opts.CompactL0OnClose = true
+
+	// The alternative is "crash on start and tell the user to fix it". This
+	// will truncate corrupt and unsynced data, which we don't guarantee to
+	// persist anyways.
+	opts.Truncate = true
+
+	// We mmap the index and the value logs; this is important to enable
+	// zero-copy value access.
+	opts.ValueLogLoadingMode = options.MemoryMap
+	opts.TableLoadingMode = options.MemoryMap
+
+	// Embed only values < 128 bytes in the LSM tree; larger values are stored
+	// in value logs.
+	opts.ValueThreshold = 128
+
 	return NewDBWithOptions(log, opts, cacheSize)
 }
 
@@ -96,11 +125,23 @@ func NewDBWithOptions(log tplog.Logger, opts badger.Options, cacheSize int) *Bad
 	}
 	cache, _ := lru.NewARC(cacheSize)
 
-	return &BadgerBackend{
-		db:    d,
-		vmgr:  vmgr,
-		cache: cache,
+	b := &BadgerBackend{
+		log:            log,
+		gcDiscardRatio: 0.2,
+		gcInterval:     8 * time.Minute,
+		gcSleep:        10 * time.Second,
+		closing:        make(chan struct{}),
+		db:             d,
+		dbOpts:         &opts,
+		vmgr:           vmgr,
+		cache:          cache,
 	}
+
+	if b.gcInterval > 0 {
+		go b.periodicGC()
+	}
+
+	return b
 }
 
 // Load metadata CSV file containing valid versions
@@ -169,6 +210,41 @@ func writeVersionsFile(vm *versionManager, path string) error {
 	return w.WriteAll(rows)
 }
 
+func (b *BadgerBackend) gcOnce() error {
+	if b.db.IsClosed() {
+		return ErrClosed
+	}
+	return b.db.RunValueLogGC(b.gcDiscardRatio)
+}
+
+func (b *BadgerBackend) periodicGC() {
+	gcTimeout := time.NewTimer(b.gcInterval)
+	defer gcTimeout.Stop()
+
+	for {
+		select {
+		case <-gcTimeout.C:
+			switch err := b.gcOnce(); err {
+			case badger.ErrNoRewrite, badger.ErrRejected:
+				// No rewrite means we've fully garbage collected.
+				// Rejected means someone else is running a GC
+				// or we're closing.
+				gcTimeout.Reset(b.gcInterval)
+			case nil:
+				gcTimeout.Reset(b.gcSleep)
+			case ErrClosed:
+				return
+			default:
+				b.log.Errorf("error during a GC cycle: %s", err)
+				// Not much we can do on a random error but log it and continue.
+				gcTimeout.Reset(b.gcInterval)
+			}
+		case <-b.closing:
+			return
+		}
+	}
+}
+
 func (b *BadgerBackend) Reader() tplgcmm.DBReader {
 	b.mtx.RLock()
 	ts := b.vmgr.lastTs
@@ -203,7 +279,8 @@ func (b *BadgerBackend) Writer() tplgcmm.DBWriter {
 func (b *BadgerBackend) Close() error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
-	writeVersionsFile(b.vmgr, filepath.Join(b.db.Opts().Dir, versionsFilename))
+	writeVersionsFile(b.vmgr, filepath.Join(b.dbOpts.Dir, versionsFilename))
+	close(b.closing)
 	return b.db.Close()
 }
 
@@ -251,6 +328,11 @@ func (b *BadgerBackend) DeleteVersion(target uint64) error {
 	return nil
 }
 
+func (b *BadgerBackend) Revert() error {
+	panic("The current badger doesn't support revert")
+}
+
+/*
 func (b *BadgerBackend) Revert() error {
 	b.mtx.RLock()
 	defer b.mtx.RUnlock()
@@ -327,6 +409,8 @@ func (b *BadgerBackend) Revert() error {
 	}
 	return txn.CommitAt(lastTs, nil)
 }
+
+*/
 
 func (b *BadgerBackend) Stats() map[string]string { return nil }
 

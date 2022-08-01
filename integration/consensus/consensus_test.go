@@ -3,6 +3,8 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"testing"
 	"time"
@@ -436,11 +438,17 @@ func TestMultiRoleNodes(t *testing.T) {
 	nParams = append(nParams, executorParams...)
 	nParams = append(nParams, proposerParams...)
 	nParams = append(nParams, validatorParams...)
-	for _, nodeP := range nParams {
+	for i, nodeP := range nParams {
 		nodeP.compState.Commit()
 		nodeP.compState.UpdateCompSState(state.CompSState_Commited)
-		t.Logf("DKG PriKey = %s, nodeType=%s", nodeP.config.CSConfig.InitDKGPrivKey, nodeP.nodeType)
+		ppPort := 8899 + i
+		go func() {
+			http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", ppPort), nil)
+		}()
+		t.Logf("DKG PriKey = %s, id=%s, nodeType=%s, ppPort=%d", nodeP.config.CSConfig.InitDKGPrivKey, nodeP.nodeID, nodeP.nodeType, ppPort)
 	}
+
+	time.Sleep(10 * time.Second)
 
 	createConsensusAndStart(nParams)
 

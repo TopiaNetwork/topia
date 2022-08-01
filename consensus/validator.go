@@ -28,6 +28,7 @@ type consensusValidator struct {
 	deliver               messageDeliverI
 	marshaler             codec.Marshaler
 	epochService          EpochService
+	exeRSValidate         *executionResultValidate
 	syncPropMsgCached     sync.RWMutex
 	propMsgCached         *ProposeMessage
 	syncBestPropMsgCached sync.RWMutex
@@ -49,6 +50,7 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 		deliver:            deliver,
 		marshaler:          marshaler,
 		epochService:       epochService,
+		exeRSValidate:      newExecutionResultValidate(log, nodeID, deliver),
 		propMsgVoted:       propMsgVoted,
 		commitMsg:          commitMsg,
 	}
@@ -309,8 +311,7 @@ func (v *consensusValidator) collectProposeMsgTimerStart(ctx context.Context) {
 func (v *consensusValidator) validateAndCollectProposeMsg(ctx context.Context, maxPri []byte, propProposer string, propMsg *ProposeMessage) (bool, bool) {
 	canCollectStart := false
 
-	exeRSValidate := newExecutionResultValidate(v.log, v.nodeID, v.deliver)
-	executor, ok, err := exeRSValidate.Validate(ctx, propMsg)
+	executor, ok, err := v.exeRSValidate.Validate(ctx, propMsg)
 	if !ok {
 		v.log.Errorf("Propose block validate err by executor %s: %v", executor, err)
 		return false, canCollectStart

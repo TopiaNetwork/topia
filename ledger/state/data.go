@@ -18,7 +18,7 @@ type stateData struct {
 func newStateData(name string, backendRW tplgcmm.DBReadWriter, cacheSize int) *stateData {
 	cache := (*freecache.Cache)(nil)
 	if cacheSize > 0 {
-		cache = freecache.NewCache(cacheSize)
+		//cache = freecache.NewCache(cacheSize)
 	} else {
 		panic("CacheSize must be bigger than 0 when creating state data!")
 	}
@@ -33,7 +33,7 @@ func newStateData(name string, backendRW tplgcmm.DBReadWriter, cacheSize int) *s
 func newStateDataReadonly(name string, backendR tplgcmm.DBReader, cacheSize int) *stateData {
 	cache := (*freecache.Cache)(nil)
 	if cacheSize > 0 {
-		cache = freecache.NewCache(cacheSize)
+		//cache = freecache.NewCache(cacheSize)
 	} else {
 		panic("CacheSize must be bigger than 0 when creating state data!")
 	}
@@ -46,14 +46,14 @@ func newStateDataReadonly(name string, backendR tplgcmm.DBReader, cacheSize int)
 }
 
 func (s *stateData) Get(key []byte) ([]byte, error) {
-	if val, err := s.cache.Get(key); err == nil {
-		return val, nil
-	}
+	//if val, err := s.cache.Get(key); err == nil {
+	//	return val, nil
+	//}
 
 	if s.backendR != nil {
 		val, err := s.backendR.Get(key)
-		if err != nil {
-			s.addToCache(key, val)
+		if err == nil {
+			//s.addToCache(key, val)
 		}
 
 		return val, err
@@ -63,7 +63,7 @@ func (s *stateData) Get(key []byte) ([]byte, error) {
 }
 
 func (s *stateData) addToCache(key, val []byte) {
-	if err := s.cache.Set(key, val, -1); err != nil {
+	if err := s.cache.Set(key, val, 30); err != nil {
 		s.cache.Del(key)
 	}
 }
@@ -77,7 +77,7 @@ func (s *stateData) Set(key []byte, value []byte) error {
 		return err
 	}
 
-	s.addToCache(key, value)
+	//s.addToCache(key, value)
 
 	return nil
 }
@@ -87,15 +87,15 @@ func (s *stateData) Delete(key []byte) error {
 		return errors.New("Read only state data store")
 	}
 
-	s.cache.Del(key)
+	//s.cache.Del(key)
 
 	return s.backendRW.Delete(key)
 }
 
 func (s *stateData) Has(key []byte) (bool, error) {
-	if _, err := s.cache.Get(key); err == nil {
-		return true, nil
-	}
+	//if _, err := s.cache.Get(key); err == nil {
+	//	return true, nil
+	//}
 
 	if s.backendR != nil {
 		return s.backendR.Has(key)

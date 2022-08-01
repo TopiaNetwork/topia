@@ -108,6 +108,24 @@ func (scheduler *executionScheduler) State() SchedulerState {
 	return SchedulerState(scheduler.schedulerState.Load())
 }
 
+func (scheduler *executionScheduler) updateTree(txPacked *PackedTxs, txRSPacked *PackedTxsResult) {
+	//Change to async in future
+	func(txPackedG *PackedTxs, txRSPackedG *PackedTxsResult) {
+		treeTx := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+		treeTxRS := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+		for i := 0; i < len(txPackedG.TxList); i++ {
+			txHashBytes, _ := txPackedG.TxList[i].HashBytes()
+			txRSHashBytes, _ := txRSPackedG.TxsResult[i].HashBytes()
+
+			treeTx.Update(txHashBytes, txHashBytes)
+			treeTxRS.Update(txRSHashBytes, txRSHashBytes)
+		}
+
+		txPacked.treeTx = treeTx
+		txRSPacked.treeTxRS = treeTxRS
+	}(txPacked, txRSPacked)
+}
+
 func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error) {
 	scheduler.log.Infof("Scheduler try to fetch the execution lock: state version %d, self node %s", txPacked.StateVersion, scheduler.nodeID)
 	if ok := scheduler.executeMutex.TryLockTimeout(60 * time.Second); !ok {
@@ -164,6 +182,8 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 		scheduler.exePackedCount.Add(1)
 		exePackedTxs.packedTxsRS = packedTxsRS
 		scheduler.exePackedTxsList.PushBack(exePackedTxs)
+
+		scheduler.updateTree(txPacked, packedTxsRS)
 
 		for _, tx := range txPacked.TxList {
 			txID, _ := tx.TxID()
@@ -264,26 +284,24 @@ func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Contex
 			return nil, nil, err
 		}
 
-		treeTx := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
-		treeTxRS := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
-		for i := 0; i < len(exeTxsF.packedTxs.TxList); i++ {
-			txHashBytes, _ := exeTxsF.packedTxs.TxList[i].HashBytes()
-			txRSHashBytes, _ := exeTxsF.packedTxsRS.TxsResult[i].HashBytes()
-
-			treeTx.Update(txHashBytes, txHashBytes)
-			treeTxRS.Update(txRSHashBytes, txRSHashBytes)
-		}
-
 		var txProofs [][]byte
 		var txRSProofs [][]byte
 		for t := 0; t < len(txHashs); t++ {
-			txProof, err := treeTx.Prove(txHashs[t])
+			txProof, err := func(data []byte) (smt.SparseMerkleProof, error) {
+				exeTxsF.packedTxs.sync.Lock()
+				defer exeTxsF.packedTxs.sync.Unlock()
+				return exeTxsF.packedTxs.treeTx.Prove(data)
+			}(txHashs[t])
 			if err != nil {
 				scheduler.log.Errorf("Can't get tx proof: t=%d, txHashBytes=v, err=%v", t, txHashs[t], err)
 				return nil, nil, err
 			}
 
-			txRSProof, err := treeTxRS.Prove(txResultHashes[t])
+			txRSProof, err := func(data []byte) (smt.SparseMerkleProof, error) {
+				exeTxsF.packedTxsRS.sync.Lock()
+				defer exeTxsF.packedTxsRS.sync.Unlock()
+				return exeTxsF.packedTxsRS.treeTxRS.Prove(data)
+			}(txResultHashes[t])
 			if err != nil {
 				scheduler.log.Errorf("Can't get tx result proof: txRSHashBytes=v, err=%v", txResultHashes[t], err)
 				return nil, nil, err

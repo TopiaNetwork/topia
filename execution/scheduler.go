@@ -208,9 +208,6 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 }
 
 func (scheduler *executionScheduler) MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error) {
-	scheduler.executeMutex.RLock()
-	defer scheduler.executeMutex.RUnlock()
-
 	exePackedCount := scheduler.exePackedCount.Load()
 	if exePackedCount >= MaxAvail_Count {
 		return 0, fmt.Errorf("Haved reached max avail state version: size=%d", exePackedCount)
@@ -218,13 +215,12 @@ func (scheduler *executionScheduler) MaxStateVersion(latestBlock *tpchaintypes.B
 
 	maxStateVersion := latestBlock.Head.Height
 
-	if scheduler.exePackedTxsList.Len() > 0 {
-		exeTxsL := scheduler.exePackedTxsList.Back().Value.(*executionPackedTxs)
-		if latestBlock.Head.Height > exeTxsL.StateVersion() {
-			scheduler.log.Warnf("The latest height %d bigger than the latest state version %d", latestBlock.Head.Height, exeTxsL.StateVersion())
-			return maxStateVersion, nil
-		}
-		maxStateVersion = exeTxsL.StateVersion()
+	lastStateVersion := scheduler.lastStateVersion.Load()
+
+	if maxStateVersion > lastStateVersion {
+		scheduler.log.Warnf("The latest height %d bigger than the latest state version %d", latestBlock.Head.Height, lastStateVersion)
+	} else {
+		maxStateVersion = lastStateVersion
 	}
 
 	return maxStateVersion, nil

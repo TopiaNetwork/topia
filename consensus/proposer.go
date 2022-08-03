@@ -184,13 +184,10 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 				}
 				p.log.Infof("Received prepare message from remote, state version %d self node %s", ppmProp.StateVersion, p.nodeID)
 				err := func() error {
-					csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
-					defer csStateRN.Stop()
-
 					p.syncPPMPropList.Lock()
 					defer p.syncPPMPropList.Unlock()
 
-					latestBlock, err := csStateRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(p.ledger)
 					if err != nil {
 						p.log.Errorf("Can't get the latest bock when receiving prepare packed msg prop: %v", err)
 						return err
@@ -262,7 +259,7 @@ func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (
 }
 
 func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, voteMsg *VoteMessage, cancel context.CancelFunc) error {
-	aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
+	aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(p.nodeID, voteMsg)
 	if err != nil {
 		p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
 		return err
@@ -285,6 +282,8 @@ func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, v
 			cancel()
 		}
 		return nil
+	} else {
+		p.validator.commitMsg.Add(commitMsg.StateVersion, struct{}{})
 	}
 
 	err = p.deliver.deliverCommitMessage(ctx, commitMsg)

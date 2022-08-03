@@ -505,16 +505,13 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 		}
 
 		latestBlock, latestBlockResult, err := func() (*tpchaintypes.Block, *tpchaintypes.BlockResult, error) {
-			csStateRN := state.CreateCompositionStateReadonly(scheduler.log, ledger)
-			defer csStateRN.Stop()
-
-			latestBlock, err := csStateRN.GetLatestBlock()
+			latestBlock, err := state.GetLatestBlock(ledger)
 			if err != nil {
 				err = fmt.Errorf("Can't get the latest block: %v, can't coommit packed tx: height=%d", err, blockHead.Height)
 				return nil, nil, err
 			}
 
-			latestBlockResult, err := csStateRN.GetLatestBlockResult()
+			latestBlockResult, err := state.GetLatestBlockResult(ledger)
 			if err != nil {
 				scheduler.log.Errorf("Can't get latest block result: %v", err)
 				return nil, nil, err

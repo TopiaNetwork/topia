@@ -257,7 +257,7 @@ func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger
 		ledger:                   ledger,
 		StateStore:               stateStore,
 		AccountState:             stateaccount.NewAccountState(stateStore, 1),
-		ChainState:               statechain.NewChainStore(stateStore, ledger, 1),
+		ChainState:               statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1),
 		NodeDomainState:          nodeDomainState,
 		NodeExecuteDomainState:   exeNodeDomainState,
 		NodeConsensusDomainState: csNodeDomainState,
@@ -442,4 +442,14 @@ func (nw *nodeNetWorkStateWapper) GetActiveValidatorIDs() ([]string, error) {
 	defer csStateRN.Stop()
 
 	return csStateRN.GetActiveValidatorIDs()
+}
+
+func GetLatestBlock(ledger ledger.Ledger) (*tpchaintypes.Block, error) {
+	stateStore, _ := ledger.CreateStateStoreReadonly()
+	return statechain.GetLatestBlock(ledger.ID(), stateStore, ledger)
+}
+
+func GetLatestBlockResult(ledger ledger.Ledger) (*tpchaintypes.BlockResult, error) {
+	stateStore, _ := ledger.CreateStateStoreReadonly()
+	return statechain.GetLatestBlockResult(ledger.ID(), stateStore, ledger)
 }

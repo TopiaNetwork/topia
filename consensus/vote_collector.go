@@ -30,25 +30,31 @@ func (vc *consensusVoteCollector) setThreshold(threshold uint64) {
 	vc.threshold = threshold
 }
 
-func (vc *consensusVoteCollector) tryAggregateSignAndAddVote(vote *VoteMessage) (tpcrtypes.Signature, error) {
+func (vc *consensusVoteCollector) tryAggregateSignAndAddVote(nodeID string, vote *VoteMessage) (tpcrtypes.Signature, error) {
 	vc.Lock()
 	defer vc.Unlock()
 
-	vc.votes = append(vc.votes, vote)
+	if len(vc.votes) > 0 {
+		if !bytes.Equal(vc.votes[0].BlockHead, vote.BlockHead) {
+			vc.log.Infof("Received not same voted block and will be discarded: %v, expected %v, self node %s", vote.BlockHead, vc.votes[0].BlockHead, nodeID)
+			return nil, nil
+		} else {
+			vc.votes = append(vc.votes, vote)
+		}
+	} else {
+		vc.votes = append(vc.votes, vote)
+	}
+
 	if len(vc.votes) >= vc.dkgBls.Threshold() {
 		signArr := make([][]byte, 0)
-		for _, vote := range vc.votes {
-			sign := tpcmm.BytesCopy(vote.Signature)
+		for _, voteT := range vc.votes {
+			sign := tpcmm.BytesCopy(voteT.Signature)
 			signArr = append(signArr, sign)
-
-			if !bytes.Equal(vc.votes[0].BlockHead, vote.BlockHead) {
-				vc.log.Infof("Received not same vote %v, expected %v, self node %s", vc.votes[0].BlockHead, vc.votes[0].BlockHead)
-			}
 		}
 		msg := tpcmm.BytesCopy(vc.votes[0].BlockHead)
 		return vc.produceAggSign(msg, signArr)
 	} else {
-		vc.log.Infof("Received vote count=%d, required=%d", len(vc.votes), vc.dkgBls.Threshold())
+		vc.log.Infof("Received vote count=%d, required=%d, self node %s", len(vc.votes), vc.dkgBls.Threshold(), nodeID)
 	}
 
 	return nil, nil

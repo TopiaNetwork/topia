@@ -365,10 +365,7 @@ func (v *consensusValidator) receiveProposeMsgStart(ctx context.Context) {
 					continue
 				}
 				err := func() error {
-					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
-					defer csStateRN.Stop()
-
-					latestBlock, err := csStateRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(v.ledger)
 					if err != nil {
 						v.log.Errorf("Can't get latest block head info: %v, self node %s", err, v.nodeID)
 						return err
@@ -495,9 +492,6 @@ func (v *consensusValidator) receiveCommitMsgStart(ctx context.Context) {
 				v.log.Infof("Validator received commit message: StateVersion %d, self node %s", commitMsg.StateVersion, v.nodeID)
 
 				err := func() error {
-					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
-					defer csStateRN.Stop()
-
 					var bh tpchaintypes.BlockHead
 					err := v.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
 					if err != nil {
@@ -505,7 +499,7 @@ func (v *consensusValidator) receiveCommitMsgStart(ctx context.Context) {
 						return err
 					}
 
-					latestBlock, err := csStateRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(v.ledger)
 					if err != nil {
 						v.log.Errorf("Can't get the latest block: %v", err)
 						return err

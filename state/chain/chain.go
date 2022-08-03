@@ -43,13 +43,15 @@ type ChainState interface {
 }
 
 type chainState struct {
+	ledgerID string
 	tplgss.StateStore
 	lgUpdater LedgerStateUpdater
 }
 
-func NewChainStore(stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater, cacheSize int) ChainState {
+func NewChainStore(ledgerID string, stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater, cacheSize int) ChainState {
 	stateStore.AddNamedStateStore(StateStore_Name_Chain, cacheSize)
 	return &chainState{
+		ledgerID:   ledgerID,
 		StateStore: stateStore,
 		lgUpdater:  lgUpdater,
 	}
@@ -150,6 +152,8 @@ func (cs *chainState) SetLatestBlock(block *tpchaintypes.Block) error {
 		cs.lgUpdater.UpdateState(tpcmm.LedgerState_AutoInc)
 	}
 
+	updateLatestBlock(cs.ledgerID, block)
+
 	return err
 }
 
@@ -166,8 +170,12 @@ func (cs *chainState) SetLatestBlockResult(blockResult *tpchaintypes.BlockResult
 
 	isExist, _ := cs.Exists(StateStore_Name_Chain, []byte(LatestBlock_Key))
 	if isExist {
-		return cs.Update(StateStore_Name_Chain, []byte(LatestBlockResult_Key), blkRSBytes)
+		err = cs.Update(StateStore_Name_Chain, []byte(LatestBlockResult_Key), blkRSBytes)
 	} else {
-		return cs.Put(StateStore_Name_Chain, []byte(LatestBlockResult_Key), blkRSBytes)
+		err = cs.Put(StateStore_Name_Chain, []byte(LatestBlockResult_Key), blkRSBytes)
 	}
+
+	updateLatestBlockRS(cs.ledgerID, blockResult)
+
+	return err
 }

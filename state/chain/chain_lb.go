@@ -1,12 +1,12 @@
 package chain
 
 import (
+	"errors"
 	"unsafe"
 
 	"go.uber.org/atomic"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
 var (
@@ -35,20 +35,18 @@ func updateLatestBlockRS(ledgerID string, brs *tpchaintypes.BlockResult) {
 	}
 }
 
-func GetLatestBlock(ledgerID string, stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater) (*tpchaintypes.Block, error) {
+func GetLatestBlock(ledgerID string) (*tpchaintypes.Block, error) {
 	if latestBlockMap[ledgerID] != nil {
 		return (*tpchaintypes.Block)(latestBlockMap[ledgerID].Load()), nil
-	} else {
-		cState := NewChainStore(ledgerID, stateStore, lgUpdater, 1)
-		return cState.GetLatestBlock()
 	}
+
+	return nil, errors.New("Nil latest block cache")
 }
 
-func GetLatestBlockResult(ledgerID string, stateStore tplgss.StateStore, lgUpdater LedgerStateUpdater) (*tpchaintypes.BlockResult, error) {
+func GetLatestBlockResult(ledgerID string) (*tpchaintypes.BlockResult, error) {
 	if latestBlockRSMap[ledgerID] != nil {
 		return (*tpchaintypes.BlockResult)(latestBlockRSMap[ledgerID].Load()), nil
-	} else {
-		cState := NewChainStore(ledgerID, stateStore, lgUpdater, 1)
-		return cState.GetLatestBlockResult()
 	}
+
+	return nil, errors.New("Nil latest block result cache")
 }

@@ -579,6 +579,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	forceExit := make(chan struct{}, 1)
 	go func(requiredCount int) {
 		recvCount := 1 //Contain self
 		defer wg.Done()
@@ -590,6 +591,8 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 				if recvCount == requiredCount {
 					return
 				}
+			case <-forceExit:
+				return
 			}
 		}
 	}(len(activeExecutors))
@@ -600,6 +603,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 		err = e.deliver.deliverPreparePackagedMessageExe(ctx, packedMsgExe)
 		if err != nil {
 			e.log.Errorf("Deliver prepare packed message to execute network failed: err=%v", err)
+			forceExit <- struct{}{}
 			return
 		}
 		e.log.Infof("Deliver prepare packed message to execute network successfully: state version %d， self node %s", packedMsgExe.StateVersion, e.nodeID)

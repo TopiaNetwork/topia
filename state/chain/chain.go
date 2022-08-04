@@ -7,6 +7,8 @@ import (
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
+	"go.uber.org/atomic"
+	"unsafe"
 )
 
 const StateStore_Name_Chain = "chain"
@@ -92,6 +94,10 @@ func (cs *chainState) GetLatestBlock() (*tpchaintypes.Block, error) {
 		return nil, err
 	}
 
+	if latestBlockMap[cs.ledgerID] == nil {
+		latestBlockMap[cs.ledgerID] = atomic.NewUnsafePointer(unsafe.Pointer(&block))
+	}
+
 	return &block, nil
 }
 
@@ -106,6 +112,10 @@ func (cs *chainState) GetLatestBlockResult() (*tpchaintypes.BlockResult, error) 
 	err = marshaler.Unmarshal(blockRSBytes, &blockRS)
 	if err != nil {
 		return nil, err
+	}
+
+	if latestBlockRSMap[cs.ledgerID] == nil {
+		latestBlockRSMap[cs.ledgerID] = atomic.NewUnsafePointer(unsafe.Pointer(&blockRS))
 	}
 
 	return &blockRS, nil

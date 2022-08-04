@@ -2,11 +2,10 @@ package state
 
 import (
 	"crypto/sha256"
-	"math/big"
-	"sync"
-
 	"github.com/lazyledger/smt"
 	"go.uber.org/atomic"
+	"math/big"
+	"sync"
 
 	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -266,7 +265,7 @@ func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger
 		NodeExecutorState:        executorState,
 		NodeProposerState:        proposerState,
 		NodeValidatorState:       validatorState,
-		EpochState:               stateepoch.NewEpochState(stateStore, 1),
+		EpochState:               stateepoch.NewEpochState(ledger.ID(), stateStore, 1),
 	}
 }
 
@@ -445,11 +444,34 @@ func (nw *nodeNetWorkStateWapper) GetActiveValidatorIDs() ([]string, error) {
 }
 
 func GetLatestBlock(ledger ledger.Ledger) (*tpchaintypes.Block, error) {
-	stateStore, _ := ledger.CreateStateStoreReadonly()
-	return statechain.GetLatestBlock(ledger.ID(), stateStore, ledger)
+	b, err := statechain.GetLatestBlock(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1)
+		b, err = cState.GetLatestBlock()
+	}
+
+	return b, err
 }
 
 func GetLatestBlockResult(ledger ledger.Ledger) (*tpchaintypes.BlockResult, error) {
-	stateStore, _ := ledger.CreateStateStoreReadonly()
-	return statechain.GetLatestBlockResult(ledger.ID(), stateStore, ledger)
+	brs, err := statechain.GetLatestBlockResult(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1)
+		brs, err = cState.GetLatestBlockResult()
+	}
+
+	return brs, err
+}
+
+func GetLatestEpoch(ledger ledger.Ledger) (*tpcmm.EpochInfo, error) {
+	brs, err := stateepoch.GetLatestEpoch(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := stateepoch.NewEpochState(ledger.ID(), stateStore, 1)
+		brs, err = cState.GetLatestEpoch()
+	}
+
+	return brs, err
 }

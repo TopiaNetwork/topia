@@ -131,7 +131,7 @@ func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block, proposeHe
 	return hasher.Bytes(), nil
 }
 
-func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, latestBlock *tpchaintypes.Block, proposeHeight uint64) (bool, []byte, []byte, error) {
+func (p *consensusProposer) canProposeBlock(latestBlock *tpchaintypes.Block, proposeHeight uint64) (bool, []byte, []byte, error) {
 	proposerSel := vrf.NewProposerSelector(vrf.ProposerSelectionType_Poiss, p.cryptService)
 
 	vrfData, err := p.getVrfInputData(latestBlock, proposeHeight)
@@ -146,12 +146,9 @@ func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateRead
 		return false, nil, nil, err
 	}
 
-	totalActiveProposerWeight, err := csStateRN.GetActiveProposersTotalWeight()
-	if err != nil {
-		p.log.Errorf("Can't get total active proposer weight: %v", err)
-		return false, nil, nil, err
-	}
-	localNodeWeight, err := csStateRN.GetNodeWeight(p.nodeID)
+	totalActiveProposerWeight := p.epochService.GetActiveProposersTotalWeight()
+
+	localNodeWeight, err := p.epochService.GetNodeWeight(p.nodeID)
 	if err != nil {
 		p.log.Errorf("Can't get local proposer weight: %v", err)
 		return false, nil, nil, err
@@ -405,14 +402,14 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 
 	latestBlock := addedBlock
 
-	latestEpoch, err := csStateRN.GetLatestEpoch()
+	latestEpoch, err := state.GetLatestEpoch(p.ledger)
 	if err != nil {
 		p.log.Errorf("Can't get the latest epoch: %v", err)
 		return err
 	}
 
 	if latestBlock == nil {
-		latestBlock, err = csStateRN.GetLatestBlock()
+		latestBlock, err = state.GetLatestBlock(p.ledger)
 		if err != nil {
 			p.log.Errorf("Can't get the latest block: %v", err)
 			return err
@@ -462,7 +459,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		return err
 	}
 
-	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock, proposeHeightNew)
+	canPropose, vrfProof, maxPri, err := p.canProposeBlock(latestBlock, proposeHeightNew)
 	if !canPropose {
 		err = fmt.Errorf("Can't propose block at the epoch : latest epoch=%d, latest height=%d, self node=%s, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)
 		p.log.Infof("%s", err.Error())

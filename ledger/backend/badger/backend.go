@@ -82,7 +82,7 @@ func NewBadgerBackend(log tplog.Logger, name string, path string, cacheSize int)
 	opts := badger.DefaultOptions(path)
 	opts.SyncWrites = false       // note that we have Sync methods
 	opts.Logger = nil             // badger is too chatty by default
-	opts.MaxTableSize = 128 << 20 //128MBx
+	opts.MaxTableSize = 256 << 20 //128MBx
 	opts.NumCompactors = 20
 
 	// Blockstore values are immutable; therefore we do not expect any

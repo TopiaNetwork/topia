@@ -23,11 +23,11 @@ import (
 )
 
 type NodeNetWorkStateWapper interface {
-	GetActiveExecutorIDs() ([]string, error)
+	GetActiveExecutorIDs() []string
 
-	GetActiveProposerIDs() ([]string, error)
+	GetActiveProposerIDs() []string
 
-	GetActiveValidatorIDs() ([]string, error)
+	GetActiveValidatorIDs() []string
 }
 
 type CompositionStateReadonly interface {
@@ -422,25 +422,43 @@ func (cs *compositionState) Unlock() {
 	cs.sync.Unlock()
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveExecutorIDs()
+	aExeIDs, err := csStateRN.GetActiveExecutorIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active executor Ids from composition state read only")
+		return nil
+	}
+
+	return aExeIDs
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveProposerIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveProposerIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveProposerIDs()
+	aPropIDS, err := csStateRN.GetActiveProposerIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active proposer Ids from composition state read only")
+		return nil
+	}
+
+	return aPropIDS
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveValidatorIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveValidatorIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveValidatorIDs()
+	aValIDs, err := csStateRN.GetActiveValidatorIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active validator Ids from composition state read only")
+		return nil
+	}
+
+	return aValIDs
 }
 
 func GetLatestBlock(ledger ledger.Ledger) (*tpchaintypes.Block, error) {

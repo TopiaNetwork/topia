@@ -1,9 +1,9 @@
 package common
 
 type NetworkActiveNode interface {
-	GetActiveExecutorIDs() ([]string, error)
+	GetActiveExecutorIDs() []string
 
-	GetActiveProposerIDs() ([]string, error)
+	GetActiveProposerIDs() []string
 
-	GetActiveValidatorIDs() ([]string, error)
+	GetActiveValidatorIDs() []string
 }

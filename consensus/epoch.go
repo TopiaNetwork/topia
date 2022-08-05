@@ -249,6 +249,7 @@ func (es *epochService) SelfSelected() bool {
 
 func (es *epochService) UpdateData(log tplog.Logger, ledger ledger.Ledger, csDomainMember []*tpcmm.NodeDomainMember) {
 	es.activeNodeInfos.update(log, ledger, csDomainMember)
+	es.deliver.deliverNetwork().UpdateNetActiveNode(es)
 }
 
 func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error {
@@ -271,7 +272,7 @@ func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.Blo
 			return err
 		}
 		if dkgCPT != nil {
-			es.activeNodeInfos.update(es.log, es.ledger, members)
+			es.UpdateData(es.log, es.ledger, members)
 			es.notifyUpdater(dkgCPT)
 			if selfSelected != nil {
 				atomic.StoreUint32(&es.selfSelected, 1)
@@ -339,7 +340,7 @@ func (es *epochService) Start(ctx context.Context, latestHeight uint64) {
 				continue
 			}
 			if len(members) > 0 && dkgCPT != nil {
-				es.activeNodeInfos.update(es.log, es.ledger, members)
+				es.UpdateData(es.log, es.ledger, members)
 				es.notifyUpdater(dkgCPT)
 				if selfSelected != nil {
 					atomic.StoreUint32(&es.selfSelected, 1)

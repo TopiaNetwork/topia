@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"errors"
-
 	"github.com/lazyledger/smt"
 
 	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
@@ -42,7 +41,10 @@ func newStateProof(nodes tplgcmm.DBReadWriter, values tplgcmm.DBReadWriter) *sta
 		return nil
 	}
 	for stateIt.Next() {
-		smTree.Update(stateIt.Key(), stateIt.Value())
+		_, err := smTree.Update(stateIt.Key(), stateIt.Value())
+		if err != nil {
+			panic("SparseMerkleTree update failed")
+		}
 	}
 	stateRoot := smTree.Root()
 	if stateRoot != nil {

@@ -17,6 +17,8 @@ import (
 type LedgerID string
 
 type Ledger interface {
+	ID() string
+
 	CreateStateStore() (tplgss.StateStore, error)
 
 	CreateStateStoreReadonly() (tplgss.StateStore, error)
@@ -58,6 +60,10 @@ func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backe
 	l.state.Store(tpcmm.LedgerState_Uninitialized)
 
 	return l
+}
+
+func (l *ledger) ID() string {
+	return string(l.id)
 }
 
 func (l *ledger) CreateStateStore() (tplgss.StateStore, error) {

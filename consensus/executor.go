@@ -309,9 +309,6 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 			case commitMsg := <-e.commitMsgChan:
 				e.log.Infof("Received commit message, StateVersion %d, self node %s", commitMsg.StateVersion, e.nodeID)
 				err := func() error {
-					csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
-					defer csStateRN.Stop()
-
 					var bh tpchaintypes.BlockHead
 					err := e.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
 					if err != nil {
@@ -319,7 +316,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 						return err
 					}
 
-					latestBlock, err := csStateRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(e.ledger)
 					if err != nil {
 						e.log.Errorf("Can't get the latest block: %v", err)
 						return err
@@ -402,10 +399,8 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 				func() {
 					e.log.Infof("Prepare timer starts: self node %s", e.nodeID)
 					prepareStart := time.Now()
-					compStatRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
-					defer compStatRN.Stop()
 
-					latestBlock, err := compStatRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(e.ledger)
 					if err != nil {
 						e.log.Errorf("Can't get the latest block: %v, self node %s", err, e.nodeID)
 						return
@@ -584,6 +579,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	forceExit := make(chan struct{}, 1)
 	go func(requiredCount int) {
 		recvCount := 1 //Contain self
 		defer wg.Done()
@@ -595,6 +591,8 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 				if recvCount == requiredCount {
 					return
 				}
+			case <-forceExit:
+				return
 			}
 		}
 	}(len(activeExecutors))
@@ -605,6 +603,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 		err = e.deliver.deliverPreparePackagedMessageExe(ctx, packedMsgExe)
 		if err != nil {
 			e.log.Errorf("Deliver prepare packed message to execute network failed: err=%v", err)
+			forceExit <- struct{}{}
 			return
 		}
 		e.log.Infof("Deliver prepare packed message to execute network successfully: state version %d， self node %s", packedMsgExe.StateVersion, e.nodeID)

@@ -158,14 +158,11 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 
 	bsp.log.Infof("Process of pubsub message: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
 
-	csStateRN := state.CreateCompositionStateReadonly(bsp.log, bsp.ledger)
-	latestBlock, err := csStateRN.GetLatestBlock()
+	latestBlock, err := state.GetLatestBlock(bsp.ledger)
 	if err != nil {
 		err = fmt.Errorf("Can't get the latest block: %v, can't process pubsub message: height=%d", err, block.Head.Height)
-		csStateRN.Stop()
 		return err
 	}
-	csStateRN.Stop()
 	if latestBlock.Head.Height >= block.Head.Height {
 		bsp.log.Warnf("Receive delay PubSubMessageBlockInfo: height=%d, latest block height=%d, self node %s", block.Head.Height, latestBlock.Head.Height, bsp.nodeID)
 		return nil

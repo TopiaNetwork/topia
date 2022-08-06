@@ -131,7 +131,7 @@ func (p *consensusProposer) getVrfInputData(block *tpchaintypes.Block, proposeHe
 	return hasher.Bytes(), nil
 }
 
-func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateReadonly, latestBlock *tpchaintypes.Block, proposeHeight uint64) (bool, []byte, []byte, error) {
+func (p *consensusProposer) canProposeBlock(latestBlock *tpchaintypes.Block, proposeHeight uint64) (bool, []byte, []byte, error) {
 	proposerSel := vrf.NewProposerSelector(vrf.ProposerSelectionType_Poiss, p.cryptService)
 
 	vrfData, err := p.getVrfInputData(latestBlock, proposeHeight)
@@ -146,12 +146,9 @@ func (p *consensusProposer) canProposeBlock(csStateRN state.CompositionStateRead
 		return false, nil, nil, err
 	}
 
-	totalActiveProposerWeight, err := csStateRN.GetActiveProposersTotalWeight()
-	if err != nil {
-		p.log.Errorf("Can't get total active proposer weight: %v", err)
-		return false, nil, nil, err
-	}
-	localNodeWeight, err := csStateRN.GetNodeWeight(p.nodeID)
+	totalActiveProposerWeight := p.epochService.GetActiveProposersTotalWeight()
+
+	localNodeWeight, err := p.epochService.GetNodeWeight(p.nodeID)
 	if err != nil {
 		p.log.Errorf("Can't get local proposer weight: %v", err)
 		return false, nil, nil, err
@@ -184,13 +181,10 @@ func (p *consensusProposer) receivePreparePackedMessagePropStart(ctx context.Con
 				}
 				p.log.Infof("Received prepare message from remote, state version %d self node %s", ppmProp.StateVersion, p.nodeID)
 				err := func() error {
-					csStateRN := state.CreateCompositionStateReadonly(p.log, p.ledger)
-					defer csStateRN.Stop()
-
 					p.syncPPMPropList.Lock()
 					defer p.syncPPMPropList.Unlock()
 
-					latestBlock, err := csStateRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(p.ledger)
 					if err != nil {
 						p.log.Errorf("Can't get the latest bock when receiving prepare packed msg prop: %v", err)
 						return err
@@ -262,7 +256,7 @@ func (p *consensusProposer) produceCommitMsg(msg *VoteMessage, aggSign []byte) (
 }
 
 func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, voteMsg *VoteMessage, cancel context.CancelFunc) error {
-	aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(voteMsg)
+	aggSign, err := p.voteCollector.tryAggregateSignAndAddVote(p.nodeID, voteMsg)
 	if err != nil {
 		p.log.Errorf("Try to aggregate sign and add vote faild: err=%v", err)
 		return err
@@ -285,6 +279,8 @@ func (p *consensusProposer) aggSignDisposeWhenRecvVoteMsg(ctx context.Context, v
 			cancel()
 		}
 		return nil
+	} else {
+		p.validator.commitMsg.Add(commitMsg.StateVersion, struct{}{})
 	}
 
 	err = p.deliver.deliverCommitMessage(ctx, commitMsg)
@@ -406,14 +402,14 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 
 	latestBlock := addedBlock
 
-	latestEpoch, err := csStateRN.GetLatestEpoch()
+	latestEpoch, err := state.GetLatestEpoch(p.ledger)
 	if err != nil {
 		p.log.Errorf("Can't get the latest epoch: %v", err)
 		return err
 	}
 
 	if latestBlock == nil {
-		latestBlock, err = csStateRN.GetLatestBlock()
+		latestBlock, err = state.GetLatestBlock(p.ledger)
 		if err != nil {
 			p.log.Errorf("Can't get the latest block: %v", err)
 			return err
@@ -463,7 +459,7 @@ func (p *consensusProposer) proposeBlockSpecification(ctx context.Context, added
 		return err
 	}
 
-	canPropose, vrfProof, maxPri, err := p.canProposeBlock(csStateRN, latestBlock, proposeHeightNew)
+	canPropose, vrfProof, maxPri, err := p.canProposeBlock(latestBlock, proposeHeightNew)
 	if !canPropose {
 		err = fmt.Errorf("Can't propose block at the epoch : latest epoch=%d, latest height=%d, self node=%s, err=%v", latestBlock.Head.Epoch, latestBlock.Head.Height, p.nodeID, err)
 		p.log.Infof("%s", err.Error())

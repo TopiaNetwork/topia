@@ -68,24 +68,29 @@ func newStateProof(nodes tplgcmm.DBReadWriter, values tplgcmm.DBReadWriter) *sta
 }
 
 func newStateProofReadonly(nodes tplgcmm.DBReader, values tplgcmm.DBReader) *stateProof {
-	hasher := sha256.New()
-	smTree := smt.NewSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, hasher)
-	stateIt, err := values.Iterator(nil, nil)
+	stateRoot, err := values.Get(rootKey)
 	if err != nil {
-		return nil
+		panic("Get root key failed")
 	}
-	for stateIt.Next() {
-		smTree.Update(stateIt.Key(), stateIt.Value())
-	}
-	stateIt.Close()
 
-	stateRoot := smTree.Root()
-	if stateRoot != nil {
-		smTree = smt.ImportSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, hasher, stateRoot)
+	if stateRoot == nil {
+		smTree := smt.NewSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, sha256.New())
+		stateIt, err := values.Iterator(nil, nil)
+		if err != nil {
+			return nil
+		}
+		for stateIt.Next() {
+			smTree.Update(stateIt.Key(), stateIt.Value())
+		}
+		stateIt.Close()
+
+		stateRoot = smTree.Root()
 	}
+
+	smTreeR := smt.ImportSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, sha256.New(), stateRoot)
 
 	return &stateProof{
-		smTree: smTree,
+		smTree: smTreeR,
 	}
 }
 

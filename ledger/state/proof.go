@@ -10,6 +10,10 @@ import (
 	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
 )
 
+var (
+	rootKey = []byte("srk")
+)
+
 func encodeProof(sp *smt.SparseMerkleProof) ([]byte, error) {
 	var data bytes.Buffer
 	enc := gob.NewEncoder(&data)
@@ -33,26 +37,33 @@ type stateProof struct {
 }
 
 func newStateProof(nodes tplgcmm.DBReadWriter, values tplgcmm.DBReadWriter) *stateProof {
-	hasher := sha256.New()
-	smTree := smt.NewSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, hasher)
-	stateIt, err := values.Iterator(nil, nil)
-	defer stateIt.Close()
+	stateRoot, err := values.Get(rootKey)
 	if err != nil {
-		return nil
-	}
-	for stateIt.Next() {
-		_, err := smTree.Update(stateIt.Key(), stateIt.Value())
-		if err != nil {
-			panic("SparseMerkleTree update failed")
-		}
-	}
-	stateRoot := smTree.Root()
-	if stateRoot != nil {
-		smTree = smt.ImportSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, hasher, stateRoot)
+		panic("Get root key failed")
 	}
 
+	if stateRoot == nil {
+		smTree := smt.NewSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, sha256.New())
+		stateIt, err := values.Iterator(nil, nil)
+		defer stateIt.Close()
+		if err != nil {
+			return nil
+		}
+		for stateIt.Next() {
+			_, err := smTree.Update(stateIt.Key(), stateIt.Value())
+			if err != nil {
+				panic("SparseMerkleTree update failed")
+			}
+		}
+
+		stateRoot = smTree.Root()
+	}
+
+	smTreeR := smt.ImportSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, sha256.New(), stateRoot)
+	values.Set(rootKey, stateRoot)
+
 	return &stateProof{
-		smTree: smTree,
+		smTree: smTreeR,
 	}
 }
 

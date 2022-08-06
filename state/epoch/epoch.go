@@ -22,10 +22,11 @@ type EpochState interface {
 }
 
 type epochState struct {
+	ledgerID string
 	tplgss.StateStore
 }
 
-func NewEpochState(stateStore tplgss.StateStore, cacheSize int) EpochState {
+func NewEpochState(ledgerID string, stateStore tplgss.StateStore, cacheSize int) EpochState {
 	stateStore.AddNamedStateStore(StateStore_Name_Epoch, cacheSize)
 	return &epochState{
 		StateStore: stateStore,
@@ -59,8 +60,12 @@ func (es *epochState) SetLatestEpoch(epoch *tpcmm.EpochInfo) error {
 
 	isExist, _ := es.Exists(StateStore_Name_Epoch, []byte(LatestEpoch_Key))
 	if isExist {
-		return es.Update(StateStore_Name_Epoch, []byte(LatestEpoch_Key), epochBytes)
+		err = es.Update(StateStore_Name_Epoch, []byte(LatestEpoch_Key), epochBytes)
 	} else {
-		return es.Put(StateStore_Name_Epoch, []byte(LatestEpoch_Key), epochBytes)
+		err = es.Put(StateStore_Name_Epoch, []byte(LatestEpoch_Key), epochBytes)
 	}
+
+	updateLatestEpoch(es.ledgerID, epoch)
+
+	return err
 }

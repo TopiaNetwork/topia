@@ -2,11 +2,10 @@ package state
 
 import (
 	"crypto/sha256"
-	"math/big"
-	"sync"
-
 	"github.com/lazyledger/smt"
 	"go.uber.org/atomic"
+	"math/big"
+	"sync"
 
 	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -24,11 +23,11 @@ import (
 )
 
 type NodeNetWorkStateWapper interface {
-	GetActiveExecutorIDs() ([]string, error)
+	GetActiveExecutorIDs() []string
 
-	GetActiveProposerIDs() ([]string, error)
+	GetActiveProposerIDs() []string
 
-	GetActiveValidatorIDs() ([]string, error)
+	GetActiveValidatorIDs() []string
 }
 
 type CompositionStateReadonly interface {
@@ -257,7 +256,7 @@ func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger
 		ledger:                   ledger,
 		StateStore:               stateStore,
 		AccountState:             stateaccount.NewAccountState(stateStore, 1),
-		ChainState:               statechain.NewChainStore(stateStore, ledger, 1),
+		ChainState:               statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1),
 		NodeDomainState:          nodeDomainState,
 		NodeExecuteDomainState:   exeNodeDomainState,
 		NodeConsensusDomainState: csNodeDomainState,
@@ -266,7 +265,7 @@ func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger
 		NodeExecutorState:        executorState,
 		NodeProposerState:        proposerState,
 		NodeValidatorState:       validatorState,
-		EpochState:               stateepoch.NewEpochState(stateStore, 1),
+		EpochState:               stateepoch.NewEpochState(ledger.ID(), stateStore, 1),
 	}
 }
 
@@ -423,23 +422,74 @@ func (cs *compositionState) Unlock() {
 	cs.sync.Unlock()
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveExecutorIDs()
+	aExeIDs, err := csStateRN.GetActiveExecutorIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active executor Ids from composition state read only")
+		return nil
+	}
+
+	return aExeIDs
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveProposerIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveProposerIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveProposerIDs()
+	aPropIDS, err := csStateRN.GetActiveProposerIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active proposer Ids from composition state read only")
+		return nil
+	}
+
+	return aPropIDS
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveValidatorIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveValidatorIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveValidatorIDs()
+	aValIDs, err := csStateRN.GetActiveValidatorIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active validator Ids from composition state read only")
+		return nil
+	}
+
+	return aValIDs
+}
+
+func GetLatestBlock(ledger ledger.Ledger) (*tpchaintypes.Block, error) {
+	b, err := statechain.GetLatestBlock(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1)
+		b, err = cState.GetLatestBlock()
+	}
+
+	return b, err
+}
+
+func GetLatestBlockResult(ledger ledger.Ledger) (*tpchaintypes.BlockResult, error) {
+	brs, err := statechain.GetLatestBlockResult(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1)
+		brs, err = cState.GetLatestBlockResult()
+	}
+
+	return brs, err
+}
+
+func GetLatestEpoch(ledger ledger.Ledger) (*tpcmm.EpochInfo, error) {
+	brs, err := stateepoch.GetLatestEpoch(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := stateepoch.NewEpochState(ledger.ID(), stateStore, 1)
+		brs, err = cState.GetLatestEpoch()
+	}
+
+	return brs, err
 }

@@ -34,6 +34,8 @@ type Network interface {
 
 	UnRegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler)
 
+	UpdateNetActiveNode(netActiveNode tpnetcmn.NetworkActiveNode)
+
 	ConnectedPeers() []*tpnetcmn.RemotePeer
 
 	Connectedness(nodeID string) (tpnetcmn.Connectedness, error)
@@ -105,6 +107,10 @@ func (net *network) RegisterModule(moduleName string, pid *actor.PID, marshaler 
 
 func (net *network) UnRegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler) {
 	net.p2p.UnRegisterModule(moduleName, pid, marshaler)
+}
+
+func (net *network) UpdateNetActiveNode(netActiveNode tpnetcmn.NetworkActiveNode) {
+	net.p2p.UpdateNetActiveNode(netActiveNode)
 }
 
 func (net *network) ConnectedPeers() []*tpnetcmn.RemotePeer {

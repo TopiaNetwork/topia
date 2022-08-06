@@ -532,10 +532,7 @@ func (md *messageDeliver) deliverBestProposeMessage(ctx context.Context, msg *Be
 }
 
 func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, error) {
-	csStateRN := state.CreateCompositionStateReadonly(md.log, md.ledger)
-	defer csStateRN.Stop()
-
-	lastBlock, err := csStateRN.GetLatestBlock()
+	lastBlock, err := state.GetLatestBlock(md.ledger)
 	if err != nil {
 		md.log.Errorf("Can't get the latest block: %v", err)
 		return "", nil, err

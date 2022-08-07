@@ -1,5 +1,9 @@
 package common
 
+import (
+	"encoding/hex"
+)
+
 const (
 	EpochSpan = 300
 )
@@ -146,4 +150,15 @@ func NodeIDs(nodeM []*NodeDomainMember) []string {
 	}
 
 	return nIDs
+}
+
+func CreateDomainID(seed string) string {
+	r := make([]byte, 10)
+	randReader, _ := NewRandReader(seed)
+	_, err := randReader.Read(r)
+	if err != nil {
+		return ""
+	}
+
+	return hex.EncodeToString(r)
 }

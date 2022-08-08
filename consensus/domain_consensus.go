@@ -273,7 +273,7 @@ func (ds *domainConsensusService) ProduceAndSaveNodeDomain(threshold int, pubKey
 	ndInfo := &tpcmm.NodeDomainInfo{}
 
 	bHash, _ := ds.triggerBlock.BlockHash()
-	ndInfo.ID = string(bHash)
+	ndInfo.ID = tpcmm.CreateDomainID(string(bHash))
 	ndInfo.Type = tpcmm.DomainType_Consensus
 
 	if ds.triggerNumber == 1 {

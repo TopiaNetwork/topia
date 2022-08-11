@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	ExecutorNode_Number  = 3
+	ExecutorNode_Number  = 6
 	ProposerNode_Number  = 3
 	ValidatorNode_number = 4
 )
@@ -90,7 +90,7 @@ func createNetworkNodes(
 	var networkExes []tpnet.Network
 	suite := bn256.NewSuiteG2()
 
-	exeDomainInfo := &tpcmm.NodeDomainInfo{
+	exeDomainInfo1 := &tpcmm.NodeDomainInfo{
 		ID:               tpcmm.CreateDomainID("exedomain1"),
 		Type:             tpcmm.DomainType_Execute,
 		ValidHeightStart: 1,
@@ -98,8 +98,20 @@ func createNetworkNodes(
 		ExeDomainData:    new(tpcmm.NodeExecuteDomain),
 	}
 
+	exeDomainInfo2 := &tpcmm.NodeDomainInfo{
+		ID:               tpcmm.CreateDomainID("exedomain2"),
+		Type:             tpcmm.DomainType_Execute,
+		ValidHeightStart: 1,
+		ValidHeightEnd:   100000,
+		ExeDomainData:    new(tpcmm.NodeExecuteDomain),
+	}
+
 	for i := 0; i < len(executorNetParams); i++ {
-		exeDomainInfo.ExeDomainData.Members = append(exeDomainInfo.ExeDomainData.Members, executorNetParams[i].network.ID())
+		if i < len(executorNetParams)/2 {
+			exeDomainInfo1.ExeDomainData.Members = append(exeDomainInfo1.ExeDomainData.Members, executorNetParams[i].network.ID())
+		} else {
+			exeDomainInfo2.ExeDomainData.Members = append(exeDomainInfo2.ExeDomainData.Members, executorNetParams[i].network.ID())
+		}
 	}
 
 	for i := 0; i < len(executorNetParams); i++ {
@@ -115,7 +127,11 @@ func createNetworkNodes(
 			State:  tpcmm.NodeState_Active,
 		})
 
-		executorNetParams[i].compState.AddNodeDomain(exeDomainInfo)
+		if i < len(executorNetParams)/2 {
+			executorNetParams[i].compState.AddNodeDomain(exeDomainInfo1)
+		} else {
+			executorNetParams[i].compState.AddNodeDomain(exeDomainInfo2)
+		}
 
 		for j := 0; j < i; j++ {
 			executorNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
@@ -169,7 +185,8 @@ func createNetworkNodes(
 			State:         tpcmm.NodeState_Active,
 		})
 
-		proposerNetParams[i].compState.AddNodeDomain(exeDomainInfo)
+		proposerNetParams[i].compState.AddNodeDomain(exeDomainInfo1)
+		proposerNetParams[i].compState.AddNodeDomain(exeDomainInfo2)
 
 		for j := 0; j < i; j++ {
 			proposerNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
@@ -227,7 +244,8 @@ func createNetworkNodes(
 			Role:          tpcmm.NodeRole_Validator,
 			State:         tpcmm.NodeState_Active,
 		})
-		validatorNetParams[i].compState.AddNodeDomain(exeDomainInfo)
+		validatorNetParams[i].compState.AddNodeDomain(exeDomainInfo1)
+		validatorNetParams[i].compState.AddNodeDomain(exeDomainInfo2)
 		for j := 0; j < i; j++ {
 			validatorNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
 				NodeID:        network.ID(),

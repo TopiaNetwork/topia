@@ -2,10 +2,11 @@ package state
 
 import (
 	"crypto/sha256"
-	"github.com/lazyledger/smt"
-	"go.uber.org/atomic"
 	"math/big"
 	"sync"
+
+	"github.com/lazyledger/smt"
+	"go.uber.org/atomic"
 
 	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"

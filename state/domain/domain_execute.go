@@ -52,7 +52,7 @@ func (ns *nodeExecuteDomainState) GetAllActiveNodeExecuteDomains(height uint64) 
 		if err != nil {
 			return
 		}
-		if domainInfo.ValidHeightStart > height && height < domainInfo.ValidHeightEnd {
+		if height >= domainInfo.ValidHeightStart && height < domainInfo.ValidHeightEnd && (domainInfo.ValidHeightEnd-tpcmm.EpochSpan) >= 0 {
 			domains = append(domains, &domainInfo)
 		}
 	})
@@ -64,5 +64,5 @@ func (ns *nodeExecuteDomainState) GetAllActiveNodeExecuteDomains(height uint64) 
 }
 
 func (ns *nodeExecuteDomainState) addNodeExecuteDomain(domainInfo *tpcmm.NodeDomainInfo) error {
-	return addNodeDomain(ns.StateStore, StateStore_Name_NodeConsensusDomain, domainInfo)
+	return addNodeDomain(ns.StateStore, StateStore_Name_NodeExecuteDomain, domainInfo)
 }

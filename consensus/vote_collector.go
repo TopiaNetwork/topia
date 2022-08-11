@@ -2,9 +2,9 @@ package consensus
 
 import (
 	"bytes"
-	tpcmm "github.com/TopiaNetwork/topia/common"
 	"sync"
 
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 )

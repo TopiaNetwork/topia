@@ -89,6 +89,19 @@ func createNetworkNodes(
 	t *testing.T) ([]tpnet.Network, []tpnet.Network, []tpnet.Network) {
 	var networkExes []tpnet.Network
 	suite := bn256.NewSuiteG2()
+
+	exeDomainInfo := &tpcmm.NodeDomainInfo{
+		ID:               tpcmm.CreateDomainID("exedomain1"),
+		Type:             tpcmm.DomainType_Execute,
+		ValidHeightStart: 1,
+		ValidHeightEnd:   100000,
+		ExeDomainData:    new(tpcmm.NodeExecuteDomain),
+	}
+
+	for i := 0; i < len(executorNetParams); i++ {
+		exeDomainInfo.ExeDomainData.Members = append(exeDomainInfo.ExeDomainData.Members, executorNetParams[i].network.ID())
+	}
+
 	for i := 0; i < len(executorNetParams); i++ {
 		network := executorNetParams[i].network
 		executorNetParams[i].mainLog.Infof("Execute network %d id=%s", i, network.ID())
@@ -101,6 +114,9 @@ func createNetworkNodes(
 			Role:   tpcmm.NodeRole_Executor,
 			State:  tpcmm.NodeState_Active,
 		})
+
+		executorNetParams[i].compState.AddNodeDomain(exeDomainInfo)
+
 		for j := 0; j < i; j++ {
 			executorNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
 				NodeID: network.ID(),
@@ -152,6 +168,8 @@ func createNetworkNodes(
 			Role:          tpcmm.NodeRole_Proposer,
 			State:         tpcmm.NodeState_Active,
 		})
+
+		proposerNetParams[i].compState.AddNodeDomain(exeDomainInfo)
 
 		for j := 0; j < i; j++ {
 			proposerNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
@@ -209,6 +227,7 @@ func createNetworkNodes(
 			Role:          tpcmm.NodeRole_Validator,
 			State:         tpcmm.NodeState_Active,
 		})
+		validatorNetParams[i].compState.AddNodeDomain(exeDomainInfo)
 		for j := 0; j < i; j++ {
 			validatorNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
 				NodeID:        network.ID(),

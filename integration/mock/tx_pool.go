@@ -117,11 +117,15 @@ func (txm *TransactionPoolMock) PickTxs() []*txbasic.Transaction {
 func (txm *TransactionPoolMock) processBlockAddedEvent(ctx context.Context, data interface{}) error {
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 	if block, ok := data.(*tpchaintypes.Block); ok {
-		for _, txBytes := range block.Data.Txs {
-			var tx txbasic.Transaction
-			marshaler.Unmarshal(txBytes, &tx)
-			txID, _ := tx.TxID()
-			txm.RemoveTxByKey(txID)
+		for _, dataChunkBytes := range block.Data.DataChunks {
+			var dataChunk tpchaintypes.BlockDataChunk
+			dataChunk.Unmarshal(dataChunkBytes)
+			for _, txBytes := range dataChunk.Txs {
+				var tx txbasic.Transaction
+				marshaler.Unmarshal(txBytes, &tx)
+				txID, _ := tx.TxID()
+				txm.RemoveTxByKey(txID)
+			}
 		}
 
 		runtime.GC()

@@ -43,10 +43,6 @@ func (v *blockValidator) validateBase(curChainID tpchaintypes.ChainID, bh *tpcha
 		return errors.New("Nil block ParentBlockHash")
 	}
 
-	if bh.Launcher == nil {
-		return errors.New("Nil block launcher ")
-	}
-
 	if bh.Proposer == nil {
 		return errors.New("Nil block proposer ")
 	}
@@ -183,14 +179,24 @@ func (v *blockValidator) stateRootVerify(compStateRN state.CompositionStateReado
 
 func (v *blockValidator) txVerify(compStateRN state.CompositionStateReadonly, block *tpchaintypes.Block) func() error {
 	return func() error {
-		actualTxCnt := uint32(len(block.Data.Txs))
-		if block.Head.TxCount != actualTxCnt {
-			return fmt.Errorf("Invalid tx count: expected %d, actual %d", block.Head.TxCount, actualTxCnt)
+		actualChunkCnt := uint32(len(block.Data.DataChunks))
+		if block.Head.ChunkCount != actualChunkCnt {
+			return fmt.Errorf("Invalid chunk count: expected %d, actual %d", block.Head.ChunkCount, actualChunkCnt)
 		}
 
-		txRoot := txbasic.TxRootByBytes(block.Data.Txs)
-		if !bytes.Equal(txRoot, block.Head.TxRoot) {
-			return fmt.Errorf("Invalid tx root: height %d", block.Head.Height)
+		if len(block.Head.HeadChunks) != len(block.Data.DataChunks) {
+			return fmt.Errorf("Invalid chunk count: head count %d, data count %d", len(block.Head.HeadChunks), len(block.Data.DataChunks))
+		}
+
+		for i, dataChunkBytes := range block.Data.DataChunks {
+			var headChunk tpchaintypes.BlockHeadChunk
+			var dataChunk tpchaintypes.BlockDataChunk
+			headChunk.Unmarshal(block.Head.HeadChunks[i])
+			dataChunk.Unmarshal(dataChunkBytes)
+			txRoot := txbasic.TxRootByBytes(dataChunk.Txs)
+			if !bytes.Equal(txRoot, headChunk.TxRoot) {
+				return fmt.Errorf("Invalid tx root: height %d", block.Head.Height)
+			}
 		}
 
 		return nil

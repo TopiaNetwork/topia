@@ -343,10 +343,15 @@ func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler code
 	blockData := &tpchaintypes.BlockData{
 		Version: blockHead.Version,
 	}
+	bdChunk := &tpchaintypes.BlockDataChunk{
+		Version: blockHead.Version,
+	}
 	for i := 0; i < len(packedTxs.TxList); i++ {
 		txBytes, _ := packedTxs.TxList[i].Bytes()
-		blockData.Txs = append(blockData.Txs, txBytes)
+		bdChunk.Txs = append(bdChunk.Txs, txBytes)
 	}
+	bdChunkBytes, _ := bdChunk.Marshal()
+	blockData.DataChunks = append(blockData.DataChunks, bdChunkBytes)
 
 	block := &tpchaintypes.Block{
 		Head: dstBH,
@@ -365,21 +370,32 @@ func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler code
 		return nil, nil, err
 	}
 
-	blockResultHead := &tpchaintypes.BlockResultHead{
+	bRSHeadChunk := &tpchaintypes.BlockResultHeadChunk{
 		Version:          blockHead.Version,
-		PrevBlockResult:  blockRSHash,
-		BlockHash:        blockHash,
 		TxResultHashRoot: tpcmm.BytesCopy(packedTxsRS.TxRSRoot),
-		Status:           tpchaintypes.BlockResultHead_OK,
 	}
+	bRSHeadChunkBytes, _ := bRSHeadChunk.Marshal()
+
+	blockResultHead := &tpchaintypes.BlockResultHead{
+		Version:         blockHead.Version,
+		PrevBlockResult: blockRSHash,
+		BlockHash:       blockHash,
+		Status:          tpchaintypes.BlockResultHead_OK,
+	}
+	blockResultHead.ResultHeadChunks = append(blockResultHead.ResultHeadChunks, bRSHeadChunkBytes)
 
 	blockResultData := &tpchaintypes.BlockResultData{
 		Version: blockHead.Version,
 	}
+	bRSDataChunk := &tpchaintypes.BlockResultDataChunk{
+		Version: blockHead.Version,
+	}
 	for r := 0; r < len(packedTxsRS.TxsResult); r++ {
 		txRSBytes, _ := packedTxsRS.TxsResult[r].HashBytes()
-		blockResultData.TxResults = append(blockResultData.TxResults, txRSBytes)
+		bRSDataChunk.TxResults = append(bRSDataChunk.TxResults, txRSBytes)
 	}
+	bRSDataChunkBytes, _ := bRSDataChunk.Marshal()
+	blockResultData.ResultDataChunks = append(blockResultData.ResultDataChunks, bRSDataChunkBytes)
 
 	blockResult := &tpchaintypes.BlockResult{
 		Head: blockResultHead,

@@ -19,6 +19,10 @@ import (
 type EpochService interface {
 	GetActiveExecutorIDs() []string
 
+	GetActiveExecutorIDsOfDomain(domainID string) []string
+
+	GetDomainIDOfExecutor(nodeID string) string
+
 	GetActiveProposerIDs() []string
 
 	GetActiveValidatorIDs() []string
@@ -26,6 +30,8 @@ type EpochService interface {
 	GetNodeWeight(nodeID string) (uint64, error)
 
 	GetActiveExecutorsTotalWeight() uint64
+
+	GetActiveExecutorsTotalWeightOfDomain(domainID string) uint64
 
 	GetActiveProposersTotalWeight() uint64
 
@@ -45,14 +51,16 @@ type EpochService interface {
 }
 
 type activeNodeInfos struct {
-	sync                   sync.RWMutex
-	activeExecutorIDs      []string
-	activeProposerIDs      []string
-	activeValidatorIDs     []string
-	activeExecutorWeights  uint64
-	activeProposerWeights  uint64
-	activeValidatorWeights uint64
-	nodeWeights            map[string]uint64 //nodeID->weight
+	sync                          sync.RWMutex
+	activeExecutorIDs             []string
+	activeExecutorIDsOfDomain     map[string][]string
+	activeProposerIDs             []string
+	activeValidatorIDs            []string
+	activeExecutorWeights         uint64
+	activeExecutorWeightsOfDomain map[string]uint64
+	activeProposerWeights         uint64
+	activeValidatorWeights        uint64
+	nodeWeights                   map[string]uint64 //nodeID->weight
 }
 
 type epochService struct {
@@ -132,6 +140,8 @@ func (an *activeNodeInfos) update(log tplog.Logger, ledger ledger.Ledger, csDoma
 	an.activeProposerIDs = an.activeProposerIDs[:0]
 	an.activeValidatorIDs = an.activeValidatorIDs[:0]
 
+	an.activeExecutorIDsOfDomain = make(map[string][]string)
+	an.activeExecutorWeightsOfDomain = make(map[string]uint64)
 	an.nodeWeights = make(map[string]uint64)
 
 	executorInfos, err := compStateRN.GetAllActiveExecutors()
@@ -139,11 +149,23 @@ func (an *activeNodeInfos) update(log tplog.Logger, ledger ledger.Ledger, csDoma
 		log.Errorf("Get active executor infos failed: %v", err)
 		return
 	}
-
 	for _, executorInfo := range executorInfos {
 		an.activeExecutorIDs = append(an.activeExecutorIDs, executorInfo.NodeID)
 		an.activeExecutorWeights += executorInfo.Weight
 		an.nodeWeights[executorInfo.NodeID] = executorInfo.Weight
+	}
+
+	latestBlock, _ := compStateRN.GetLatestBlock()
+	executorDomainInfos, err := compStateRN.GetAllActiveNodeExecuteDomains(latestBlock.Head.Height)
+	if err != nil {
+		log.Errorf("Get active executor domain infos failed: %v", err)
+		return
+	}
+	for _, exeDomainInfo := range executorDomainInfos {
+		an.activeExecutorIDsOfDomain[exeDomainInfo.ID] = append(an.activeExecutorIDsOfDomain[exeDomainInfo.ID], exeDomainInfo.ExeDomainData.Members...)
+		for _, exeID := range exeDomainInfo.ExeDomainData.Members {
+			an.activeExecutorWeightsOfDomain[exeDomainInfo.ID] += an.nodeWeights[exeID]
+		}
 	}
 
 	for _, domainMember := range csDomainMember {
@@ -163,6 +185,30 @@ func (an *activeNodeInfos) getActiveExecutorIDs() []string {
 	defer an.sync.RUnlock()
 
 	return an.activeExecutorIDs
+}
+
+func (an *activeNodeInfos) getActiveExecutorIDsOfDomain(domainID string) []string {
+	an.sync.RLock()
+	defer an.sync.RUnlock()
+
+	if exeIDs, ok := an.activeExecutorIDsOfDomain[domainID]; ok {
+		return exeIDs
+	}
+
+	return nil
+}
+
+func (an *activeNodeInfos) getDomainIDOfExecutor(nodeID string) string {
+	an.sync.RLock()
+	defer an.sync.RUnlock()
+
+	for domainID, nodeIDs := range an.activeExecutorIDsOfDomain {
+		if tpcmm.IsContainString(nodeID, nodeIDs) {
+			return domainID
+		}
+	}
+
+	return ""
 }
 
 func (an *activeNodeInfos) getActiveProposerIDs() []string {
@@ -197,6 +243,17 @@ func (an *activeNodeInfos) getActiveExecutorsTotalWeight() uint64 {
 	return an.activeExecutorWeights
 }
 
+func (an *activeNodeInfos) getActiveExecutorsTotalWeightOfDomain(domainID string) uint64 {
+	an.sync.RLock()
+	defer an.sync.RUnlock()
+
+	if weight, ok := an.activeExecutorWeightsOfDomain[domainID]; ok {
+		return weight
+	}
+
+	return 0
+}
+
 func (an *activeNodeInfos) getActiveProposersTotalWeight() uint64 {
 	an.sync.RLock()
 	defer an.sync.RUnlock()
@@ -215,6 +272,14 @@ func (es *epochService) GetActiveExecutorIDs() []string {
 	return es.activeNodeInfos.getActiveExecutorIDs()
 }
 
+func (es *epochService) GetActiveExecutorIDsOfDomain(domainID string) []string {
+	return es.activeNodeInfos.getActiveExecutorIDsOfDomain(domainID)
+}
+
+func (es *epochService) GetDomainIDOfExecutor(nodeID string) string {
+	return es.activeNodeInfos.getDomainIDOfExecutor(nodeID)
+}
+
 func (es *epochService) GetActiveProposerIDs() []string {
 	return es.activeNodeInfos.getActiveProposerIDs()
 }
@@ -229,6 +294,10 @@ func (es *epochService) GetNodeWeight(nodeID string) (uint64, error) {
 
 func (es *epochService) GetActiveExecutorsTotalWeight() uint64 {
 	return es.activeNodeInfos.getActiveExecutorsTotalWeight()
+}
+
+func (es *epochService) GetActiveExecutorsTotalWeightOfDomain(domainID string) uint64 {
+	return es.activeNodeInfos.getActiveExecutorsTotalWeightOfDomain(domainID)
 }
 
 func (es *epochService) GetActiveProposersTotalWeight() uint64 {

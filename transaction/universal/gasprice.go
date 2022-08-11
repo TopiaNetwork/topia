@@ -41,28 +41,35 @@ func (gc *gasPriceComputer) getMinGasPriceOfLatestBlock() (uint64, error) {
 		return 0, err
 	}
 
-	if latestBlock.Head.TxCount == 0 {
+	if latestBlock.Head.ChunkCount == 0 {
 		return gc.gasConfig.MinGasPrice, nil
 	}
 
 	var txMinGasPrice uint64
-	for _, txBytes := range latestBlock.Data.Txs {
-		var tx txbasic.Transaction
-		err = gc.marshaler.Unmarshal(txBytes, &tx)
-		if err != nil {
-			panic("Unmarshal tx: " + err.Error())
-		}
 
-		switch txbasic.TransactionCategory(tx.Head.Category) {
-		case txbasic.TransactionCategory_Topia_Universal:
-			var txUni TransactionUniversal
-			err = gc.marshaler.Unmarshal(tx.Data.Specification, &txUni)
+	for _, dataChunkBytes := range latestBlock.Data.DataChunks {
+		var dataChunk tpchaintypes.BlockDataChunk
+
+		dataChunk.Unmarshal(dataChunkBytes)
+
+		for _, txBytes := range dataChunk.Txs {
+			var tx txbasic.Transaction
+			err = gc.marshaler.Unmarshal(txBytes, &tx)
 			if err != nil {
-				panic("Unmarshal tx data: " + err.Error())
+				panic("Unmarshal tx: " + err.Error())
 			}
 
-			if txMinGasPrice == 0 || txMinGasPrice > txUni.Head.GasPrice {
-				txMinGasPrice = txUni.Head.GasPrice
+			switch txbasic.TransactionCategory(tx.Head.Category) {
+			case txbasic.TransactionCategory_Topia_Universal:
+				var txUni TransactionUniversal
+				err = gc.marshaler.Unmarshal(tx.Data.Specification, &txUni)
+				if err != nil {
+					panic("Unmarshal tx data: " + err.Error())
+				}
+
+				if txMinGasPrice == 0 || txMinGasPrice > txUni.Head.GasPrice {
+					txMinGasPrice = txUni.Head.GasPrice
+				}
 			}
 		}
 	}

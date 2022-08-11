@@ -311,9 +311,9 @@ func (v *consensusValidator) collectProposeMsgTimerStart(ctx context.Context) {
 func (v *consensusValidator) validateAndCollectProposeMsg(ctx context.Context, maxPri []byte, propProposer string, propMsg *ProposeMessage) (bool, bool) {
 	canCollectStart := false
 
-	executor, ok, err := v.exeRSValidate.Validate(ctx, propMsg)
+	ok, err := v.exeRSValidate.Validate(ctx, propMsg)
 	if !ok {
-		v.log.Errorf("Propose block validate err by executor %s: %v", executor, err)
+		v.log.Errorf("Propose block validate err: %v", err)
 		return false, canCollectStart
 	}
 

@@ -41,7 +41,7 @@ type messageDeliverI interface {
 
 	deliverConsensusDomainSelectedMessageExe(ctx context.Context, msg *ConsensusDomainSelectedMessage) error
 
-	deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error
+	deliverPreparePackagedMessageExe(ctx context.Context, domainID string, msg *PreparePackedMessageExe) error
 
 	deliverPreparePackagedMessageExeIndication(ctx context.Context, launcherID string, msg *PreparePackedMessageExeIndication) error
 
@@ -49,7 +49,7 @@ type messageDeliverI interface {
 
 	deliverProposeMessage(ctx context.Context, msg *ProposeMessage) error
 
-	deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error)
+	deliverResultValidateReqMessage(ctx context.Context, domainID string, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error)
 
 	deliverResultValidateRespMessage(actorCtx actor.Context, msg *ExeResultValidateRespMessage, err error) error
 
@@ -197,7 +197,7 @@ func (md *messageDeliver) deliverConsensusDomainSelectedMessageExe(ctx context.C
 	return nil
 }
 
-func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, msg *PreparePackedMessageExe) error {
+func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, domainID string, msg *PreparePackedMessageExe) error {
 	sigData, err := md.cryptService.Sign(md.priKey, msg.TxsData())
 	if err != nil {
 		md.log.Errorf("Can't sign when deliver PreparePackedMessageExe err: %v", err)
@@ -221,7 +221,7 @@ func (md *messageDeliver) deliverPreparePackagedMessageExe(ctx context.Context, 
 	var peerIDsExecutor []string
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDsExecutor = md.epochService.GetActiveExecutorIDs()
+		peerIDsExecutor = md.epochService.GetActiveExecutorIDsOfDomain(domainID)
 		if len(peerIDsExecutor) == 0 {
 			err := fmt.Errorf("Zero active executor node")
 			md.log.Errorf("%v", err)
@@ -370,14 +370,14 @@ func (md *messageDeliver) deliverProposeMessage(ctx context.Context, msg *Propos
 	return err
 }
 
-func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error) {
+func (md *messageDeliver) deliverResultValidateReqMessage(ctx context.Context, domainID string, msg *ExeResultValidateReqMessage) (*ExeResultValidateRespMessage, error) {
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 	ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RespThreshold, float32(1.0))
 
 	randExecutorID := make([]string, TxsResultValidity_MaxExecutor)
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs := md.epochService.GetActiveExecutorIDs()
+		peerIDs := md.epochService.GetActiveExecutorIDsOfDomain(domainID)
 		if len(peerIDs) == 0 {
 			md.log.Warnf("Active executor nodes count 0: self node %s", md.nodeID)
 		}

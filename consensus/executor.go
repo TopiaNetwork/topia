@@ -455,7 +455,7 @@ func (e *consensusExecutor) start(ctx context.Context) {
 	e.prepareTimerStart(ctx)
 }
 
-func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []*txbasic.Transaction, txResultList []txbasic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
+func (e *consensusExecutor) makePreparePackedMsg(domainID string, vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []*txbasic.Transaction, txResultList []txbasic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
 	if len(txList) != len(txResultList) {
 		err := fmt.Errorf("Mismatch tx list count %d and tx result count %d", len(txList), len(txResultList))
 		e.log.Errorf("%v", err)
@@ -477,6 +477,8 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 
 	pubKey, _ := e.cryptService.ConvertToPublic(e.priKey)
 
+	domainIDBytes := []byte(domainID)
+
 	exePPM := &PreparePackedMessageExe{
 		ChainID:         []byte(compState.ChainID()),
 		Version:         CONSENSUS_VER,
@@ -485,6 +487,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		ParentBlockHash: parentBlockHash,
 		VRFProof:        vrfProof,
 		VRFProofPubKey:  pubKey,
+		DomainID:        domainIDBytes,
 		Launcher:        []byte(e.nodeID),
 		StateVersion:    stateVersion,
 		TxRoot:          txRoot,
@@ -498,6 +501,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		ParentBlockHash: parentBlockHash,
 		VRFProof:        vrfProof,
 		VRFProofPubKey:  pubKey,
+		DomainID:        domainIDBytes,
 		Launcher:        []byte(e.nodeID),
 		StateVersion:    stateVersion,
 		TxRoot:          txRoot,
@@ -569,7 +573,8 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 	}
 
 	e.log.Infof("Executor starts making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
-	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txsRS.TxRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
+	domainID := e.epochService.GetDomainIDOfExecutor(e.nodeID)
+	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(domainID, vrfProof, txRoot, txsRS.TxRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {
 		return err
 	}
@@ -600,7 +605,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = e.deliver.deliverPreparePackagedMessageExe(ctx, packedMsgExe)
+		err = e.deliver.deliverPreparePackagedMessageExe(ctx, domainID, packedMsgExe)
 		if err != nil {
 			e.log.Errorf("Deliver prepare packed message to execute network failed: err=%v", err)
 			forceExit <- struct{}{}

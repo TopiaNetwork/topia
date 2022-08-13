@@ -2,18 +2,20 @@ package execution
 
 import (
 	"context"
+	crand "crypto/rand"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
-	"math/rand"
+	"math/big"
+	mrand "math/rand"
 	"time"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetcmn "github.com/TopiaNetwork/topia/network/common"
+	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/state"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
@@ -55,18 +57,34 @@ func NewExecutionForwarder(nodeID string,
 
 func (forwarder executionForwarder) sendTx(ctx context.Context, tx *txbasic.Transaction) error {
 	compStateRN := state.CreateCompositionStateReadonly(forwarder.log, forwarder.ledger)
-	activeExecutors, _ := compStateRN.GetActiveExecutorIDs()
+	latestBlock, _ := compStateRN.GetLatestBlock()
+	exeDomainInfos, err := compStateRN.GetAllActiveNodeExecuteDomains(latestBlock.Head.Height)
+	if err != nil {
+		err := fmt.Errorf("Can't get all active node execute domains: height %d, %v", latestBlock.Head.Height, err)
+		forwarder.log.Errorf("%v", err)
+		return err
+	}
+	if len(exeDomainInfos) == 0 {
+		err := fmt.Errorf("No available active node execute domain: height %d", latestBlock.Head.Height)
+		forwarder.log.Errorf("%v", err)
+		return err
+	}
+
+	maxInt := int64(len(exeDomainInfos) - 1)
+	rInt, _ := crand.Int(crand.Reader, big.NewInt(maxInt))
+
+	selectedDomain := exeDomainInfos[rInt.Int64()]
 
 	txID, _ := tx.TxID()
 
-	if tpcmm.IsContainString(forwarder.nodeID, activeExecutors) {
+	if tpcmm.IsContainString(forwarder.nodeID, selectedDomain.ExeDomainData.Members) {
 		err := forwarder.txPool.AddTx(tx, true)
 		if err != nil {
 			forwarder.log.Errorf("Add local tx to pool err: txID %s %v", txID, err)
 			return err
 		}
 	} else {
-		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, activeExecutors)
+		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, selectedDomain.ExeDomainData.Members)
 		ctx = context.WithValue(ctx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
 		txBytes, err := forwarder.marshaler.Marshal(tx)
 		if err != nil {
@@ -119,7 +137,7 @@ func (forwarder executionForwarder) ForwardTxSync(ctx context.Context, tx *txbas
 		case <-timer.C:
 			txResult, err := blockStore.GetTransactionResultByID(txID)
 			if err != nil {
-				jitter := 100*time.Millisecond + time.Duration(rand.Int63n(int64(time.Second))) // nolint: gosec
+				jitter := 100*time.Millisecond + time.Duration(mrand.Int63n(int64(time.Second))) // nolint: gosec
 				backoff := 100 * time.Duration(count) * time.Millisecond
 				timer.Reset(jitter + backoff)
 				continue

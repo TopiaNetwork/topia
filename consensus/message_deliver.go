@@ -544,7 +544,7 @@ func (md *messageDeliver) getVoterCollector(voterRound uint64) (string, []byte, 
 		return "", nil, err
 	}
 
-	selVoteColectors, vrfProof, err := vrf.NewLeaderSelectorVRF(md.log, md.nodeID, md.cryptService).Select(vrf.RoleSelector_VoteCollector, 0, md.priKey, lastBlock, md.epochService, 1)
+	selVoteColectors, vrfProof, err := vrf.NewLeaderSelectorVRF(md.log, md.nodeID, md.cryptService).Select(vrf.RoleSelector_VoteCollector, "", 0, md.priKey, lastBlock, md.epochService, 1)
 	if len(selVoteColectors) != 1 {
 		err := fmt.Errorf("Expect vote collector count 1, got %d", len(selVoteColectors))
 		md.log.Errorf("%v", err)

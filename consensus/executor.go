@@ -351,7 +351,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 	}()
 }
 
-func (e *consensusExecutor) canPrepare(stateVersion uint64, latestBlock *tpchaintypes.Block) (bool, []byte, error) {
+func (e *consensusExecutor) canPrepare(domainID string, stateVersion uint64, latestBlock *tpchaintypes.Block) (bool, []byte, error) {
 	if schedulerState := e.exeScheduler.State(); schedulerState != execution.SchedulerState_Idle {
 		err := fmt.Errorf("Execution scheduler state %s, self node %s", schedulerState.String(), e.nodeID)
 		e.log.Errorf("%v", err)
@@ -361,7 +361,7 @@ func (e *consensusExecutor) canPrepare(stateVersion uint64, latestBlock *tpchain
 	roleSelector := vrf.NewLeaderSelectorVRF(e.log, e.nodeID, e.cryptService)
 
 	e.log.Infof("Begin Select: state version %d, self node %s", stateVersion, e.nodeID)
-	candIDs, vrfProof, err := roleSelector.Select(vrf.RoleSelector_ExecutionLauncher, stateVersion, e.priKey, latestBlock, e.epochService, 1)
+	candIDs, vrfProof, err := roleSelector.Select(vrf.RoleSelector_ExecutionLauncher, domainID, stateVersion, e.priKey, latestBlock, e.epochService, 1)
 	if err != nil {
 		e.log.Errorf("Select executor err: %v", err)
 		return false, nil, err
@@ -389,7 +389,9 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 		timer := time.NewTicker(e.prepareInterval)
 		defer timer.Stop()
 
-		for !e.deliver.deliverNetwork().Ready() {
+		var domainID string
+		for !e.deliver.deliverNetwork().Ready() || domainID == "" {
+			domainID = e.epochService.GetDomainIDOfExecutor(e.nodeID)
 			time.Sleep(50 * time.Millisecond)
 		}
 
@@ -397,7 +399,7 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 			select {
 			case <-timer.C:
 				func() {
-					e.log.Infof("Prepare timer starts: self node %s", e.nodeID)
+					e.log.Infof("Prepare timer starts: domain %s, self node %s", domainID, e.nodeID)
 					prepareStart := time.Now()
 
 					latestBlock, err := state.GetLatestBlock(e.ledger)
@@ -428,11 +430,11 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 						return
 					}
 
-					isCan, vrfProof, _ := e.canPrepare(stateVersion, latestBlock)
+					isCan, vrfProof, _ := e.canPrepare(domainID, stateVersion, latestBlock)
 					if isCan {
 						e.log.Infof("Selected execution launcher can prepare: state version %d, self node %s", stateVersion, e.nodeID)
 						pStart := time.Now()
-						e.Prepare(ctx, vrfProof, stateVersion)
+						e.Prepare(ctx, domainID, vrfProof, stateVersion)
 						e.log.Infof("Prepare time: state version %d, cost %d ms, self node %s", stateVersion, time.Since(pStart).Milliseconds(), e.nodeID)
 					}
 					e.log.Infof("Prepare time total: isCan %v, state version %d, cost %d ms, self node %s", isCan, stateVersion, time.Since(prepareStart).Milliseconds(), e.nodeID)
@@ -543,7 +545,7 @@ func (e *consensusExecutor) makePreparePackedMsg(domainID string, vrfProof []byt
 	return exePPM, proposePPM, nil
 }
 
-func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateVersion uint64) error {
+func (e *consensusExecutor) Prepare(ctx context.Context, domainID string, vrfProof []byte, stateVersion uint64) error {
 	pendTxs := e.txPool.PickTxs()
 
 	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
@@ -573,14 +575,13 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 	}
 
 	e.log.Infof("Executor starts making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
-	domainID := e.epochService.GetDomainIDOfExecutor(e.nodeID)
 	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(domainID, vrfProof, txRoot, txsRS.TxRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {
 		return err
 	}
 	e.log.Infof("Executor finishes making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
 
-	activeExecutors := e.epochService.GetActiveExecutorIDs()
+	activeExecutors := e.epochService.GetActiveExecutorIDsOfDomain(domainID)
 
 	var wg sync.WaitGroup
 	wg.Add(1)

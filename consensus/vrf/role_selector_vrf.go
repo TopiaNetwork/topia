@@ -42,6 +42,7 @@ type RoleSelectorVRF interface {
 	ComputeVRF(priKey tpcrtypes.PrivateKey, data []byte) ([]byte, error)
 
 	Select(role RoleSelector,
+		domainID string,
 		stateVersion uint64,
 		priKey tpcrtypes.PrivateKey,
 		latestBlock *tpchaintypes.Block,
@@ -185,6 +186,7 @@ func (selector *roleSelectorVRF) getCandidateInfos(activeNodeID []string, servan
 }
 
 func (selector *roleSelectorVRF) Select(role RoleSelector,
+	domainID string,
 	stateVersion uint64,
 	priKey tpcrtypes.PrivateKey,
 	latestBlock *tpchaintypes.Block,
@@ -201,8 +203,8 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 	switch role {
 	case RoleSelector_ExecutionLauncher:
 		{
-			totalActiveWeight = servant.GetActiveExecutorsTotalWeight()
-			activeNodeID = servant.GetActiveExecutorIDs()
+			totalActiveWeight = servant.GetActiveExecutorsTotalWeightOfDomain(domainID)
+			activeNodeID = servant.GetActiveExecutorIDsOfDomain(domainID)
 		}
 	case RoleSelector_VoteCollector:
 		{

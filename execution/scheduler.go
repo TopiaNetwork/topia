@@ -64,7 +64,7 @@ type ExecutionScheduler interface {
 
 	CommitBlock(ctx context.Context, stateVersion uint64, block *tpchaintypes.Block, blockRS *tpchaintypes.BlockResult, compState state.CompositionState, requester string) error
 
-	CommitPackedTx(ctx context.Context, stateVersion uint64, blockHead *tpchaintypes.BlockHead, deltaHeight int, marshaler codec.Marshaler, network tpnet.Network, ledger ledger.Ledger) error
+	CommitPackedTx(ctx context.Context, stateVersion uint64, refIndex uint32, blockHead *tpchaintypes.BlockHead, deltaHeight int, marshaler codec.Marshaler, network tpnet.Network, ledger ledger.Ledger) error
 }
 
 type executionScheduler struct {
@@ -333,7 +333,7 @@ func (scheduler *executionScheduler) CompositionStateOfExePackedTxs(stateVersion
 	return nil, fmt.Errorf("Can't find composition state: stateVersion %d, seld node %s", stateVersion, scheduler.nodeID)
 }
 
-func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler codec.Marshaler, blockHead *tpchaintypes.BlockHead, latestBlockResult *tpchaintypes.BlockResult, packedTxs *PackedTxs, packedTxsRS *PackedTxsResult) (*tpchaintypes.Block, *tpchaintypes.BlockResult, error) {
+func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler codec.Marshaler, refIndex uint32, blockHead *tpchaintypes.BlockHead, latestBlockResult *tpchaintypes.BlockResult, packedTxs *PackedTxs, packedTxsRS *PackedTxsResult) (*tpchaintypes.Block, *tpchaintypes.BlockResult, error) {
 	dstBH, err := blockHead.DeepCopy(blockHead)
 	if err != nil {
 		err := fmt.Errorf("Block head deep copy err: %v", err)
@@ -344,7 +344,8 @@ func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler code
 		Version: blockHead.Version,
 	}
 	bdChunk := &tpchaintypes.BlockDataChunk{
-		Version: blockHead.Version,
+		Version:  blockHead.Version,
+		RefIndex: refIndex,
 	}
 	for i := 0; i < len(packedTxs.TxList); i++ {
 		txBytes, _ := packedTxs.TxList[i].Bytes()
@@ -484,6 +485,7 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 
 func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 	stateVersion uint64,
+	refIndex uint32,
 	blockHead *tpchaintypes.BlockHead,
 	deltaHeight int,
 	marshaler codec.Marshaler,
@@ -541,7 +543,7 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 			return nil
 		}
 
-		block, blockRS, err := scheduler.constructBlockAndBlockResult(marshaler, blockHead, latestBlockResult, exeTxsF.packedTxs, exeTxsF.PackedTxsResult())
+		block, blockRS, err := scheduler.constructBlockAndBlockResult(marshaler, refIndex, blockHead, latestBlockResult, exeTxsF.packedTxs, exeTxsF.PackedTxsResult())
 		if err != nil {
 			scheduler.log.Errorf("constructBlockAndBlockResult err: %v", err)
 			return err

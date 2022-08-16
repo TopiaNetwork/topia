@@ -40,6 +40,7 @@ const (
 	NodeRole_Executor           = 0x01
 	NodeRole_Proposer           = 0x02
 	NodeRole_Validator          = 0x04
+	NodeRole_Archiver           = 0x08
 )
 
 var CurrentNetworkType = NetworkType_Testnet
@@ -94,6 +95,8 @@ func (n NodeRole) Value(role string) NodeRole {
 		return NodeRole_Proposer
 	case "validator":
 		return NodeRole_Validator
+	case "archiver":
+		return NodeRole_Archiver
 	default:
 		return NodeRole_Unknown
 	}

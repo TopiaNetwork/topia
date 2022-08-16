@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"sync"
 	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
@@ -604,19 +606,25 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 	msg.Signature = sigData
 	msg.PubKey = pubKey
 
-	msgBytes, err := md.marshaler.Marshal(msg)
-	if err != nil {
-		md.log.Errorf("CommitMessage marshal err: %v", err)
-		return err
-	}
-
-	exeCtx := ctx
+	exeCtxs := []context.Context{ctx}
 	propCtx := ctx
 	ValCtx := ctx
+
 	switch md.strategy {
 	case DeliverStrategy_Specifically:
-		peerIDs := md.epochService.GetActiveExecutorIDs()
-		exeCtx = context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+		var bh tpchaintypes.BlockHead
+
+		bh.Unmarshal(msg.BlockHead)
+		if len(bh.HeadChunks) > 0 {
+			exeCtxs = make([]context.Context, len(bh.HeadChunks))
+		}
+		for i, hChunkBytes := range bh.HeadChunks {
+			var hChunk tpchaintypes.BlockHeadChunk
+			hChunk.Unmarshal(hChunkBytes)
+			peerIDs := md.epochService.GetActiveExecutorIDsOfDomain(string(hChunk.DomainID))
+			exeCtxT := context.WithValue(ctx, tpnetcmn.NetContextKey_PeerList, peerIDs)
+			exeCtxs[i] = exeCtxT
+		}
 
 		peerProposerIDs := md.epochService.GetActiveProposerIDs()
 		peerProposerIDs = tpcmm.RemoveIfExistString(md.nodeID, peerProposerIDs)
@@ -626,23 +634,55 @@ func (md *messageDeliver) deliverCommitMessage(ctx context.Context, msg *CommitM
 		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_PeerList, peerValidatorIDs)
 	}
 
-	exeCtx = context.WithValue(exeCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = deliverSendCommon(exeCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
-	if err != nil {
-		md.log.Errorf("Send commit message to executor network failed: err=%v", err)
-	}
+	orginRefIndex := msg.RefIndex
 
-	propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = deliverSendCommon(propCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
-	if err != nil {
-		md.log.Errorf("Send commit message to propose network failed: err=%v", err)
-	}
+	var wg sync.WaitGroup
 
-	ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
-	err = deliverSendCommon(ValCtx, md.log, md.marshaler, md.network, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
-	if err != nil {
-		md.log.Errorf("Send commit message to validate network failed: err=%v", err)
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i, exeCtx := range exeCtxs {
+			exeCtxD := context.WithValue(exeCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+
+			msg.RefIndex = uint32(i)
+			msgBytes, err := md.marshaler.Marshal(msg)
+			if err != nil {
+				md.log.Errorf("CommitMessage marshal err: %v", err)
+				continue
+			}
+
+			err = deliverSendCommon(exeCtxD, md.log, md.marshaler, md.network, tpnetprotoc.ForwardExecute_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+			if err != nil {
+				md.log.Errorf("Send commit message to executor network failed: err=%v", err)
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		msg.RefIndex = orginRefIndex
+		msgBytes, err := md.marshaler.Marshal(msg)
+		if err != nil {
+			md.log.Errorf("CommitMessage marshal err: %v", err)
+			return
+		}
+
+		propCtx = context.WithValue(propCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+		err = deliverSendCommon(propCtx, md.log, md.marshaler, md.network, tpnetprotoc.ForwardPropose_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+		if err != nil {
+			md.log.Errorf("Send commit message to propose network failed: err=%v", err)
+		}
+
+		ValCtx = context.WithValue(ValCtx, tpnetcmn.NetContextKey_RouteStrategy, tpnetcmn.RouteStrategy_NearestBucket)
+		err = deliverSendCommon(ValCtx, md.log, md.marshaler, md.network, tpnetprotoc.FrowardValidate_Msg, MOD_NAME, ConsensusMessage_Commit, msgBytes)
+		if err != nil {
+			md.log.Errorf("Send commit message to validate network failed: err=%v", err)
+		}
+	}()
+
+	wg.Wait()
 
 	return err
 }

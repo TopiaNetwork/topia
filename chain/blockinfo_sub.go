@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	"sync"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -16,6 +15,7 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/state"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )
 
 type BlockInfoSubProcessor interface {
@@ -59,8 +59,8 @@ func (bsp *blockInfoSubProcessor) validateRemoteBlockInfo(block *tpchaintypes.Bl
 	for i, dataChunkBytes := range block.Data.DataChunks {
 		var headChunk tpchaintypes.BlockHeadChunk
 		var dataChunk tpchaintypes.BlockDataChunk
-		headChunk.Unmarshal(block.Head.HeadChunks[i])
 		dataChunk.Unmarshal(dataChunkBytes)
+		headChunk.Unmarshal(block.Head.HeadChunks[int(dataChunk.RefIndex)])
 
 		txCount := uint64(len(dataChunk.Txs))
 		if txCount > bsp.config.ChainConfig.MaxTxCountOfEachBlock {
@@ -69,7 +69,7 @@ func (bsp *blockInfoSubProcessor) validateRemoteBlockInfo(block *tpchaintypes.Bl
 		}
 
 		txRoot := txbasic.TxRootByBytes(dataChunk.Txs)
-		if bytes.Equal(txRoot, headChunk.TxRoot) {
+		if !bytes.Equal(txRoot, headChunk.TxRoot) {
 			bsp.log.Errorf("Invalid tx root: height %d", block.Head.Height)
 			return tpnetmsg.ValidationReject
 		}
@@ -181,7 +181,7 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	bsp.log.Infof("Process of pubsub message begins committing block: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
 
 	compState := bsp.GetCompositionState(block.Head.Height)
-	if compState != nil {
+	if compState == nil {
 		err = fmt.Errorf("Process of pubsub message, can't get composition state: height=%d, self node %s", block.Head.Height, bsp.nodeID)
 		bsp.log.Errorf("%v", err)
 		return err

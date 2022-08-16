@@ -50,6 +50,7 @@ func NewChain(level tplogcmm.LogLevel,
 
 	return &chain{
 		log:           chainLog,
+		nodeID:        nodeID,
 		level:         level,
 		marshaler:     marshaler,
 		txPool:        txPool,

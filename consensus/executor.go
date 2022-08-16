@@ -329,7 +329,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 						return err
 					}
 
-					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, &bh, deltaHeight, e.marshaler, e.deliver.network, e.ledger)
+					err = e.exeScheduler.CommitPackedTx(ctx, commitMsg.StateVersion, commitMsg.RefIndex, &bh, deltaHeight, e.marshaler, e.deliver.network, e.ledger)
 					if err != nil {
 						e.log.Errorf("Commit packed tx err: %v", err)
 						return err

@@ -100,8 +100,10 @@ func NewNode(rootPath string, endPoint string, seed string, role string) *Node {
 	service.SetTxPool(n.txPool)
 	n.service = service
 
+	var nodeRole tpcmm.NodeRole
+
 	exeScheduler := execution.NewExecutionScheduler(nodeID, mainLog, config, codec.CodecType_PROTO, n.txPool)
-	n.chain = chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, codec.CodecType_PROTO, n.ledger, n.txPool, exeScheduler, config)
+	n.chain = chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, nodeRole.Value(role), codec.CodecType_PROTO, n.ledger, n.txPool, exeScheduler, config)
 
 	n.evHub = eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 

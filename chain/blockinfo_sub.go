@@ -9,6 +9,7 @@ import (
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -24,17 +25,18 @@ type BlockInfoSubProcessor interface {
 }
 
 type blockInfoSubProcessor struct {
-	log         tplog.Logger
-	nodeID      string
-	cType       state.CompStateBuilderType
-	marshaler   codec.Marshaler
-	ledger      ledger.Ledger
-	scheduler   execution.ExecutionScheduler
-	config      *configuration.Configuration
-	syncProcess sync.RWMutex
+	log            tplog.Logger
+	nodeID         string
+	cType          state.CompStateBuilderType
+	marshaler      codec.Marshaler
+	blockCollector BlockCollector
+	ledger         ledger.Ledger
+	scheduler      execution.ExecutionScheduler
+	config         *configuration.Configuration
+	syncProcess    sync.RWMutex
 }
 
-func NewBlockInfoSubProcessor(log tplog.Logger, nodeID string, marshaler codec.Marshaler, ledger ledger.Ledger, scheduler execution.ExecutionScheduler, config *configuration.Configuration) BlockInfoSubProcessor {
+func NewBlockInfoSubProcessor(log tplog.Logger, nodeID string, nodeRole tpcmm.NodeRole, marshaler codec.Marshaler, ledger ledger.Ledger, scheduler execution.ExecutionScheduler, config *configuration.Configuration) BlockInfoSubProcessor {
 	csStateRN := state.CreateCompositionStateReadonly(log, ledger)
 	defer csStateRN.Stop()
 
@@ -45,13 +47,14 @@ func NewBlockInfoSubProcessor(log tplog.Logger, nodeID string, marshaler codec.M
 	}
 
 	return &blockInfoSubProcessor{
-		log:       log,
-		nodeID:    nodeID,
-		cType:     cType,
-		marshaler: marshaler,
-		ledger:    ledger,
-		scheduler: scheduler,
-		config:    config,
+		log:            log,
+		nodeID:         nodeID,
+		cType:          cType,
+		marshaler:      marshaler,
+		blockCollector: CreateBlockCollector(log, nodeID, nodeRole),
+		ledger:         ledger,
+		scheduler:      scheduler,
+		config:         config,
 	}
 }
 
@@ -167,6 +170,15 @@ func (bsp *blockInfoSubProcessor) Process(ctx context.Context, subMsgBlockInfo *
 	}
 
 	bsp.log.Infof("Process of pubsub message: height=%d, result status %s, self node %s", block.Head.Height, blockRS.Head.Status.String(), bsp.nodeID)
+
+	blockCol, blockRSCol, err := bsp.blockCollector.Collect(block, blockRS)
+	if err != nil {
+		return err
+	}
+
+	if blockCol == nil || blockRSCol == nil {
+		return nil
+	}
 
 	latestBlock, err := state.GetLatestBlock(bsp.ledger)
 	if err != nil {

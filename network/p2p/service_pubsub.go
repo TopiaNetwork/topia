@@ -3,11 +3,11 @@ package p2p
 import (
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/codec"
 	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
+	"github.com/TopiaNetwork/topia/codec"
 	tplog "github.com/TopiaNetwork/topia/log"
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/network/message"

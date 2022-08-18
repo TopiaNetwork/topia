@@ -320,6 +320,7 @@ func createNetworkNodes(
 	buildNodeConnections(netCons)
 
 	for _, netAr := range archiverNetParams {
+		netAr.nodeID = netAr.network.ID()
 		for _, target := range netARCons {
 			err := netAr.network.Connect(target.ListenAddr())
 			if err != nil {
@@ -367,7 +368,9 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, codec.CodecType_PROTO, txPool)
 
-		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
+		var nodeRole tpcmm.NodeRole
+
+		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), nodeRole.Value(nodeType), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
 
 		cType := state.CompStateBuilderType_Full
 		if nodeType != "executor" {
@@ -500,9 +503,9 @@ func TestMultiRoleNodes(t *testing.T) {
 	waitChan := make(chan struct{})
 
 	executorParams := createNodeParams(ExecutorNode_Number, "executor")
+	archiverParams := createNodeParams(archiverNode_number, "archiver")
 	proposerParams := createNodeParams(ProposerNode_Number, "proposer")
 	validatorParams := createNodeParams(ValidatorNode_number, "validator")
-	archiverParams := createNodeParams(archiverNode_number, "archiver")
 
 	/*executorNet, proposerNet, validatorNet := */
 	createNetworkNodes(executorParams, proposerParams, validatorParams, archiverParams, t)
@@ -511,6 +514,7 @@ func TestMultiRoleNodes(t *testing.T) {
 	nParams = append(nParams, executorParams...)
 	nParams = append(nParams, proposerParams...)
 	nParams = append(nParams, validatorParams...)
+	nParams = append(nParams, archiverParams...)
 	for i, nodeP := range nParams {
 		nodeP.compState.Commit()
 		nodeP.compState.UpdateCompSState(state.CompSState_Commited)
@@ -527,7 +531,7 @@ func TestMultiRoleNodes(t *testing.T) {
 
 	var dkgNParams []*nodeParams
 	dkgNParams = append(dkgNParams, proposerParams...)
-	dkgNParams = append(nParams, validatorParams...)
+	dkgNParams = append(dkgNParams, validatorParams...)
 	for _, nodeP := range dkgNParams {
 		func() {
 			csStateRN := state.CreateCompositionStateReadonly(nodeP.mainLog, nodeP.ledger)

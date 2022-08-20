@@ -1,31 +1,52 @@
 package wallet
 
 import (
+	"errors"
+	"github.com/TopiaNetwork/topia/wallet/key_store"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
 )
 
-var defaultAddrFile_mutex sync.Mutex
+const (
+	keysFolderName = "wallet"
+)
 
-func initDefaultAddrFile() error {
-	defaultAddrFolderPath := filepath.Join(walletBackendConfig.RootPath, topiaKeysFolderName)
-	exist, err := isPathExist(filepath.Join(defaultAddrFolderPath, defaultAddrKey))
+var (
+	defaultAddrFile_mutex  sync.Mutex
+	defaultAddrCache_mutex sync.RWMutex
+)
+
+var defaultAddr_Cache = "" // default void-string
+
+var defaultAddrNotSetErr = errors.New("default addr hasn't been set")
+
+func initDefaultAddr() error {
+	defaultAddrFolderPath := filepath.Join(walletBackendConfig.RootPath, keysFolderName)
+	exist, err := key_store.IsPathExist(filepath.Join(defaultAddrFolderPath, key_store.DefaultAddrKey))
 	if err != nil {
 		return err
 	}
 	if !exist { // if walletDefaultAddrKey hasn't been set, set it
-		return setDefaultAddr("")
+		return SetDefaultAddr("")
 	}
+
+	defaultAddr, err := getDefaultAddrFromBackend()
+	if err != nil {
+		return err
+	}
+	defaultAddrCache_mutex.Lock()
+	defaultAddr_Cache = defaultAddr
+	defaultAddrCache_mutex.Unlock()
 	return nil
 }
 
-func setDefaultAddr(defaultAddr string) error {
+func SetDefaultAddr(defaultAddr string) error {
 	defaultAddrFile_mutex.Lock()
 	defer defaultAddrFile_mutex.Unlock()
 
-	keysFolderPath := filepath.Join(walletBackendConfig.RootPath, topiaKeysFolderName)
+	keysFolderPath := filepath.Join(walletBackendConfig.RootPath, keysFolderName)
 	err := os.Mkdir(keysFolderPath, os.ModePerm)
 	if err != nil {
 		if !os.IsExist(err) { // ignore dir already exist error.
@@ -33,9 +54,9 @@ func setDefaultAddr(defaultAddr string) error {
 		}
 	}
 
-	daFilePath := filepath.Join(keysFolderPath, defaultAddrKey)
+	daFilePath := filepath.Join(keysFolderPath, key_store.DefaultAddrKey)
 
-	exist, err := isPathExist(daFilePath)
+	exist, err := key_store.IsPathExist(daFilePath)
 	if err != nil {
 		return err
 	}
@@ -55,32 +76,32 @@ func setDefaultAddr(defaultAddr string) error {
 		return err
 	}
 
-	cacheMutex.Lock()
+	defaultAddrCache_mutex.Lock()
 	defaultAddr_Cache = defaultAddr
-	cacheMutex.Unlock()
+	defaultAddrCache_mutex.Unlock()
 	return nil
 }
 
-func getDefaultAddr() (defaultAddr string) {
-	cacheMutex.RLock()
+func GetDefaultAddr() (defaultAddr string) {
+	defaultAddrCache_mutex.RLock()
 	defaultAddr = defaultAddr_Cache
-	cacheMutex.RUnlock()
+	defaultAddrCache_mutex.RUnlock()
 	return defaultAddr
 }
 
-func removeDefaultAddr() error {
+func RemoveDefaultAddr() error {
 	defaultAddrFile_mutex.Lock()
 	defer defaultAddrFile_mutex.Unlock()
 
-	keysFolderPath := filepath.Join(walletBackendConfig.RootPath, topiaKeysFolderName)
-	fp := filepath.Join(keysFolderPath, defaultAddrKey)
+	keysFolderPath := filepath.Join(walletBackendConfig.RootPath, keysFolderName)
+	fp := filepath.Join(keysFolderPath, key_store.DefaultAddrKey)
 
-	exist, err := isPathExist(fp)
+	exist, err := key_store.IsPathExist(fp)
 	if err != nil {
 		return err
 	}
 	if !exist {
-		return addrNotExistErr
+		return defaultAddrNotSetErr
 	}
 
 	err = os.Remove(fp)
@@ -88,9 +109,9 @@ func removeDefaultAddr() error {
 		return err
 	}
 
-	cacheMutex.Lock()
+	defaultAddrCache_mutex.Lock()
 	defaultAddr_Cache = "" // default void string
-	cacheMutex.Unlock()
+	defaultAddrCache_mutex.Unlock()
 
 	return nil
 }
@@ -99,10 +120,10 @@ func getDefaultAddrFromBackend() (defaultAddr string, err error) {
 	defaultAddrFile_mutex.Lock()
 	defer defaultAddrFile_mutex.Unlock()
 
-	defaultAddrFolderPath := filepath.Join(walletBackendConfig.RootPath, topiaKeysFolderName)
-	daFilePath := filepath.Join(defaultAddrFolderPath, defaultAddrKey)
+	defaultAddrFolderPath := filepath.Join(walletBackendConfig.RootPath, keysFolderName)
+	daFilePath := filepath.Join(defaultAddrFolderPath, key_store.DefaultAddrKey)
 
-	exist, err := isPathExist(daFilePath)
+	exist, err := key_store.IsPathExist(daFilePath)
 	if err != nil {
 		return "", err
 	}

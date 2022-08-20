@@ -1,7 +1,7 @@
 //go:build linux
 // +build linux
 
-package wallet
+package keyring
 
 import (
 	"fmt"
@@ -19,12 +19,12 @@ func TestKeyringWithBKD_KWallet(t *testing.T) {
 		if bkd == keyring.KWalletBackend {
 			match = true
 
-			var kri keyringImp
-			err := initWithBackendX(&kri, keyring.KWalletBackend, testFolderPath())
+			var kri KeyringImp
+			err := initWithBackendX(&kri, keyring.KWalletBackend, dirPathForTest(), getTestEncrytWayInstance_secp256(t))
 			assert.Equal(t, nil, err, "init with backend:", keyring.KWalletBackend, "err:", err)
-			testSetGetRemove(kri, t)
+			testSetGetRemove(&kri, t)
 
-			err = os.RemoveAll(filepath.Join(testFolderPath(), topiaKeysFolderName))
+			err = os.RemoveAll(filepath.Join(dirPathForTest(), keysFolderName))
 			assert.Nil(t, err, "remove wallet folder err", err)
 		}
 	}
@@ -41,12 +41,12 @@ func TestKeyringWithBKD_KeyCtl(t *testing.T) {
 		if bkd == keyring.KeyCtlBackend {
 			match = true
 
-			var kri keyringImp
-			err := initWithBackendX(&kri, keyring.KeyCtlBackend, testFolderPath())
+			var kri KeyringImp
+			err := initWithBackendX(&kri, keyring.KeyCtlBackend, dirPathForTest(), getTestEncrytWayInstance_secp256(t))
 			assert.Nil(t, err, "init with KeyCtlBackend err", err)
-			testSetGetRemove(kri, t)
+			testSetGetRemove(&kri, t)
 
-			err = os.Remove(filepath.Join(testFolderPath(), topiaKeysFolderName))
+			err = os.RemoveAll(filepath.Join(dirPathForTest(), keysFolderName))
 			assert.Nil(t, err, "remove wallet folder err", err)
 		}
 	}

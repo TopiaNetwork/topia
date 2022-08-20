@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"errors"
 	"fmt"
 	"github.com/TopiaNetwork/topia/crypt/ed25519"
 	"github.com/TopiaNetwork/topia/crypt/secp256"
@@ -18,87 +17,66 @@ import (
 
 func TestWallet_Function(t *testing.T) {
 
-	ews := []EncryptWayOfWallet{getTestEncrytWayInstance_ed25519(t), getTestEncrytWayInstance_secp256(t)}
-	for i := range ews {
-		cleanCache()
+	walletBackendConfig.RootPath = dirPathForTest() // only for test
+	w, err := NewWallet(tplogcmm.NoLevel, nil, getTestEncrytWayInstance_ed25519(t))
+	assert.Nil(t, err, "NewWallet err")
 
-		var keyFolderName string
+	addr, err := w.Create(types.CryptType_Ed25519)
+	assert.Equal(t, nil, err, "create addr err:", err)
 
-		walletBackendConfig.RootPath = testFolderPath() // only for test
-		w, err := NewWallet(tplogcmm.NoLevel, nil, ews[i])
-		assert.Nil(t, err, "NewWallet err")
+	_, err = w.Sign(addr, []byte("msg to sign"))
+	assert.Equal(t, nil, err, "Sign err:", err)
 
-		wImp, ok := w.(*wallet)
-		assert.Equal(t, true, ok, "cannot happen")
+	err = w.SetDefault(addr)
+	assert.Equal(t, nil, err, "SetDefault addr err:", err)
 
-		switch wImp.ks.(type) {
-		case *fileKeyStore:
-			keyFolderName = topiaKeysFolderName
-		case *keyringImp:
-			keyFolderName = keyringKeysFolderName
-		default:
-			t.Fatal("cannot happen")
-		}
+	defaultAddr, err := w.Default()
+	assert.Equal(t, addr, defaultAddr, "get Default addr err:", err)
+	assert.Equal(t, nil, err, "get Default addr err:", err)
 
-		addr, err := w.Create(types.CryptType_Ed25519)
-		assert.Equal(t, nil, err, "create addr err:", err)
+	_, err = w.Export(addr)
+	assert.Equal(t, nil, err, "Export seckey err:", err)
 
-		_, err = w.Sign(addr, []byte("msg to sign"))
-		assert.Equal(t, nil, err, "Sign err:", err)
+	err = w.Lock(addr, true)
+	assert.Equal(t, nil, err, "Lock addr err", err)
 
-		err = w.SetDefault(addr)
-		assert.Equal(t, nil, err, "SetDefault addr err:", err)
+	bo, err := w.IsLocked(addr)
+	assert.Equal(t, true, bo, "check addr lock state err", err)
+	assert.Equal(t, nil, err, "check addr lock state err", err)
 
-		defaultAddr, err := w.Default()
-		assert.Equal(t, addr, defaultAddr, "get Default addr err:", err)
-		assert.Equal(t, nil, err, "get Default addr err:", err)
+	err = w.Lock(addr, false)
+	assert.Equal(t, nil, err, "Lock addr err", err)
 
-		_, err = w.Export(addr)
-		assert.Equal(t, nil, err, "Export seckey err:", err)
+	err = w.Delete(addr)
+	assert.Equal(t, nil, err, "delete addr err", err)
 
-		err = w.Lock(addr, true)
-		assert.Equal(t, nil, err, "Lock addr err", err)
+	bo, err = w.Has(addr)
+	assert.Equal(t, false, bo, "check Has err", err)
 
-		bo, err := w.IsLocked(addr)
-		assert.Equal(t, true, bo, "check addr lock state err", err)
-		assert.Equal(t, nil, err, "check addr lock state err", err)
+	_, err = w.List()
+	assert.Equal(t, nil, err, "List err", err)
 
-		err = w.Lock(addr, false)
-		assert.Equal(t, nil, err, "Lock addr err", err)
+	err = w.Enable(false)
+	assert.Equal(t, nil, err, "enable wallet err", err)
 
-		err = w.Delete(addr)
-		assert.Equal(t, nil, err, "delete addr err", err)
+	bo, err = w.IsEnable()
+	assert.Equal(t, false, bo, "check wallet enable state err", err)
+	assert.Equal(t, nil, err, "check wallet enable state err", err)
 
-		bo, err = w.Has(addr)
-		assert.Equal(t, false, bo, "check Has err", err)
+	err = w.Enable(true)
+	assert.Equal(t, nil, err, "enable wallet err", err)
 
-		_, err = w.List()
-		assert.Equal(t, nil, err, "List err", err)
-
-		err = w.Enable(false)
-		assert.Equal(t, nil, err, "enable wallet err", err)
-
-		bo, err = w.IsEnable()
-		assert.Equal(t, false, bo, "check wallet enable state err", err)
-		assert.Equal(t, nil, err, "check wallet enable state err", err)
-
-		err = w.Enable(true)
-		assert.Equal(t, nil, err, "enable wallet err", err)
-
-		err = removeTestWalletFolder(w, filepath.Join(testFolderPath(), keyFolderName))
-		assert.Nil(t, err, err)
-	}
+	err = os.RemoveAll(filepath.Join(dirPathForTest(), "wallet"))
+	assert.Nil(t, err, err)
 
 }
 
 func TestMnemonic(t *testing.T) {
-	cleanCache()
-
 	passphrase := "this is test passphrase"
 
 	var ct = tpcrtypes.CryptType_Ed25519
 
-	walletBackendConfig.RootPath = testFolderPath() // only for test
+	walletBackendConfig.RootPath = dirPathForTest() // only for test
 	w, err := NewWallet(tplogcmm.NoLevel, nil, getTestEncrytWayInstance_ed25519(t))
 
 	assert.Nil(t, err, "NewWallet err", err)
@@ -123,21 +101,8 @@ func TestMnemonic(t *testing.T) {
 	err = w.Delete(addr24)
 	assert.Nil(t, err, "delete addr err", err)
 
-	err = removeTestWalletFolder(w, filepath.Join(testFolderPath(), "wallet"))
+	err = os.RemoveAll(filepath.Join(dirPathForTest(), "wallet"))
 	assert.Nil(t, err, err)
-}
-
-//return path string of the folder which this file is in.
-func testFolderPath() string {
-	var testFolderPath string
-	_, filename, _, ok := runtime.Caller(0)
-	if ok {
-		testFolderPath = path.Dir(filename)
-	} else {
-		fmt.Println("get file path err")
-		return ""
-	}
-	return testFolderPath
 }
 
 func getTestEncrytWayInstance_ed25519(t *testing.T) EncryptWayOfWallet {
@@ -162,34 +127,15 @@ func getTestEncrytWayInstance_secp256(t *testing.T) EncryptWayOfWallet {
 	}
 }
 
-// removeTestWalletFolder just for Test.
-func removeTestWalletFolder(w Wallet, path string) error {
-	if !isValidFolderPath(path) {
-		return errors.New("invalid folder path:" + path)
-	}
-
-	wImp := w.(*wallet)
-
-	if fks, ok := wImp.ks.(*fileKeyStore); ok {
-		fks.mutex.Lock()
-		defaultAddrFile_mutex.Lock()
-		err := os.RemoveAll(path)
-		if err != nil {
-			return err
-		}
-		defaultAddrFile_mutex.Unlock()
-		fks.mutex.Unlock()
-	} else if kri, ok := wImp.ks.(*keyringImp); ok {
-		kri.mutex.Lock()
-		defaultAddrFile_mutex.Lock()
-		err := os.RemoveAll(path)
-		if err != nil {
-			return err
-		}
-		defaultAddrFile_mutex.Unlock()
-		kri.mutex.Unlock()
+// DirPathForTest return path string of the folder which this file is in.
+func dirPathForTest() string {
+	var testFolderPath string
+	_, filename, _, ok := runtime.Caller(0)
+	if ok {
+		testFolderPath = path.Dir(filename)
 	} else {
-		return errors.New("wallet imp err")
+		fmt.Println("get file path err")
+		return ""
 	}
-	return nil
+	return testFolderPath
 }

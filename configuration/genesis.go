@@ -13,12 +13,13 @@ import (
 )
 
 type GenesisData struct {
-	ChainID     tpchaintypes.ChainID
-	NetType     tpcmm.NetworkType
-	Epoch       *tpcmm.EpochInfo
-	Block       *tpchaintypes.Block
-	BlockResult *tpchaintypes.BlockResult
-	GenesisNode []*tpcmm.NodeInfo
+	ChainID          tpchaintypes.ChainID
+	NetType          tpcmm.NetworkType
+	Epoch            *tpcmm.EpochInfo
+	Block            *tpchaintypes.Block
+	BlockResult      *tpchaintypes.BlockResult
+	GenesisNode      []*tpcmm.NodeInfo
+	GenesisExeDomain []*tpcmm.NodeDomainInfo
 }
 
 func (genesis *GenesisData) Save(fileFullName string) error {

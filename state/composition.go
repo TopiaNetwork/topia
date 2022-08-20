@@ -10,7 +10,7 @@ import (
 
 	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/common"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
 	"github.com/TopiaNetwork/topia/ledger"
@@ -18,22 +18,23 @@ import (
 	tplog "github.com/TopiaNetwork/topia/log"
 	stateaccount "github.com/TopiaNetwork/topia/state/account"
 	statechain "github.com/TopiaNetwork/topia/state/chain"
-	staetround "github.com/TopiaNetwork/topia/state/epoch"
+	statedomain "github.com/TopiaNetwork/topia/state/domain"
+	stateepoch "github.com/TopiaNetwork/topia/state/epoch"
 	statenode "github.com/TopiaNetwork/topia/state/node"
 )
 
 type NodeNetWorkStateWapper interface {
-	GetActiveExecutorIDs() ([]string, error)
+	GetActiveExecutorIDs() []string
 
-	GetActiveProposerIDs() ([]string, error)
+	GetActiveProposerIDs() []string
 
-	GetActiveValidatorIDs() ([]string, error)
+	GetActiveValidatorIDs() []string
 }
 
 type CompositionStateReadonly interface {
 	ChainID() tpchaintypes.ChainID
 
-	NetworkType() common.NetworkType
+	NetworkType() tpcmm.NetworkType
 
 	GetAccountRoot() ([]byte, error)
 
@@ -54,6 +55,26 @@ type CompositionStateReadonly interface {
 	GetLatestBlock() (*tpchaintypes.Block, error)
 
 	GetLatestBlockResult() (*tpchaintypes.BlockResult, error)
+
+	GetNodeDomainRoot() ([]byte, error)
+
+	GetNodeExecuteDomainRoot() ([]byte, error)
+
+	GetNodeConsensusDomainRoot() ([]byte, error)
+
+	IsNodeDomainExist(nodeID string) bool
+
+	IsExistNodeExecuteDomain(id string) bool
+
+	IsExistNodeConsensusDomain(id string) bool
+
+	GetNodeDomain(id string) (*tpcmm.NodeDomainInfo, error)
+
+	GetAllActiveNodeDomains(height uint64) ([]*tpcmm.NodeDomainInfo, error)
+
+	GetAllActiveNodeExecuteDomains(height uint64) ([]*tpcmm.NodeDomainInfo, error)
+
+	GetAllActiveNodeConsensusDomains(height uint64) ([]*tpcmm.NodeDomainInfo, error)
 
 	GetNodeRoot() ([]byte, error)
 
@@ -77,7 +98,7 @@ type CompositionStateReadonly interface {
 
 	GetAllConsensusNodeIDs() ([]string, error)
 
-	GetNode(nodeID string) (*common.NodeInfo, error)
+	GetNode(nodeID string) (*tpcmm.NodeInfo, error)
 
 	GetTotalWeight() (uint64, error)
 
@@ -89,13 +110,13 @@ type CompositionStateReadonly interface {
 
 	GetInactiveNodeIDs() ([]string, error)
 
-	GetAllActiveExecutors() ([]*common.NodeInfo, error)
+	GetAllActiveExecutors() ([]*tpcmm.NodeInfo, error)
 
-	GetAllActiveProposers() ([]*common.NodeInfo, error)
+	GetAllActiveProposers() ([]*tpcmm.NodeInfo, error)
 
-	GetAllActiveValidators() ([]*common.NodeInfo, error)
+	GetAllActiveValidators() ([]*tpcmm.NodeInfo, error)
 
-	GetAllInactiveNodes() ([]*common.NodeInfo, error)
+	GetAllInactiveNodes() ([]*tpcmm.NodeInfo, error)
 
 	GetNodeWeight(nodeID string) (uint64, error)
 
@@ -109,7 +130,7 @@ type CompositionStateReadonly interface {
 
 	GetEpochRoot() ([]byte, error)
 
-	GetLatestEpoch() (*common.EpochInfo, error)
+	GetLatestEpoch() (*tpcmm.EpochInfo, error)
 
 	CompSStateStore() tplgss.StateStore
 
@@ -148,12 +169,15 @@ const (
 type CompositionState interface {
 	stateaccount.AccountState
 	statechain.ChainState
+	statedomain.NodeDomainState
+	statedomain.NodeExecuteDomainState
+	statedomain.NodeConsensusDomainState
 	statenode.NodeState
 	statenode.NodeInactiveState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
-	staetround.EpochState
+	stateepoch.EpochState
 
 	CompSStateStore() tplgss.StateStore
 
@@ -190,12 +214,15 @@ type compositionState struct {
 	tplgss.StateStore
 	stateaccount.AccountState
 	statechain.ChainState
+	statedomain.NodeDomainState
+	statedomain.NodeExecuteDomainState
+	statedomain.NodeConsensusDomainState
 	statenode.NodeState
 	statenode.NodeInactiveState
 	statenode.NodeExecutorState
 	statenode.NodeProposerState
 	statenode.NodeValidatorState
-	staetround.EpochState
+	stateepoch.EpochState
 	log          tplog.Logger
 	ledger       ledger.Ledger
 	stateVersion uint64
@@ -216,24 +243,30 @@ func NewNodeNetWorkStateWapper(log tplog.Logger, ledger ledger.Ledger) NodeNetWo
 }
 
 func createCompositionStateWithStateStore(log tplog.Logger, ledger ledger.Ledger, stateVersion uint64, stateStore tplgss.StateStore) *compositionState {
-	inactiveState := statenode.NewNodeInactiveState(stateStore, 1024*1024) // 1 Megabyte
-	executorState := statenode.NewNodeExecutorState(stateStore, 2*1024*1024)
-	proposerState := statenode.NewNodeProposerState(stateStore, 2*1024*1024)
-	validatorState := statenode.NewNodeValidatorState(stateStore, 2*1024*1024)
-	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState, 1024*1024)
+	exeNodeDomainState := statedomain.NewNodeExecuteDomainState(stateStore, 1)
+	csNodeDomainState := statedomain.NewNodeConsensusDomainState(stateStore, 1)
+	nodeDomainState := statedomain.NewNodeDomainState(stateStore, exeNodeDomainState, csNodeDomainState, 1)
+	inactiveState := statenode.NewNodeInactiveState(stateStore, 1) // 1 Megabyte
+	executorState := statenode.NewNodeExecutorState(stateStore, 1)
+	proposerState := statenode.NewNodeProposerState(stateStore, 1)
+	validatorState := statenode.NewNodeValidatorState(stateStore, 1)
+	nodeState := statenode.NewNodeState(stateStore, inactiveState, executorState, proposerState, validatorState, 1)
 	return &compositionState{
-		log:                log,
-		stateVersion:       stateVersion,
-		ledger:             ledger,
-		StateStore:         stateStore,
-		AccountState:       stateaccount.NewAccountState(stateStore, 1024*1024),
-		ChainState:         statechain.NewChainStore(stateStore, ledger, 1024*1024),
-		NodeState:          nodeState,
-		NodeInactiveState:  inactiveState,
-		NodeExecutorState:  executorState,
-		NodeProposerState:  proposerState,
-		NodeValidatorState: validatorState,
-		EpochState:         staetround.NewRoundState(stateStore, 1024*1024),
+		log:                      log,
+		stateVersion:             stateVersion,
+		ledger:                   ledger,
+		StateStore:               stateStore,
+		AccountState:             stateaccount.NewAccountState(stateStore, 1),
+		ChainState:               statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1),
+		NodeDomainState:          nodeDomainState,
+		NodeExecuteDomainState:   exeNodeDomainState,
+		NodeConsensusDomainState: csNodeDomainState,
+		NodeState:                nodeState,
+		NodeInactiveState:        inactiveState,
+		NodeExecutorState:        executorState,
+		NodeProposerState:        proposerState,
+		NodeValidatorState:       validatorState,
+		EpochState:               stateepoch.NewEpochState(ledger.ID(), stateStore, 1),
 	}
 }
 
@@ -296,6 +329,24 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 		return nil, err
 	}
 
+	domainRoot, err := cs.GetNodeDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node domain state root: %v", err)
+		return nil, err
+	}
+
+	exeDomainRoot, err := cs.GetNodeExecuteDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node execute domain state root: %v", err)
+		return nil, err
+	}
+
+	csDomainRoot, err := cs.GetNodeConsensusDomainRoot()
+	if err != nil {
+		cs.log.Errorf("Can't get node consensus domain state root: %v", err)
+		return nil, err
+	}
+
 	inactiveRoot, err := cs.GetNodeInactiveRoot()
 	if err != nil {
 		cs.log.Errorf("Can't get inactive node state root: %v", err)
@@ -335,6 +386,9 @@ func (cs *compositionState) StateRoot() ([]byte, error) {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
 	tree.Update(accRoot, accRoot)
 	tree.Update(chainRoot, chainRoot)
+	tree.Update(domainRoot, domainRoot)
+	tree.Update(exeDomainRoot, exeDomainRoot)
+	tree.Update(csDomainRoot, csDomainRoot)
 	tree.Update(inactiveRoot, inactiveRoot)
 	tree.Update(nodeRoot, nodeRoot)
 	tree.Update(nodeExecutorRoot, nodeExecutorRoot)
@@ -369,23 +423,74 @@ func (cs *compositionState) Unlock() {
 	cs.sync.Unlock()
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveExecutorIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveExecutorIDs()
+	aExeIDs, err := csStateRN.GetActiveExecutorIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active executor Ids from composition state read only")
+		return nil
+	}
+
+	return aExeIDs
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveProposerIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveProposerIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveProposerIDs()
+	aPropIDS, err := csStateRN.GetActiveProposerIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active proposer Ids from composition state read only")
+		return nil
+	}
+
+	return aPropIDS
 }
 
-func (nw *nodeNetWorkStateWapper) GetActiveValidatorIDs() ([]string, error) {
+func (nw *nodeNetWorkStateWapper) GetActiveValidatorIDs() []string {
 	csStateRN := CreateCompositionStateReadonly(nw.log, nw.ledger)
 	defer csStateRN.Stop()
 
-	return csStateRN.GetActiveValidatorIDs()
+	aValIDs, err := csStateRN.GetActiveValidatorIDs()
+	if err != nil {
+		nw.log.Errorf("Can't get active validator Ids from composition state read only")
+		return nil
+	}
+
+	return aValIDs
+}
+
+func GetLatestBlock(ledger ledger.Ledger) (*tpchaintypes.Block, error) {
+	b, err := statechain.GetLatestBlock(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1)
+		b, err = cState.GetLatestBlock()
+	}
+
+	return b, err
+}
+
+func GetLatestBlockResult(ledger ledger.Ledger) (*tpchaintypes.BlockResult, error) {
+	brs, err := statechain.GetLatestBlockResult(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := statechain.NewChainStore(ledger.ID(), stateStore, ledger, 1)
+		brs, err = cState.GetLatestBlockResult()
+	}
+
+	return brs, err
+}
+
+func GetLatestEpoch(ledger ledger.Ledger) (*tpcmm.EpochInfo, error) {
+	brs, err := stateepoch.GetLatestEpoch(ledger.ID())
+	if err != nil {
+		stateStore, _ := ledger.CreateStateStoreReadonly()
+		cState := stateepoch.NewEpochState(ledger.ID(), stateStore, 1)
+		brs, err = cState.GetLatestEpoch()
+	}
+
+	return brs, err
 }

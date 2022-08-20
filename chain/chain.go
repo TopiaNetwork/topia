@@ -72,7 +72,7 @@ func (c *chain) dispatch(actorCtx actor.Context, data []byte) {
 		if err == nil {
 			err = c.blkSubProcess.Process(context.Background(), &pubsubMsgBlk)
 			if err != nil {
-				c.log.Errorf("Processs block info pubsub message err: %v", err)
+				c.log.Errorf("Process block info pubsub message err: %v", err)
 			}
 		} else {
 			c.log.Errorf("chain received invalid block info message and can't Unmarshal: %v", err)

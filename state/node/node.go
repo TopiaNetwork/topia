@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/TopiaNetwork/topia/common"
+
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 )
 
@@ -19,7 +20,7 @@ type NodeState interface {
 
 	GetAllConsensusNodeIDs() ([]string, error)
 
-	GetNode(nodeID string) (*common.NodeInfo, error)
+	GetNode(nodeID string) (*tpcmm.NodeInfo, error)
 
 	GetTotalWeight() (uint64, error)
 
@@ -27,16 +28,18 @@ type NodeState interface {
 
 	GetDKGPartPubKeysForVerify() (map[string]string, error) //nodeID->DKGPartPubKey
 
-	AddNode(nodeInfo *common.NodeInfo) error
+	AddNode(nodeInfo *tpcmm.NodeInfo) error
 
 	UpdateWeight(nodeID string, weight uint64) error
 
 	UpdateDKGPartPubKey(nodeID string, pubKey string) error
+
+	UpdateDKGPriShare(nodeID string, priShare []byte) error
 }
 
 type nodeStateMetaInfo struct {
-	Role  common.NodeRole
-	State common.NodeState
+	Role  tpcmm.NodeRole
+	State tpcmm.NodeState
 }
 
 type nodeState struct {
@@ -99,7 +102,7 @@ func (ns *nodeState) GetAllConsensusNodeIDs() ([]string, error) {
 	return allNodeIDs, nil
 }
 
-func (ns *nodeState) GetNode(nodeID string) (*common.NodeInfo, error) {
+func (ns *nodeState) GetNode(nodeID string) (*tpcmm.NodeInfo, error) {
 	nodeMetaInfoBytes, err := ns.GetStateData(StateStore_Name_Node, []byte(nodeID))
 	if err != nil {
 		return nil, err
@@ -116,20 +119,20 @@ func (ns *nodeState) GetNode(nodeID string) (*common.NodeInfo, error) {
 	}
 
 	switch nodeMetaInfo.State {
-	case common.NodeState_Active:
+	case tpcmm.NodeState_Active:
 		{
 			switch nodeMetaInfo.Role {
-			case common.NodeRole_Executor:
+			case tpcmm.NodeRole_Executor:
 				return ns.GetActiveExecutor(nodeID)
-			case common.NodeRole_Proposer:
+			case tpcmm.NodeRole_Proposer:
 				return ns.GetActiveProposer(nodeID)
-			case common.NodeRole_Validator:
+			case tpcmm.NodeRole_Validator:
 				return ns.GetActiveValidator(nodeID)
 			default:
 				return nil, fmt.Errorf("Invalid node role from %s", nodeID)
 			}
 		}
-	case common.NodeState_Inactive:
+	case tpcmm.NodeState_Standby, tpcmm.NodeState_Frozen:
 		return ns.GetInactiveNode(nodeID)
 	default:
 		return nil, fmt.Errorf("Invalid node state from %s", nodeID)
@@ -167,21 +170,21 @@ func (ns *nodeState) GetNodeWeight(nodeID string) (uint64, error) {
 	return nodeInfo.Weight, nil
 }
 
-func (ns *nodeState) AddNode(nodeInfo *common.NodeInfo) error {
+func (ns *nodeState) AddNode(nodeInfo *tpcmm.NodeInfo) error {
 	if nodeInfo == nil {
 		return errors.New("Nil node info input")
 	}
 
 	var err error
 	switch nodeInfo.State {
-	case common.NodeState_Active:
+	case tpcmm.NodeState_Active:
 		{
 			switch nodeInfo.Role {
-			case common.NodeRole_Executor:
+			case tpcmm.NodeRole_Executor:
 				err = ns.addActiveExecutor(nodeInfo)
-			case common.NodeRole_Proposer:
+			case tpcmm.NodeRole_Proposer:
 				err = ns.AddActiveProposer(nodeInfo)
-			case common.NodeRole_Validator:
+			case tpcmm.NodeRole_Validator:
 				err = ns.AddActiveValidator(nodeInfo)
 			default:
 				return fmt.Errorf("Invalid node role from %s", nodeInfo.NodeID)
@@ -189,7 +192,7 @@ func (ns *nodeState) AddNode(nodeInfo *common.NodeInfo) error {
 
 			break
 		}
-	case common.NodeState_Inactive:
+	case tpcmm.NodeState_Standby, tpcmm.NodeState_Frozen:
 		err = ns.AddInactiveNode(nodeInfo)
 		break
 	default:
@@ -252,20 +255,20 @@ func (ns *nodeState) UpdateWeight(nodeID string, weight uint64) error {
 	}
 
 	switch nodeMetaInfo.State {
-	case common.NodeState_Active:
+	case tpcmm.NodeState_Active:
 		{
 			switch nodeMetaInfo.Role {
-			case common.NodeRole_Executor:
+			case tpcmm.NodeRole_Executor:
 				return ns.updateActiveExecutorWeight(nodeID, weight)
-			case common.NodeRole_Proposer:
+			case tpcmm.NodeRole_Proposer:
 				return ns.updateActiveProposerWeight(nodeID, weight)
-			case common.NodeRole_Validator:
+			case tpcmm.NodeRole_Validator:
 				return ns.updateActiveValidatorWeight(nodeID, weight)
 			default:
 				return fmt.Errorf("Invalid node role from %s", nodeID)
 			}
 		}
-	case common.NodeState_Inactive:
+	case tpcmm.NodeState_Standby, tpcmm.NodeState_Frozen:
 		return ns.updateInactiveNodeWeight(nodeID, weight)
 	default:
 		return fmt.Errorf("Invalid node state from %s", nodeID)
@@ -289,21 +292,58 @@ func (ns *nodeState) UpdateDKGPartPubKey(nodeID string, pubKey string) error {
 	}
 
 	switch nodeMetaInfo.State {
-	case common.NodeState_Active:
+	case tpcmm.NodeState_Active:
 		{
 			switch nodeMetaInfo.Role {
-			case common.NodeRole_Executor:
+			case tpcmm.NodeRole_Executor:
 				return ns.updateActiveExecutorDKGPartPubKey(nodeID, pubKey)
-			case common.NodeRole_Proposer:
+			case tpcmm.NodeRole_Proposer:
 				return ns.updateActiveProposerDKGPartPubKey(nodeID, pubKey)
-			case common.NodeRole_Validator:
+			case tpcmm.NodeRole_Validator:
 				return ns.updateActiveValidatorDKGPartPubKey(nodeID, pubKey)
 			default:
 				return fmt.Errorf("Invalid node role from %s", nodeID)
 			}
 		}
-	case common.NodeState_Inactive:
+	case tpcmm.NodeState_Standby, tpcmm.NodeState_Frozen:
 		return ns.updateInactiveNodeDKGPartPubKey(nodeID, pubKey)
+	default:
+		return fmt.Errorf("Invalid node state from %s", nodeID)
+	}
+}
+
+func (ns *nodeState) UpdateDKGPriShare(nodeID string, priShare []byte) error {
+	nodeMetaInfoBytes, err := ns.GetStateData(StateStore_Name_Node, []byte(nodeID))
+	if err != nil {
+		return err
+	}
+
+	if nodeMetaInfoBytes == nil { //means that there is no node info
+		return nil
+	}
+
+	var nodeMetaInfo nodeStateMetaInfo
+	err = json.Unmarshal(nodeMetaInfoBytes, &nodeMetaInfo)
+	if err != nil {
+		return err
+	}
+
+	switch nodeMetaInfo.State {
+	case tpcmm.NodeState_Active:
+		{
+			switch nodeMetaInfo.Role {
+			case tpcmm.NodeRole_Executor:
+				return ns.updateActiveExecutorDKGPriShare(nodeID, priShare)
+			case tpcmm.NodeRole_Proposer:
+				return ns.updateActiveProposerDKGPriShare(nodeID, priShare)
+			case tpcmm.NodeRole_Validator:
+				return ns.updateActiveValidatorDKGPriShare(nodeID, priShare)
+			default:
+				return fmt.Errorf("Invalid node role from %s", nodeID)
+			}
+		}
+	case tpcmm.NodeState_Standby, tpcmm.NodeState_Frozen:
+		return ns.updateInactiveNodeDKGPriShare(nodeID, priShare)
 	default:
 		return fmt.Errorf("Invalid node state from %s", nodeID)
 	}

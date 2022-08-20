@@ -4,11 +4,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"math/big"
 	"sort"
 	"strings"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -25,6 +25,7 @@ const (
 	RoleSelector_Unknown RoleSelector = iota
 	RoleSelector_ExecutionLauncher
 	RoleSelector_VoteCollector
+	RoleSelector_Nodes
 )
 
 func init() {
@@ -41,11 +42,18 @@ type RoleSelectorVRF interface {
 	ComputeVRF(priKey tpcrtypes.PrivateKey, data []byte) ([]byte, error)
 
 	Select(role RoleSelector,
+		domainID string,
 		stateVersion uint64,
 		priKey tpcrtypes.PrivateKey,
 		latestBlock *tpchaintypes.Block,
 		servant vrfServant,
 		count int) ([]string, []byte, error)
+
+	SelectExpectedNodes(
+		epochInfo *tpcmm.EpochInfo,
+		latestBlock *tpchaintypes.Block,
+		nodes []*tpcmm.NodeInfo,
+		count int) ([]*tpcmm.NodeInfo, error)
 }
 
 type roleSelectorVRF struct {
@@ -159,9 +167,9 @@ func (selector *roleSelectorVRF) getVrfInputData(role RoleSelector, epoch uint64
 	return hasher.Bytes(), nil
 }
 
-func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, servant vrfServant) ([]*candidateInfo, error) {
+func (selector *roleSelectorVRF) getCandidateInfos(activeNodeID []string, servant vrfServant) ([]*candidateInfo, error) {
 	var canInfos []*candidateInfo
-	for _, nodeId := range avtiveNodeID {
+	for _, nodeId := range activeNodeID {
 		nodeWeight, err := servant.GetNodeWeight(nodeId)
 		if err != nil {
 			selector.log.Errorf("Can't get node weight: %v", err)
@@ -178,6 +186,7 @@ func (selector *roleSelectorVRF) getCandidateInfos(avtiveNodeID []string, servan
 }
 
 func (selector *roleSelectorVRF) Select(role RoleSelector,
+	domainID string,
 	stateVersion uint64,
 	priKey tpcrtypes.PrivateKey,
 	latestBlock *tpchaintypes.Block,
@@ -194,8 +203,8 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 	switch role {
 	case RoleSelector_ExecutionLauncher:
 		{
-			totalActiveWeight = servant.GetActiveExecutorsTotalWeight()
-			activeNodeID = servant.GetActiveExecutorIDs()
+			totalActiveWeight = servant.GetActiveExecutorsTotalWeightOfDomain(domainID)
+			activeNodeID = servant.GetActiveExecutorIDsOfDomain(domainID)
 		}
 	case RoleSelector_VoteCollector:
 		{
@@ -263,6 +272,62 @@ func (selector *roleSelectorVRF) Select(role RoleSelector,
 	}
 
 	return cansResult, vrfProof, errors.New("Invalid parameters")
+}
+
+func (selector *roleSelectorVRF) SelectExpectedNodes(
+	epochInfo *tpcmm.EpochInfo,
+	latestBlock *tpchaintypes.Block,
+	nodes []*tpcmm.NodeInfo,
+	count int) ([]*tpcmm.NodeInfo, error) {
+	thresholdVals := make([]uint64, count)
+
+	totalWeight := uint64(0)
+	for _, node := range nodes {
+		totalWeight += node.Weight
+	}
+
+	csProof := &tpchaintypes.ConsensusProof{
+		ParentBlockHash: latestBlock.Head.ParentBlockHash,
+		Height:          latestBlock.Head.Height,
+		AggSign:         latestBlock.Head.VoteAggSignature,
+	}
+	csProofBytes, err := csProof.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	hasher := tpcmm.NewBlake2bHasher(0)
+	if _, err := hasher.Writer().Write(csProofBytes); err != nil {
+		return nil, err
+	}
+	vrfInputData := hasher.Bytes()
+
+	vrfHash := selector.makeVRFHash(RoleSelector_Nodes, epochInfo.Epoch, latestBlock.Head.Height, vrfInputData)
+	seed := selector.hashToSeed(vrfHash)
+
+	for i := 0; i < count; i++ {
+		thresholdVals[i] = selector.thresholdValue(&seed, totalWeight)
+	}
+	sort.Slice(thresholdVals, func(i, j int) bool { return thresholdVals[i] < thresholdVals[j] })
+
+	sort.Slice(nodes, func(i, j int) bool {
+		return nodes[i].NodeID < nodes[j].NodeID
+	})
+
+	nodesResult := make([]*tpcmm.NodeInfo, count)
+	cumulativeWeight := uint64(0)
+	undrawn := 0
+	for _, node := range nodes {
+		if thresholdVals[undrawn] < (cumulativeWeight + node.Weight) {
+			nodesResult[undrawn] = node
+			undrawn++
+			if undrawn == len(nodesResult) {
+				return nodesResult, nil
+			}
+		}
+		cumulativeWeight = cumulativeWeight + node.Weight
+	}
+
+	return nodesResult, errors.New("Invalid parameters")
 }
 
 func (r RoleSelector) String() string {

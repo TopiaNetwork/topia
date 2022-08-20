@@ -3,6 +3,8 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
+	actorlog "github.com/AsynkronIT/protoactor-go/log"
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -33,7 +36,7 @@ import (
 )
 
 const (
-	ExecutorNode_Number  = 3
+	ExecutorNode_Number  = 6
 	ProposerNode_Number  = 3
 	ValidatorNode_number = 4
 )
@@ -86,6 +89,31 @@ func createNetworkNodes(
 	t *testing.T) ([]tpnet.Network, []tpnet.Network, []tpnet.Network) {
 	var networkExes []tpnet.Network
 	suite := bn256.NewSuiteG2()
+
+	exeDomainInfo1 := &tpcmm.NodeDomainInfo{
+		ID:               tpcmm.CreateDomainID("exedomain1"),
+		Type:             tpcmm.DomainType_Execute,
+		ValidHeightStart: 1,
+		ValidHeightEnd:   100000,
+		ExeDomainData:    new(tpcmm.NodeExecuteDomain),
+	}
+
+	exeDomainInfo2 := &tpcmm.NodeDomainInfo{
+		ID:               tpcmm.CreateDomainID("exedomain2"),
+		Type:             tpcmm.DomainType_Execute,
+		ValidHeightStart: 1,
+		ValidHeightEnd:   100000,
+		ExeDomainData:    new(tpcmm.NodeExecuteDomain),
+	}
+
+	for i := 0; i < len(executorNetParams); i++ {
+		if i < len(executorNetParams)/2 {
+			exeDomainInfo1.ExeDomainData.Members = append(exeDomainInfo1.ExeDomainData.Members, executorNetParams[i].network.ID())
+		} else {
+			exeDomainInfo2.ExeDomainData.Members = append(exeDomainInfo2.ExeDomainData.Members, executorNetParams[i].network.ID())
+		}
+	}
+
 	for i := 0; i < len(executorNetParams); i++ {
 		network := executorNetParams[i].network
 		executorNetParams[i].mainLog.Infof("Execute network %d id=%s", i, network.ID())
@@ -98,6 +126,13 @@ func createNetworkNodes(
 			Role:   tpcmm.NodeRole_Executor,
 			State:  tpcmm.NodeState_Active,
 		})
+
+		if i < len(executorNetParams)/2 {
+			executorNetParams[i].compState.AddNodeDomain(exeDomainInfo1)
+		} else {
+			executorNetParams[i].compState.AddNodeDomain(exeDomainInfo2)
+		}
+
 		for j := 0; j < i; j++ {
 			executorNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
 				NodeID: network.ID(),
@@ -149,6 +184,9 @@ func createNetworkNodes(
 			Role:          tpcmm.NodeRole_Proposer,
 			State:         tpcmm.NodeState_Active,
 		})
+
+		proposerNetParams[i].compState.AddNodeDomain(exeDomainInfo1)
+		proposerNetParams[i].compState.AddNodeDomain(exeDomainInfo2)
 
 		for j := 0; j < i; j++ {
 			proposerNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
@@ -206,6 +244,8 @@ func createNetworkNodes(
 			Role:          tpcmm.NodeRole_Validator,
 			State:         tpcmm.NodeState_Active,
 		})
+		validatorNetParams[i].compState.AddNodeDomain(exeDomainInfo1)
+		validatorNetParams[i].compState.AddNodeDomain(exeDomainInfo2)
 		for j := 0; j < i; j++ {
 			validatorNetParams[j].compState.AddNode(&tpcmm.NodeInfo{
 				NodeID:        network.ID(),
@@ -285,6 +325,8 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 		config := tpconfig.GetConfiguration()
 
 		sysActor := actor.NewActorSystem()
+
+		actor.SetLogLevel(actorlog.DebugLevel)
 
 		l := createLedger(testMainLog, "./TestConsensus", backend.BackendType_Badger, i, nodeType)
 
@@ -380,9 +422,14 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
 		eventhub.GetEventHubManager().GetEventHub(nParams[i].nodeID).Start(nParams[i].sysActor)
+		cType := state.CompStateBuilderType_Full
+		if nParams[i].nodeType != "executor" {
+			cType = state.CompStateBuilderType_Simple
+		}
 		cs := consensus.NewConsensus(
 			nParams[i].chainID,
 			nParams[i].nodeID,
+			cType,
 			nParams[i].priKey,
 			tplogcmm.InfoLevel,
 			nParams[i].mainLog,
@@ -428,11 +475,17 @@ func TestMultiRoleNodes(t *testing.T) {
 	nParams = append(nParams, executorParams...)
 	nParams = append(nParams, proposerParams...)
 	nParams = append(nParams, validatorParams...)
-	for _, nodeP := range nParams {
+	for i, nodeP := range nParams {
 		nodeP.compState.Commit()
 		nodeP.compState.UpdateCompSState(state.CompSState_Commited)
-		t.Logf("DKG PriKey = %s, nodeType=%s", nodeP.config.CSConfig.InitDKGPrivKey, nodeP.nodeType)
+		ppPort := 8899 + i
+		go func() {
+			http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", ppPort), nil)
+		}()
+		t.Logf("DKG PriKey = %s, id=%s, nodeType=%s, ppPort=%d", nodeP.config.CSConfig.InitDKGPrivKey, nodeP.nodeID, nodeP.nodeType, ppPort)
 	}
+
+	time.Sleep(10 * time.Second)
 
 	createConsensusAndStart(nParams)
 
@@ -449,9 +502,11 @@ func TestMultiRoleNodes(t *testing.T) {
 
 			nodeP.mainLog.Infof("Current active proposers %v and validators %v", activeProposers, activeValidators)
 
-			latestEpochInfo, _ := csStateRN.GetLatestEpoch()
+			latestBlock, _ := csStateRN.GetLatestBlock()
 
-			nodeP.cs.TriggerDKG(latestEpochInfo.Epoch)
+			if nodeP.nodeType != "executor" && nodeP.ledger.State() == tpcmm.LedgerState_Genesis {
+				nodeP.cs.TriggerDKG(latestBlock)
+			}
 		}()
 	}
 

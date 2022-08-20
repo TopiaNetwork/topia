@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"net"
 	"sort"
@@ -458,13 +459,8 @@ func (p2p *P2PService) createDHTService(ctx context.Context, p2pLog tplog.Logger
 
 	if p2p.netActiveNode != nil {
 		dhtOptionsExecute = append(dhtOptionsExecute, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
-			activeExcutors, err := p2p.netActiveNode.GetActiveExecutorIDs()
-			if err != nil {
-				p2pLog.Errorf("Can't get active excutors: %v", err)
-			}
-
+			activeExcutors := p2p.netActiveNode.GetActiveExecutorIDs()
 			p2pLog.Debugf("Current active excutors: %v", activeExcutors)
-
 			if len(activeExcutors) > 0 {
 				return tpcmm.IsContainString(p.String(), activeExcutors)
 			}
@@ -473,13 +469,8 @@ func (p2p *P2PService) createDHTService(ctx context.Context, p2pLog tplog.Logger
 		}))
 
 		dhtOptionsPropose = append(dhtOptionsPropose, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
-			activeProposers, err := p2p.netActiveNode.GetActiveProposerIDs()
-			if err != nil {
-				p2pLog.Errorf("Can't get active proposers: %v", err)
-			}
-
+			activeProposers := p2p.netActiveNode.GetActiveProposerIDs()
 			p2pLog.Debugf("Current active proposers: %v", activeProposers)
-
 			if len(activeProposers) > 0 {
 				return tpcmm.IsContainString(p.String(), activeProposers)
 			}
@@ -488,13 +479,8 @@ func (p2p *P2PService) createDHTService(ctx context.Context, p2pLog tplog.Logger
 		}))
 
 		dhtOptionsValidate = append(dhtOptionsValidate, dht.RoutingTableFilter(func(dht interface{}, p peer.ID) bool {
-			activeValidates, err := p2p.netActiveNode.GetActiveValidatorIDs()
-			if err != nil {
-				p2pLog.Errorf("Can't get active validates: %v", err)
-			}
-
+			activeValidates := p2p.netActiveNode.GetActiveValidatorIDs()
 			p2pLog.Debugf("Current active validates: %v", activeValidates)
-
 			if len(activeValidates) > 0 {
 				return tpcmm.IsContainString(p.String(), activeValidates)
 			}
@@ -576,6 +562,10 @@ func (p2p *P2PService) UnRegisterModule(moduleName string, pid *actor.PID, msgMa
 	delete(p2p.modMarshals, moduleName)
 }
 
+func (p2p *P2PService) UpdateNetActiveNode(netActiveNode tpnetcmn.NetworkActiveNode) {
+	p2p.netActiveNode = netActiveNode
+}
+
 func (p2p *P2PService) dispatch(moduleName string, msg interface{}) error {
 	if pid, ok := p2p.modPIDS[moduleName]; ok {
 		//if msgMarshal, okM := p2p.modMarshals[moduleName]; okM {
@@ -606,7 +596,7 @@ func (p2p *P2PService) dispatchAndWaitResp(moduleName string, streamMsg *message
 		//if err == nil {
 		result, err := p2p.sysActor.Root.RequestFuture(pid, streamMsg.Data, tpnetprotoc.WaitRespTimeout).Result()
 		if err != nil {
-			p2p.log.Errorf("RequestFuture err(%s) module name =%s", err.Error(), moduleName)
+			p2p.log.Errorf("RequestFuture err(%s), module name %s, self node %s", err.Error(), moduleName, p2p.host.ID())
 			return nil, err
 		} else {
 			return result, nil
@@ -862,6 +852,9 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 			resp, err := p2p.streamService.readMessage(stream)
 			if err == nil {
 				sendResp.RespData = resp.Data
+				if resp.ErrDesc != "" {
+					sendResp.Err = errors.New(resp.ErrDesc)
+				}
 				respCh <- sendResp
 				p2p.host.ConnManager().TagPeer(peerID, "SendSync", 25)
 			} else {
@@ -1130,7 +1123,7 @@ func (p2p *P2PService) FindPeer(ctx context.Context, nodeID string) (string, err
 		return "", err
 	}
 
-	executorIDs, _ := p2p.netActiveNode.GetActiveExecutorIDs()
+	executorIDs := p2p.netActiveNode.GetActiveExecutorIDs()
 	if tpcmm.IsContainString(nodeID, executorIDs) {
 		maAddr, err := p2p.dhtServices[DHTServiceType_Execute].dht.FindPeer(ctx, peerID)
 		if err != nil {
@@ -1139,7 +1132,7 @@ func (p2p *P2PService) FindPeer(ctx context.Context, nodeID string) (string, err
 		return maAddr.String(), nil
 	}
 
-	proposerIDs, _ := p2p.netActiveNode.GetActiveProposerIDs()
+	proposerIDs := p2p.netActiveNode.GetActiveProposerIDs()
 	if tpcmm.IsContainString(nodeID, proposerIDs) {
 		maAddr, err := p2p.dhtServices[DHTServiceType_Propose].dht.FindPeer(ctx, peerID)
 		if err != nil {
@@ -1148,7 +1141,7 @@ func (p2p *P2PService) FindPeer(ctx context.Context, nodeID string) (string, err
 		return maAddr.String(), nil
 	}
 
-	validatorIDs, _ := p2p.netActiveNode.GetActiveValidatorIDs()
+	validatorIDs := p2p.netActiveNode.GetActiveValidatorIDs()
 	if tpcmm.IsContainString(nodeID, validatorIDs) {
 		maAddr, err := p2p.dhtServices[DHTServiceType_Validate].dht.FindPeer(ctx, peerID)
 		if err != nil {

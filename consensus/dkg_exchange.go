@@ -1,9 +1,8 @@
 package consensus
 
 import (
+	"bytes"
 	"context"
-	"github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/common"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -11,9 +10,9 @@ import (
 	dkg "github.com/TopiaNetwork/kyber/v3/share/dkg/pedersen"
 	vss "github.com/TopiaNetwork/kyber/v3/share/vss/pedersen"
 
+	"github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
-	"github.com/TopiaNetwork/topia/state"
 )
 
 const (
@@ -26,6 +25,7 @@ const (
 	PartPubKeyChannel_Size  = 500
 	DealMSGChannel_Size     = 500
 	DealRespMsgChannel_Size = 500
+	FinishedMsgChannel_Size = 500
 )
 
 type DKGExchangeState byte
@@ -55,7 +55,8 @@ type dkgExchange struct {
 	partPubKey     chan *DKGPartPubKeyMessage
 	dealMsgCh      chan *DKGDealMessage
 	dealRespMsgCh  chan *DKGDealRespMessage
-	deliver        messageDeliverI
+	finishedMsgCh  chan *DKGFinishedMessage
+	deliver        dkgMessageDeliverI
 	ledger         ledger.Ledger
 	dkgExData      *dkgExchangeData
 	dkgCrypt       *dkgCrypt
@@ -69,8 +70,9 @@ func newDKGExchange(log tplog.Logger,
 	partPubKey chan *DKGPartPubKeyMessage,
 	dealMsgCh chan *DKGDealMessage,
 	dealRespMsgCh chan *DKGDealRespMessage,
+	finishedMsgCh chan *DKGFinishedMessage,
 	initDKGPrivKey string,
-	deliver messageDeliverI,
+	deliver dkgMessageDeliverI,
 	ledger ledger.Ledger) *dkgExchange {
 	dkgExData := &dkgExchangeData{}
 	dkgExData.initDKGPrivKey.Store(initDKGPrivKey)
@@ -86,6 +88,7 @@ func newDKGExchange(log tplog.Logger,
 		partPubKey:    partPubKey,
 		dealMsgCh:     dealMsgCh,
 		dealRespMsgCh: dealRespMsgCh,
+		finishedMsgCh: finishedMsgCh,
 		deliver:       deliver,
 		ledger:        ledger,
 		dkgExData:     dkgExData,
@@ -96,12 +99,7 @@ func (ex *dkgExchange) updateDKGPrivKey(dkgPriKey string) {
 	ex.dkgExData.initDKGPrivKey.Swap(dkgPriKey)
 }
 
-func (ex *dkgExchange) updateDKGPartPubKeys(compStateRN state.CompositionStateReadonly) error {
-	dkgPartPubKeys, err := compStateRN.GetDKGPartPubKeysForVerify()
-	if err != nil {
-		return err
-	}
-
+func (ex *dkgExchange) updateDKGPartPubKeys(dkgPartPubKeys map[string]string) error {
 	ex.dkgExData.initDKGPartPubKeys.Swap(dkgPartPubKeys)
 
 	return nil
@@ -150,16 +148,22 @@ func (ex *dkgExchange) notifyUpdater() {
 	}
 }
 
-func (ex *dkgExchange) initWhenStart(epoch uint64) {
+func (ex *dkgExchange) initWhenStart(triggerNumber uint64) {
 	dkgPrivKey := ex.dkgExData.initDKGPrivKey.Load().(string)
 	dkgPartPubKeys := ex.getDKGPartPubKeys()
 	nParticipant := len(dkgPartPubKeys)
-	dkgCrypt := newDKGCrypt(ex.log, epoch, dkgPrivKey, dkgPartPubKeys, 2*nParticipant/3+1, nParticipant)
+	dkgCrypt := newDKGCrypt(ex.log, triggerNumber, dkgPrivKey, dkgPartPubKeys, 2*nParticipant/3+1, nParticipant)
 	ex.setDKGCrypt(dkgCrypt)
 }
 
-func (ex *dkgExchange) start(epoch uint64) {
-	ex.startCh <- epoch
+func (ex *dkgExchange) start(triggerNumber uint64, ctx context.Context) {
+	ex.startCh <- triggerNumber
+
+	ex.startReceiveDealLoop(ctx)
+
+	ex.startReceiveDealRespLoop(ctx)
+
+	ex.startReceiveFinishedMsg(ctx)
 }
 
 func (ex *dkgExchange) stop() {
@@ -181,19 +185,19 @@ func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 	go func() {
 		for {
 			select {
-			case epoch := <-ex.startCh:
+			case triggerNumber := <-ex.startCh:
 				ex.log.Infof("DKG exchange send deal start %s", ex.nodeID)
 				if ex.dkgCrypt == nil {
-					ex.log.Panicf("dkgCrypt nil at present: epoch=%d")
+					ex.log.Panicf("dkgCrypt nil at present: trigger number %d", ex.dkgCrypt.triggerNumber)
 				}
 
-				if ex.dkgCrypt.epoch != epoch {
-					ex.log.Panicf("dkgCrypt invalid expected epoch=%d, got epoch =%d", epoch, ex.dkgCrypt.epoch)
+				if ex.dkgCrypt.triggerNumber != triggerNumber {
+					ex.log.Panicf("dkgCrypt invalid expected triggerNumber=%d, got trigger number %d", triggerNumber, ex.dkgCrypt.triggerNumber)
 				}
 
 				deals, err := ex.dkgCrypt.getDeals()
 				if err != nil {
-					ex.log.Panicf("Can't get deals epoch %d: %v", ex.dkgCrypt.epoch, err)
+					ex.log.Panicf("Can't get deals trigger number %d: %v", ex.dkgCrypt.triggerNumber, err)
 				}
 
 				for i, deal := range deals {
@@ -202,15 +206,15 @@ func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 					}
 
 					dealMsg := &DKGDealMessage{
-						ChainID:  []byte(ex.chainID),
-						Version:  CONSENSUS_VER,
-						Epoch:    ex.dkgCrypt.epoch,
-						DealData: dealBytes,
+						ChainID:       []byte(ex.chainID),
+						Version:       CONSENSUS_VER,
+						TriggerNumber: ex.dkgCrypt.triggerNumber,
+						DealData:      dealBytes,
 					}
 					pubKey := ex.dkgCrypt.pubKey(uint32(i))
 					destNodeID := ex.getNodeIDByDKGPartPubKey(pubKey)
 					if destNodeID == "" {
-						ex.log.Panicf("can't find the responding node ID by dkg part pub key: epoch=%d", ex.dkgCrypt.epoch)
+						ex.log.Panicf("can't find the responding node ID by dkg part pub key: trigger number %d", ex.dkgCrypt.triggerNumber)
 					}
 
 					verifierPub, _ := ex.dkgCrypt.dkGenerator.GetVerifierPubOfDealer(i)
@@ -226,15 +230,15 @@ func (ex *dkgExchange) startSendDealLoop(ctx context.Context) {
 
 					err = ex.deliver.deliverDKGDealMessage(ctx, destNodeID, dealMsg)
 					if err != nil {
-						ex.log.Panicf("Can't deliver deal epoch %d: %v", ex.dkgCrypt.epoch, err)
+						ex.log.Panicf("Can't deliver deal trigger number %d: %v", ex.dkgCrypt.triggerNumber, err)
 					}
 				}
 				ex.dkgExData.State.Swap(DKGExchangeState_Exchanging_Deal)
 			case <-ex.stopCh:
-				ex.log.Info("DKG exchange new epoch loop stop")
+				ex.log.Info("DKG exchange new trigger loop stop")
 				return
 			case <-ctx.Done():
-				ex.log.Info("DKG exchange new epoch loop stop")
+				ex.log.Info("DKG exchange new trigger loop stop")
 				return
 			}
 		}
@@ -249,48 +253,48 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 				var deal dkg.Deal
 				_, err := deal.UnmarshalMsg(dealMsg.DealData)
 				if err != nil {
-					ex.log.Panicf("Can't unmarshal deal epoch %d: %v", ex.dkgCrypt.epoch, err)
+					ex.log.Panicf("Can't unmarshal deal trigger number %d: %v", ex.dkgCrypt.triggerNumber, err)
 					continue
 				}
 
-				ex.log.Infof("Node %s receive dealIndex %d epoch=%d", ex.nodeID, deal.Index, dealMsg.Epoch)
+				ex.log.Infof("Node %s receive dealIndex %d trigger number %d", ex.nodeID, deal.Index, dealMsg.TriggerNumber)
 
-				dealResp, err := ex.dkgCrypt.processDeal(&deal)
+				dealResp, err := ex.dkgCrypt.processDeal(&deal, ctx, ex.callBackWhenFinished)
 				if err != nil {
 					if err == vss.ErrDealAlreadyProcessed {
-						ex.log.Warnf("Process received deal dealIndex %d epoch %d: self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.epoch, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
+						ex.log.Warnf("Process received deal dealIndex %d trigger number %d: self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.triggerNumber, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
 						continue
 					} else {
-						ex.log.Panicf("Process deal failed dealIndex %d epoch %d: %v, self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.epoch, err, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
+						ex.log.Panicf("Process deal failed dealIndex %d trigger number %d: %v, self nodeID %s, expected signVerify pub %s, %v", deal.Index, ex.dkgCrypt.triggerNumber, err, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
 						continue
 					}
 				} else {
-					ex.log.Infof("Node %s process deal successed dealIndex %d epoch %d, self nodeID %s, expected signVerify pub %s, %v", ex.nodeID, deal.Index, ex.dkgCrypt.epoch, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
+					ex.log.Infof("Node %s process deal successes dealIndex %d epoch %d, self nodeID %s, expected signVerify pub %s, %v", ex.nodeID, deal.Index, ex.dkgCrypt.triggerNumber, ex.nodeID, ex.dkgCrypt.dealSignVerifyPub(deal.Index), ex.dkgExData.initDKGPartPubKeys.Load().(map[string]string))
 				}
 
 				if dealResp.Response.Status != vss.StatusApproval {
-					ex.log.Panicf("Deal response not approval dealIndex %d epoch %d", deal.Index, ex.dkgCrypt.epoch)
+					ex.log.Panicf("Deal response not approval dealIndex %d trigger number %d", deal.Index, ex.dkgCrypt.triggerNumber)
 					continue
 				}
 
 				dealRespBytes, err := dealResp.MarshalMsg(nil)
 				if err != nil {
-					ex.log.Panicf("Marshal deal responsse failed dealIndex %d epoch %d: %v", deal.Index, ex.dkgCrypt.epoch, err)
+					ex.log.Panicf("Marshal deal responses failed dealIndex %d trigger number %d: %v", deal.Index, ex.dkgCrypt.triggerNumber, err)
 					continue
 				}
 
 				dealRespMsg := &DKGDealRespMessage{
-					ChainID:  []byte(ex.chainID),
-					Version:  CONSENSUS_VER,
-					Epoch:    ex.dkgCrypt.epoch,
-					RespData: dealRespBytes,
+					ChainID:       []byte(ex.chainID),
+					Version:       CONSENSUS_VER,
+					TriggerNumber: ex.dkgCrypt.triggerNumber,
+					RespData:      dealRespBytes,
 				}
 
 				ex.log.Infof("Node %s send deal %d response to other participants", ex.nodeID, deal.Index)
 
 				err = ex.deliver.deliverDKGDealRespMessage(ctx, dealRespMsg)
 				if err != nil {
-					ex.log.Panicf("Can't marshal deal epoch %d: %v", ex.dkgCrypt.epoch, err)
+					ex.log.Panicf("Can't deliver deal trigger number %d: %v", ex.dkgCrypt.triggerNumber, err)
 				}
 			case <-ex.stopCh:
 				ex.log.Info("DKG exchange receive deal loop stop")
@@ -300,6 +304,53 @@ func (ex *dkgExchange) startReceiveDealLoop(ctx context.Context) {
 				return
 			}
 		}
+	}()
+}
+
+func (ex *dkgExchange) callBackWhenFinished(ctx context.Context) {
+	ex.log.Infof("DKG exchange finished: self node %s", ex.nodeID)
+	ex.dkgExData.State.Swap(DKGExchangeState_Finished)
+	ex.finishedCh <- true
+
+	pubPolicyComm, err := ex.dkgCrypt.PubKey()
+	if err != nil {
+		ex.log.Panicf("Can't get public policy commit: trigger number %d", ex.dkgCrypt.triggerNumber)
+	}
+
+	finishedMsg := &DKGFinishedMessage{
+		ChainID:       []byte(ex.chainID),
+		Version:       CONSENSUS_VER,
+		TriggerNumber: ex.dkgCrypt.triggerNumber,
+		NodeID:        []byte(ex.nodeID),
+		PubPolyCommit: pubPolicyComm,
+	}
+	ex.log.Infof("Node send finished message to other participants: trigger number %d, self node %s", ex.dkgCrypt.triggerNumber, ex.nodeID)
+	err = ex.deliver.deliverDKGFinishedMessage(ctx, finishedMsg)
+	if err != nil {
+		ex.log.Panicf("Can't deliver finished message: %d, trigger number %d", err, ex.dkgCrypt.triggerNumber)
+	}
+
+	func() {
+		ex.dkgCrypt.remoteFinishedSync.Lock()
+		defer ex.dkgCrypt.remoteFinishedSync.Unlock()
+
+		if len(ex.dkgCrypt.remoteFinished) < ex.dkgCrypt.nParticipant-1 {
+			return
+		}
+
+		selfPubPolicyCommt, err := ex.dkgCrypt.PubKey()
+		if err != nil {
+			ex.log.Panicf("Can't get public policy commit: %v, trgger number %d, self node %s", err, finishedMsg.TriggerNumber, ex.nodeID)
+		}
+
+		for _, rFinishedMsg := range ex.dkgCrypt.remoteFinished {
+			if !bytes.Equal(selfPubPolicyCommt, rFinishedMsg.PubPolyCommit) {
+				ex.log.Panicf("Received invalid finished message: trigger number %d, self node %s", rFinishedMsg.TriggerNumber, ex.nodeID)
+			}
+		}
+
+		ex.updateDKGState(DKGExchangeState_IDLE)
+		ex.notifyUpdater()
 	}()
 }
 
@@ -311,34 +362,27 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 				var resp dkg.Response
 				_, err := resp.UnmarshalMsg(dealRespMsg.RespData)
 				if err != nil {
-					ex.log.Panicf("Can't Unmarshal response epoch %d: %v", ex.dkgCrypt.epoch, err)
+					ex.log.Panicf("Can't Unmarshal response trigger number %d: %v", ex.dkgCrypt.triggerNumber, err)
 				}
 
-				ex.log.Infof("Node %s receive deal response %d epoch=%d", ex.nodeID, resp.Index, dealRespMsg.Epoch)
+				ex.log.Infof("Node %s receive deal response %d trigger number %d", ex.nodeID, resp.Index, dealRespMsg.TriggerNumber)
 
 				err = ex.dkgCrypt.processResp(&resp)
 				if err != nil {
 					if err == vss.ErrNoDealBeforeResponse {
-						ex.log.Warnf("Process no deal before response: epoch %d", ex.dkgCrypt.epoch)
+						ex.log.Warnf("Process no deal before response: epoch %d", ex.dkgCrypt.triggerNumber)
 						ex.dkgCrypt.addAdvanceResp(&resp)
 					} else if err == vss.ErrExistResponseOfSameOrigin {
-						ex.log.Warnf("Process same origin response: epoch %d", ex.dkgCrypt.epoch)
+						ex.log.Warnf("Process same origin response: trigger number %d", ex.dkgCrypt.triggerNumber)
 					} else {
-						ex.log.Panicf("Process response failed: epoch %d: %v", ex.dkgCrypt.epoch, err)
+						ex.log.Panicf("Process response failed: trigger number %d: %v", ex.dkgCrypt.triggerNumber, err)
 					}
 				}
 
-				ex.log.Infof("Node %s process deal response successed %d epoch=%d", ex.nodeID, resp.Index, dealRespMsg.Epoch)
+				ex.log.Infof("Node %s process deal response successes %d trigger number %d", ex.nodeID, resp.Index, dealRespMsg.TriggerNumber)
 
 				if ex.dkgCrypt.Finished() {
-					ex.log.Infof("DKG exchange finished: self node %s", ex.nodeID)
-					ex.dkgExData.State.Swap(DKGExchangeState_Finished)
-					ex.finishedCh <- true
-
-					if ex.ledger.State() == common.LedgerState_Genesis {
-						ex.notifyUpdater()
-						ex.updateDKGState(DKGExchangeState_IDLE)
-					}
+					ex.callBackWhenFinished(ctx)
 				}
 			case <-ex.stopCh:
 				ex.log.Info("DKG exchange receive deal response loop stop")
@@ -351,13 +395,59 @@ func (ex *dkgExchange) startReceiveDealRespLoop(ctx context.Context) {
 	}()
 }
 
+func (ex *dkgExchange) startReceiveFinishedMsg(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case finishedMsg := <-ex.finishedMsgCh:
+				ex.log.Infof("Node %s receive finished message, trigger number %d", ex.nodeID, finishedMsg.TriggerNumber)
+
+				if !ex.dkgCrypt.Finished() {
+					func() {
+						ex.dkgCrypt.remoteFinishedSync.Lock()
+						defer ex.dkgCrypt.remoteFinishedSync.Unlock()
+
+						ex.dkgCrypt.remoteFinished = append(ex.dkgCrypt.remoteFinished, finishedMsg)
+					}()
+
+					continue
+				}
+
+				selfPubPolicyCommt, err := ex.dkgCrypt.PubKey()
+				if err != nil {
+					ex.log.Errorf("Can't get public policy commit: %v, trgger number %d, self node %s", err, finishedMsg.TriggerNumber, ex.nodeID)
+					continue
+				}
+				if !bytes.Equal(selfPubPolicyCommt, finishedMsg.PubPolyCommit) {
+					ex.log.Errorf("Received invalid finished message: trgger number %d, self node %s", finishedMsg.TriggerNumber, ex.nodeID)
+					continue
+				}
+
+				func() {
+					ex.dkgCrypt.remoteFinishedSync.Lock()
+					defer ex.dkgCrypt.remoteFinishedSync.Unlock()
+
+					ex.dkgCrypt.remoteFinished = append(ex.dkgCrypt.remoteFinished, finishedMsg)
+				}()
+
+				if len(ex.dkgCrypt.remoteFinished) >= ex.dkgCrypt.nParticipant-1 {
+					ex.updateDKGState(DKGExchangeState_IDLE)
+					ex.notifyUpdater()
+				}
+			case <-ex.stopCh:
+				ex.log.Info("DKG exchange receive finished message loop stop")
+				return
+			case <-ctx.Done():
+				ex.log.Info("DKG exchange receive finished message loop stop")
+				return
+			}
+		}
+	}()
+}
+
 func (ex *dkgExchange) startLoop(ctx context.Context) {
 	ex.log.Info("Start DKG exchange loop")
 	ex.startSendDealLoop(ctx)
-
-	ex.startReceiveDealLoop(ctx)
-
-	ex.startReceiveDealRespLoop(ctx)
 }
 
 func (state DKGExchangeState) String() string {

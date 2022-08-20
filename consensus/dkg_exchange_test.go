@@ -3,7 +3,6 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/ledger/backend"
 	"log"
 	"sync"
 	"testing"
@@ -19,6 +18,7 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
 	"github.com/TopiaNetwork/topia/ledger"
+	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
@@ -26,6 +26,7 @@ import (
 var partPubKeyChMap = make(map[string]chan *DKGPartPubKeyMessage)
 var dealMsgChMap = make(map[string]chan *DKGDealMessage)
 var dealRespMsgChMap = make(map[string]chan *DKGDealRespMessage)
+var finishedMsgChMap = make(map[string]chan *DKGFinishedMessage)
 
 var dkgExChangeMap = make(map[int]*dkgExchange)
 
@@ -42,9 +43,10 @@ func createTestDKGExChange(log tplog.Logger, nodeID string, ledger ledger.Ledger
 		partPubKeyChMap:  partPubKeyChMap,
 		dealMsgChMap:     dealMsgChMap,
 		dealRespMsgChMap: dealRespMsgChMap,
+		finishedMsgChMap: finishedMsgChMap,
 	}
 
-	dkgEx := newDKGExchange(log, "testdkg", nodeID, partPubKeyChMap[nodeID], dealMsgChMap[nodeID], dealRespMsgChMap[nodeID], initPrivKeysMap[nodeID], deliver, ledger)
+	dkgEx := newDKGExchange(log, "testdkg", nodeID, partPubKeyChMap[nodeID], dealMsgChMap[nodeID], dealRespMsgChMap[nodeID], finishedMsgChMap[nodeID], initPrivKeysMap[nodeID], deliver, ledger)
 	dkgEx.nodeID = nodeID
 	dkgEx.dkgExData.initDKGPartPubKeys.Store(initPubKeysMap)
 
@@ -107,7 +109,7 @@ func TestDkgExchangeLoop(t *testing.T) {
 
 	for i := 0; i < nParticipant; i++ {
 		wg.Add(1)
-		dkgExChangeMap[i].start(10)
+		dkgExChangeMap[i].start(10, context.Background())
 		go func(dkgEx *dkgExchange, index int) {
 			defer wg.Done()
 			for {

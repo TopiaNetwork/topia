@@ -4,7 +4,14 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
+
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -26,11 +33,6 @@ import (
 	"github.com/TopiaNetwork/topia/sync"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"github.com/TopiaNetwork/topia/wallet"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
-	"time"
 )
 
 type Node struct {
@@ -173,6 +175,15 @@ func (n *Node) initData() {
 			err = compState.AddNode(nodeInfo)
 			if err != nil {
 				n.log.Panicf("Add node info error: %v", err)
+				compState.Stop()
+				return
+			}
+		}
+
+		for _, exeDomainInfo := range n.config.Genesis.GenesisExeDomain {
+			err = compState.AddNodeDomain(exeDomainInfo)
+			if err != nil {
+				n.log.Panicf("Add execute domain info error: %v", err)
 				compState.Stop()
 				return
 			}

@@ -40,7 +40,7 @@ func startCmd() *cobra.Command {
 	flags.StringVarP(&rootPath, "rootpath", "", "", "the node data root path")
 	flags.StringVarP(&endPoint, "endpoint", "", "/ip4/127.0.0.1/tcp/21000", "the node listening endpoint")
 	flags.StringVarP(&seed, "seed", "", "universal", "the network peer's seed for generating key")
-	flags.StringVarP(&role, "role", "", "executor", "the node role, you can input one of executor,proposer,validator,proposer_validator")
+	flags.StringVarP(&role, "role", "", "executor", "the node role, you can input one of executor,proposer,validator,archiver")
 	return nodeStartCmd
 }
 

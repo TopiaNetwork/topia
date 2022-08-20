@@ -49,6 +49,22 @@ func TestGenerateGenesisData(t *testing.T) {
 
 	suite := bn256.NewSuiteG2()
 
+	exeDomainInfo1 := &tpcmm.NodeDomainInfo{
+		ID:               tpcmm.CreateDomainID("exedomain1"),
+		Type:             tpcmm.DomainType_Execute,
+		ValidHeightStart: 1,
+		ValidHeightEnd:   100000,
+		ExeDomainData: &tpcmm.NodeExecuteDomain{
+			Members: []string{
+				"16Uiu2HAkvPb9xbeHsbDSS44xLY2ZWJvZtdUpcWBSAMuPBTx1eNnj",
+				"16Uiu2HAm29UXXHcMbUXpeALDQuRppiRKxvCGnREN4XwKRTPgFV4Q",
+				"16Uiu2HAm8r3jz6E9p1imUJh1wc4JprhHKDqBBZwu1gHsXSHJpM7d",
+			},
+		},
+	}
+
+	gData.GenesisExeDomain = append(gData.GenesisExeDomain, exeDomainInfo1)
+
 	executorIDs := []string{
 		"16Uiu2HAkvPb9xbeHsbDSS44xLY2ZWJvZtdUpcWBSAMuPBTx1eNnj",
 		"16Uiu2HAm29UXXHcMbUXpeALDQuRppiRKxvCGnREN4XwKRTPgFV4Q",

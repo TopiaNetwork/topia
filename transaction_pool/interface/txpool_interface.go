@@ -140,7 +140,7 @@ type TransactionPool interface {
 
 	Size() int64
 
-	TruncateTxPool()
+	ClearTxPool()
 
 	Start(sysActor *actor.ActorSystem, network tpnet.Network) error
 

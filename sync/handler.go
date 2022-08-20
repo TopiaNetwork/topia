@@ -13,6 +13,7 @@ import (
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	"github.com/TopiaNetwork/topia/common"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -27,7 +28,10 @@ const (
 	SendAccountLimit = 10 * 1024
 )
 
-var ErrOnSyncing = errors.New("syncing not done")
+var (
+	ErrOnSyncing        = errors.New("syncing not done")
+	ErrBlockHashExisted = errors.New("sync blockHashCache blockHash is existed")
+)
 
 type SyncHandler interface {
 	HandleHeartBeatRequest(msg *HeartBeatRequest) error
@@ -57,6 +61,10 @@ type syncHandler struct {
 	forceSync         chan struct{}
 	quitSync          chan struct{}
 	doneChan          chan error
+	workerPool        *WorkerPool
+	blockHashCache    *BlockHashCache
+	heightBlocksCache *HeightBlocksCache
+
 	blockDownloader   *BlockDownloader
 	epochDownloader   *EpochDownloader
 	nodeDownloader    *NodeDownloader
@@ -64,16 +72,74 @@ type syncHandler struct {
 	accountDownloader *AccountDownloader
 	wg                sync.WaitGroup
 }
+type BlockHashCache struct {
+	mu          sync.RWMutex
+	blockHashes map[tpchaintypes.BlockHash]struct{}
+}
+
+func NewBlockHashCache() *BlockHashCache {
+	blockC := &BlockHashCache{
+		blockHashes: make(map[tpchaintypes.BlockHash]struct{}, 0),
+	}
+	return blockC
+}
+func (bc *BlockHashCache) Add(hash tpchaintypes.BlockHash) {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+	bc.blockHashes[hash] = struct{}{}
+}
+func (bc *BlockHashCache) Get(hash tpchaintypes.BlockHash) bool {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+	_, ok := bc.blockHashes[hash]
+	return ok
+}
+func (bc *BlockHashCache) remove(hash tpchaintypes.BlockHash) {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+	delete(bc.blockHashes, hash)
+}
+
+type HeightBlocksCache struct {
+	mu           sync.RWMutex
+	heightBlocks map[uint64][]*tpchaintypes.Block
+}
+
+func NewHeightBlocksCache() *HeightBlocksCache {
+	hbc := &HeightBlocksCache{
+		heightBlocks: make(map[uint64][]*tpchaintypes.Block, 0),
+	}
+	return hbc
+}
+
+func (hbc *HeightBlocksCache) Get(height uint64) ([]*tpchaintypes.Block, bool) {
+	hbc.mu.RLock()
+	defer hbc.mu.RUnlock()
+	list, ok := hbc.heightBlocks[height]
+	return list, ok
+}
+func (hbc *HeightBlocksCache) Add(height uint64, list []*tpchaintypes.Block) {
+	hbc.mu.RLock()
+	defer hbc.mu.RUnlock()
+	hbc.heightBlocks[height] = list
+}
+func (hbc *HeightBlocksCache) Remove(height uint64) {
+	hbc.mu.Lock()
+	defer hbc.mu.Unlock()
+	delete(hbc.heightBlocks, height)
+}
 
 func NewSyncHandler(conf *SyncConfig, log tplog.Logger, ctx context.Context, marshaler codec.Marshaler, ledger ledger.Ledger, nodeID string,
 	stateQueryService service.StateQueryService,
 	blockService service.BlockService) *syncHandler {
 	syhandler := &syncHandler{
-		log:       log,
-		ctx:       ctx,
-		marshaler: marshaler,
-		ledger:    ledger,
-		nodeID:    nodeID,
+		log:               log,
+		ctx:               ctx,
+		marshaler:         marshaler,
+		ledger:            ledger,
+		nodeID:            nodeID,
+		blockHashCache:    NewBlockHashCache(),
+		heightBlocksCache: NewHeightBlocksCache(),
 	}
 	pubSubScores := syhandler.query.PubSubScores()
 	for _, pubSubScore := range pubSubScores {
@@ -96,7 +162,74 @@ func NewSyncHandler(conf *SyncConfig, log tplog.Logger, ctx context.Context, mar
 	}
 	syhandler.HighestHeight = curHeight
 
+	syhandler.workerPool = NewWorkerPool(DefaultWorkerSize)
+
+	if err != nil {
+		syhandler.log.Errorf("sync handler new task pool error:", err)
+	}
 	return syhandler
+}
+
+func (sh *syncHandler) putTask(job *Job) {
+	defer sh.wg.Done()
+	sh.workerPool.SubmitWait(sh.syncJob, job)
+}
+
+func (sh *syncHandler) syncJob(job *Job) {
+	jobType := job.jobType
+	data := job.data
+	switch jobType {
+	case msgBlock:
+		blockData := data.(*FreeItem)
+		sh.blockDownloader.blockSyncQueue.Push(blockData, blockData.value.(*tpchaintypes.Block).Head.Height)
+	case msgEpoch:
+		epochData := data.(*FreeItem)
+		sh.epochDownloader.epochInfoSyncQueue.Push(epochData, epochData.value.(*EpochResponse).StateVersion)
+	case msgChain:
+		chainData := data.(*FreeItem)
+		sh.chainDownloader.chainSyncQueue.Push(chainData, chainData.value.(*ChainResponse).StateVersion)
+	case msgNode:
+		nodeData := data.(*NodeResponse)
+		tmpItem := &LKQueueSet{
+			Map:       make(map[interface{}]struct{}, 0),
+			Priority:  nodeData.StateVersion,
+			ListBytes: nodeData.NodesData,
+		}
+		var list []*tpcmm.NodeInfo
+		err := sh.marshaler.Unmarshal(tmpItem.ListBytes, list)
+		if err != nil {
+			sh.log.Errorf("Unmarshal list bytes err", err)
+		}
+		var idNode *KeyValueItem
+		for _, node := range list {
+			idNode.K = node.NodeID
+			idNode.V = node
+			tmpItem.List = append(tmpItem.List, idNode)
+		}
+		sh.nodeDownloader.nodeFragmentQueue.Push(tmpItem, nodeData.StateVersion)
+
+	case msgAccount:
+		accountData := data.(*AccountResponse)
+		tmpItem := &LKQueueSet{
+			Map:       make(map[interface{}]struct{}, 0),
+			Priority:  accountData.StateVersion,
+			Root:      accountData.AccountRoot,
+			ListBytes: accountData.AccountsData,
+		}
+		var list []*account.Account
+		err := sh.marshaler.Unmarshal(tmpItem.ListBytes, list)
+		if err != nil {
+			sh.log.Errorf("Unmarshal list bytes err", err)
+			return
+		}
+		var addrAccount *KeyValueItem
+		for _, account := range list {
+			addrAccount.K = account.Addr
+			addrAccount.V = account
+			tmpItem.List = append(tmpItem.List, addrAccount)
+		}
+		sh.accountDownloader.accFragmentQueue.Push(tmpItem, accountData.StateVersion)
+	}
 }
 
 func (sh *syncHandler) HandleHeartBeatRequest(msg *HeartBeatRequest) error {
@@ -167,7 +300,6 @@ func (sh *syncHandler) HandleHeartBeatRequest(msg *HeartBeatRequest) error {
 		}
 		syncData, _ := sh.marshaler.Marshal(&syncMsg)
 		sh.query.Send(sh.ctx, protocol.AsyncSendProtocolID, MOD_NAME, syncData)
-
 	}
 	return nil
 }
@@ -190,7 +322,6 @@ func (sh *syncHandler) HandleBlockRequest(msg *BlockRequest) error {
 			Code:   0,
 			Block:  requestBlock,
 		}
-
 		data, _ := sh.marshaler.Marshal(blockResponse)
 		zipData, _ := CompressBytes(data, GZIP)
 		if err != nil {
@@ -214,14 +345,28 @@ func (sh *syncHandler) HandleBlockResponse(msg *BlockResponse) error {
 	if curHeight < msg.Height {
 		blockHash := tpchaintypes.BlockHash(hex.EncodeToString(msg.BlockHash))
 		if !sh.query.IsBadBlockExist(blockHash) {
+			if sh.blockHashCache.Get(blockHash) {
+				return ErrBlockHashExisted
+			}
+			sh.blockHashCache.Add(blockHash)
 			score := sh.query.GetNodeScore(string(msg.NodeID))
 			item := &FreeItem{
 				score: score,
 				value: msg.Block,
 			}
-			sh.blockDownloader.chanFetchBlock <- item
+
+			if msg.Height == curHeight+1 {
+				blockTask := &Job{
+					job:     sh.syncJob,
+					jobType: msgBlock,
+					data:    item,
+				}
+				sh.workerPool.Submit(sh.syncJob, blockTask)
+			}
+			sh.blockDownloader.blockSyncQueue.Push(item, item.value.(*tpchaintypes.Block).Head.Height)
 		}
 	}
+	sh.wg.Wait()
 	return nil
 }
 
@@ -404,7 +549,13 @@ func (sh *syncHandler) HandleEpochResponse(msg *EpochResponse) error {
 				score: score,
 				value: msg,
 			}
-			sh.epochDownloader.chanFetchEpochInfo <- item
+			epochTask := &Task{
+				job:     sh.syncJob,
+				jobType: msgEpoch,
+				data:    item,
+			}
+			sh.wg.Add(1)
+			sh.putTask(epochTask)
 			if sh.epochDownloader.DoneSync == nil {
 				sh.epochDownloader.DoneSync <- ErrOnSyncing
 			}
@@ -437,11 +588,18 @@ func (sh *syncHandler) HandleEpochResponse(msg *EpochResponse) error {
 			score: score,
 			value: msg,
 		}
-		sh.epochDownloader.chanFetchEpochInfo <- item
+		epochTask := &Task{
+			job:     sh.syncJob,
+			jobType: msgEpoch,
+			data:    item,
+		}
+		sh.wg.Add(1)
+		sh.putTask(epochTask)
 		if sh.nodeDownloader.DoneSync == nil {
 			sh.nodeDownloader.DoneSync <- ErrOnSyncing
 		}
 	}
+	sh.wg.Wait()
 	return nil
 }
 
@@ -585,12 +743,20 @@ func (sh *syncHandler) HandleNodeResponse(msg *NodeResponse) error {
 	if curStateVersion > msg.StateVersion {
 		return nil
 	} else {
-		sh.nodeDownloader.chanFetchNodeFragment <- msg
+
+		nodeTask := &Task{
+			job:     sh.syncJob,
+			jobType: msgNode,
+			data:    msg,
+		}
+		sh.wg.Add(1)
+		sh.putTask(nodeTask)
 		sh.nodeDownloader.DoneSync = make(chan error, 1)
 		if curStateVersion == msg.StateVersion {
 			sh.nodeDownloader.remoteNodeRoot = msg.NodeRoot
 		}
 	}
+	sh.wg.Wait()
 	return nil
 }
 
@@ -643,7 +809,13 @@ func (sh *syncHandler) HandleChainResponse(msg *ChainResponse) error {
 				score: score,
 				value: msg,
 			}
-			sh.chainDownloader.chanFetchChainData <- item
+			chainTask := &Task{
+				job:     sh.syncJob,
+				jobType: msgChain,
+				data:    item,
+			}
+			sh.wg.Add(1)
+			sh.putTask(chainTask)
 			if sh.chainDownloader.DoneSync == nil {
 				sh.chainDownloader.DoneSync <- ErrOnSyncing
 			}
@@ -666,7 +838,13 @@ func (sh *syncHandler) HandleChainResponse(msg *ChainResponse) error {
 					score: score,
 					value: msg,
 				}
-				sh.chainDownloader.chanFetchChainData <- item
+				chainTask := &Task{
+					job:     sh.syncJob,
+					jobType: msgChain,
+					data:    item,
+				}
+				sh.wg.Add(1)
+				sh.putTask(chainTask)
 				if sh.chainDownloader.DoneSync == nil {
 					sh.chainDownloader.DoneSync <- ErrOnSyncing
 				}
@@ -690,9 +868,15 @@ func (sh *syncHandler) HandleChainResponse(msg *ChainResponse) error {
 			score: score,
 			value: msg,
 		}
-		sh.chainDownloader.chanFetchChainData <- item
+		chainTask := &Task{
+			job:     sh.syncJob,
+			jobType: msgChain,
+			data:    item,
+		}
+		sh.wg.Add(1)
+		sh.putTask(chainTask)
 	}
-
+	sh.wg.Wait()
 	return nil
 }
 
@@ -831,12 +1015,20 @@ func (sh *syncHandler) HandleAccountResponse(msg *AccountResponse) error {
 	if curStateVersion > msg.StateVersion {
 		return nil
 	} else {
-		sh.accountDownloader.chanFetchAccountFragment <- msg
+
+		accountTask := &Task{
+			job:     sh.syncJob,
+			jobType: msgAccount,
+			data:    msg,
+		}
+		sh.wg.Add(1)
+		sh.putTask(accountTask)
 		sh.accountDownloader.DoneSync = make(chan error, 1)
 		if curStateVersion == msg.StateVersion {
 			sh.accountDownloader.remoteAccountRoot = msg.AccountRoot
 		}
 	}
+	sh.wg.Wait()
 	return nil
 }
 

@@ -67,7 +67,7 @@ type syncer struct {
 	ctx                  context.Context
 	nodeID               string
 	query                SyncServant
-	wg                   sync.WaitGroup
+	wg                   *sync.WaitGroup
 	SyncHeartBeatTimer   *time.Timer //Forced synchronization timer
 	updateNodeScoreTimer *time.Timer
 }
@@ -85,6 +85,7 @@ func NewSyncer(conf *SyncConfig, level tplogcmm.LogLevel, log tplog.Logger, code
 		ctx:       ctx,
 	}
 	sy.handler = NewSyncHandler(conf, sy.log, ctx, sy.marshaler, ledger, nodeID, stateQueryService, blockService)
+
 	return sy
 }
 
@@ -311,26 +312,17 @@ func (sa *syncer) Start(sysActor *actor.ActorSystem, network network.Network) er
 	go sa.loop()
 
 	sa.wg.Add(1)
-	go sa.loopFetchBlocks()
-	sa.wg.Add(1)
 	go sa.loopDoSyncBlocks()
-	sa.wg.Add(1)
-	go sa.loopFetchEpochs()
 	sa.wg.Add(1)
 	go sa.loopDoSyncEpochs()
 	sa.wg.Add(1)
-	go sa.loopFetchNodes()
-	sa.wg.Add(1)
 	go sa.loopDoSyncNodes()
-	sa.wg.Add(1)
-	go sa.loopFetchChain()
 	sa.wg.Add(1)
 	go sa.loopDoSyncChain()
 	sa.wg.Add(1)
-	go sa.loopFetchAccounts()
-	sa.wg.Add(1)
 	go sa.loopDoSyncAccounts()
 
+	sa.wg.Wait()
 	return nil
 }
 
@@ -356,48 +348,33 @@ func (sa *syncer) loop() {
 			sa.handler.nodeDownloader.chanQuitSync <- struct{}{}
 			sa.handler.chainDownloader.chanQuitSync <- struct{}{}
 			sa.handler.accountDownloader.chanQuitSync <- struct{}{}
+			sa.handler.taskPool.Close()
 			return
 		}
 	}
 
 }
-func (sa *syncer) loopFetchBlocks() {
-	defer sa.wg.Done()
-	sa.handler.blockDownloader.loopFetchBlocks()
-}
+
 func (sa *syncer) loopDoSyncBlocks() {
 	defer sa.wg.Done()
 	sa.handler.blockDownloader.loopDoSyncBlocks()
 }
-func (sa *syncer) loopFetchEpochs() {
-	defer sa.wg.Done()
-	sa.handler.epochDownloader.loopFetchEpochs()
-}
+
 func (sa *syncer) loopDoSyncEpochs() {
 	defer sa.wg.Done()
 	sa.handler.epochDownloader.loopDoSyncEpochs()
-}
-func (sa *syncer) loopFetchNodes() {
-	defer sa.wg.Done()
-	sa.handler.nodeDownloader.loopFetchNodes()
 }
 
 func (sa *syncer) loopDoSyncNodes() {
 	defer sa.wg.Done()
 	sa.handler.nodeDownloader.loopDoSyncNodes()
 }
-func (sa *syncer) loopFetchChain() {
-	defer sa.wg.Done()
-	sa.handler.chainDownloader.loopFetchChain()
-}
+
 func (sa *syncer) loopDoSyncChain() {
 	defer sa.wg.Done()
 	sa.handler.chainDownloader.loopDoSyncChain()
 }
-func (sa *syncer) loopFetchAccounts() {
-	defer sa.wg.Done()
-	sa.handler.accountDownloader.loopFetchAccounts()
-}
+
 func (sa *syncer) loopDoSyncAccounts() {
 	defer sa.wg.Done()
 	sa.handler.accountDownloader.loopDoSyncAccounts()

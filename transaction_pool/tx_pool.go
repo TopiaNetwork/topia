@@ -75,7 +75,7 @@ type transactionPool struct {
 	hasher              tpcmm.Hasher
 	poolSize            int64
 	poolCount           int64
-	wg                  sync.WaitGroup
+	wg                  *sync.WaitGroup
 }
 
 func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig, level tplogcmm.LogLevel,
@@ -346,11 +346,11 @@ func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxI
 }
 
 func (pool *transactionPool) Size() int64 {
-	return pool.poolSize
+	return atomic.LoadInt64(&pool.poolSize)
 }
 
 func (pool *transactionPool) Count() int64 {
-	return pool.poolCount
+	return atomic.LoadInt64(&pool.poolCount)
 }
 
 func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Network) error {
@@ -382,7 +382,7 @@ func (pool *transactionPool) RemoveTxByKey(key txbasic.TxID) error {
 	// Remove it from the list of known transactions
 
 	if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key); ok {
-		atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+		atomic.AddInt64(&pool.poolSize, int64(-txRm.Size()))
 		atomic.AddInt64(&pool.poolCount, -1)
 	}
 
@@ -433,7 +433,7 @@ func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transactio
 	// Try to insert the transaction into the future queue
 	f1 := func(category txbasic.TransactionCategory, key txbasic.TxID) {
 		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key); ok {
-			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+			atomic.AddInt64(&pool.poolSize, int64(-txRm.Size()))
 			atomic.AddInt64(&pool.poolCount, -1)
 		}
 
@@ -562,7 +562,7 @@ func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Addr
 			}
 			f2 := func(category txbasic.TransactionCategory, string2 txbasic.TxID) {
 				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, string2); ok {
-					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
+					atomic.AddInt64(&pool.poolSize, int64(-txRm.Size()))
 					atomic.AddInt64(&pool.poolCount, -1)
 				}
 			}

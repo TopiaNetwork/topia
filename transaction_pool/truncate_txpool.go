@@ -108,11 +108,13 @@ func (pool *transactionPool) truncateQueueByCategory(category txbasic.Transactio
 
 }
 
-func (pool *transactionPool) TruncateTxPool() {
+func (pool *transactionPool) ClearTxPool() {
 	pool.queues = newQueuesMap()
 	pool.pendings = newPendingsMap()
 	pool.allTxsForLook = newAllTxsLookupMap()
 	pool.txCache.Purge()
+	atomic.SwapInt64(&pool.poolSize, 0)
+	atomic.SwapInt64(&pool.poolCount, 0)
 	pool.log.Tracef("TransactionPool Truncated")
 
 }

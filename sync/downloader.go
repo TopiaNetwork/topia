@@ -28,14 +28,6 @@ var (
 	ErrDiffRoot        = errors.New("error for different root")
 )
 
-const (
-	FetchBlockChanSize   = MaxSyncHeights
-	FetchEpochChanSize   = MaxSyncHeights
-	FetchNodeChanSize    = 1024 * MaxSyncHeights
-	FetchChainChanSize   = MaxSyncHeights
-	FetchAccountChanSize = 1024 * MaxSyncHeights
-)
-
 type Downloader struct {
 	mode               SyncMode
 	resetCurLevel      bool
@@ -49,7 +41,6 @@ type Downloader struct {
 	DoneSync           chan error
 	requestInterval    *time.Timer
 	resetStateInterval *time.Timer
-	reNewScoreInterval *time.Timer
 }
 
 func NewDownloader(conf *SyncConfig, log tplog.Logger, marshaler codec.Marshaler, ctx context.Context, ledger ledger.Ledger) *Downloader {
@@ -69,8 +60,7 @@ type BlockDownloader struct {
 	*Downloader
 	nodeID    string
 	txServant txbasic.TransactionServant
-	//savedBlockHeights *IdBitmap //save block height for block saved in queue
-	chanFetchBlock chan *FreeItem
+
 	blockSyncQueue *LockFreePriorityQueue //look free height sorted queue for blocks
 
 }
@@ -80,24 +70,8 @@ func NewBlockDownloader(conf *SyncConfig, log tplog.Logger, marshaler codec.Mars
 		Downloader:     NewDownloader(conf, log, marshaler, ctx, ledger),
 		nodeID:         nodeId,
 		blockSyncQueue: NewLKQueue(),
-		chanFetchBlock: make(chan *FreeItem, FetchBlockChanSize),
 	}
 	return downloader
-}
-
-func (bd *BlockDownloader) loopFetchBlocks() {
-	for {
-		select {
-		case v := <-bd.chanFetchBlock:
-
-			bd.blockSyncQueue.Push(v, v.value.(*tpchaintypes.Block).Head.Height)
-
-		case <-bd.chanQuitSync:
-			return
-		default:
-			continue
-		}
-	}
 }
 
 func (bd *BlockDownloader) loopDoSyncBlocks() {
@@ -439,36 +413,19 @@ func (bd *BlockDownloader) forceRequestBlock(curBlockHeight uint64, height uint6
 
 type EpochDownloader struct {
 	*Downloader
-	nodeID          string
-	curSyncVersion  uint64
-	remoteEpochRoot []byte
-	//savedEpochs        *IdBitmap //save epochs for epochInfos saved in queue
-	chanFetchEpochInfo chan *FreeItem
+	nodeID             string
+	curSyncVersion     uint64
+	remoteEpochRoot    []byte
 	epochInfoSyncQueue *LockFreePriorityQueue //look free height sorted queue for EpochInfos
 }
 
 func NewEpochDownloader(conf *SyncConfig, log tplog.Logger, marshaler codec.Marshaler, ctx context.Context, ledger ledger.Ledger, nodeID string) *EpochDownloader {
 	downloader := &EpochDownloader{
-		Downloader: NewDownloader(conf, log, marshaler, ctx, ledger),
-		nodeID:     nodeID,
-		//savedEpochs:        new(IdBitmap),
-		chanFetchEpochInfo: make(chan *FreeItem, FetchEpochChanSize),
+		Downloader:         NewDownloader(conf, log, marshaler, ctx, ledger),
+		nodeID:             nodeID,
 		epochInfoSyncQueue: NewLKQueue(),
 	}
 	return downloader
-}
-
-func (ed *EpochDownloader) loopFetchEpochs() {
-	for {
-		select {
-		case v := <-ed.chanFetchEpochInfo:
-			ed.epochInfoSyncQueue.Push(v, v.value.(*EpochResponse).StateVersion)
-		case <-ed.chanQuitSync:
-			return
-		default:
-			continue
-		}
-	}
 }
 
 func (ed *EpochDownloader) loopDoSyncEpochs() {
@@ -641,48 +598,17 @@ func (ed *EpochDownloader) forceRequestCurEpoch() error {
 
 type NodeDownloader struct {
 	*Downloader
-	curSyncVersion        uint64
-	remoteNodeRoot        []byte
-	chanFetchNodeFragment chan *NodeResponse
-	nodeFragmentQueue     *LockFreeSetQueue
+	curSyncVersion    uint64
+	remoteNodeRoot    []byte
+	nodeFragmentQueue *LockFreeSetQueue
 }
 
 func NewNodeDownloader(conf *SyncConfig, log tplog.Logger, marshaler codec.Marshaler, ctx context.Context, ledger ledger.Ledger) *NodeDownloader {
 	downloader := &NodeDownloader{
-		Downloader:            NewDownloader(conf, log, marshaler, ctx, ledger),
-		chanFetchNodeFragment: make(chan *NodeResponse, FetchNodeChanSize),
-		nodeFragmentQueue:     NewLKQueueSet(),
+		Downloader:        NewDownloader(conf, log, marshaler, ctx, ledger),
+		nodeFragmentQueue: NewLKQueueSet(),
 	}
 	return downloader
-}
-
-func (nd *NodeDownloader) loopFetchNodes() {
-	for {
-		select {
-		case v := <-nd.chanFetchNodeFragment:
-			tmpItem := &LKQueueSet{
-				Map:       make(map[interface{}]struct{}, 0),
-				Priority:  v.StateVersion,
-				ListBytes: v.NodesData,
-			}
-			var list []*tpcmm.NodeInfo
-			err := nd.marshaler.Unmarshal(tmpItem.ListBytes, list)
-			if err != nil {
-				nd.log.Errorf("Unmarshal list bytes err", err)
-			}
-			var idNode *KeyValueItem
-			for _, node := range list {
-				idNode.K = node.NodeID
-				idNode.V = node
-				tmpItem.List = append(tmpItem.List, idNode)
-			}
-			nd.nodeFragmentQueue.Push(tmpItem, v.StateVersion)
-		case <-nd.chanQuitSync:
-			return
-		default:
-			continue
-		}
-	}
 }
 
 func (nd *NodeDownloader) loopDoSyncNodes() {
@@ -889,34 +815,18 @@ type ChainDownloader struct {
 	nodeID          string
 	curSyncVersion  uint64
 	remoteChainRoot []byte
-	//savedVersions      *IdBitmap
-	chanFetchChainData chan *FreeItem
-	chainSyncQueue     *LockFreePriorityQueue
+	chainSyncQueue  *LockFreePriorityQueue
 }
 
 func NewChainDownloader(conf *SyncConfig, log tplog.Logger, marshaler codec.Marshaler, ctx context.Context, ledger ledger.Ledger, nodeID string) *ChainDownloader {
 	downloader := &ChainDownloader{
-		Downloader: NewDownloader(conf, log, marshaler, ctx, ledger),
-		nodeID:     nodeID,
-		//savedVersions:      new(IdBitmap),
-		chanFetchChainData: make(chan *FreeItem, FetchChainChanSize),
-		chainSyncQueue:     NewLKQueue(),
+		Downloader:     NewDownloader(conf, log, marshaler, ctx, ledger),
+		nodeID:         nodeID,
+		chainSyncQueue: NewLKQueue(),
 	}
 	return downloader
 }
 
-func (cd *ChainDownloader) loopFetchChain() {
-	for {
-		select {
-		case v := <-cd.chanFetchChainData:
-			cd.chainSyncQueue.Push(v, v.value.(*ChainResponse).StateVersion)
-		case <-cd.chanQuitSync:
-			return
-		default:
-			continue
-		}
-	}
-}
 func (cd *ChainDownloader) loopDoSyncChain() {
 	cd.requestInterval = time.NewTimer(RequestChainInterval)
 	cd.resetStateInterval = time.NewTimer(ResetChainInterval)
@@ -1118,52 +1028,19 @@ func (cd *ChainDownloader) forceRequestChain() error {
 
 type AccountDownloader struct {
 	*Downloader
-	curSyncVersion           uint64
-	remoteAccountRoot        []byte
-	chanFetchAccountFragment chan *AccountResponse
-	accFragmentQueue         *LockFreeSetQueue
+	curSyncVersion    uint64
+	remoteAccountRoot []byte
+	accFragmentQueue  *LockFreeSetQueue
 }
 
 func NewAccountDownloader(conf *SyncConfig, log tplog.Logger, marshaler codec.Marshaler, ctx context.Context, ledger ledger.Ledger) *AccountDownloader {
 	downloader := &AccountDownloader{
-		Downloader:               NewDownloader(conf, log, marshaler, ctx, ledger),
-		chanFetchAccountFragment: make(chan *AccountResponse, FetchAccountChanSize),
-		accFragmentQueue:         NewLKQueueSet(),
+		Downloader:       NewDownloader(conf, log, marshaler, ctx, ledger),
+		accFragmentQueue: NewLKQueueSet(),
 	}
 	return downloader
 }
 
-func (ad *AccountDownloader) loopFetchAccounts() {
-	for {
-		select {
-		case v := <-ad.chanFetchAccountFragment:
-			tmpItem := &LKQueueSet{
-				Map:       make(map[interface{}]struct{}, 0),
-				Priority:  v.StateVersion,
-				Root:      v.AccountRoot,
-				ListBytes: v.AccountsData,
-			}
-			var list []*account.Account
-			err := ad.marshaler.Unmarshal(tmpItem.ListBytes, list)
-			if err != nil {
-				ad.log.Errorf("Unmarshal list bytes err", err)
-				return
-			}
-			var addrAccount *KeyValueItem
-			for _, account := range list {
-				addrAccount.K = account.Addr
-				addrAccount.V = account
-				tmpItem.List = append(tmpItem.List, addrAccount)
-			}
-			ad.accFragmentQueue.Push(tmpItem, v.StateVersion)
-
-		case <-ad.chanQuitSync:
-			return
-		default:
-			continue
-		}
-	}
-}
 func (ad *AccountDownloader) loopDoSyncAccounts() {
 	ad.requestInterval = time.NewTimer(RequestAccountInterval)
 	ad.resetStateInterval = time.NewTimer(ResetAccountStateInterval)

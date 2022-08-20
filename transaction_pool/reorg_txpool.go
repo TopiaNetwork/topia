@@ -117,6 +117,7 @@ func (pool *transactionPool) reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 		newBlockHeight := newBlockHead.GetHeight()
 		if depth := uint64(math.Abs(float64(oldBlockHeight) - float64(newBlockHeight))); depth > 64 {
 			pool.log.Debugf("Skipping deep transaction reorg,", "depth:", depth)
+			return nil
 		} else {
 
 			var curTxPoolTxs, packagedTx []*txbasic.Transaction
@@ -175,10 +176,11 @@ func (pool *transactionPool) reset(oldBlockHead, newBlockHead *tpchaintypes.Bloc
 					}
 				}
 				reinjectTxs = TxDifferenceList(curTxPoolTxs, packagedTx)
+				pool.addTxsLocked(reinjectTxs, false)
+				return nil
 			}
 		}
 	}
-	pool.addTxsLocked(reinjectTxs, false)
 	return nil
 }
 

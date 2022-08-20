@@ -136,3 +136,9 @@ func MinUint64(x, y uint64) uint64 {
 	}
 	return x
 }
+func MinInt32(x, y int32) int32 {
+	if x > y {
+		return y
+	}
+	return x
+}

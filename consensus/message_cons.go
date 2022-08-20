@@ -3,10 +3,24 @@ package consensus
 import (
 	"crypto/sha256"
 	"encoding/binary"
+
+	"github.com/lazyledger/smt"
+
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
-	"github.com/lazyledger/smt"
 )
+
+func (m *ConsensusDomainSelectedMessage) DataBytes() []byte {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, m.MemberNumber)
+
+	var dataBytes []byte
+	dataBytes = append(dataBytes, m.DomainID...)
+	dataBytes = append(dataBytes, b...)
+	dataBytes = append(dataBytes, m.NodeIDOfMember...)
+
+	return dataBytes
+}
 
 func (m *PreparePackedMessageExe) TxsData() []byte {
 	var txsData []byte
@@ -45,18 +59,18 @@ func (m *ProposeMessage) BlockHeadInfo() (*tpchaintypes.BlockHead, error) {
 	return nil, err
 }
 
-func (m *ProposeMessage) TxRoot() []byte {
+func (p *PropData) TxRoot() []byte {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
-	for _, txHashBytes := range m.TxHashs {
+	for _, txHashBytes := range p.TxHashs {
 		tree.Update(txHashBytes, txHashBytes)
 	}
 
 	return tree.Root()
 }
 
-func (m *ProposeMessage) TxResultRoot() []byte {
+func (p *PropData) TxResultRoot() []byte {
 	tree := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
-	for _, txRSHashBytes := range m.TxResultHashs {
+	for _, txRSHashBytes := range p.TxResultHashs {
 		tree.Update(txRSHashBytes, txRSHashBytes)
 	}
 

@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -26,22 +27,24 @@ type TestCacheData struct {
 
 type dkgCrypt struct {
 	log tplog.Logger
-	//index           uint32
-	epoch           uint64
-	initPrivKey     kyber.Scalar
-	partPubKeysSync sync.RWMutex
-	initPartPubKeys []kyber.Point
-	threshold       int
-	nParticipant    int
-	suite           *bn256.Suite
-	remoteDealsSync sync.RWMutex
-	remoteDeals     []*dkg.Deal
-	remoteRespsSync sync.RWMutex
-	remoteAdvanResp []*dkg.Response
-	dkGenerator     *dkg.DistKeyGenerator
+	//index         uint32
+	triggerNumber      uint64
+	initPrivKey        kyber.Scalar
+	partPubKeysSync    sync.RWMutex
+	initPartPubKeys    []kyber.Point
+	threshold          int
+	nParticipant       int
+	suite              *bn256.Suite
+	remoteDealsSync    sync.RWMutex
+	remoteDeals        []*dkg.Deal
+	remoteRespsSync    sync.RWMutex
+	remoteAdvanResp    []*dkg.Response
+	remoteFinishedSync sync.RWMutex
+	remoteFinished     []*DKGFinishedMessage
+	dkGenerator        *dkg.DistKeyGenerator
 }
 
-func newDKGCrypt(log tplog.Logger /*index uint32, */, epoch uint64 /*suite *bn256.Suite, */, initPrivKey string, initPartPubKeys []string, threshold int, nParticipant int) *dkgCrypt {
+func newDKGCrypt(log tplog.Logger /*index uint32, */, triggerNumber uint64 /*suite *bn256.Suite, */, initPrivKey string, initPartPubKeys []string, threshold int, nParticipant int) *dkgCrypt {
 	if len(initPrivKey) == 0 {
 		log.Panicf("Blank initPrivKey %s", initPrivKey)
 	}
@@ -74,7 +77,7 @@ func newDKGCrypt(log tplog.Logger /*index uint32, */, epoch uint64 /*suite *bn25
 	dkgCrypt := &dkgCrypt{
 		log: log,
 		//index:           index,
-		epoch:           epoch,
+		triggerNumber:   triggerNumber,
 		initPrivKey:     priKey,
 		initPartPubKeys: initPartPubKeyP,
 		threshold:       threshold,
@@ -84,7 +87,7 @@ func newDKGCrypt(log tplog.Logger /*index uint32, */, epoch uint64 /*suite *bn25
 
 	err = dkgCrypt.createGenerator()
 	if err != nil {
-		log.Panicf("Can't create DKG generator epoch %d: %v", epoch, err)
+		log.Panicf("Can't create DKG generator triggerNumber %d: %v", triggerNumber, err)
 	}
 
 	return dkgCrypt
@@ -128,10 +131,6 @@ func (d *dkgCrypt) createGenerator() error {
 	return nil
 }
 
-func (d *dkgCrypt) getEpoch() uint64 {
-	return d.epoch
-}
-
 func (d *dkgCrypt) pubKey(index uint32) string {
 	/*if index < 0 || index >= len(d.initPartPubKeys) {
 		d.log.Panicf("Out of index: %d[0, %d)", index, len(d.initPartPubKeys))
@@ -165,7 +164,7 @@ func (d *dkgCrypt) getDeals() (map[int]*dkg.Deal, error) {
 	return d.dkGenerator.Deals()
 }
 
-func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
+func (d *dkgCrypt) processDeal(deal *dkg.Deal, ctx context.Context, finishedCallBack func(ctx context.Context)) (*dkg.Response, error) {
 	d.remoteDealsSync.Lock()
 	defer d.remoteDealsSync.Unlock()
 
@@ -187,6 +186,9 @@ func (d *dkgCrypt) processDeal(deal *dkg.Deal) (*dkg.Response, error) {
 
 	if d.dkGenerator.ExpectedDeals() == d.nParticipant-1 {
 		d.processAdvanceResp()
+		if d.Finished() {
+			finishedCallBack(ctx)
+		}
 	}
 
 	return resp, err
@@ -261,6 +263,35 @@ func (d *dkgCrypt) PubKey() ([]byte, error) {
 	pubPoly := share.NewPubPoly(d.suite, d.suite.Point().Base(), dkShare.Commitments())
 
 	return pubPoly.Commit().MarshalBinary()
+}
+
+func (d *dkgCrypt) PriShare() ([]byte, error) {
+	dkShare, err := d.dkGenerator.DistKeyShare()
+	if err != nil {
+		return nil, err
+	}
+
+	return dkShare.PriShare().Marshal()
+}
+
+func (d *dkgCrypt) PubShares() ([][]byte, error) {
+	dkShare, err := d.dkGenerator.DistKeyShare()
+	if err != nil {
+		return nil, err
+	}
+
+	var pubSsBytes [][]byte
+	pubPolicy := share.NewPubPoly(d.suite, d.suite.Point().Base(), dkShare.Commitments())
+	pubSs := pubPolicy.Shares(d.nParticipant)
+	for _, pubS := range pubSs {
+		pubSBytes, err := pubS.Marshal()
+		if err != nil {
+			return nil, err
+		}
+		pubSsBytes = append(pubSsBytes, pubSBytes)
+	}
+
+	return pubSsBytes, nil
 }
 
 func (d *dkgCrypt) Sign(msg []byte) ([]byte, []byte, error) {

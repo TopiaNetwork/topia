@@ -12,17 +12,19 @@ import "gogo.proto";
 message ConsensusMessage {
   enum Type {
     Unknown = 0;
-    PrepareExe = 1;
-    PrepareExeIndic = 2;
-    PrepareProp = 3;
-    Propose = 4;
-    ExeRSValidateReq = 5;
-    BestPropose = 6;
-    Vote    = 7;
-    Commit  = 8;
-    PartPubKey = 9;
-    DKGDeal = 10;
-    DKGDealResp = 11;
+    CSDomainSel = 1;
+    PrepareExe = 2;
+    PrepareExeIndic = 3;
+    PrepareProp = 4;
+    Propose = 5;
+    ExeRSValidateReq = 6;
+    BestPropose = 7;
+    Vote    = 8;
+    Commit  = 9;
+    PartPubKey = 10;
+    DKGDeal = 11;
+    DKGDealResp = 12;
+    DKGFinished = 13;
   }
   Type MsgType = 1  [(gogoproto.jsontag) = "msgType"];
   bytes Data = 2  [(gogoproto.jsontag) = "data"];
@@ -38,10 +40,11 @@ message PreparePackedMessageExe {
   bytes  ParentBlockHash   = 7  [(gogoproto.jsontag) = "parentBlockHash"];
   bytes  VRFProof          = 8  [(gogoproto.jsontag) = "vrfProof"];
   bytes  VRFProofPubKey    = 9  [(gogoproto.jsontag) = "vrfProof"];
-  bytes  Launcher          = 10 [(gogoproto.jsontag) = "vrfProof"];
-  uint64 StateVersion      = 11 [(gogoproto.jsontag) = "stateVersion"];
-  bytes  TxRoot            = 12 [(gogoproto.jsontag) = "txRoot"];
-  repeated bytes Txs       = 13 [(gogoproto.jsontag) = "txs"];
+  bytes  DomainID          = 10 [(gogoproto.jsontag) = "domainID"];
+  bytes  Launcher          = 11 [(gogoproto.jsontag) = "launcher"];
+  uint64 StateVersion      = 12 [(gogoproto.jsontag) = "stateVersion"];
+  bytes  TxRoot            = 13 [(gogoproto.jsontag) = "txRoot"];
+  repeated bytes Txs       = 14 [(gogoproto.jsontag) = "txs"];
 }
 
 message PreparePackedMessageExeIndication {
@@ -51,25 +54,34 @@ message PreparePackedMessageExeIndication {
   uint64 Round             = 4  [(gogoproto.jsontag) = "epoch"];
   bytes  Signature         = 5  [(gogoproto.jsontag) = "signature"];
   bytes  PubKey            = 6  [(gogoproto.jsontag) = "pubKey"];
-  uint64 StateVersion      = 7  [(gogoproto.jsontag) = "stateVersion"];
+  bytes  DomainID          = 7  [(gogoproto.jsontag) = "domainID"];
+  uint64 StateVersion      = 8  [(gogoproto.jsontag) = "stateVersion"];
 }
 
 message PreparePackedMessageProp {
   bytes  ChainID               = 1  [(gogoproto.jsontag) = "chainID"];
   uint32 Version               = 2  [(gogoproto.jsontag) = "version"];
   uint64 Epoch                 = 3  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round                 = 4  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round                 = 4  [(gogoproto.jsontag) = "round"];
   bytes  Signature             = 5  [(gogoproto.jsontag) = "signature"];
   bytes  PubKey                = 6  [(gogoproto.jsontag) = "pubKey"];
   bytes  ParentBlockHash       = 7  [(gogoproto.jsontag) = "parentBlockHash"];
   bytes  VRFProof              = 8  [(gogoproto.jsontag) = "vrfProof"];
   bytes  VRFProofPubKey        = 9  [(gogoproto.jsontag) = "vrfProofPubKey"];
-  bytes  Launcher              = 10 [(gogoproto.jsontag) = "launcher"];
-  uint64 StateVersion          = 11 [(gogoproto.jsontag) = "stateVersion"];
-  bytes  TxRoot                = 12 [(gogoproto.jsontag) = "txRoot"];
-  bytes  TxResultRoot          = 13 [(gogoproto.jsontag) = "txResultRoot"];
-  repeated bytes TxHashs       = 14 [(gogoproto.jsontag) = "txHashs"];
-  repeated bytes TxResultHashs = 15 [(gogoproto.jsontag) = "txResultHashs"];
+  bytes  DomainID              = 10 [(gogoproto.jsontag) = "domainID"];
+  bytes  Launcher              = 11 [(gogoproto.jsontag) = "launcher"];
+  uint64 StateVersion          = 12 [(gogoproto.jsontag) = "stateVersion"];
+  bytes  TxRoot                = 13 [(gogoproto.jsontag) = "txRoot"];
+  bytes  TxResultRoot          = 14 [(gogoproto.jsontag) = "txResultRoot"];
+  repeated bytes TxHashs       = 15 [(gogoproto.jsontag) = "txHashs"];
+  repeated bytes TxResultHashs = 16 [(gogoproto.jsontag) = "txResultHashs"];
+}
+
+message PropData {
+  uint32 Version               = 1 [(gogoproto.jsontag) = "version"];
+  bytes  DomainID              = 2 [(gogoproto.jsontag) = "domainID"];
+  repeated bytes TxHashs       = 3 [(gogoproto.jsontag) = "txHashs"];
+  repeated bytes TxResultHashs = 4 [(gogoproto.jsontag) = "txResultHashs"];
 }
 
 message ProposeMessage {
@@ -82,9 +94,8 @@ message ProposeMessage {
   uint64 StateVersion          = 7  [(gogoproto.jsontag) = "stateVersion"];
   bytes  MaxPri                = 8  [(gogoproto.jsontag) = "maxPri"];
   bytes Proposer               = 9  [(gogoproto.jsontag) = "proposer"];
-  repeated bytes TxHashs       = 10 [(gogoproto.jsontag) = "txHashs"];
-  repeated bytes TxResultHashs = 11 [(gogoproto.jsontag) = "txResultHashs"];
-  bytes BlockHead              = 12 [(gogoproto.jsontag) = "blockHead"];
+  repeated bytes PropDatas     = 10 [(gogoproto.jsontag) = "propDatas"];
+  bytes BlockHead              = 11 [(gogoproto.jsontag) = "blockHead"];
 }
 
 message ExeResultValidateReqMessage {
@@ -150,30 +161,53 @@ message CommitMessage {
 }
 
 message DKGPartPubKeyMessage {
-  bytes  ChainID   = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version   = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Epoch     = 3  [(gogoproto.jsontag) = "epoch"];
-  bytes Signature  = 4  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey     = 5  [(gogoproto.jsontag) = "pubKey"];
-  bytes PartPubKey = 6  [(gogoproto.jsontag) = "partPubKey"];
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
+  bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes PartPubKey        = 6  [(gogoproto.jsontag) = "partPubKey"];
 }
 
 message DKGDealMessage {
-  bytes  ChainID  = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version  = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Epoch    = 3  [(gogoproto.jsontag) = "epoch"];
-  bytes Signature = 4  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey    = 5  [(gogoproto.jsontag) = "pubKey"];
-  bytes DealData  = 6  [(gogoproto.jsontag) = "dealData"];
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
+  bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes DealData          = 6  [(gogoproto.jsontag) = "dealData"];
 }
 
 message DKGDealRespMessage {
-  bytes  ChainID  = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version  = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Epoch    = 3  [(gogoproto.jsontag) = "epoch"];
-  bytes Signature = 4  [(gogoproto.jsontag) = "signature"];
-  bytes PubKey    = 5  [(gogoproto.jsontag) = "pubKey"];
-  bytes RespData  = 6  [(gogoproto.jsontag) = "respData"];
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
+  bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes RespData          = 6  [(gogoproto.jsontag) = "respData"];
 }
+
+message DKGFinishedMessage {
+  bytes  ChainID          = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version          = 2  [(gogoproto.jsontag) = "version"];
+  uint64 TriggerNumber    = 3  [(gogoproto.jsontag) = "triggerNumber"];
+  bytes Signature         = 4  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey            = 5  [(gogoproto.jsontag) = "pubKey"];
+  bytes NodeID            = 6  [(gogoproto.jsontag) = "nodeID"];
+  bytes PubPolyCommit     = 7  [(gogoproto.jsontag) = "respData"];
+}
+
+message ConsensusDomainSelectedMessage {
+  bytes  ChainID            = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version            = 2  [(gogoproto.jsontag) = "version"];
+  bytes Signature           = 3  [(gogoproto.jsontag) = "signature"];
+  bytes PubKey              = 4  [(gogoproto.jsontag) = "pubKey"];
+  bytes DomainID            = 5  [(gogoproto.jsontag) = "domainID"];
+  uint32 MemberNumber       = 6  [(gogoproto.jsontag) = "memberNumber"];
+  bytes NodeIDOfMember      = 7  [(gogoproto.jsontag) = "nodeIDOfMember"];
+  uint64 NodeRoleOfMember   = 8  [(gogoproto.jsontag) = "nodeRoleOfMember"];
+  uint64 NodeWeightOfMember = 9  [(gogoproto.jsontag) = "nodeWeightOfMember"];
+}
+
 
 

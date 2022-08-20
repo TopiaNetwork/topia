@@ -5,10 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"errors"
-
 	"github.com/lazyledger/smt"
 
 	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
+)
+
+var (
+	rootKey = []byte("srk")
 )
 
 func encodeProof(sp *smt.SparseMerkleProof) ([]byte, error) {
@@ -34,45 +37,60 @@ type stateProof struct {
 }
 
 func newStateProof(nodes tplgcmm.DBReadWriter, values tplgcmm.DBReadWriter) *stateProof {
-	hasher := sha256.New()
-	smTree := smt.NewSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, hasher)
-	stateIt, err := values.Iterator(nil, nil)
-	defer stateIt.Close()
+	stateRoot, err := values.Get(rootKey)
 	if err != nil {
-		return nil
-	}
-	for stateIt.Next() {
-		smTree.Update(stateIt.Key(), stateIt.Value())
-	}
-	stateRoot := smTree.Root()
-	if stateRoot != nil {
-		smTree = smt.ImportSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, hasher, stateRoot)
+		panic("Get root key failed")
 	}
 
+	if stateRoot == nil {
+		smTree := smt.NewSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, sha256.New())
+		stateIt, err := values.Iterator(nil, nil)
+		defer stateIt.Close()
+		if err != nil {
+			return nil
+		}
+		for stateIt.Next() {
+			_, err := smTree.Update(stateIt.Key(), stateIt.Value())
+			if err != nil {
+				panic("SparseMerkleTree update failed")
+			}
+		}
+
+		stateRoot = smTree.Root()
+	}
+
+	smTreeR := smt.ImportSparseMerkleTree(&stateProofDB{nodes}, &stateProofDB{values}, sha256.New(), stateRoot)
+	values.Set(rootKey, stateRoot)
+
 	return &stateProof{
-		smTree: smTree,
+		smTree: smTreeR,
 	}
 }
 
 func newStateProofReadonly(nodes tplgcmm.DBReader, values tplgcmm.DBReader) *stateProof {
-	hasher := sha256.New()
-	smTree := smt.NewSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, hasher)
-	stateIt, err := values.Iterator(nil, nil)
+	stateRoot, err := values.Get(rootKey)
 	if err != nil {
-		return nil
+		panic("Get root key failed")
 	}
-	for stateIt.Next() {
-		smTree.Update(stateIt.Key(), stateIt.Value())
-	}
-	stateIt.Close()
 
-	stateRoot := smTree.Root()
-	if stateRoot != nil {
-		smTree = smt.ImportSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, hasher, stateRoot)
+	if stateRoot == nil {
+		smTree := smt.NewSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, sha256.New())
+		stateIt, err := values.Iterator(nil, nil)
+		if err != nil {
+			return nil
+		}
+		for stateIt.Next() {
+			smTree.Update(stateIt.Key(), stateIt.Value())
+		}
+		stateIt.Close()
+
+		stateRoot = smTree.Root()
 	}
+
+	smTreeR := smt.ImportSparseMerkleTree(&stateProofDBReadonly{nodes}, &stateProofDBReadonly{values}, sha256.New(), stateRoot)
 
 	return &stateProof{
-		smTree: smTree,
+		smTree: smTreeR,
 	}
 }
 

@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -16,6 +19,10 @@ import (
 type EpochService interface {
 	GetActiveExecutorIDs() []string
 
+	GetActiveExecutorIDsOfDomain(domainID string) []string
+
+	GetDomainIDOfExecutor(nodeID string) string
+
 	GetActiveProposerIDs() []string
 
 	GetActiveValidatorIDs() []string
@@ -24,82 +31,106 @@ type EpochService interface {
 
 	GetActiveExecutorsTotalWeight() uint64
 
+	GetActiveExecutorsTotalWeightOfDomain(domainID string) uint64
+
 	GetActiveProposersTotalWeight() uint64
 
 	GetActiveValidatorsTotalWeight() uint64
 
 	GetLatestEpoch() *tpcmm.EpochInfo
 
-	Start(ctx context.Context)
+	SelfSelected() bool
+
+	AddDKGBLSUpdater(updater DKGBLSUpdater)
+
+	UpdateData(log tplog.Logger, ledger ledger.Ledger, csDomainMember []*tpcmm.NodeDomainMember)
+
+	UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error
+
+	Start(ctx context.Context, latestHeight uint64)
 }
 
 type activeNodeInfos struct {
-	sync                   sync.RWMutex
-	activeExecutorIDs      []string
-	activeProposerIDs      []string
-	activeValidatorIDs     []string
-	activeExecutorWeights  uint64
-	activeProposerWeights  uint64
-	activeValidatorWeights uint64
-	nodeWeights            map[string]uint64 //nodeID->weight
+	sync                          sync.RWMutex
+	activeExecutorIDs             []string
+	activeExecutorIDsOfDomain     map[string][]string
+	activeProposerIDs             []string
+	activeValidatorIDs            []string
+	activeExecutorWeights         uint64
+	activeExecutorWeightsOfDomain map[string]uint64
+	activeProposerWeights         uint64
+	activeValidatorWeights        uint64
+	nodeWeights                   map[string]uint64 //nodeID->weight
 }
 
 type epochService struct {
 	log                 tplog.Logger
 	nodeID              string
-	blockAddedCh        chan *tpchaintypes.Block
-	epochNewCh          chan *tpcmm.EpochInfo
+	stateBuilderType    state.CompStateBuilderType
 	epochInterval       uint64 //the height number between two epochs
 	currentEpoch        *tpcmm.EpochInfo
 	dkgStartBeforeEpoch uint64 //the starting height number of DKG before an epoch
 	exeScheduler        execution.ExecutionScheduler
 	ledger              ledger.Ledger
+	deliver             messageDeliverI
 	dkgExchange         *dkgExchange
+	csDomainSelector    *domainConsensusSelector
 	activeNodeInfos     *activeNodeInfos
+	selfSelected        uint32
+	updatersSync        sync.RWMutex
+	dkgBLSUpdaters      []DKGBLSUpdater
 }
 
 func NewEpochService(log tplog.Logger,
 	nodeID string,
-	blockAddedCh chan *tpchaintypes.Block,
-	epochNewCh chan *tpcmm.EpochInfo,
+	stateBuilderType state.CompStateBuilderType,
 	epochInterval uint64,
+	currentEpoch *tpcmm.EpochInfo,
 	dkgStartBeforeEpoch uint64,
 	exeScheduler execution.ExecutionScheduler,
 	ledger ledger.Ledger,
-	dkgExchange *dkgExchange) EpochService {
+	deliver messageDeliverI,
+	dkgExchange *dkgExchange,
+	exeActiveNodeIds []*tpcmm.NodeInfo) EpochService {
 	if ledger == nil || dkgExchange == nil {
 		log.Panic("Invalid input parameter and can't create epoch service!")
 	}
 
-	compStateRN := state.CreateCompositionStateReadonly(log, ledger)
-	defer compStateRN.Stop()
-
-	currentEpoch, err := compStateRN.GetLatestEpoch()
-	if err != nil {
-		log.Panicf("Can't get the latest epoch: err=%v", err)
+	anInfos := &activeNodeInfos{}
+	anInfos.nodeWeights = make(map[string]uint64)
+	for _, executorInfo := range exeActiveNodeIds {
+		anInfos.activeExecutorIDs = append(anInfos.activeExecutorIDs, executorInfo.NodeID)
+		anInfos.activeExecutorWeights += executorInfo.Weight
+		anInfos.nodeWeights[executorInfo.NodeID] = executorInfo.Weight
 	}
 
-	anInfos := &activeNodeInfos{}
-	anInfos.update(log, compStateRN)
+	csDomainSel := NewDomainConsensusSelector(log, ledger)
 
-	return &epochService{
+	epochS := &epochService{
 		log:                 log,
 		nodeID:              nodeID,
-		blockAddedCh:        blockAddedCh,
-		epochNewCh:          epochNewCh,
+		stateBuilderType:    stateBuilderType,
 		epochInterval:       epochInterval,
 		currentEpoch:        currentEpoch,
 		dkgStartBeforeEpoch: dkgStartBeforeEpoch,
 		exeScheduler:        exeScheduler,
 		ledger:              ledger,
+		deliver:             deliver,
 		dkgExchange:         dkgExchange,
+		csDomainSelector:    csDomainSel,
 		activeNodeInfos:     anInfos,
 	}
+
+	exeScheduler.SetEpochUpdater(epochS)
+
+	return epochS
 }
 
-func (an *activeNodeInfos) update(log tplog.Logger, compStateRN state.CompositionStateReadonly) {
+func (an *activeNodeInfos) update(log tplog.Logger, ledger ledger.Ledger, csDomainMember []*tpcmm.NodeDomainMember) {
 	an.sync.Lock()
 	defer an.sync.Unlock()
+
+	compStateRN := state.CreateCompositionStateReadonly(log, ledger)
 
 	an.activeExecutorWeights = 0
 	an.activeProposerWeights = 0
@@ -107,8 +138,10 @@ func (an *activeNodeInfos) update(log tplog.Logger, compStateRN state.Compositio
 
 	an.activeExecutorIDs = an.activeExecutorIDs[:0]
 	an.activeProposerIDs = an.activeProposerIDs[:0]
-	an.activeExecutorIDs = an.activeValidatorIDs[:0]
+	an.activeValidatorIDs = an.activeValidatorIDs[:0]
 
+	an.activeExecutorIDsOfDomain = make(map[string][]string)
+	an.activeExecutorWeightsOfDomain = make(map[string]uint64)
 	an.nodeWeights = make(map[string]uint64)
 
 	executorInfos, err := compStateRN.GetAllActiveExecutors()
@@ -116,33 +149,34 @@ func (an *activeNodeInfos) update(log tplog.Logger, compStateRN state.Compositio
 		log.Errorf("Get active executor infos failed: %v", err)
 		return
 	}
-	proposerInfos, err := compStateRN.GetAllActiveProposers()
-	if err != nil {
-		log.Errorf("Get active proposer infos failed: %v", err)
-		return
-	}
-	validatorInfos, err := compStateRN.GetAllActiveValidators()
-	if err != nil {
-		log.Errorf("Get active validator infos failed: %v", err)
-		return
-	}
-
 	for _, executorInfo := range executorInfos {
 		an.activeExecutorIDs = append(an.activeExecutorIDs, executorInfo.NodeID)
 		an.activeExecutorWeights += executorInfo.Weight
 		an.nodeWeights[executorInfo.NodeID] = executorInfo.Weight
 	}
 
-	for _, proposerInfo := range proposerInfos {
-		an.activeProposerIDs = append(an.activeProposerIDs, proposerInfo.NodeID)
-		an.activeProposerWeights += proposerInfo.Weight
-		an.nodeWeights[proposerInfo.NodeID] = proposerInfo.Weight
+	latestBlock, _ := compStateRN.GetLatestBlock()
+	executorDomainInfos, err := compStateRN.GetAllActiveNodeExecuteDomains(latestBlock.Head.Height)
+	if err != nil {
+		log.Errorf("Get active executor domain infos failed: %v", err)
+		return
+	}
+	for _, exeDomainInfo := range executorDomainInfos {
+		an.activeExecutorIDsOfDomain[exeDomainInfo.ID] = append(an.activeExecutorIDsOfDomain[exeDomainInfo.ID], exeDomainInfo.ExeDomainData.Members...)
+		for _, exeID := range exeDomainInfo.ExeDomainData.Members {
+			an.activeExecutorWeightsOfDomain[exeDomainInfo.ID] += an.nodeWeights[exeID]
+		}
 	}
 
-	for _, validatorInfo := range validatorInfos {
-		an.activeValidatorIDs = append(an.activeValidatorIDs, validatorInfo.NodeID)
-		an.activeValidatorWeights += validatorInfo.Weight
-		an.nodeWeights[validatorInfo.NodeID] = validatorInfo.Weight
+	for _, domainMember := range csDomainMember {
+		if domainMember.NodeRole&tpcmm.NodeRole_Proposer == tpcmm.NodeRole_Proposer {
+			an.activeProposerIDs = append(an.activeProposerIDs, domainMember.NodeID)
+			an.activeProposerWeights += domainMember.Weight
+		} else if domainMember.NodeRole&tpcmm.NodeRole_Validator == tpcmm.NodeRole_Validator {
+			an.activeValidatorIDs = append(an.activeValidatorIDs, domainMember.NodeID)
+			an.activeValidatorWeights += domainMember.Weight
+		}
+		an.nodeWeights[domainMember.NodeID] = domainMember.Weight
 	}
 }
 
@@ -151,6 +185,30 @@ func (an *activeNodeInfos) getActiveExecutorIDs() []string {
 	defer an.sync.RUnlock()
 
 	return an.activeExecutorIDs
+}
+
+func (an *activeNodeInfos) getActiveExecutorIDsOfDomain(domainID string) []string {
+	an.sync.RLock()
+	defer an.sync.RUnlock()
+
+	if exeIDs, ok := an.activeExecutorIDsOfDomain[domainID]; ok {
+		return exeIDs
+	}
+
+	return nil
+}
+
+func (an *activeNodeInfos) getDomainIDOfExecutor(nodeID string) string {
+	an.sync.RLock()
+	defer an.sync.RUnlock()
+
+	for domainID, nodeIDs := range an.activeExecutorIDsOfDomain {
+		if tpcmm.IsContainString(nodeID, nodeIDs) {
+			return domainID
+		}
+	}
+
+	return ""
 }
 
 func (an *activeNodeInfos) getActiveProposerIDs() []string {
@@ -185,6 +243,17 @@ func (an *activeNodeInfos) getActiveExecutorsTotalWeight() uint64 {
 	return an.activeExecutorWeights
 }
 
+func (an *activeNodeInfos) getActiveExecutorsTotalWeightOfDomain(domainID string) uint64 {
+	an.sync.RLock()
+	defer an.sync.RUnlock()
+
+	if weight, ok := an.activeExecutorWeightsOfDomain[domainID]; ok {
+		return weight
+	}
+
+	return 0
+}
+
 func (an *activeNodeInfos) getActiveProposersTotalWeight() uint64 {
 	an.sync.RLock()
 	defer an.sync.RUnlock()
@@ -203,6 +272,14 @@ func (es *epochService) GetActiveExecutorIDs() []string {
 	return es.activeNodeInfos.getActiveExecutorIDs()
 }
 
+func (es *epochService) GetActiveExecutorIDsOfDomain(domainID string) []string {
+	return es.activeNodeInfos.getActiveExecutorIDsOfDomain(domainID)
+}
+
+func (es *epochService) GetDomainIDOfExecutor(nodeID string) string {
+	return es.activeNodeInfos.getDomainIDOfExecutor(nodeID)
+}
+
 func (es *epochService) GetActiveProposerIDs() []string {
 	return es.activeNodeInfos.getActiveProposerIDs()
 }
@@ -219,6 +296,10 @@ func (es *epochService) GetActiveExecutorsTotalWeight() uint64 {
 	return es.activeNodeInfos.getActiveExecutorsTotalWeight()
 }
 
+func (es *epochService) GetActiveExecutorsTotalWeightOfDomain(domainID string) uint64 {
+	return es.activeNodeInfos.getActiveExecutorsTotalWeightOfDomain(domainID)
+}
+
 func (es *epochService) GetActiveProposersTotalWeight() uint64 {
 	return es.activeNodeInfos.getActiveProposersTotalWeight()
 }
@@ -231,75 +312,129 @@ func (es *epochService) GetLatestEpoch() *tpcmm.EpochInfo {
 	return es.currentEpoch
 }
 
-func (es *epochService) processBlockAddedStart(ctx context.Context) {
+func (es *epochService) SelfSelected() bool {
+	return atomic.LoadUint32(&es.selfSelected) == 1
+}
+
+func (es *epochService) UpdateData(log tplog.Logger, ledger ledger.Ledger, csDomainMember []*tpcmm.NodeDomainMember) {
+	es.activeNodeInfos.update(log, ledger, csDomainMember)
+	es.deliver.deliverNetwork().UpdateNetActiveNode(es)
+}
+
+func (es *epochService) UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error {
+	deltaH := int(newBH.Height) - int(es.currentEpoch.StartHeight)
+	if deltaH == int(es.epochInterval) {
+		newEpoch := &tpcmm.EpochInfo{
+			Epoch:          es.currentEpoch.Epoch + 1,
+			StartTimeStamp: uint64(time.Now().UnixNano()),
+			StartHeight:    newBH.Height,
+		}
+		err := compState.SetLatestEpoch(newEpoch)
+		if err != nil {
+			es.log.Errorf("Save the latest epoch error: %v", err)
+			return err
+		}
+
+		domainID, dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
+		if err != nil {
+			es.log.Errorf("Select consensus domain error: %v", err)
+			return err
+		}
+		if dkgCPT != nil {
+			es.UpdateData(es.log, es.ledger, members)
+			es.notifyUpdater(dkgCPT)
+			if selfSelected != nil {
+				atomic.StoreUint32(&es.selfSelected, 1)
+
+				csDomainSelectedMsg := &ConsensusDomainSelectedMessage{
+					ChainID:            []byte(compState.ChainID()),
+					Version:            CONSENSUS_VER,
+					DomainID:           []byte(domainID),
+					MemberNumber:       uint32(len(members)),
+					NodeIDOfMember:     []byte(selfSelected.NodeID),
+					NodeRoleOfMember:   uint64(selfSelected.NodeRole),
+					NodeWeightOfMember: selfSelected.Weight,
+				}
+				err = es.deliver.deliverConsensusDomainSelectedMessageExe(ctx, csDomainSelectedMsg)
+				if err == nil {
+					es.log.Infof("Successfully deliver consensus domain selected message to execute network")
+				}
+			} else {
+				atomic.StoreUint32(&es.selfSelected, 0)
+			}
+		}
+
+		eventhub.GetEventHubManager().GetEventHub(es.nodeID).Trig(ctx, eventhub.EventName_EpochNew, newEpoch)
+	}
+
+	return nil
+}
+
+func (es *epochService) AddDKGBLSUpdater(updater DKGBLSUpdater) {
+	es.updatersSync.Lock()
+	defer es.updatersSync.Unlock()
+
+	es.dkgBLSUpdaters = append(es.dkgBLSUpdaters, updater)
+}
+
+func (es *epochService) notifyUpdater(dkgBls DKGBls) {
+	es.updatersSync.RLock()
+	defer es.updatersSync.RUnlock()
+	for _, updater := range es.dkgBLSUpdaters {
+		updater.updateDKGBls(dkgBls)
+	}
+}
+
+func (es *epochService) Start(ctx context.Context, latestHeight uint64) {
 	go func() {
 		for {
-			select {
-			case newBh := <-es.blockAddedCh:
-				err := func() error {
-					es.log.Infof("Epoch services receive new block added event: new block height %d", newBh.Head.Height)
+			var compState state.CompositionState
+			switch es.stateBuilderType {
+			case state.CompStateBuilderType_Full:
+				compState = es.exeScheduler.CompositionStateAtVersion(latestHeight + 1)
+			case state.CompStateBuilderType_Simple:
+				compState = state.GetStateBuilder(es.stateBuilderType).CompositionStateAtVersion(es.nodeID, latestHeight+1)
+			}
 
-					epochInfo := es.currentEpoch
+			if compState == nil {
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
 
-					deltaH := int(newBh.Head.Height) - int(epochInfo.StartHeight)
-					if deltaH == int(es.epochInterval)-int(es.dkgStartBeforeEpoch) {
-						dkgExState := es.dkgExchange.getDKGState()
-						if dkgExState != DKGExchangeState_IDLE {
-							es.log.Warnf("Unfinished dkg exchange is going on an new dkg can't start, current state: %s", dkgExState.String)
-						} else {
-							compStateRN := state.CreateCompositionStateReadonly(es.log, es.ledger)
-							defer compStateRN.Stop()
+			//es.log.Infof("Fetched composition state: state version %d, state %d, self node %s", compState.StateVersion(), compState.CompSState(), es.nodeID)
 
-							err := es.dkgExchange.updateDKGPartPubKeys(compStateRN)
-							if err != nil {
-								es.log.Errorf("Update DKG exchange part pub keys err: %v", err)
-								return err
-							}
-							es.dkgExchange.initWhenStart(epochInfo.Epoch + 1)
-							es.dkgExchange.start(epochInfo.Epoch + 1)
-						}
+			domainID, dkgCPT, members, selfSelected, err := es.csDomainSelector.Select(es.nodeID, compState)
+			if err != nil {
+				es.log.Errorf("Select consensus domain error: %v", err)
+				continue
+			}
+			if len(members) > 0 && dkgCPT != nil {
+				es.UpdateData(es.log, es.ledger, members)
+				es.notifyUpdater(dkgCPT)
+				if selfSelected != nil {
+					atomic.StoreUint32(&es.selfSelected, 1)
+
+					csDomainSelectedMsg := &ConsensusDomainSelectedMessage{
+						ChainID:            []byte(compState.ChainID()),
+						Version:            CONSENSUS_VER,
+						DomainID:           []byte(domainID),
+						MemberNumber:       uint32(len(members)),
+						NodeIDOfMember:     []byte(selfSelected.NodeID),
+						NodeRoleOfMember:   uint64(selfSelected.NodeRole),
+						NodeWeightOfMember: selfSelected.Weight,
 					}
-
-					return nil
-				}()
-
-				if err != nil {
-					continue
-				}
-			case <-ctx.Done():
-				es.log.Info("Epoch service propcess block added exit")
-				return
-			}
-		}
-	}()
-}
-
-func (es *epochService) processEpochNewStart(ctx context.Context) {
-	go func() {
-		for {
-			select {
-			case newEpoch := <-es.epochNewCh:
-				es.log.Infof("Epoch service receives new epoch event: new epoch %d", newEpoch.Epoch)
-				es.currentEpoch = newEpoch
-
-				compStateRN := state.CreateCompositionStateReadonly(es.log, es.ledger)
-				es.activeNodeInfos.update(es.log, compStateRN)
-				if !es.dkgExchange.dkgCrypt.Finished() {
-					es.log.Warnf("Current epoch %d DKG unfinished and still use the old, height %d", newEpoch.Epoch, newEpoch.StartHeight)
+					err = es.deliver.deliverConsensusDomainSelectedMessageExe(ctx, csDomainSelectedMsg)
+					if err == nil {
+						es.log.Infof("Successfully deliver consensus domain selected message to execute network: self node %s", es.nodeID)
+					}
 				} else {
-					es.dkgExchange.notifyUpdater()
-					es.dkgExchange.updateDKGState(DKGExchangeState_IDLE)
+					atomic.StoreUint32(&es.selfSelected, 0)
 				}
-				compStateRN.Stop()
-			case <-ctx.Done():
-				es.log.Info("Epoch service propcess epoch new exit")
+
 				return
+			} else {
+				time.Sleep(50 * time.Millisecond)
 			}
 		}
 	}()
-}
-
-func (es *epochService) Start(ctx context.Context) {
-	es.processBlockAddedStart(ctx)
-	es.processEpochNewStart(ctx)
 }

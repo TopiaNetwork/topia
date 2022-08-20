@@ -4,18 +4,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/TopiaNetwork/topia/codec"
-	"github.com/TopiaNetwork/topia/eventhub"
-	lru "github.com/hashicorp/golang-lru"
 	"math/big"
 	"strconv"
 	"sync"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/codec"
+	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/state"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 type consensusValidator struct {
@@ -27,6 +27,8 @@ type consensusValidator struct {
 	ledger                ledger.Ledger
 	deliver               messageDeliverI
 	marshaler             codec.Marshaler
+	epochService          EpochService
+	exeRSValidate         *executionResultValidate
 	syncPropMsgCached     sync.RWMutex
 	propMsgCached         *ProposeMessage
 	syncBestPropMsgCached sync.RWMutex
@@ -35,7 +37,7 @@ type consensusValidator struct {
 	commitMsg             *lru.Cache
 }
 
-func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, commitMsgChan chan *CommitMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler) *consensusValidator {
+func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan *ProposeMessage, bestProposeMsgChan chan *BestProposeMessage, commitMsgChan chan *CommitMessage, ledger ledger.Ledger, deliver *messageDeliver, marshaler codec.Marshaler, epochService EpochService) *consensusValidator {
 	propMsgVoted, _ := lru.New(5)
 	commitMsg, _ := lru.New(5)
 	return &consensusValidator{
@@ -47,6 +49,8 @@ func newConsensusValidator(log tplog.Logger, nodeID string, proposeMsgChan chan 
 		ledger:             ledger,
 		deliver:            deliver,
 		marshaler:          marshaler,
+		epochService:       epochService,
+		exeRSValidate:      newExecutionResultValidate(log, nodeID, deliver),
 		propMsgVoted:       propMsgVoted,
 		commitMsg:          commitMsg,
 	}
@@ -239,6 +243,10 @@ func (v *consensusValidator) receiveBestProposeMsgStart(ctx context.Context) {
 		for {
 			select {
 			case bestPropMsg := <-v.bestProposeMsgChan:
+				if !v.epochService.SelfSelected() {
+					v.log.Warnf("Not selected consensus node and should not receive best propose message: StateVersion %d, self node %s", bestPropMsg.StateVersion, v.nodeID)
+					continue
+				}
 				if ok := v.commitMsg.Contains(bestPropMsg.StateVersion); ok {
 					v.log.Warnf("Validator have received commit message and best propose message will be discard: StateVersion %d, self node %s", bestPropMsg.StateVersion, v.nodeID)
 					continue
@@ -303,10 +311,9 @@ func (v *consensusValidator) collectProposeMsgTimerStart(ctx context.Context) {
 func (v *consensusValidator) validateAndCollectProposeMsg(ctx context.Context, maxPri []byte, propProposer string, propMsg *ProposeMessage) (bool, bool) {
 	canCollectStart := false
 
-	exeRSValidate := newExecutionResultValidate(v.log, v.nodeID, v.deliver)
-	executor, ok, err := exeRSValidate.Validate(ctx, propMsg)
+	ok, err := v.exeRSValidate.Validate(ctx, propMsg)
 	if !ok {
-		v.log.Errorf("Propose block validate err by executor %s: %v", err, executor)
+		v.log.Errorf("Propose block validate err: %v", err)
 		return false, canCollectStart
 	}
 
@@ -349,15 +356,16 @@ func (v *consensusValidator) receiveProposeMsgStart(ctx context.Context) {
 		for {
 			select {
 			case propMsg := <-v.proposeMsgChan:
+				if !v.epochService.SelfSelected() {
+					v.log.Warnf("Not selected consensus node and should not receive propose message: StateVersion %d, self node %s", propMsg.StateVersion, v.nodeID)
+					continue
+				}
 				if ok := v.commitMsg.Contains(propMsg.StateVersion); ok {
 					v.log.Warnf("Validator have received commit message and propose message will be discarded: StateVersion %d, self node %s", propMsg.StateVersion, v.nodeID)
 					continue
 				}
 				err := func() error {
-					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
-					defer csStateRN.Stop()
-
-					latestBlock, err := csStateRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(v.ledger)
 					if err != nil {
 						v.log.Errorf("Can't get latest block head info: %v, self node %s", err, v.nodeID)
 						return err
@@ -455,6 +463,8 @@ func (v *consensusValidator) commitMsgDispose(ctx context.Context, bh *tpchainty
 	}
 	v.log.Infof("Validator sets latest block: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
 
+	v.epochService.UpdateEpoch(ctx, block.Head, compState)
+
 	v.log.Infof("Validator begins committing: stateVersion %d, height %d, requester %s, self node %s", commitMsg.StateVersion, block.Head.Height, "validator", v.nodeID)
 	errCMMState := compState.Commit()
 	if errCMMState != nil {
@@ -482,9 +492,6 @@ func (v *consensusValidator) receiveCommitMsgStart(ctx context.Context) {
 				v.log.Infof("Validator received commit message: StateVersion %d, self node %s", commitMsg.StateVersion, v.nodeID)
 
 				err := func() error {
-					csStateRN := state.CreateCompositionStateReadonly(v.log, v.ledger)
-					defer csStateRN.Stop()
-
 					var bh tpchaintypes.BlockHead
 					err := v.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
 					if err != nil {
@@ -492,7 +499,7 @@ func (v *consensusValidator) receiveCommitMsgStart(ctx context.Context) {
 						return err
 					}
 
-					latestBlock, err := csStateRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(v.ledger)
 					if err != nil {
 						v.log.Errorf("Can't get the latest block: %v", err)
 						return err

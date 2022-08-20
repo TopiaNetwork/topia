@@ -17,8 +17,8 @@ import (
 	"github.com/TopiaNetwork/topia/state"
 	txfactory "github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
+	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type TransactionService interface {
@@ -80,7 +80,14 @@ func (txs *transactionService) GetTransactionCount(addr tpcrtypes.Address, heigh
 		return 0, err
 	}
 
-	return uint64(block.Head.TxCount), nil
+	txTotalCount := uint32(0)
+	for _, bhChunkBytes := range block.Head.HeadChunks {
+		var bhChunk tpchaintypes.BlockHeadChunk
+		bhChunk.Unmarshal(bhChunkBytes)
+		txTotalCount += bhChunk.TxCount
+	}
+
+	return uint64(txTotalCount), nil
 }
 
 func (txs *transactionService) SuggestGasPrice() (uint64, error) {

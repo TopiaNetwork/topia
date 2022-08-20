@@ -46,6 +46,6 @@ func DefConsensusConfiguration() *ConsensusConfiguration {
 		ProposerBlockMaxInterval: 1000 * time.Millisecond,
 		BlockMaxCyclePeriod:      5000 * time.Millisecond,
 		MaxPrepareMsgCache:       50,
-		BlocksPerEpoch:           5,
+		BlocksPerEpoch:           50000,
 	}
 }

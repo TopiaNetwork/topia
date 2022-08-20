@@ -43,10 +43,18 @@ const (
 
 const MaxAvail_Count = 5
 
+type EpochUpdater interface {
+	UpdateEpoch(ctx context.Context, newBH *tpchaintypes.BlockHead, compState state.CompositionState) error
+}
+
 type ExecutionScheduler interface {
+	SetEpochUpdater(epochUpdater EpochUpdater)
+
 	State() SchedulerState
 
 	MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error)
+
+	CompositionStateAtVersion(stateVersion uint64) state.CompositionState
 
 	PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error)
 
@@ -69,6 +77,7 @@ type executionScheduler struct {
 	exePackedCount   *atomic.Uint32
 	exePackedTxsList *list.List
 	config           *configuration.Configuration
+	epochUpdater     EpochUpdater
 	marshaler        codec.Marshaler
 	txPool           txpooli.TransactionPool
 	syncCommitBlock  sync.RWMutex
@@ -91,8 +100,30 @@ func NewExecutionScheduler(nodeID string, log tplog.Logger, config *configuratio
 	}
 }
 
+func (scheduler *executionScheduler) SetEpochUpdater(epochUpdater EpochUpdater) {
+	scheduler.epochUpdater = epochUpdater
+}
+
 func (scheduler *executionScheduler) State() SchedulerState {
 	return SchedulerState(scheduler.schedulerState.Load())
+}
+
+func (scheduler *executionScheduler) updateTree(txPacked *PackedTxs, txRSPacked *PackedTxsResult) {
+	//Change to async in future
+	func(txPackedG *PackedTxs, txRSPackedG *PackedTxsResult) {
+		treeTx := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+		treeTxRS := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
+		for i := 0; i < len(txPackedG.TxList); i++ {
+			txHashBytes, _ := txPackedG.TxList[i].HashBytes()
+			txRSHashBytes, _ := txRSPackedG.TxsResult[i].HashBytes()
+
+			treeTx.Update(txHashBytes, txHashBytes)
+			treeTxRS.Update(txRSHashBytes, txRSHashBytes)
+		}
+
+		txPacked.treeTx = treeTx
+		txRSPacked.treeTxRS = treeTxRS
+	}(txPacked, txRSPacked)
 }
 
 func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPacked *PackedTxs, compState state.CompositionState) (*PackedTxsResult, error) {
@@ -152,6 +183,8 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 		exePackedTxs.packedTxsRS = packedTxsRS
 		scheduler.exePackedTxsList.PushBack(exePackedTxs)
 
+		scheduler.updateTree(txPacked, packedTxsRS)
+
 		for _, tx := range txPacked.TxList {
 			txID, _ := tx.TxID()
 			scheduler.txPool.RemoveTxByKey(txID)
@@ -175,9 +208,6 @@ func (scheduler *executionScheduler) ExecutePackedTx(ctx context.Context, txPack
 }
 
 func (scheduler *executionScheduler) MaxStateVersion(latestBlock *tpchaintypes.Block) (uint64, error) {
-	scheduler.executeMutex.RLock()
-	defer scheduler.executeMutex.RUnlock()
-
 	exePackedCount := scheduler.exePackedCount.Load()
 	if exePackedCount >= MaxAvail_Count {
 		return 0, fmt.Errorf("Haved reached max avail state version: size=%d", exePackedCount)
@@ -185,16 +215,35 @@ func (scheduler *executionScheduler) MaxStateVersion(latestBlock *tpchaintypes.B
 
 	maxStateVersion := latestBlock.Head.Height
 
-	if scheduler.exePackedTxsList.Len() > 0 {
-		exeTxsL := scheduler.exePackedTxsList.Back().Value.(*executionPackedTxs)
-		if latestBlock.Head.Height > exeTxsL.StateVersion() {
-			scheduler.log.Warnf("The latest height %d bigger than the latest state version %d", latestBlock.Head.Height, exeTxsL.StateVersion())
-			return maxStateVersion, nil
-		}
-		maxStateVersion = exeTxsL.StateVersion()
+	lastStateVersion := scheduler.lastStateVersion.Load()
+
+	if maxStateVersion > lastStateVersion {
+		scheduler.log.Warnf("The latest height %d bigger than the latest state version %d", latestBlock.Head.Height, lastStateVersion)
+	} else {
+		maxStateVersion = lastStateVersion
 	}
 
 	return maxStateVersion, nil
+}
+
+func (scheduler *executionScheduler) CompositionStateAtVersion(stateVersion uint64) state.CompositionState {
+	scheduler.executeMutex.RLock()
+	defer scheduler.executeMutex.RUnlock()
+
+	if scheduler.exePackedTxsList.Len() > 0 {
+		exeTxsItem := scheduler.exePackedTxsList.Front()
+		for exeTxsItem != nil {
+			exeTxsF := exeTxsItem.Value.(*executionPackedTxs)
+			if exeTxsF.StateVersion() != stateVersion {
+				exeTxsItem = exeTxsItem.Next()
+			} else if exeTxsF.compState.CompSState() != state.CompSState_Commited {
+				return exeTxsF.compState
+			}
+		}
+		return nil
+	} else {
+		return nil
+	}
 }
 
 func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Context, stateVersion uint64, txHashs [][]byte, txResultHashes [][]byte) ([][]byte, [][]byte, error) {
@@ -231,26 +280,24 @@ func (scheduler *executionScheduler) PackedTxProofForValidity(ctx context.Contex
 			return nil, nil, err
 		}
 
-		treeTx := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
-		treeTxRS := smt.NewSparseMerkleTree(smt.NewSimpleMap(), smt.NewSimpleMap(), sha256.New())
-		for i := 0; i < len(exeTxsF.packedTxs.TxList); i++ {
-			txHashBytes, _ := exeTxsF.packedTxs.TxList[i].HashBytes()
-			txRSHashBytes, _ := exeTxsF.packedTxsRS.TxsResult[i].HashBytes()
-
-			treeTx.Update(txHashBytes, txHashBytes)
-			treeTxRS.Update(txRSHashBytes, txRSHashBytes)
-		}
-
 		var txProofs [][]byte
 		var txRSProofs [][]byte
 		for t := 0; t < len(txHashs); t++ {
-			txProof, err := treeTx.Prove(txHashs[t])
+			txProof, err := func(data []byte) (smt.SparseMerkleProof, error) {
+				exeTxsF.packedTxs.sync.Lock()
+				defer exeTxsF.packedTxs.sync.Unlock()
+				return exeTxsF.packedTxs.treeTx.Prove(data)
+			}(txHashs[t])
 			if err != nil {
 				scheduler.log.Errorf("Can't get tx proof: t=%d, txHashBytes=v, err=%v", t, txHashs[t], err)
 				return nil, nil, err
 			}
 
-			txRSProof, err := treeTxRS.Prove(txResultHashes[t])
+			txRSProof, err := func(data []byte) (smt.SparseMerkleProof, error) {
+				exeTxsF.packedTxsRS.sync.Lock()
+				defer exeTxsF.packedTxsRS.sync.Unlock()
+				return exeTxsF.packedTxsRS.treeTxRS.Prove(data)
+			}(txResultHashes[t])
 			if err != nil {
 				scheduler.log.Errorf("Can't get tx result proof: txRSHashBytes=v, err=%v", txResultHashes[t], err)
 				return nil, nil, err
@@ -296,10 +343,15 @@ func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler code
 	blockData := &tpchaintypes.BlockData{
 		Version: blockHead.Version,
 	}
+	bdChunk := &tpchaintypes.BlockDataChunk{
+		Version: blockHead.Version,
+	}
 	for i := 0; i < len(packedTxs.TxList); i++ {
 		txBytes, _ := packedTxs.TxList[i].Bytes()
-		blockData.Txs = append(blockData.Txs, txBytes)
+		bdChunk.Txs = append(bdChunk.Txs, txBytes)
 	}
+	bdChunkBytes, _ := bdChunk.Marshal()
+	blockData.DataChunks = append(blockData.DataChunks, bdChunkBytes)
 
 	block := &tpchaintypes.Block{
 		Head: dstBH,
@@ -318,21 +370,32 @@ func (scheduler *executionScheduler) constructBlockAndBlockResult(marshaler code
 		return nil, nil, err
 	}
 
-	blockResultHead := &tpchaintypes.BlockResultHead{
+	bRSHeadChunk := &tpchaintypes.BlockResultHeadChunk{
 		Version:          blockHead.Version,
-		PrevBlockResult:  blockRSHash,
-		BlockHash:        blockHash,
 		TxResultHashRoot: tpcmm.BytesCopy(packedTxsRS.TxRSRoot),
-		Status:           tpchaintypes.BlockResultHead_OK,
 	}
+	bRSHeadChunkBytes, _ := bRSHeadChunk.Marshal()
+
+	blockResultHead := &tpchaintypes.BlockResultHead{
+		Version:         blockHead.Version,
+		PrevBlockResult: blockRSHash,
+		BlockHash:       blockHash,
+		Status:          tpchaintypes.BlockResultHead_OK,
+	}
+	blockResultHead.ResultHeadChunks = append(blockResultHead.ResultHeadChunks, bRSHeadChunkBytes)
 
 	blockResultData := &tpchaintypes.BlockResultData{
 		Version: blockHead.Version,
 	}
+	bRSDataChunk := &tpchaintypes.BlockResultDataChunk{
+		Version: blockHead.Version,
+	}
 	for r := 0; r < len(packedTxsRS.TxsResult); r++ {
 		txRSBytes, _ := packedTxsRS.TxsResult[r].HashBytes()
-		blockResultData.TxResults = append(blockResultData.TxResults, txRSBytes)
+		bRSDataChunk.TxResults = append(bRSDataChunk.TxResults, txRSBytes)
 	}
+	bRSDataChunkBytes, _ := bRSDataChunk.Marshal()
+	blockResultData.ResultDataChunks = append(blockResultData.ResultDataChunks, bRSDataChunkBytes)
 
 	blockResult := &tpchaintypes.BlockResult{
 		Head: blockResultHead,
@@ -352,8 +415,6 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 
 	scheduler.syncCommitBlock.Lock()
 	defer scheduler.syncCommitBlock.Unlock()
-
-	var newEpoch *tpcmm.EpochInfo
 
 	scheduler.log.Infof("CommitBlock gets lock: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
@@ -381,26 +442,7 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 		}
 		scheduler.log.Infof("CommitBlock set latest block result: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 
-		latestEpoch, err := compState.GetLatestEpoch()
-		if err != nil {
-			scheduler.log.Errorf("Can't get latest epoch error: %v", err)
-			return err
-		}
-		scheduler.log.Infof("CommitBlock get latest epoch: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
-
-		deltaH := int(block.Head.Height) - int(latestEpoch.StartHeight)
-		if deltaH == int(scheduler.config.CSConfig.EpochInterval) {
-			newEpoch = &tpcmm.EpochInfo{
-				Epoch:          latestEpoch.Epoch + 1,
-				StartTimeStamp: uint64(time.Now().UnixNano()),
-				StartHeight:    block.Head.Height,
-			}
-			err = compState.SetLatestEpoch(newEpoch)
-			if err != nil {
-				scheduler.log.Errorf("Save the latest epoch error: %v", err)
-				return err
-			}
-		}
+		scheduler.epochUpdater.UpdateEpoch(ctx, block.Head, compState)
 
 		scheduler.log.Infof("CommitBlock begins committing: stateVersion %d, height %d, requester %s, self node %s", stateVersion, block.Head.Height, requester, scheduler.nodeID)
 		errCMMState := compState.Commit()
@@ -434,10 +476,6 @@ func (scheduler *executionScheduler) CommitBlock(ctx context.Context,
 		return errCMMBlockRS
 	}
 	*/
-
-	if newEpoch != nil {
-		eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_EpochNew, newEpoch)
-	}
 
 	eventhub.GetEventHubManager().GetEventHub(scheduler.nodeID).Trig(ctx, eventhub.EventName_BlockAdded, block)
 
@@ -483,16 +521,13 @@ func (scheduler *executionScheduler) CommitPackedTx(ctx context.Context,
 		}
 
 		latestBlock, latestBlockResult, err := func() (*tpchaintypes.Block, *tpchaintypes.BlockResult, error) {
-			csStateRN := state.CreateCompositionStateReadonly(scheduler.log, ledger)
-			defer csStateRN.Stop()
-
-			latestBlock, err := csStateRN.GetLatestBlock()
+			latestBlock, err := state.GetLatestBlock(ledger)
 			if err != nil {
 				err = fmt.Errorf("Can't get the latest block: %v, can't coommit packed tx: height=%d", err, blockHead.Height)
 				return nil, nil, err
 			}
 
-			latestBlockResult, err := csStateRN.GetLatestBlockResult()
+			latestBlockResult, err := state.GetLatestBlockResult(ledger)
 			if err != nil {
 				scheduler.log.Errorf("Can't get latest block result: %v", err)
 				return nil, nil, err

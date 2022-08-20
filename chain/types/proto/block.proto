@@ -15,35 +15,46 @@ message ConsensusProof {
   bytes  AggSign         = 3  [(gogoproto.jsontag) = "aggSign"];
 }
 
+message BlockHeadChunk{
+    uint32 Version      = 1  [(gogoproto.jsontag) = "version"];
+    bytes  DomainID     = 2  [(gogoproto.jsontag) = "domainID"];
+    bytes  Launcher     = 3  [(gogoproto.jsontag) = "launcher"];
+    uint32 TxCount      = 4  [(gogoproto.jsontag) = "txCount"];
+    bytes  TxRoot       = 5  [(gogoproto.jsontag) = "txRoot"];
+    bytes  TxResultRoot = 6  [(gogoproto.jsontag) = "txResultRoot"];
+}
+
+message BlockDataChunk{
+  uint32 Version      = 1  [(gogoproto.jsontag) = "version"];
+  repeated bytes Txs  = 2  [(gogoproto.jsontag) = "txs"];
+}
 
 message BlockHead {
-  bytes  ChainID           = 1  [(gogoproto.jsontag) = "chainID"];
-  uint32 Version           = 2  [(gogoproto.jsontag) = "version"];
-  uint64 Height            = 3  [(gogoproto.jsontag) = "height"];
-  uint64 Epoch             = 4  [(gogoproto.jsontag) = "epoch"];
-  uint64 Round             = 5  [(gogoproto.jsontag) = "round"];
-  bytes  ParentBlockHash   = 6  [(gogoproto.jsontag) = "parentBlockHash"];
-  bytes  Launcher          = 7  [(gogoproto.jsontag) = "launcher"];
-  bytes  Proposer          = 8  [(gogoproto.jsontag) = "proposer"];
-  bytes  Proof             = 9  [(gogoproto.jsontag) = "proof"];
-  bytes  VRFProof          = 10 [(gogoproto.jsontag) = "vrfProof"];
-  uint64 VRFProofHeight    = 11 [(gogoproto.jsontag) = "vrfProofHeight"];
-  bytes  MaxPri            = 12 [(gogoproto.jsontag) = "maxPri"];
-  bytes  VoteAggSignature  = 13 [(gogoproto.jsontag) = "voteAggSignature"];
-  uint32 TxCount           = 14 [(gogoproto.jsontag) = "txCount"];
-  bytes  TxRoot            = 15 [(gogoproto.jsontag) = "txRoot"];
-  bytes  TxResultRoot      = 16 [(gogoproto.jsontag) = "txResultHash"];
-  bytes  StateRoot         = 17 [(gogoproto.jsontag) = "stateRoot"];
-  bytes  GasFees           = 18 [(gogoproto.jsontag) = "gasFees"];
-  uint64 TimeStamp         = 19 [(gogoproto.jsontag) = "timeStamp"];
-  uint64 ElapsedSpan       = 20 [(gogoproto.jsontag) = "elaspedSpan"]; //unit ms
-  bytes  Hash              = 21 [(gogoproto.jsontag) = "hash"];
-  bytes  Reserved          = 22 [(gogoproto.jsontag) = "reserved"];
+  bytes  ChainID            = 1  [(gogoproto.jsontag) = "chainID"];
+  uint32 Version            = 2  [(gogoproto.jsontag) = "version"];
+  uint64 Height             = 3  [(gogoproto.jsontag) = "height"];
+  uint64 Epoch              = 4  [(gogoproto.jsontag) = "epoch"];
+  uint64 Round              = 5  [(gogoproto.jsontag) = "round"];
+  bytes  ParentBlockHash    = 6  [(gogoproto.jsontag) = "parentBlockHash"];
+  bytes  Proposer           = 7  [(gogoproto.jsontag) = "proposer"];
+  bytes  Proof              = 8  [(gogoproto.jsontag) = "proof"];
+  bytes  VRFProof           = 9 [(gogoproto.jsontag) = "vrfProof"];
+  uint64 VRFProofHeight     = 10 [(gogoproto.jsontag) = "vrfProofHeight"];
+  bytes  MaxPri             = 11 [(gogoproto.jsontag) = "maxPri"];
+  bytes  VoteAggSignature   = 12 [(gogoproto.jsontag) = "voteAggSignature"];
+  uint32 ChunkCount         = 13 [(gogoproto.jsontag) = "chunkCount"];
+  repeated bytes HeadChunks = 14 [(gogoproto.jsontag) = "headChunks"];
+  bytes  StateRoot          = 15 [(gogoproto.jsontag) = "stateRoot"];
+  bytes  GasFees            = 16 [(gogoproto.jsontag) = "gasFees"];
+  uint64 TimeStamp          = 17 [(gogoproto.jsontag) = "timeStamp"];
+  uint64 ElapsedSpan        = 18 [(gogoproto.jsontag) = "elaspedSpan"]; //unit ms
+  bytes  Hash               = 19 [(gogoproto.jsontag) = "hash"];
+  bytes  Reserved           = 20 [(gogoproto.jsontag) = "reserved"];
 }
 
 message BlockData {
-  uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
-  repeated bytes Txs       = 2  [(gogoproto.jsontag) = "txs"];
+  uint32 Version            = 1  [(gogoproto.jsontag) = "version"];
+  repeated bytes DataChunks = 2  [(gogoproto.jsontag) = "dataChunks"];
 }
 
 message Block {
@@ -51,23 +62,33 @@ message Block {
   BlockData Data = 2  [(gogoproto.jsontag) = "data"];
 }
 
-message BlockResultHead {
+message BlockResultHeadChunk{
+  uint32 Version          = 1  [(gogoproto.jsontag) = "version"];
+  bytes  TxResultHashRoot = 2  [(gogoproto.jsontag) = "txResultHashRoot"];
+}
+
+message BlockResultDataChunk{
   uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
-  bytes  PrevBlockResult   = 2  [(gogoproto.jsontag) = "prevBlockResult"];
-  bytes  BlockHash         = 3  [(gogoproto.jsontag) = "blockHash"];
-  bytes  TxResultHashRoot  = 4  [(gogoproto.jsontag) = "txResultHashRoot"];
+  repeated bytes TxResults = 2  [(gogoproto.jsontag) = "txResults"];
+}
+
+message BlockResultHead {
+  uint32 Version                  = 1  [(gogoproto.jsontag) = "version"];
+  bytes  PrevBlockResult          = 2  [(gogoproto.jsontag) = "prevBlockResult"];
+  bytes  BlockHash                = 3  [(gogoproto.jsontag) = "blockHash"];
+  repeated bytes ResultHeadChunks = 4  [(gogoproto.jsontag) = "resultHeadChunks"];
   enum ResultStatus {
     OK = 0;
     Err = 1;
   }
-  ResultStatus Status    = 5  [(gogoproto.jsontag) = "status"];
-  bytes ErrMsg           = 6  [(gogoproto.jsontag) = "errMsg"];
-  bytes Reserved         = 7  [(gogoproto.jsontag) = "reserved"];
+  ResultStatus Status     = 5  [(gogoproto.jsontag) = "status"];
+  bytes ErrMsg            = 6  [(gogoproto.jsontag) = "errMsg"];
+  bytes Reserved          = 7  [(gogoproto.jsontag) = "reserved"];
 }
 
 message BlockResultData {
-  uint32 Version           = 1  [(gogoproto.jsontag) = "version"];
-  repeated bytes TxResults = 2  [(gogoproto.jsontag) = "txResults"];
+  uint32 Version                  = 1  [(gogoproto.jsontag) = "version"];
+  repeated bytes ResultDataChunks = 2  [(gogoproto.jsontag) = "resultDataChunks"];
 }
 
 message BlockResult {

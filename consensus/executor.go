@@ -2,8 +2,10 @@ package consensus
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"fmt"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"sync"
 	"time"
 
@@ -31,12 +33,16 @@ type consensusExecutor struct {
 	exeScheduler                 execution.ExecutionScheduler
 	epochService                 EpochService
 	deliver                      *messageDeliver
+	csDomainSelectedMsgCh        chan *ConsensusDomainSelectedMessage
 	preparePackedMsgExeChan      chan *PreparePackedMessageExe
 	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication
 	commitMsgChan                chan *CommitMessage
 	cryptService                 tpcrt.CryptService
 	prepareInterval              time.Duration
 	prepareMsgLunched            *lru.Cache //Key: state version
+	csDomainSelSync              sync.RWMutex
+	csDomainSelMsgList           *list.List //*ConsensusDomainSelectedMessage
+	csDomainSelMembers           []*tpcmm.NodeDomainMember
 }
 
 func newConsensusExecutor(log tplog.Logger,
@@ -48,6 +54,7 @@ func newConsensusExecutor(log tplog.Logger,
 	exeScheduler execution.ExecutionScheduler,
 	epochService EpochService,
 	deliver *messageDeliver,
+	csDomainSelectedMsgCh chan *ConsensusDomainSelectedMessage,
 	preprePackedMsgExeChan chan *PreparePackedMessageExe,
 	preparePackedMsgExeIndicChan chan *PreparePackedMessageExeIndication,
 	commitMsgChan chan *CommitMessage,
@@ -66,13 +73,75 @@ func newConsensusExecutor(log tplog.Logger,
 		exeScheduler:                 exeScheduler,
 		epochService:                 epochService,
 		deliver:                      deliver,
+		csDomainSelectedMsgCh:        csDomainSelectedMsgCh,
 		preparePackedMsgExeChan:      preprePackedMsgExeChan,
 		preparePackedMsgExeIndicChan: preparePackedMsgExeIndicChan,
 		commitMsgChan:                commitMsgChan,
 		cryptService:                 cryptService,
 		prepareInterval:              prepareInterval,
 		prepareMsgLunched:            pMsgLCache,
+		csDomainSelMsgList:           list.New(),
 	}
+}
+
+func (e *consensusExecutor) startConsensusDomainSelectedMsg(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case csDomainSelMsg := <-e.csDomainSelectedMsgCh:
+				e.log.Infof("Executor receives consensus domain selected message: domain ID %s, member number %d, member node %s, self node %s", string(csDomainSelMsg.DomainID), csDomainSelMsg.MemberNumber, string(csDomainSelMsg.NodeIDOfMember),
+					e.nodeID)
+
+				err := func() error {
+					e.csDomainSelSync.Lock()
+					defer e.csDomainSelSync.Unlock()
+					requiredMemberNumber := csDomainSelMsg.MemberNumber
+					lastEle := e.csDomainSelMsgList.Back()
+					if lastEle != nil {
+						lastCSDomainSelMsg := lastEle.Value.(*ConsensusDomainSelectedMessage)
+
+						if bytes.Equal(csDomainSelMsg.DomainID, lastCSDomainSelMsg.DomainID) &&
+							csDomainSelMsg.MemberNumber == lastCSDomainSelMsg.MemberNumber {
+							if bytes.Equal(csDomainSelMsg.NodeIDOfMember, lastCSDomainSelMsg.NodeIDOfMember) {
+								err := fmt.Errorf("Executor receives the same consensus domain selected message: domain ID %s, member number %d, member node %s, self node %s", string(csDomainSelMsg.DomainID), csDomainSelMsg.MemberNumber, string(csDomainSelMsg.NodeIDOfMember), e.nodeID)
+								e.log.Warnf("%s", err.Error())
+								return err
+							} else {
+								requiredMemberNumber = lastCSDomainSelMsg.MemberNumber
+							}
+						} else {
+							err := fmt.Errorf("Executor receives invalid consensus domain selected message: domain ID %s(expected %s), member number %d(expected %d), member node %s, self node %s", string(csDomainSelMsg.DomainID), string(lastCSDomainSelMsg.DomainID), csDomainSelMsg.MemberNumber, lastCSDomainSelMsg.MemberNumber, string(csDomainSelMsg.NodeIDOfMember), e.nodeID)
+							e.log.Errorf("%s", err.Error())
+							return err
+						}
+					}
+
+					e.csDomainSelMsgList.PushBack(csDomainSelMsg)
+					e.csDomainSelMembers = append(e.csDomainSelMembers, &tpcmm.NodeDomainMember{
+						NodeID:   string(csDomainSelMsg.NodeIDOfMember),
+						NodeRole: tpcmm.NodeRole(csDomainSelMsg.NodeRoleOfMember),
+						Weight:   csDomainSelMsg.NodeWeightOfMember,
+					})
+
+					if uint32(e.csDomainSelMsgList.Len()) == requiredMemberNumber {
+						e.log.Infof("Executor receives expected consensus domain selected message: member number %d, self node %s", requiredMemberNumber, e.nodeID)
+						e.epochService.UpdateData(e.log, e.ledger, e.csDomainSelMembers)
+						e.csDomainSelMsgList.Init()
+						e.csDomainSelMembers = e.csDomainSelMembers[:0]
+						return nil
+					}
+					return nil
+				}()
+
+				if err != nil {
+					continue
+				}
+			case <-ctx.Done():
+				e.log.Info("Executor receiving consensus domain selected message loop stop")
+				return
+			}
+		}
+	}()
 }
 
 func (e *consensusExecutor) UnmarshalTxsOfPreparePackedMessage(txs [][]byte) ([]*txbasic.Transaction, error) {
@@ -240,9 +309,6 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 			case commitMsg := <-e.commitMsgChan:
 				e.log.Infof("Received commit message, StateVersion %d, self node %s", commitMsg.StateVersion, e.nodeID)
 				err := func() error {
-					csStateRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
-					defer csStateRN.Stop()
-
 					var bh tpchaintypes.BlockHead
 					err := e.marshaler.Unmarshal(commitMsg.BlockHead, &bh)
 					if err != nil {
@@ -250,7 +316,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 						return err
 					}
 
-					latestBlock, err := csStateRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(e.ledger)
 					if err != nil {
 						e.log.Errorf("Can't get the latest block: %v", err)
 						return err
@@ -285,7 +351,7 @@ func (e *consensusExecutor) receiveCommitMsgStart(ctx context.Context) {
 	}()
 }
 
-func (e *consensusExecutor) canPrepare(stateVersion uint64, latestBlock *tpchaintypes.Block) (bool, []byte, error) {
+func (e *consensusExecutor) canPrepare(domainID string, stateVersion uint64, latestBlock *tpchaintypes.Block) (bool, []byte, error) {
 	if schedulerState := e.exeScheduler.State(); schedulerState != execution.SchedulerState_Idle {
 		err := fmt.Errorf("Execution scheduler state %s, self node %s", schedulerState.String(), e.nodeID)
 		e.log.Errorf("%v", err)
@@ -295,7 +361,7 @@ func (e *consensusExecutor) canPrepare(stateVersion uint64, latestBlock *tpchain
 	roleSelector := vrf.NewLeaderSelectorVRF(e.log, e.nodeID, e.cryptService)
 
 	e.log.Infof("Begin Select: state version %d, self node %s", stateVersion, e.nodeID)
-	candIDs, vrfProof, err := roleSelector.Select(vrf.RoleSelector_ExecutionLauncher, stateVersion, e.priKey, latestBlock, e.epochService, 1)
+	candIDs, vrfProof, err := roleSelector.Select(vrf.RoleSelector_ExecutionLauncher, domainID, stateVersion, e.priKey, latestBlock, e.epochService, 1)
 	if err != nil {
 		e.log.Errorf("Select executor err: %v", err)
 		return false, nil, err
@@ -323,7 +389,9 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 		timer := time.NewTicker(e.prepareInterval)
 		defer timer.Stop()
 
-		for !e.deliver.deliverNetwork().Ready() {
+		var domainID string
+		for !e.deliver.deliverNetwork().Ready() || domainID == "" {
+			domainID = e.epochService.GetDomainIDOfExecutor(e.nodeID)
 			time.Sleep(50 * time.Millisecond)
 		}
 
@@ -331,22 +399,26 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 			select {
 			case <-timer.C:
 				func() {
-					e.log.Infof("Prepare timer starts: self node %s", e.nodeID)
+					e.log.Infof("Prepare timer starts: domain %s, self node %s", domainID, e.nodeID)
 					prepareStart := time.Now()
-					compStatRN := state.CreateCompositionStateReadonly(e.log, e.ledger)
-					defer compStatRN.Stop()
 
-					latestBlock, err := compStatRN.GetLatestBlock()
+					latestBlock, err := state.GetLatestBlock(e.ledger)
 					if err != nil {
 						e.log.Errorf("Can't get the latest block: %v, self node %s", err, e.nodeID)
 						return
 					}
 
 					e.log.Infof("Prepare timer starts to get max state version: self node %s", e.nodeID)
-					maxStateVersion, err := e.exeScheduler.MaxStateVersion(latestBlock)
-					if err != nil {
-						e.log.Errorf("Can't get max state version: %v, self node %s", err, e.nodeID)
-						return
+
+					var maxStateVersion uint64
+					for maxStateVersion == 0 {
+						maxStateVersion, err = e.exeScheduler.MaxStateVersion(latestBlock)
+						if err != nil {
+							//e.log.Warnf("Can't get max state version: %v, self node %s", err, e.nodeID)
+							time.Sleep(50 * time.Millisecond)
+						} else {
+							break
+						}
 					}
 					e.log.Infof("Prepare timer gets max state version: maxStateVersion %d, self node %s", maxStateVersion, e.nodeID)
 					stateVersion := maxStateVersion + 1
@@ -358,11 +430,11 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 						return
 					}
 
-					isCan, vrfProof, _ := e.canPrepare(stateVersion, latestBlock)
+					isCan, vrfProof, _ := e.canPrepare(domainID, stateVersion, latestBlock)
 					if isCan {
 						e.log.Infof("Selected execution launcher can prepare: state version %d, self node %s", stateVersion, e.nodeID)
 						pStart := time.Now()
-						e.Prepare(ctx, vrfProof, stateVersion)
+						e.Prepare(ctx, domainID, vrfProof, stateVersion)
 						e.log.Infof("Prepare time: state version %d, cost %d ms, self node %s", stateVersion, time.Since(pStart).Milliseconds(), e.nodeID)
 					}
 					e.log.Infof("Prepare time total: isCan %v, state version %d, cost %d ms, self node %s", isCan, stateVersion, time.Since(prepareStart).Milliseconds(), e.nodeID)
@@ -376,6 +448,8 @@ func (e *consensusExecutor) prepareTimerStart(ctx context.Context) {
 }
 
 func (e *consensusExecutor) start(ctx context.Context) {
+	e.startConsensusDomainSelectedMsg(ctx)
+
 	e.receivePreparePackedMessageExeStart(ctx)
 
 	e.receiveCommitMsgStart(ctx)
@@ -383,7 +457,7 @@ func (e *consensusExecutor) start(ctx context.Context) {
 	e.prepareTimerStart(ctx)
 }
 
-func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []*txbasic.Transaction, txResultList []txbasic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
+func (e *consensusExecutor) makePreparePackedMsg(domainID string, vrfProof []byte, txRoot []byte, txRSRoot []byte, stateVersion uint64, txList []*txbasic.Transaction, txResultList []txbasic.TransactionResult, compState state.CompositionState) (*PreparePackedMessageExe, *PreparePackedMessageProp, error) {
 	if len(txList) != len(txResultList) {
 		err := fmt.Errorf("Mismatch tx list count %d and tx result count %d", len(txList), len(txResultList))
 		e.log.Errorf("%v", err)
@@ -405,6 +479,8 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 
 	pubKey, _ := e.cryptService.ConvertToPublic(e.priKey)
 
+	domainIDBytes := []byte(domainID)
+
 	exePPM := &PreparePackedMessageExe{
 		ChainID:         []byte(compState.ChainID()),
 		Version:         CONSENSUS_VER,
@@ -413,6 +489,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		ParentBlockHash: parentBlockHash,
 		VRFProof:        vrfProof,
 		VRFProofPubKey:  pubKey,
+		DomainID:        domainIDBytes,
 		Launcher:        []byte(e.nodeID),
 		StateVersion:    stateVersion,
 		TxRoot:          txRoot,
@@ -426,6 +503,7 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 		ParentBlockHash: parentBlockHash,
 		VRFProof:        vrfProof,
 		VRFProofPubKey:  pubKey,
+		DomainID:        domainIDBytes,
 		Launcher:        []byte(e.nodeID),
 		StateVersion:    stateVersion,
 		TxRoot:          txRoot,
@@ -467,27 +545,28 @@ func (e *consensusExecutor) makePreparePackedMsg(vrfProof []byte, txRoot []byte,
 	return exePPM, proposePPM, nil
 }
 
-func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateVersion uint64) error {
+func (e *consensusExecutor) Prepare(ctx context.Context, domainID string, vrfProof []byte, stateVersion uint64) error {
 	pendTxs := e.txPool.PickTxs()
-	if len(pendTxs) == 0 {
-		e.log.Infof("Current pending txs'size 0")
-		return nil
-	}
-
-	txRoot := txbasic.TxRoot(pendTxs)
 
 	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
 	if compState == nil {
-		err := fmt.Errorf("Can't CreateCompositionState for Prepare: maxStateVer=%d", stateVersion)
+		err := fmt.Errorf("Can't create composition state for Prepare: maxStateVer=%d", stateVersion)
 		e.log.Errorf("%v", err)
 		return err
 	}
 
 	var packedTxs execution.PackedTxs
 
+	var txRoot []byte
+	var txList []*txbasic.Transaction
+	if len(pendTxs) != 0 {
+		txRoot = txbasic.TxRoot(pendTxs)
+		txList = append(txList, pendTxs...)
+	}
+
 	packedTxs.StateVersion = stateVersion
 	packedTxs.TxRoot = txRoot
-	packedTxs.TxList = append(packedTxs.TxList, pendTxs...)
+	packedTxs.TxList = txList
 
 	txsRS, err := e.exeScheduler.ExecutePackedTx(ctx, &packedTxs, compState)
 	if err != nil {
@@ -496,16 +575,17 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 	}
 
 	e.log.Infof("Executor starts making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
-	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(vrfProof, txRoot, txsRS.TxRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
+	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(domainID, vrfProof, txRoot, txsRS.TxRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {
 		return err
 	}
 	e.log.Infof("Executor finishes making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
 
-	activeExecutors, _ := compState.GetActiveExecutorIDs()
+	activeExecutors := e.epochService.GetActiveExecutorIDsOfDomain(domainID)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	forceExit := make(chan struct{}, 1)
 	go func(requiredCount int) {
 		recvCount := 1 //Contain self
 		defer wg.Done()
@@ -517,6 +597,8 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 				if recvCount == requiredCount {
 					return
 				}
+			case <-forceExit:
+				return
 			}
 		}
 	}(len(activeExecutors))
@@ -524,9 +606,10 @@ func (e *consensusExecutor) Prepare(ctx context.Context, vrfProof []byte, stateV
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = e.deliver.deliverPreparePackagedMessageExe(ctx, packedMsgExe)
+		err = e.deliver.deliverPreparePackagedMessageExe(ctx, domainID, packedMsgExe)
 		if err != nil {
 			e.log.Errorf("Deliver prepare packed message to execute network failed: err=%v", err)
+			forceExit <- struct{}{}
 			return
 		}
 		e.log.Infof("Deliver prepare packed message to execute network successfully: state version %d， self node %s", packedMsgExe.StateVersion, e.nodeID)

@@ -84,6 +84,7 @@ func NewNode(rootPath string, endPoint string, seed string, role string) *Node {
 
 	config := tpconfig.GetConfiguration()
 	config.CSConfig.InitDKGPrivKey = tpconfig.TestDatas[seed].InitDKGPrivKey
+	fmt.Printf("")
 	n.config = config
 
 	n.ledger = ledger.NewLedger(chainRootPath, ledger.LedgerID(seed), mainLog, backend.BackendType_Badger)

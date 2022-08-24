@@ -84,10 +84,27 @@ func NewNode(rootPath string, endPoint string, seed string, role string) *Node {
 
 	config := tpconfig.GetConfiguration()
 	config.CSConfig.InitDKGPrivKey = tpconfig.TestDatas[seed].InitDKGPrivKey
-	fmt.Printf("")
 	n.config = config
 
 	n.ledger = ledger.NewLedger(chainRootPath, ledger.LedgerID(seed), mainLog, backend.BackendType_Badger)
+
+	switch role {
+	case "executor":
+		for _, exeDInfo := range config.Genesis.GenesisExeDomain {
+			if tpcmm.IsContainString(config.Genesis.GenesisNode[seed].NodeID, exeDInfo.ExeDomainData.Members) {
+				config.NetConfig.Connection.SeedPeers = config.Genesis.SeedPeersMap[exeDInfo.ID]
+				break
+			}
+		}
+	case "proposer":
+		config.NetConfig.Connection.SeedPeers = config.Genesis.SeedPeersMap["consensus"]
+	case "validator":
+		config.NetConfig.Connection.SeedPeers = config.Genesis.SeedPeersMap["consensus"]
+	case "archiver":
+		config.NetConfig.Connection.SeedPeers = config.Genesis.SeedPeersMap["archiver"]
+	default:
+		panic(fmt.Sprintf("Not support node role %s", n.role))
+	}
 
 	n.network = tpnet.NewNetwork(ctx, mainLog, config.NetConfig, n.sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, n.ledger))
 

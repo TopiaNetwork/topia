@@ -257,8 +257,11 @@ func (cons *consensus) Start(sysActor *actor.ActorSystem, epoch uint64, epochSta
 	nodeInfo, err := csStateRN.GetNode(cons.nodeID)
 	if err != nil {
 		cons.log.Panicf("Get node error: %v", err)
-		return err
 	}
+	if nodeInfo == nil {
+		cons.log.Panicf("Can't get node: nodeId %v", cons.nodeID)
+	}
+
 	cons.nodeRole = nodeInfo.Role
 	cons.log.Infof("Self Node id=%s, role=%s, state=%d", nodeInfo.NodeID, nodeInfo.Role.String(), nodeInfo.State)
 

@@ -18,8 +18,9 @@ type GenesisData struct {
 	Epoch            *tpcmm.EpochInfo
 	Block            *tpchaintypes.Block
 	BlockResult      *tpchaintypes.BlockResult
-	GenesisNode      []*tpcmm.NodeInfo
+	GenesisNode      map[string]*tpcmm.NodeInfo //seed->nodeInfo
 	GenesisExeDomain []*tpcmm.NodeDomainInfo
+	SeedPeersMap     map[string][]*SeedPeer
 }
 
 func (genesis *GenesisData) Save(fileFullName string) error {

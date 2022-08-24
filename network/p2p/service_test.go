@@ -18,6 +18,18 @@ import (
 
 const ticksForAssertEventually = 100 * time.Millisecond
 
+func TestNodeGen(t *testing.T) {
+	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
+
+	netConfig := configuration.GetConfiguration().NetConfig
+
+	p2p1 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41000", "topia00", NewNetworkActiveNodeMock())
+	p2p2 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41000", "topia11", NewNetworkActiveNodeMock())
+	p2p3 := NewP2PService(context.Background(), testLog, netConfig, nil, "/ip4/127.0.0.1/tcp/41000", "topia22", NewNetworkActiveNodeMock())
+
+	testLog.Infof("p2p id1=%s, id2=%s, id3=%s", p2p1.ID().String(), p2p2.ID().String(), p2p3.ID().String())
+}
+
 func TestSend(t *testing.T) {
 	testLog, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.JSONFormat, tplog.StdErrOutput, "")
 

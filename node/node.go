@@ -4,7 +4,14 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
+
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -26,11 +33,6 @@ import (
 	"github.com/TopiaNetwork/topia/sync"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 	"github.com/TopiaNetwork/topia/wallet"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
-	"time"
 )
 
 type Node struct {
@@ -86,6 +88,24 @@ func NewNode(rootPath string, endPoint string, seed string, role string) *Node {
 
 	n.ledger = ledger.NewLedger(chainRootPath, ledger.LedgerID(seed), mainLog, backend.BackendType_Badger)
 
+	switch role {
+	case "executor":
+		for _, exeDInfo := range config.Genesis.GenesisExeDomain {
+			if tpcmm.IsContainString(config.Genesis.GenesisNode[seed].NodeID, exeDInfo.ExeDomainData.Members) {
+				config.NetConfig.Connection.SeedPeers = config.Genesis.SeedPeersMap[exeDInfo.ID]
+				break
+			}
+		}
+	case "proposer":
+		config.NetConfig.Connection.SeedPeers = config.Genesis.SeedPeersMap["consensus"]
+	case "validator":
+		config.NetConfig.Connection.SeedPeers = config.Genesis.SeedPeersMap["consensus"]
+	case "archiver":
+		config.NetConfig.Connection.SeedPeers = config.Genesis.SeedPeersMap["archiver"]
+	default:
+		panic(fmt.Sprintf("Not support node role %s", n.role))
+	}
+
 	n.network = tpnet.NewNetwork(ctx, mainLog, config.NetConfig, n.sysActor, endPoint, seed, state.NewNodeNetWorkStateWapper(mainLog, n.ledger))
 
 	n.initData()
@@ -100,8 +120,10 @@ func NewNode(rootPath string, endPoint string, seed string, role string) *Node {
 	service.SetTxPool(n.txPool)
 	n.service = service
 
+	var nodeRole tpcmm.NodeRole
+
 	exeScheduler := execution.NewExecutionScheduler(nodeID, mainLog, config, codec.CodecType_PROTO, n.txPool)
-	n.chain = chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, codec.CodecType_PROTO, n.ledger, n.txPool, exeScheduler, config)
+	n.chain = chain.NewChain(tplogcmm.InfoLevel, mainLog, nodeID, nodeRole.Value(role), codec.CodecType_PROTO, n.ledger, n.txPool, exeScheduler, config)
 
 	n.evHub = eventhub.GetEventHubManager().CreateEventHub(nodeID, tplogcmm.InfoLevel, mainLog)
 
@@ -171,6 +193,15 @@ func (n *Node) initData() {
 			err = compState.AddNode(nodeInfo)
 			if err != nil {
 				n.log.Panicf("Add node info error: %v", err)
+				compState.Stop()
+				return
+			}
+		}
+
+		for _, exeDomainInfo := range n.config.Genesis.GenesisExeDomain {
+			err = compState.AddNodeDomain(exeDomainInfo)
+			if err != nil {
+				n.log.Panicf("Add execute domain info error: %v", err)
 				compState.Stop()
 				return
 			}

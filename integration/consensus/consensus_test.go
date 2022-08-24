@@ -39,6 +39,7 @@ const (
 	ExecutorNode_Number  = 6
 	ProposerNode_Number  = 3
 	ValidatorNode_number = 4
+	archiverNode_number  = 1
 )
 
 var portFrefix = map[string]string{
@@ -86,6 +87,7 @@ func createNetworkNodes(
 	executorNetParams []*nodeParams,
 	proposerNetParams []*nodeParams,
 	validatorNetParams []*nodeParams,
+	archiverNetParams []*nodeParams,
 	t *testing.T) ([]tpnet.Network, []tpnet.Network, []tpnet.Network) {
 	var networkExes []tpnet.Network
 	suite := bn256.NewSuiteG2()
@@ -163,6 +165,20 @@ func createNetworkNodes(
 				State:  tpcmm.NodeState_Active,
 			})
 		}
+		for _, archiverNetParam := range archiverNetParams {
+			archiverNetParam.compState.AddNode(&tpcmm.NodeInfo{
+				NodeID: network.ID(),
+				Weight: 10,
+				Role:   tpcmm.NodeRole_Executor,
+				State:  tpcmm.NodeState_Active,
+			})
+		}
+	}
+
+	for i, archiverNetParam := range archiverNetParams {
+		archiverNetParam.mainLog.Infof("Archiver network %d id=%s", i, archiverNetParam.network.ID())
+		archiverNetParam.compState.AddNodeDomain(exeDomainInfo1)
+		archiverNetParam.compState.AddNodeDomain(exeDomainInfo2)
 	}
 
 	var networkProps []tpnet.Network
@@ -287,8 +303,12 @@ func createNetworkNodes(
 	//buildNodeConnections(networkVals)
 
 	var netCons []tpnet.Network
-	for _, netExe := range networkExes {
+	var netARCons []tpnet.Network
+	for i, netExe := range networkExes {
 		netCons = append(netCons, netExe)
+		if i < 2 {
+			netARCons = append(netARCons, netExe)
+		}
 	}
 	for _, netProp := range networkProps {
 		netCons = append(netCons, netProp)
@@ -298,6 +318,16 @@ func createNetworkNodes(
 	}
 
 	buildNodeConnections(netCons)
+
+	for _, netAr := range archiverNetParams {
+		netAr.nodeID = netAr.network.ID()
+		for _, target := range netARCons {
+			err := netAr.network.Connect(target.ListenAddr())
+			if err != nil {
+				netAr.mainLog.Panicf("err: %v")
+			}
+		}
+	}
 
 	time.Sleep(10 * time.Second)
 
@@ -338,7 +368,9 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		exeScheduler := execution.NewExecutionScheduler(network.ID(), testMainLog, config, codec.CodecType_PROTO, txPool)
 
-		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
+		var nodeRole tpcmm.NodeRole
+
+		chain := chain.NewChain(tplogcmm.InfoLevel, testMainLog, network.ID(), nodeRole.Value(nodeType), codec.CodecType_PROTO, l, txPool, exeScheduler, config)
 
 		cType := state.CompStateBuilderType_Full
 		if nodeType != "executor" {
@@ -422,6 +454,12 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
 		eventhub.GetEventHubManager().GetEventHub(nParams[i].nodeID).Start(nParams[i].sysActor)
+
+		if nParams[i].nodeType == "archiver" {
+			nParams[i].chain.Start(nParams[i].sysActor, nParams[i].network)
+			continue
+		}
+
 		cType := state.CompStateBuilderType_Full
 		if nParams[i].nodeType != "executor" {
 			cType = state.CompStateBuilderType_Simple
@@ -465,16 +503,18 @@ func TestMultiRoleNodes(t *testing.T) {
 	waitChan := make(chan struct{})
 
 	executorParams := createNodeParams(ExecutorNode_Number, "executor")
+	archiverParams := createNodeParams(archiverNode_number, "archiver")
 	proposerParams := createNodeParams(ProposerNode_Number, "proposer")
 	validatorParams := createNodeParams(ValidatorNode_number, "validator")
 
 	/*executorNet, proposerNet, validatorNet := */
-	createNetworkNodes(executorParams, proposerParams, validatorParams, t)
+	createNetworkNodes(executorParams, proposerParams, validatorParams, archiverParams, t)
 
 	var nParams []*nodeParams
 	nParams = append(nParams, executorParams...)
 	nParams = append(nParams, proposerParams...)
 	nParams = append(nParams, validatorParams...)
+	nParams = append(nParams, archiverParams...)
 	for i, nodeP := range nParams {
 		nodeP.compState.Commit()
 		nodeP.compState.UpdateCompSState(state.CompSState_Commited)
@@ -491,7 +531,7 @@ func TestMultiRoleNodes(t *testing.T) {
 
 	var dkgNParams []*nodeParams
 	dkgNParams = append(dkgNParams, proposerParams...)
-	dkgNParams = append(nParams, validatorParams...)
+	dkgNParams = append(dkgNParams, validatorParams...)
 	for _, nodeP := range dkgNParams {
 		func() {
 			csStateRN := state.CreateCompositionStateReadonly(nodeP.mainLog, nodeP.ledger)

@@ -53,7 +53,7 @@ func newDKGCrypt(log tplog.Logger /*index uint32, */, triggerNumber uint64 /*sui
 		log.Panic("Blank initPartPubKeys")
 	}
 
-	log.Infof("When newDKGCrypt: initPartPubKeys=%v", initPartPubKeys)
+	log.Infof("When newDKGCrypt: initPrivKey=%s, initPartPubKeys=%v", initPrivKey, initPartPubKeys)
 
 	suite := bn256.NewSuiteG2()
 	priKey, err := encoding.StringHexToScalar(suite, initPrivKey)

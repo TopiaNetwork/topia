@@ -22,14 +22,14 @@ func (anmock *NetworkActiveNodeMock) addActiveValidator(peerID string) {
 	anmock.activeValidators = append(anmock.activeValidators, peerID)
 }
 
-func (anmock *NetworkActiveNodeMock) GetActiveExecutorIDs() ([]string, error) {
-	return anmock.activeExcutors, nil
+func (anmock *NetworkActiveNodeMock) GetActiveExecutorIDs() []string {
+	return anmock.activeExcutors
 }
 
-func (anmock *NetworkActiveNodeMock) GetActiveProposerIDs() ([]string, error) {
-	return anmock.activeProposers, nil
+func (anmock *NetworkActiveNodeMock) GetActiveProposerIDs() []string {
+	return anmock.activeProposers
 }
 
-func (anmock *NetworkActiveNodeMock) GetActiveValidatorIDs() ([]string, error) {
-	return anmock.activeValidators, nil
+func (anmock *NetworkActiveNodeMock) GetActiveValidatorIDs() []string {
+	return anmock.activeValidators
 }

@@ -3,20 +3,22 @@ package chain
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
+
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	"github.com/TopiaNetwork/topia/codec"
+	tpcmm "github.com/TopiaNetwork/topia/common"
 	"github.com/TopiaNetwork/topia/configuration"
 	"github.com/TopiaNetwork/topia/execution"
 	"github.com/TopiaNetwork/topia/ledger"
+	tplog "github.com/TopiaNetwork/topia/log"
+	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	tpnet "github.com/TopiaNetwork/topia/network"
 	tpnetmsg "github.com/TopiaNetwork/topia/network/message"
 	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txpool "github.com/TopiaNetwork/topia/transaction_pool/interface"
-
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/codec"
-	tplog "github.com/TopiaNetwork/topia/log"
-	tplogcmm "github.com/TopiaNetwork/topia/log/common"
-	tpnet "github.com/TopiaNetwork/topia/network"
 )
 
 type Chain interface {
@@ -28,6 +30,7 @@ type Chain interface {
 type chain struct {
 	log           tplog.Logger
 	nodeID        string
+	nodeRole      tpcmm.NodeRole
 	level         tplogcmm.LogLevel
 	marshaler     codec.Marshaler
 	txPool        txpool.TransactionPool
@@ -38,6 +41,7 @@ type chain struct {
 func NewChain(level tplogcmm.LogLevel,
 	log tplog.Logger,
 	nodeID string,
+	nodeRole tpcmm.NodeRole,
 	codecType codec.CodecType,
 	ledger ledger.Ledger,
 	txPool txpool.TransactionPool,
@@ -46,10 +50,12 @@ func NewChain(level tplogcmm.LogLevel,
 	chainLog := tplog.CreateModuleLogger(level, tpchaintypes.MOD_NAME, log)
 	marshaler := codec.CreateMarshaler(codecType)
 
-	blkSubPro := NewBlockInfoSubProcessor(chainLog, nodeID, marshaler, ledger, scheduler, config)
+	blkSubPro := NewBlockInfoSubProcessor(chainLog, nodeID, nodeRole, marshaler, ledger, scheduler, config)
 
 	return &chain{
 		log:           chainLog,
+		nodeID:        nodeID,
+		nodeRole:      nodeRole,
 		level:         level,
 		marshaler:     marshaler,
 		txPool:        txPool,

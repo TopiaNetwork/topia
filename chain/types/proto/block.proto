@@ -26,7 +26,8 @@ message BlockHeadChunk{
 
 message BlockDataChunk{
   uint32 Version      = 1  [(gogoproto.jsontag) = "version"];
-  repeated bytes Txs  = 2  [(gogoproto.jsontag) = "txs"];
+  uint32 RefIndex     = 2  [(gogoproto.jsontag) = "refIndex"];
+  repeated bytes Txs  = 3  [(gogoproto.jsontag) = "txs"];
 }
 
 message BlockHead {
@@ -64,7 +65,8 @@ message Block {
 
 message BlockResultHeadChunk{
   uint32 Version          = 1  [(gogoproto.jsontag) = "version"];
-  bytes  TxResultHashRoot = 2  [(gogoproto.jsontag) = "txResultHashRoot"];
+  uint32 RefIndex         = 2  [(gogoproto.jsontag) = "refIndex"];
+  bytes  TxResultHashRoot = 3  [(gogoproto.jsontag) = "txResultHashRoot"];
 }
 
 message BlockResultDataChunk{

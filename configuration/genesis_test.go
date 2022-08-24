@@ -67,17 +67,17 @@ func TestGenerateGenesisData(t *testing.T) {
 	}
 
 	gData.SeedPeersMap[exeDomainInfo1.ID] = []*SeedPeer{
-		{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41000/p2p/16Uiu2HAkvPb9xbeHsbDSS44xLY2ZWJvZtdUpcWBSAMuPBTx1eNnj"},
-		{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41001/p2p/16Uiu2HAm29UXXHcMbUXpeALDQuRppiRKxvCGnREN4XwKRTPgFV4Q"},
-		{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41002/p2p/16Uiu2HAm8r3jz6E9p1imUJh1wc4JprhHKDqBBZwu1gHsXSHJpM7d"},
+		{tpcmm.NodeRole_Executor, "/ip4/192.168.3.35/tcp/41000/p2p/16Uiu2HAkvPb9xbeHsbDSS44xLY2ZWJvZtdUpcWBSAMuPBTx1eNnj"},
+		{tpcmm.NodeRole_Executor, "/ip4/192.168.3.36/tcp/41001/p2p/16Uiu2HAm29UXXHcMbUXpeALDQuRppiRKxvCGnREN4XwKRTPgFV4Q"},
+		{tpcmm.NodeRole_Executor, "/ip4/192.168.3.37/tcp/41002/p2p/16Uiu2HAm8r3jz6E9p1imUJh1wc4JprhHKDqBBZwu1gHsXSHJpM7d"},
 	}
 
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41000/p2p/16Uiu2HAkvPb9xbeHsbDSS44xLY2ZWJvZtdUpcWBSAMuPBTx1eNnj"})
+		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/192.168.3.35/tcp/41000/p2p/16Uiu2HAkvPb9xbeHsbDSS44xLY2ZWJvZtdUpcWBSAMuPBTx1eNnj"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41001/p2p/16Uiu2HAm29UXXHcMbUXpeALDQuRppiRKxvCGnREN4XwKRTPgFV4Q"})
+		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/192.168.3.36/tcp/41001/p2p/16Uiu2HAm29UXXHcMbUXpeALDQuRppiRKxvCGnREN4XwKRTPgFV4Q"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41002/p2p/16Uiu2HAm8r3jz6E9p1imUJh1wc4JprhHKDqBBZwu1gHsXSHJpM7d"})
+		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/192.168.3.37/tcp/41002/p2p/16Uiu2HAm8r3jz6E9p1imUJh1wc4JprhHKDqBBZwu1gHsXSHJpM7d"})
 
 	exeDomainInfo2 := &tpcmm.NodeDomainInfo{
 		ID:               tpcmm.CreateDomainID("exedomain2"),
@@ -94,17 +94,17 @@ func TestGenerateGenesisData(t *testing.T) {
 	}
 
 	gData.SeedPeersMap[exeDomainInfo2.ID] = []*SeedPeer{
-		{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41010/p2p/16Uiu2HAm63TystBV4hVt2s8ibvbLamcCtLjSSZBkpcET9df91dRy"},
-		{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41011/p2p/16Uiu2HAmL35p4tw2kHMbtKkrfKNc2JoWeWovfWXPFzDPr5E2qHqE"},
-		{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41022/p2p/16Uiu2HAmFt98Z258smgyrmzmfyyfwSqZxJZTZ2N5wvqABnDELrca"},
+		{tpcmm.NodeRole_Executor, "/ip4/192.168.3.38/tcp/41010/p2p/16Uiu2HAm63TystBV4hVt2s8ibvbLamcCtLjSSZBkpcET9df91dRy"},
+		{tpcmm.NodeRole_Executor, "/ip4/192.168.3.39/tcp/41011/p2p/16Uiu2HAmL35p4tw2kHMbtKkrfKNc2JoWeWovfWXPFzDPr5E2qHqE"},
+		{tpcmm.NodeRole_Executor, "/ip4/192.168.3.40/tcp/41022/p2p/16Uiu2HAmFt98Z258smgyrmzmfyyfwSqZxJZTZ2N5wvqABnDELrca"},
 	}
 
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41010/p2p/16Uiu2HAm63TystBV4hVt2s8ibvbLamcCtLjSSZBkpcET9df91dRy"})
+		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/192.168.3.38/tcp/41010/p2p/16Uiu2HAm63TystBV4hVt2s8ibvbLamcCtLjSSZBkpcET9df91dRy"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41011/p2p/16Uiu2HAmL35p4tw2kHMbtKkrfKNc2JoWeWovfWXPFzDPr5E2qHqE"})
+		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/192.168.3.39/tcp/41011/p2p/16Uiu2HAmL35p4tw2kHMbtKkrfKNc2JoWeWovfWXPFzDPr5E2qHqE"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/127.0.0.1/tcp/41022/p2p/16Uiu2HAmFt98Z258smgyrmzmfyyfwSqZxJZTZ2N5wvqABnDELrca"})
+		&SeedPeer{tpcmm.NodeRole_Executor, "/ip4/192.168.3.40/tcp/41022/p2p/16Uiu2HAmFt98Z258smgyrmzmfyyfwSqZxJZTZ2N5wvqABnDELrca"})
 
 	gData.GenesisExeDomain = append(gData.GenesisExeDomain, exeDomainInfo1)
 	gData.GenesisExeDomain = append(gData.GenesisExeDomain, exeDomainInfo2)
@@ -146,25 +146,25 @@ func TestGenerateGenesisData(t *testing.T) {
 	}
 
 	gData.SeedPeersMap[exeDomainInfo1.ID] = append(gData.SeedPeersMap[exeDomainInfo1.ID],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41003/p2p/16Uiu2HAmRGnTWGLtCJaH7VZKrrAPuh4waQueTyUGNMJ1giktViaP"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.41/tcp/41003/p2p/16Uiu2HAmRGnTWGLtCJaH7VZKrrAPuh4waQueTyUGNMJ1giktViaP"})
 	gData.SeedPeersMap[exeDomainInfo1.ID] = append(gData.SeedPeersMap[exeDomainInfo1.ID],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41004/p2p/16Uiu2HAmSxqKEEkjAHeUu2gpWUYdjEKbvz3t7S36haUtdkjPvgJu"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.42/tcp/41004/p2p/16Uiu2HAmSxqKEEkjAHeUu2gpWUYdjEKbvz3t7S36haUtdkjPvgJu"})
 	gData.SeedPeersMap[exeDomainInfo1.ID] = append(gData.SeedPeersMap[exeDomainInfo1.ID],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41005/p2p/16Uiu2HAkzgCXoLsa6g1iSjBY3Lykeqg2EF44ZJLBGykRpAaA8uY7"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.43/tcp/41005/p2p/16Uiu2HAkzgCXoLsa6g1iSjBY3Lykeqg2EF44ZJLBGykRpAaA8uY7"})
 
 	gData.SeedPeersMap[exeDomainInfo2.ID] = append(gData.SeedPeersMap[exeDomainInfo2.ID],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41003/p2p/16Uiu2HAmRGnTWGLtCJaH7VZKrrAPuh4waQueTyUGNMJ1giktViaP"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.41/tcp/41003/p2p/16Uiu2HAmRGnTWGLtCJaH7VZKrrAPuh4waQueTyUGNMJ1giktViaP"})
 	gData.SeedPeersMap[exeDomainInfo2.ID] = append(gData.SeedPeersMap[exeDomainInfo2.ID],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41004/p2p/16Uiu2HAmSxqKEEkjAHeUu2gpWUYdjEKbvz3t7S36haUtdkjPvgJu"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.42/tcp/41004/p2p/16Uiu2HAmSxqKEEkjAHeUu2gpWUYdjEKbvz3t7S36haUtdkjPvgJu"})
 	gData.SeedPeersMap[exeDomainInfo2.ID] = append(gData.SeedPeersMap[exeDomainInfo2.ID],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41005/p2p/16Uiu2HAkzgCXoLsa6g1iSjBY3Lykeqg2EF44ZJLBGykRpAaA8uY7"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.43/tcp/41005/p2p/16Uiu2HAkzgCXoLsa6g1iSjBY3Lykeqg2EF44ZJLBGykRpAaA8uY7"})
 
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41003/p2p/16Uiu2HAmRGnTWGLtCJaH7VZKrrAPuh4waQueTyUGNMJ1giktViaP"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.41/tcp/41003/p2p/16Uiu2HAmRGnTWGLtCJaH7VZKrrAPuh4waQueTyUGNMJ1giktViaP"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41004/p2p/16Uiu2HAmSxqKEEkjAHeUu2gpWUYdjEKbvz3t7S36haUtdkjPvgJu"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.42/tcp/41004/p2p/16Uiu2HAmSxqKEEkjAHeUu2gpWUYdjEKbvz3t7S36haUtdkjPvgJu"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/127.0.0.1/tcp/41005/p2p/16Uiu2HAkzgCXoLsa6g1iSjBY3Lykeqg2EF44ZJLBGykRpAaA8uY7"})
+		&SeedPeer{tpcmm.NodeRole_Proposer, "/ip4/192.168.3.43/tcp/41005/p2p/16Uiu2HAkzgCXoLsa6g1iSjBY3Lykeqg2EF44ZJLBGykRpAaA8uY7"})
 
 	for i := 0; i < len(proposerIDs); i++ {
 		keyPair := key.NewKeyPair(suite)
@@ -194,31 +194,31 @@ func TestGenerateGenesisData(t *testing.T) {
 	}
 
 	gData.SeedPeersMap[exeDomainInfo1.ID] = append(gData.SeedPeersMap[exeDomainInfo1.ID],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41006/p2p/16Uiu2HAmEjXsGN2yR6jXc1bPEiEs3o1aMu2apchx8taGArmKy7ja"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.44/tcp/41006/p2p/16Uiu2HAmEjXsGN2yR6jXc1bPEiEs3o1aMu2apchx8taGArmKy7ja"})
 	gData.SeedPeersMap[exeDomainInfo1.ID] = append(gData.SeedPeersMap[exeDomainInfo1.ID],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41007/p2p/16Uiu2HAkxG2ZpVWub8xatogt7oP8cwu4pbbkxG1oQXrgNSembE5C"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.45/tcp/41007/p2p/16Uiu2HAkxG2ZpVWub8xatogt7oP8cwu4pbbkxG1oQXrgNSembE5C"})
 	gData.SeedPeersMap[exeDomainInfo1.ID] = append(gData.SeedPeersMap[exeDomainInfo1.ID],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41008/p2p/16Uiu2HAmUpkpxGbEc4tUVPYmdaMeZS9VCbGiJV2mXFMiVCe71eDq"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.46/tcp/41008/p2p/16Uiu2HAmUpkpxGbEc4tUVPYmdaMeZS9VCbGiJV2mXFMiVCe71eDq"})
 	gData.SeedPeersMap[exeDomainInfo1.ID] = append(gData.SeedPeersMap[exeDomainInfo1.ID],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41009/p2p/16Uiu2HAmD57RgJxS7R4putawdjxz9KQqqtRnTDm4JoPeTjHTzN3R"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.47/tcp/41009/p2p/16Uiu2HAmD57RgJxS7R4putawdjxz9KQqqtRnTDm4JoPeTjHTzN3R"})
 
 	gData.SeedPeersMap[exeDomainInfo2.ID] = append(gData.SeedPeersMap[exeDomainInfo2.ID],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41006/p2p/16Uiu2HAmEjXsGN2yR6jXc1bPEiEs3o1aMu2apchx8taGArmKy7ja"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.44/tcp/41006/p2p/16Uiu2HAmEjXsGN2yR6jXc1bPEiEs3o1aMu2apchx8taGArmKy7ja"})
 	gData.SeedPeersMap[exeDomainInfo2.ID] = append(gData.SeedPeersMap[exeDomainInfo2.ID],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41007/p2p/16Uiu2HAkxG2ZpVWub8xatogt7oP8cwu4pbbkxG1oQXrgNSembE5C"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.45/tcp/41007/p2p/16Uiu2HAkxG2ZpVWub8xatogt7oP8cwu4pbbkxG1oQXrgNSembE5C"})
 	gData.SeedPeersMap[exeDomainInfo2.ID] = append(gData.SeedPeersMap[exeDomainInfo2.ID],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41008/p2p/16Uiu2HAmUpkpxGbEc4tUVPYmdaMeZS9VCbGiJV2mXFMiVCe71eDq"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.46/tcp/41008/p2p/16Uiu2HAmUpkpxGbEc4tUVPYmdaMeZS9VCbGiJV2mXFMiVCe71eDq"})
 	gData.SeedPeersMap[exeDomainInfo2.ID] = append(gData.SeedPeersMap[exeDomainInfo2.ID],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41009/p2p/16Uiu2HAmD57RgJxS7R4putawdjxz9KQqqtRnTDm4JoPeTjHTzN3R"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.47/tcp/41009/p2p/16Uiu2HAmD57RgJxS7R4putawdjxz9KQqqtRnTDm4JoPeTjHTzN3R"})
 
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41006/p2p/16Uiu2HAmEjXsGN2yR6jXc1bPEiEs3o1aMu2apchx8taGArmKy7ja"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.44/tcp/41006/p2p/16Uiu2HAmEjXsGN2yR6jXc1bPEiEs3o1aMu2apchx8taGArmKy7ja"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41007/p2p/16Uiu2HAkxG2ZpVWub8xatogt7oP8cwu4pbbkxG1oQXrgNSembE5C"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.45/tcp/41007/p2p/16Uiu2HAkxG2ZpVWub8xatogt7oP8cwu4pbbkxG1oQXrgNSembE5C"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41008/p2p/16Uiu2HAmUpkpxGbEc4tUVPYmdaMeZS9VCbGiJV2mXFMiVCe71eDq"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.46/tcp/41008/p2p/16Uiu2HAmUpkpxGbEc4tUVPYmdaMeZS9VCbGiJV2mXFMiVCe71eDq"})
 	gData.SeedPeersMap["consensus"] = append(gData.SeedPeersMap["consensus"],
-		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/127.0.0.1/tcp/41009/p2p/16Uiu2HAmD57RgJxS7R4putawdjxz9KQqqtRnTDm4JoPeTjHTzN3R"})
+		&SeedPeer{tpcmm.NodeRole_Validator, "/ip4/192.168.3.47/tcp/41009/p2p/16Uiu2HAmD57RgJxS7R4putawdjxz9KQqqtRnTDm4JoPeTjHTzN3R"})
 
 	for i := 0; i < len(validatorIDs); i++ {
 		keyPair := key.NewKeyPair(suite)

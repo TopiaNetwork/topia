@@ -1,6 +1,8 @@
 package transactionpool
 
 import (
+	"fmt"
+	"golang.org/x/sync/errgroup"
 	"sync/atomic"
 	"time"
 
@@ -15,17 +17,33 @@ func (pool *transactionPool) dropTxsForBlockAdded(newBlock *tpchaintypes.Block) 
 	defer func(t0 time.Time) {
 		pool.log.Infof("dropTxsForBlockAdded cost time: ", time.Since(t0))
 	}(time.Now())
-	var txIDs []txbasic.TxID
-	for _, txByte := range newBlock.Data.Txs {
-		var tx *txbasic.Transaction
-		err := pool.marshaler.Unmarshal(txByte, &tx)
-		if err != nil {
-			pool.log.Errorf("Unmarshal tx error:", err)
-		}
-		txID, _ := tx.TxID()
-		txIDs = append(txIDs, txID)
+
+	var egChunk errgroup.Group
+	for _, dataChunkBytes := range newBlock.Data.DataChunks {
+		dataChunkBytes := dataChunkBytes
+
+		egChunk.Go(func() error {
+			var dataChunk tpchaintypes.BlockDataChunk
+			if err := dataChunk.Unmarshal(dataChunkBytes); err != nil {
+				pool.log.Errorf("Unmarshal data chunk of block %d err: %v", newBlock.Head.Height, err)
+			}
+
+			var txIDs []txbasic.TxID
+			for _, txByte := range dataChunk.Txs {
+				var tx *txbasic.Transaction
+				err := pool.marshaler.Unmarshal(txByte, &tx)
+				if err != nil {
+					pool.log.Errorf("Unmarshal tx error:", err)
+				}
+				txID, _ := tx.TxID()
+				txIDs = append(txIDs, txID)
+			}
+			pool.RemoveTxBatch(txIDs)
+
+			return nil
+		})
+		egChunk.Wait()
 	}
-	pool.RemoveTxBatch(txIDs)
 }
 
 func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block) {
@@ -35,19 +53,46 @@ func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block)
 
 	var addCnt int64
 	var txList []*txbasic.Transaction
+	var eg errgroup.Group
 	for _, block := range blocks {
-		for _, txByte := range block.Data.Txs {
-			var tx *txbasic.Transaction
-			err := pool.marshaler.Unmarshal(txByte, &tx)
-			if err != nil {
-				continue
+		block := block
+		eg.Go(func() error {
+			var egChunk errgroup.Group
+			for _, dataChunkBytes := range block.Data.DataChunks {
+				dataChunkBytes := dataChunkBytes
+				egChunk.Go(func() error {
+					var dataChunk tpchaintypes.BlockDataChunk
+					if err := dataChunk.Unmarshal(dataChunkBytes); err != nil {
+						err := fmt.Errorf("Unmarshal data chunk of block %d err: %v", block.Head.Height, err)
+						pool.log.Errorf("%v", err)
+						return err
+					}
+
+					for _, txBytes := range dataChunk.Txs {
+						var tx *txbasic.Transaction
+						if err := pool.marshaler.Unmarshal(txBytes, &tx); err != nil {
+							err := fmt.Errorf("Unmarshal tx of block %d err: %v", block.Head.Height, err)
+							pool.log.Errorf("%v", err)
+							return err
+						}
+
+						if pool.validateTxsForRevert(tx) == message.ValidationAccept {
+							addCnt += 1
+							txList = append(txList, tx)
+						}
+					}
+
+					return nil
+				})
 			}
-			if pool.validateTxsForRevert(tx) == message.ValidationAccept {
-				addCnt += 1
-				txList = append(txList, tx)
-			}
-		}
+			return egChunk.Wait()
+		})
 	}
+	err := eg.Wait()
+	if err != nil {
+		return
+	}
+
 	var removeCnt int64
 	if addCnt <= (pool.config.TxPoolMaxCnt - pool.Count()) {
 		removeCnt = 0

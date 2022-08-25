@@ -36,12 +36,12 @@ func Test_transactionPool_loop_chanRemoveTxHashes(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pool1.RemoveTxHashes(hashes1)
+		pool1.RemoveTxBatch(hashes1)
 	}()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pool1.RemoveTxHashes(hashes2)
+		pool1.RemoveTxBatch(hashes2)
 	}()
 	wg.Add(1)
 	go func() {
@@ -202,10 +202,10 @@ func Test_transactionPool_loop(t *testing.T) {
 	}
 	assert.Equal(t, int64(200), pool1.Count())
 	go func() {
-		pool1.RemoveTxHashes(keyLocals)
+		pool1.RemoveTxBatch(keyLocals)
 	}()
 	go func() {
-		pool1.RemoveTxHashes(keyRemotes)
+		pool1.RemoveTxBatch(keyRemotes)
 	}()
 
 	pool1.chanBlockAdded <- NewBlock

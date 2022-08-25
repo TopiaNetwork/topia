@@ -434,12 +434,12 @@ func (pool *transactionPool) RemoveTxByKey(txID txbasic.TxID) error {
 	return nil
 }
 
-func (pool *transactionPool) RemoveTxHashes(hashes []txbasic.TxID) []error {
+func (pool *transactionPool) RemoveTxBatch(hashes []txbasic.TxID) []error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
 	defer func(t0 time.Time) {
-		pool.log.Infof(pool.nodeId, "transaction pool RemoveTxHashes cost time:", time.Since(t0))
+		pool.log.Infof(pool.nodeId, "transaction pool RemoveTxBatch cost time:", time.Since(t0))
 	}(time.Now())
 	var errs []error
 	for {

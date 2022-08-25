@@ -2,9 +2,6 @@ package transactionpool
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +9,7 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/hashicorp/golang-lru"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -22,164 +20,103 @@ import (
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/service"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
-)
-
-var ObsID string
-
-const (
-	ChanBlockAddedSize = 10
-)
-
-var (
-	ErrAlreadyKnown             = errors.New("transaction is already know")
-	ErrTxPoolFull               = errors.New("drop tx for transaction is full")
-	ErrReplaceUnderpriced       = errors.New("replace tx error gas price is lower ")
-	ErrTxNotExist               = errors.New("transaction not found")
-	ErrTxIsNil                  = errors.New("transaction is nil")
-	ErrTxUpdate                 = errors.New("can not update tx")
-	ErrPendingIsNil             = errors.New("pending is nil")
-	ErrQueueIsNil               = errors.New("queue is nil")
-	ErrUnRooted                 = errors.New("UnRooted new chain")
-	ErrQueueEmpty               = errors.New("queue is empty")
-	ErrAllTxListOfCategoryIsNil = errors.New("all txs of category is nil")
 )
 
 type transactionPool struct {
 	nodeId string
 	config txpooli.TransactionPoolConfig
 
-	chanSysShutdown   chan error
-	chanBlockAdded    chan BlockAddedEvent
-	chanReqReset      chan *txPoolResetHeads
-	chanReqTurn       chan *accountCache
-	chanReorgDone     chan chan struct{}
-	chanReorgShutdown chan struct{} // requests shutdown of scheduleReorgLoop
-	chanRmTxs         chan []txbasic.TxID
-	txServant         TransactionPoolServant
+	poolSize     int64
+	poolCount    int64
+	pendingSize  int64
+	pendingCount int64
+	isInRemove   int32
+	isPicking    int32
 
-	pendings      *pendingsMap
-	queues        *queuesMap
-	allTxsForLook *allTxsLookupMap
+	chanAddTxs     chan *addTxsItem
+	chanSortedItem chan *sortedItem
 
-	activationIntervals *activationInterval // ActivationIntervals for each txID
-	heightIntervals     *HeightInterval     // HeightIntervals for each txID
-	txHashCategory      *txHashCategory
-	txCache             *lru.Cache
-	log                 tplog.Logger
-	level               tplogcmm.LogLevel
-	ctx                 context.Context
-	handler             *transactionPoolHandler
-	marshaler           codec.Marshaler
-	hasher              tpcmm.Hasher
-	poolSize            int64
-	poolCount           int64
-	wg                  sync.WaitGroup
+	chanSysShutdown    chan struct{}
+	chanBlockAdded     chan *tpchaintypes.Block
+	chanBlocksRevert   chan []*tpchaintypes.Block
+	chanDelTxsStorage  chan []txbasic.TxID
+	chanSaveTxsStorage chan []*wrappedTx
+
+	txServant TransactionPoolServant
+
+	packagedTxIDs *lru.Cache
+	pending       *accTxs
+	prepareTxs    *accTxs
+	pendingNonces *accountNonce
+	allWrappedTxs *allLookupTxs
+
+	sortedTxs *sortedTxList
+	txCache   *lru.Cache
+
+	wg        sync.WaitGroup
+	log       tplog.Logger
+	level     tplogcmm.LogLevel
+	ctx       context.Context
+	handler   *transactionPoolHandler
+	marshaler codec.Marshaler
+	hasher    tpcmm.Hasher
+	mu        sync.RWMutex
 }
 
-func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig, level tplogcmm.LogLevel,
-	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
+func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig,
+	level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
 	blockService service.BlockService, network tpnet.Network) txpooli.TransactionPool {
 	conf = (&conf).Check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
-		nodeId:              nodeID,
-		config:              conf,
-		log:                 poolLog,
-		level:               level,
-		ctx:                 ctx,
-		allTxsForLook:       newAllTxsLookupMap(),
-		activationIntervals: newActivationInterval(),
-		heightIntervals:     newHeightInterval(),
-		txHashCategory:      newTxHashCategory(),
-		chanBlockAdded:      make(chan BlockAddedEvent, ChanBlockAddedSize),
-		chanReqReset:        make(chan *txPoolResetHeads),
-		chanReqTurn:         make(chan *accountCache),
-		chanReorgDone:       make(chan chan struct{}),
-		chanReorgShutdown:   make(chan struct{}), // requests shutdown of scheduleReorgLoop
-		chanRmTxs:           make(chan []txbasic.TxID),
+		nodeId: nodeID,
+		config: conf,
+		log:    poolLog,
+		level:  level,
+		ctx:    ctx,
+
+		pending:       newAccTxs(),
+		pendingNonces: newAccountNonce(stateQueryService),
+		prepareTxs:    newAccTxs(),
+		allWrappedTxs: newAllLookupTxs(),
+		sortedTxs:     newSortedTxList(sortedByMaxGasPrice),
+
+		chanAddTxs:     make(chan *addTxsItem, ChanAddTxsSize),
+		chanSortedItem: make(chan *sortedItem, ChanAddTxsSize),
+
+		chanSysShutdown:    make(chan struct{}),
+		chanBlockAdded:     make(chan *tpchaintypes.Block, ChanBlockAddedSize),
+		chanBlocksRevert:   make(chan []*tpchaintypes.Block),
+		chanDelTxsStorage:  make(chan []txbasic.TxID, ChanDelTxsStorage),
+		chanSaveTxsStorage: make(chan []*wrappedTx, ChanSaveTxsStorage),
 
 		marshaler: codec.CreateMarshaler(codecType),
 		hasher:    tpcmm.NewBlake2bHasher(0),
+		wg:        sync.WaitGroup{},
+		mu:        sync.RWMutex{},
 	}
-	pool.txCache, _ = lru.New(pool.config.TxCacheSize)
-	pool.pendings = newPendingsMap()
-	pool.queues = newQueuesMap()
-	pool.allTxsForLook = newAllTxsLookupMap()
+
+	pool.packagedTxIDs, _ = lru.New(TxCacheSize)
+	pool.txCache, _ = lru.New(TxCacheSize)
+
 	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
-
-	curBlock, err := pool.txServant.GetLatestBlock()
-	if err != nil {
-		pool.log.Errorf("NewTransactionPool get current block error:", err)
+	if pool.config.IsLoadCfg {
+		pool.loadAndSetPoolConfig(pool.config.PathConf)
 	}
-	pool.reset(nil, curBlock.GetHead())
-	pool.wg.Add(1)
-	go pool.ReorgAndTurnTxLoop()
-
+	if pool.config.IsLoadTxs {
+		pool.LoadLocalTxsData(pool.config.PathTxsStorage)
+	}
 	pool.loopChanSelect()
-	TxMsgSubProcessor = &txMessageSubProcessor{txpool: pool, log: pool.log, nodeID: pool.nodeId}
+
+	TxMsgSub = &txMsgSubProcessor{txPool: pool, log: pool.log, nodeID: pool.nodeId}
 	//subscribe
 	pool.txServant.Subscribe(ctx, protocol.SyncProtocolID_Msg,
 		true,
-		TxMsgSubProcessor.Validate)
-	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSubProcessor)
+		TxMsgSub.Validate)
+	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSub)
 	pool.handler = poolHandler
-
-	pool.LoadTxsData(pool.config.PathTxsStorge)
 	return pool
-}
-
-func (pool *transactionPool) newTxListStructs(category txbasic.TransactionCategory) {
-	if _, ok := pool.queues.queue[category]; !ok {
-		pool.queues.queue[category] = newQueueTxs()
-	}
-	if _, ok := pool.pendings.pending[category]; !ok {
-		pool.pendings.pending[category] = newPendingTxs()
-	}
-	if _, ok := pool.allTxsForLook.all[category]; !ok {
-		pool.allTxsForLook.all[category] = newTxForLookup()
-	}
-}
-func (pool *transactionPool) DropCategoryFromStruct(category txbasic.TransactionCategory) {
-	pool.allTxsForLook.ifEmptyDropCategory(category)
-	pool.pendings.ifEmptyDropCategory(category)
-	pool.queues.ifEmptyDropCategory(category)
-}
-
-func (pool *transactionPool) AddTx(tx *txbasic.Transaction, local bool) error {
-	category := txbasic.TransactionCategory(tx.Head.Category)
-	pool.newTxListStructs(category)
-	if local {
-		err := pool.AddLocal(tx)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := pool.AddRemote(tx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (pool *transactionPool) AddLocals(txs []*txbasic.Transaction) []error {
-	return pool.addTxs(txs, true)
-}
-
-func (pool *transactionPool) AddLocal(tx *txbasic.Transaction) error {
-	errs := pool.AddLocals([]*txbasic.Transaction{tx})
-	return errs[0]
-}
-
-func (pool *transactionPool) AddRemotes(txs []*txbasic.Transaction) []error {
-	return pool.addTxs(txs, false)
-}
-func (pool *transactionPool) AddRemote(tx *txbasic.Transaction) error {
-	errs := pool.AddRemotes([]*txbasic.Transaction{tx})
-
-	return errs[0]
 }
 
 func (pool *transactionPool) Dispatch(context actor.Context, data []byte) {
@@ -198,7 +135,7 @@ func (pool *transactionPool) Dispatch(context actor.Context, data []byte) {
 			pool.log.Errorf("TransactionPool unmarshal msg %d err %v", txPoolMsg.MsgType, err)
 			return
 		}
-		err = pool.processTx(&msg)
+		err = pool.processTX(&msg)
 		if err != nil {
 			return
 		}
@@ -208,7 +145,7 @@ func (pool *transactionPool) Dispatch(context actor.Context, data []byte) {
 	}
 }
 
-func (pool *transactionPool) processTx(msg *TxMessage) error {
+func (pool *transactionPool) processTX(msg *TxMessage) error {
 	err := pool.handler.ProcessTx(pool.ctx, msg)
 	if err != nil {
 		return err
@@ -216,141 +153,366 @@ func (pool *transactionPool) processTx(msg *TxMessage) error {
 	}
 	return nil
 }
-
-func (pool *transactionPool) PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error) {
-	txs := make([]*txbasic.Transaction, 0)
-	for cat, _ := range pool.allTxsForLook.all {
-		txs = append(txs, pool.pendings.getTxsByAddrOfCategory(cat, addr)...)
-		txs = append(txs, pool.queues.getTxsByAddrOfCategory(cat, addr)...)
+func (pool *transactionPool) AddTx(tx *txbasic.Transaction, isLocal bool) error {
+	if isLocal {
+		return pool.addLocal(tx)
+	} else {
+		return pool.addRemote(tx)
 	}
+}
+
+func (pool *transactionPool) addLocal(tx *txbasic.Transaction) error {
+	err := pool.addLocals([]*txbasic.Transaction{tx})
+
+	return err
+}
+
+func (pool *transactionPool) addRemote(tx *txbasic.Transaction) error {
+	err := pool.addRemotes([]*txbasic.Transaction{tx})
+	return err
+}
+func (pool *transactionPool) addLocals(txs []*txbasic.Transaction) error {
+	return pool.addTxs(txs, true)
+}
+
+func (pool *transactionPool) addRemotes(txs []*txbasic.Transaction) error {
+	return pool.addTxs(txs, false)
+}
+func (pool *transactionPool) addTx(tx *txbasic.Transaction, isLocal bool) error {
+	err := pool.addTxs([]*txbasic.Transaction{tx}, isLocal)
+	return err
+}
+func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, isLocal bool) error {
+
 	if len(txs) == 0 {
-		return nil, ErrPendingIsNil
+		return ErrTxIsNil
 	}
-	return txs, nil
-}
-
-func (pool *transactionPool) pendingTxsForCatgory(category txbasic.TransactionCategory) []*txbasic.Transaction {
-	defer func(t0 time.Time) {
-		pool.log.Infof("get Pending txs list For Catgory", category, "cost time: ", time.Since(t0))
-	}(time.Now())
-
-	return pool.pendings.getTxsByCategory(category)
-}
-
-func (pool *transactionPool) pendingMapAddrTxsOfCategory(category txbasic.TransactionCategory) map[tpcrtypes.Address][]*txbasic.Transaction {
-	defer func(t0 time.Time) {
-		pool.log.Infof("get Pending MapAddrTxs Of Category", category, "cost time: ", time.Since(t0))
-	}(time.Now())
-
-	return pool.pendings.getAddrTxsByCategory(category)
-}
-
-func (pool *transactionPool) Queue() ([]*txbasic.Transaction, error) {
-	defer func(t0 time.Time) {
-		pool.log.Infof("get Queue txs, cost time:", time.Since(t0))
-	}(time.Now())
-
-	txList := make([]*txbasic.Transaction, 0)
-
-	for _, category := range pool.allTxsForLook.getAllCategory() {
-		txList = append(txList, pool.queues.getTxsByCategory(category)...)
-	}
-	if len(txList) == 0 {
-		return nil, ErrQueueIsNil
-	}
-	return txList, nil
-}
-
-func (pool *transactionPool) queueTxsForCatgory(category txbasic.TransactionCategory) []*txbasic.Transaction {
-	defer func(t0 time.Time) {
-		pool.log.Infof("get Queue Txs For Catgory", category, "cost time: ", time.Since(t0))
-	}(time.Now())
-
-	return pool.queues.getTxsByCategory(category)
-}
-
-func (pool *transactionPool) queueMapAddrTxsOfCategory(category txbasic.TransactionCategory) map[tpcrtypes.Address][]*txbasic.Transaction {
-	defer func(t0 time.Time) {
-		pool.log.Infof("get Queue MapAddrTxs Of Category", category, "cost time: ", time.Since(t0))
-	}(time.Now())
-
-	return pool.queues.getAddrTxsByCategory(category)
-}
-
-func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, local bool) []error {
-	var (
-		errs     = make([]error, len(txs))
-		news     = make([]*txbasic.Transaction, 0, len(txs))
-		category txbasic.TransactionCategory
-	)
-	for i, tx := range txs {
-		category = txbasic.TransactionCategory(tx.Head.Category)
-		if txId, err := tx.TxID(); err == nil {
-			if pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txId) != nil {
-				errs[i] = ErrAlreadyKnown
-				continue
-			}
-			news = append(news, tx)
+	if atomic.LoadInt32(&pool.isInRemove) == int32(1) || atomic.LoadInt32(&pool.isPicking) == int32(1) {
+		pool.chanAddTxs <- &addTxsItem{
+			txs:     txs,
+			isLocal: isLocal,
 		}
 	}
-	if len(news) == 0 {
+	pool.mu.Lock()
+	if pool.Count()+int64(len(txs)) > pool.config.TxPoolMaxCnt {
+		for _, tx := range txs {
+			id, _ := tx.TxID()
+			pool.txCache.Add(id, txpooli.StateDroppedForTxPoolFull)
+		}
+		return ErrTxPoolFull
+	}
+	curHeight, err := pool.txServant.CurrentHeight()
+	if err != nil {
+		return err
+	}
+
+	var newTxs []*txbasic.Transaction
+	for _, tx := range txs {
+		chainNonce, _ := pool.txServant.GetNonce(tpcrtypes.Address(tx.Head.FromAddr))
+		if tx.Head.Nonce <= chainNonce {
+			continue
+		}
+		txID, _ := tx.TxID()
+
+		if _, ok := pool.allWrappedTxs.Get(txID); ok {
+			continue
+		}
+		newTxs = append(newTxs, tx)
+	}
+	if len(newTxs) == 0 {
+		return ErrNoTxAdded
+	}
+	getPendingNonce := func(addr tpcrtypes.Address) (uint64, error) {
+		return pool.pendingNonces.get(addr)
+	}
+	setPendingNonce := func(addr tpcrtypes.Address, nonce uint64) {
+		pool.pendingNonces.set(addr, nonce)
+	}
+	isPackaged := func(id txbasic.TxID) bool {
+		_, ok := pool.packagedTxIDs.Get(id)
+		return ok
+	}
+	dropOldTx := func(id txbasic.TxID) {
+		pool.allWrappedTxs.Del(id)
+		pool.txCache.Remove(id)
+		pool.chanDelTxsStorage <- []txbasic.TxID{id}
+	}
+	addTxInfo := func(isLocal bool, tx *txbasic.Transaction) {
+		txID, _ := tx.TxID()
+		txInfo := &wrappedTx{
+			TxID:          txID,
+			IsLocal:       isLocal,
+			Category:      txbasic.TransactionCategory(tx.Head.Category),
+			LastTime:      time.Now(),
+			LastHeight:    curHeight,
+			TxState:       txpooli.StateTxAdded,
+			IsRepublished: false,
+			FromAddr:      tpcrtypes.Address(tx.Head.FromAddr),
+			Nonce:         tx.Head.Nonce,
+			Tx:            tx,
+		}
+		pool.allWrappedTxs.Set(txID, txInfo)
+		pool.txCache.Add(txID, txpooli.StateTxAdded)
+		pool.chanSaveTxsStorage <- []*wrappedTx{txInfo}
+	}
+	addSize := func(pendingCnt, pendingSize, poolCnt, poolSize int64) {
+		if pendingCnt != int64(0) {
+			atomic.AddInt64(&pool.pendingCount, pendingCnt)
+		}
+		if pendingSize != int64(0) {
+			atomic.AddInt64(&pool.pendingSize, pendingSize)
+		}
+		if poolCnt != int64(0) {
+			for {
+				old := atomic.LoadInt64(&pool.poolCount)
+				if atomic.CompareAndSwapInt64(&pool.poolCount, old, old+poolCnt) {
+					break
+				}
+			}
+		}
+		if poolSize != int64(0) {
+			atomic.AddInt64(&pool.poolSize, poolSize)
+		}
+	}
+	addIntoSorted := func(address tpcrtypes.Address, maxPrice uint64, isMaxPriceChanged bool, txs []*txbasic.Transaction) bool {
+
+		if atomic.LoadInt32(&pool.isPicking) == 1 {
+			sortItem := &sortedItem{
+				account:           address,
+				maxPrice:          maxPrice,
+				isMaxPriceChanged: isMaxPriceChanged,
+				txs:               txs,
+			}
+			pool.chanSortedItem <- sortItem
+			return false
+		}
+
+		pool.sortedTxs.addAccTx(address, maxPrice, isMaxPriceChanged, txs)
+		return true
+	}
+	fetchTxsPrepared := func(address tpcrtypes.Address, nonce uint64) []*txbasic.Transaction {
+		return pool.prepareTxs.fetchTxsToPending(address, nonce)
+	}
+	insertToPrepared := func(address tpcrtypes.Address, isLocal bool, tx *txbasic.Transaction,
+		dropOldTx func(id txbasic.TxID), addTxInfo func(isLocal bool, tx *txbasic.Transaction), addSize func(pendingCnt, pendingSize, poolCnt, poolSize int64)) {
+		pool.prepareTxs.addTxToPrepared(address, isLocal, tx, dropOldTx, addTxInfo, addSize)
+	}
+
+	pool.pending.addTxsToPending(newTxs, isLocal, getPendingNonce, setPendingNonce, isPackaged, dropOldTx, addTxInfo,
+		addSize, addIntoSorted, fetchTxsPrepared, insertToPrepared)
+
+	defer pool.mu.Unlock()
+
+	return nil
+}
+
+func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txID txbasic.TxID) error {
+	if atomic.LoadInt32(&pool.isInRemove) == int32(1) || atomic.LoadInt32(&pool.isPicking) == int32(1) {
+		pool.chanAddTxs <- &addTxsItem{
+			txs:     []*txbasic.Transaction{tx},
+			isLocal: false,
+		}
+	}
+	txOldWrapped, ok := pool.allWrappedTxs.Get(txID)
+	if !ok {
+		return ErrTxNotExist
+	}
+
+	if tpcrtypes.Address(tx.Head.FromAddr) == txOldWrapped.FromAddr &&
+		tx.Head.Nonce == txOldWrapped.Nonce &&
+		GasPrice(txOldWrapped.Tx) < GasPrice(tx) {
+
+		if _, ok := pool.packagedTxIDs.Get(txID); ok {
+			return ErrTxIsPackaged
+		}
+
+		err := pool.addTx(tx, true)
+
+		if err != nil {
+			return err
+		}
+
+		//commit when unit testing
+		//**********
+		//txRemoved := &eventhub.TxPoolEvent{
+		//	EvType: eventhub.TxPoolEVType_Removed,
+		//	Tx:     txOldWrapped.Tx,
+		//}
+		//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txRemoved)
+		////commit when unit testing
+		//txAdded := &eventhub.TxPoolEvent{
+		//	EvType: eventhub.TxPoolEVType_Received,
+		//	Tx:     txOldWrapped.Tx,
+		//}
+		//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txAdded)
+		//***********
+	}
+	return nil
+}
+
+func (pool *transactionPool) RemoveTxByKey(txID txbasic.TxID) error {
+	txOldWrapped, ok := pool.allWrappedTxs.Get(txID)
+	if !ok {
+		return ErrTxNotExist
+	}
+	pendingReInject := func(address tpcrtypes.Address, txs []*txbasic.Transaction, dropSize int64) {
+		if txs != nil {
+			pool.prepareTxs.reInjectTxsToPrepare(address, txs)
+			atomic.AddInt64(&pool.pendingCount, -int64(1+len(txs)))
+			atomic.AddInt64(&pool.pendingSize, -dropSize)
+			for {
+				old := atomic.LoadInt64(&pool.poolCount)
+				if atomic.CompareAndSwapInt64(&pool.poolCount, old, old-1) {
+					break
+				}
+			}
+
+			atomic.AddInt64(&pool.poolSize, -int64(txOldWrapped.Tx.Size()))
+
+		} else {
+			atomic.AddInt64(&pool.pendingCount, -int64(1))
+			atomic.AddInt64(&pool.pendingSize, -dropSize)
+			for {
+				old := atomic.LoadInt64(&pool.poolCount)
+				if atomic.CompareAndSwapInt64(&pool.poolCount, old, old-1) {
+					break
+				}
+			}
+			atomic.AddInt64(&pool.poolSize, -int64(txOldWrapped.Tx.Size()))
+
+		}
+	}
+	setNonce := func(address tpcrtypes.Address, nonce uint64) { pool.pendingNonces.set(address, nonce) }
+	delSorted := func(addr tpcrtypes.Address) {
+		for {
+			old := atomic.LoadInt32(&pool.isPicking)
+			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(1)) {
+				break
+			}
+		}
+		pool.sortedTxs.removeAddr(addr)
+		for {
+			old := atomic.LoadInt32(&pool.isPicking)
+			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
+				break
+			}
+		}
+
+	}
+	addSorted := func(addr tpcrtypes.Address, maxPrice uint64, isMaxPriceChanged bool, txs []*txbasic.Transaction) bool {
+		pool.sortedTxs.addAccTx(addr, maxPrice, isMaxPriceChanged, txs)
+		return true
+	}
+	err := pool.pending.pendingRemoveTx(txOldWrapped.FromAddr, txOldWrapped.Nonce, pendingReInject, setNonce, delSorted, addSorted)
+
+	if err != nil {
+		err = pool.prepareTxs.prepareTxsRemoveTx(txOldWrapped.FromAddr, txOldWrapped.Nonce)
+		if err != nil {
+			return err
+		} else {
+			for {
+				old := atomic.LoadInt64(&pool.poolCount)
+				if atomic.CompareAndSwapInt64(&pool.poolCount, old, old-1) {
+					break
+				}
+			}
+			atomic.AddInt64(&pool.poolSize, -int64(txOldWrapped.Tx.Size()))
+
+		}
+	}
+	pool.txCache.Remove(txID)
+	pool.allWrappedTxs.Del(txID)
+	pool.chanDelTxsStorage <- []txbasic.TxID{txID}
+	////commit when unit testing
+	//*******************
+	//txRemoved := &eventhub.TxPoolEvent{
+	//	EvType: eventhub.TxPoolEVType_Removed,
+	//	Tx:     txOldWrapped.Tx,
+	//}
+	//eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txRemoved)
+	//*******************
+	return nil
+}
+
+func (pool *transactionPool) RemoveTxHashes(hashes []txbasic.TxID) []error {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	defer func(t0 time.Time) {
+		pool.log.Infof(pool.nodeId, "transaction pool RemoveTxHashes cost time:", time.Since(t0))
+	}(time.Now())
+	var errs []error
+	for {
+		old := atomic.LoadInt32(&pool.isInRemove)
+		if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(1)) {
+			break
+		}
+	}
+	for {
+		old := atomic.LoadInt32(&pool.isPicking)
+		if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(1)) {
+			break
+		}
+	}
+
+	if len(hashes) == 0 {
+		errs = append(errs, ErrTxIsNil)
+		for {
+			old := atomic.LoadInt32(&pool.isInRemove)
+			if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(0)) {
+				break
+			}
+		}
+		for {
+			old := atomic.LoadInt32(&pool.isPicking)
+			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
+				break
+			}
+		}
+
 		return errs
 	}
-	// Process all the new transaction and merge any errors into the original slice
-	_, dirtyAddrCache := pool.addTxsLocked(news, local)
-
-	// Reorg the pool internals if needed and return
-	done := pool.requestTurnToPending(dirtyAddrCache)
-	<-done
-	return errs
-}
-
-func (pool *transactionPool) addTxsLocked(txs []*txbasic.Transaction, local bool) ([]error, *accountCache) {
-	dirtyAccounts := newAccountCache()
-	errs := make([]error, len(txs))
-	for i, tx := range txs {
-		replaced, err := pool.add(tx, local)
-		errs[i] = err
-		if err == nil && !replaced {
-			dirtyAccounts.addTx(tx)
-
+	for _, hash := range hashes {
+		if err := pool.RemoveTxByKey(hash); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	for {
+		old := atomic.LoadInt32(&pool.isInRemove)
+		if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(0)) {
+			break
+		}
+	}
+	for {
+		old := atomic.LoadInt32(&pool.isPicking)
+		if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
+			break
 		}
 	}
 
-	return errs, dirtyAccounts
+	if len(errs) > 0 {
+		return errs
+	}
+	return nil
 }
 
-func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error {
-	defer func(t0 time.Time) {
-		pool.log.Infof("Update transaction cost time:", time.Since(t0))
-	}(time.Now())
-
-	category := txbasic.TransactionCategory(tx.Head.Category)
-
-	tx2 := pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txKey)
-
-	switch category {
-	case txbasic.TransactionCategory_Topia_Universal:
-		if tpcrtypes.Address(tx2.Head.FromAddr) == tpcrtypes.Address(tx.Head.FromAddr) &&
-			ToAddress(tx) == ToAddress(tx2) &&
-			GasPrice(tx2) < GasPrice(tx) {
-			pool.RemoveTxByKey(txKey)
-			txs := make([]*txbasic.Transaction, 0)
-			txs = append(txs, tx)
-			pool.addTxs(txs, true)
-		}
-		return nil
-	default:
-		return ErrTxUpdate
+func (pool *transactionPool) Get(txID txbasic.TxID) (*txbasic.Transaction, bool) {
+	wTx, ok := pool.allWrappedTxs.Get(txID)
+	if ok {
+		return wTx.Tx, true
 	}
+	return nil, false
 }
 
 func (pool *transactionPool) Size() int64 {
-	return pool.poolSize
+	return atomic.LoadInt64(&pool.poolSize)
+}
+func (pool *transactionPool) PendingAccountTxCnt(address tpcrtypes.Address) int64 {
+	return pool.pending.accountTxCnt(address)
 }
 
 func (pool *transactionPool) Count() int64 {
-	return pool.poolCount
+	return atomic.LoadInt64(&pool.poolCount)
 }
 
 func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Network) error {
@@ -366,262 +528,10 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 	if err != nil {
 		pool.log.Panicf("processBlockAddedEvent error:%s", err)
 	}
+
 	pool.log.Infof("processBlockAddedEvent,obsID:%s", ObsID)
 
-	pool.loopChanSelect()
 	return nil
-}
-
-func (pool *transactionPool) RemoveTxByKey(key txbasic.TxID) error {
-	category := pool.txHashCategory.getByHash(key)
-	tx := pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, key)
-	if tx == nil {
-		return ErrTxNotExist
-	}
-	addr := tpcrtypes.Address(tx.Head.FromAddr)
-	// Remove it from the list of known transactions
-
-	if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key); ok {
-		atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
-		atomic.AddInt64(&pool.poolCount, -1)
-	}
-
-	//commit when unit testing
-	txRemoved := &eventhub.TxPoolEvent{
-		EvType: eventhub.TxPoolEVTypee_Removed,
-		Tx:     tx,
-	}
-	eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txRemoved)
-
-	// Remove the transaction from the pending lists and reset the account nonce
-	f1 := func(txId txbasic.TxID, tx *txbasic.Transaction) {
-		pool.queueAddTx(txId, tx, false, false)
-	}
-	pool.pendings.getTxListRemoveByAddrOfCategory(f1, tx, category, addr)
-
-	// Transaction is in the future queue
-	f2 := func(string2 txbasic.TxID) {
-		pool.activationIntervals.removeTxActiv(string2)
-		pool.heightIntervals.removeTxHeight(string2)
-		pool.txHashCategory.removeHashCat(string2)
-	}
-	pool.queues.getTxListRemoveFutureByAddrOfCategory(tx, f2, key, category, addr)
-	pool.txCache.Add(key, txpooli.StateTxRemoved)
-	pool.DropCategoryFromStruct(category)
-	return nil
-}
-
-func (pool *transactionPool) RemoveTxHashs(hashs []txbasic.TxID) []error {
-	defer func(t0 time.Time) {
-		pool.log.Infof("transaction pool RemoveTxHashs cost time:", time.Since(t0))
-	}(time.Now())
-
-	errs := make([]error, 0)
-	for _, txHash := range hashs {
-		if err := pool.RemoveTxByKey(txHash); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errs
-}
-
-func (pool *transactionPool) Get(category txbasic.TransactionCategory, key txbasic.TxID) *txbasic.Transaction {
-	return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, key)
-}
-
-func (pool *transactionPool) queueAddTx(key txbasic.TxID, tx *txbasic.Transaction, local bool, addAll bool) (bool, error) {
-	// Try to insert the transaction into the future queue
-	f1 := func(category txbasic.TransactionCategory, key txbasic.TxID) {
-		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, key); ok {
-			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
-			atomic.AddInt64(&pool.poolCount, -1)
-		}
-
-	}
-	f2 := func(category txbasic.TransactionCategory, string2 txbasic.TxID) *txbasic.Transaction {
-		return pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, key)
-	}
-	f3 := func(string2 txbasic.TxID) {
-		pool.log.Errorf("Missing transaction in lookup set, please report the issue ", "TxID", key)
-	}
-	f4 := func(category txbasic.TransactionCategory, tx *txbasic.Transaction, local bool) {
-		if ok, err := pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, local); !ok {
-			pool.log.Errorf("add tx to all txs list error", err)
-		} else {
-			atomic.AddInt64(&pool.poolSize, int64(tx.Size()))
-			atomic.AddInt64(&pool.poolCount, 1)
-			pool.activationIntervals.setTxActiv(key, time.Now())
-			currentheight, err := pool.txServant.CurrentHeight()
-			if err != nil {
-				pool.log.Errorf("get current height error:", err)
-			}
-			pool.heightIntervals.setTxHeight(key, currentheight)
-		}
-
-	}
-	f5 := func(key txbasic.TxID, category txbasic.TransactionCategory, local bool) {
-		pool.activationIntervals.setTxActiv(key, time.Now())
-		currentheight, err := pool.txServant.CurrentHeight()
-		if err != nil {
-			pool.log.Errorf("get current height error:", err)
-		}
-		pool.heightIntervals.setTxHeight(key, currentheight)
-		pool.txHashCategory.setHashCat(key, category)
-		//comment for unit testing
-		if local {
-			pool.txServant.PublishTx(pool.ctx, tx)
-		}
-		txAdded := &eventhub.TxPoolEvent{
-			EvType: eventhub.TxPoolEVType_Received,
-			Tx:     tx,
-		}
-		eventhub.GetEventHubManager().GetEventHub(pool.nodeId).Trig(pool.ctx, eventhub.EventName_TxPoolChanged, txAdded)
-		pool.txCache.Add(key, txpooli.StateTxAddToQueue)
-
-	}
-	ok, err := pool.queues.addTxByKeyOfCategory(f1, f2, f3, f4, f5, key, tx, local, addAll)
-	return ok, err
-}
-
-func (pool *transactionPool) GetLocalTxs(category txbasic.TransactionCategory) []*txbasic.Transaction {
-	txs := pool.allTxsForLook.getLocalTxsByCategory(category)
-	return txs
-}
-
-// add : insert a transaction into the non-executable queue for later pending promotion and execution.
-func (pool *transactionPool) add(tx *txbasic.Transaction, local bool) (replaced bool, err error) {
-	// Make the local flag. If it's from local source or it's from the network but
-	// the sender is marked as local previously, treat it as the local transaction.
-	txId, _ := tx.TxID()
-	isLocal := local
-	category := txbasic.TransactionCategory(tx.Head.Category)
-	// If the transaction is already known, discard it
-	if pool.allTxsForLook.getTxFromKeyFromAllTxsLookupByCategory(category, txId) != nil {
-		pool.log.Tracef("Discarding already known transaction ", "hash:", txId, "category:", category)
-		return false, ErrAlreadyKnown
-	}
-	if uint64(pool.Size()) > pool.config.MaxSizeOfPending+pool.config.MaxSizeOfQueue ||
-		uint64(pool.Size()) > pool.config.TxPoolMaxSize {
-		pool.RemoveTxByKey(txId)
-		pool.txCache.Add(txId, txpooli.StateTxDiscardForTxPoolFull)
-		return false, ErrTxPoolFull
-	}
-
-	// Try to replace an existing transaction in the pending pool
-	from := tpcrtypes.Address(tx.Head.FromAddr)
-	f1 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
-		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
-			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
-			atomic.AddInt64(&pool.poolCount, -1)
-		}
-	}
-	f3 := func(category txbasic.TransactionCategory, tx *txbasic.Transaction, isLocal bool) {
-		if ok, err := pool.allTxsForLook.addTxToAllTxsLookupByCategory(category, tx, isLocal); !ok {
-			pool.log.Errorf("add tx to all txs list error", err)
-		} else {
-			atomic.AddInt64(&pool.poolSize, int64(tx.Size()))
-			atomic.AddInt64(&pool.poolCount, 1)
-		}
-
-	}
-	f5 := func(txId txbasic.TxID) {
-		pool.activationIntervals.setTxActiv(txId, time.Now())
-		currentheight, err := pool.txServant.CurrentHeight()
-		if err != nil {
-			pool.log.Errorf("get current height error:", err)
-		}
-		pool.heightIntervals.setTxHeight(txId, currentheight)
-		pool.log.Tracef("Pooled new executable transaction ", "hash:", txId, "from:", from)
-	}
-
-	if ok, err := pool.pendings.replaceTxOfAddrOfCategory(category, from, txId, tx, isLocal, f1, f3, f5); err != nil {
-		pool.txCache.Add(txId, txpooli.StateTxDiscardForReplaceFailed)
-		return ok, err
-	}
-	// New transaction isn't replacing a pending one, push into queue
-	replaced, err = pool.queueAddTx(txId, tx, isLocal, true)
-	if err != nil {
-		return false, err
-	}
-
-	pool.log.Tracef("Pooled new future transaction,", "txId:", txId, "from:", from, "to:", ToAddress(tx))
-	return replaced, nil
-}
-
-// turnAccTxsToPending adds  account's transaction list to the pending.
-func (pool *transactionPool) turnAddrTxsToPending(addrsNeedTurn []tpcrtypes.Address) {
-	var turnedTxs []*txbasic.Transaction
-	for _, addr := range addrsNeedTurn {
-		for _, category := range pool.allTxsForLook.getAllCategory() {
-			f1 := func(address tpcrtypes.Address) uint64 {
-				var nonce, err = pool.txServant.GetNonce(address)
-				if err != nil {
-					pool.log.Errorf("replaceExecutables get nonce error:", err)
-				}
-				return nonce
-			}
-			f2 := func(category txbasic.TransactionCategory, string2 txbasic.TxID) {
-				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, string2); ok {
-					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
-					atomic.AddInt64(&pool.poolCount, -1)
-				}
-			}
-			pool.queues.replaceExecutablesDropTooOld(category, addr, f1, f2)
-			ft0 := func(address tpcrtypes.Address) uint64 {
-				nonce, err := pool.txServant.GetNonce(address)
-				if err != nil {
-					pool.log.Errorf("replaceExecutables get tx nonce error:", err)
-				}
-				return nonce
-			}
-			ft1 := func(category txbasic.TransactionCategory, address tpcrtypes.Address, tx *txbasic.Transaction) (bool, *txbasic.Transaction) {
-				if pool.pendings.getTxListByAddrOfCategory(category, addr) == nil {
-					pool.pendings.setTxListOfCategory(category, addr, newCoreList(false))
-				}
-				inserted, old := pool.pendings.addTxToTxListByAddrOfCategory(category, address, tx)
-				return inserted, old
-			}
-			ft2 := func(category txbasic.TransactionCategory, txId txbasic.TxID, tx *txbasic.Transaction) {
-				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
-					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
-					atomic.AddInt64(&pool.poolCount, -1)
-				}
-			}
-
-			ft4 := func(category txbasic.TransactionCategory, oldkey txbasic.TxID, tx *txbasic.Transaction) {
-				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, oldkey); ok {
-					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
-					atomic.AddInt64(&pool.poolCount, -1)
-				}
-			}
-			ft5 := func(txId txbasic.TxID) {
-				pool.activationIntervals.setTxActiv(txId, time.Now())
-				currentheight, err := pool.txServant.CurrentHeight()
-				if err != nil {
-					pool.log.Errorf("get current height error:", err)
-				}
-				pool.heightIntervals.setTxHeight(txId, currentheight)
-
-			}
-			pool.queues.replaceExecutablesTurnTx(ft0, ft1, ft2, ft4, ft5, turnedTxs, category, addr)
-
-			// Drop all transactions over the allowed limit
-			fl2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
-				if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
-					atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
-					atomic.AddInt64(&pool.poolCount, -1)
-					pool.log.Tracef("Removed cap-exceeding queued transaction", "txId", txId)
-
-				}
-			}
-			pool.queues.replaceExecutablesDropOverLimit(fl2, pool.config.MaxSizeOfEachQueueAccount, category, addr)
-
-			// Delete the entire queue entry if it became empty.
-			pool.queues.replaceExecutablesDeleteEmpty(category, addr)
-
-		}
-	}
-	return
 }
 
 func (pool *transactionPool) Stop() {
@@ -631,163 +541,110 @@ func (pool *transactionPool) Stop() {
 	eventhub.GetEventHubManager().GetEventHub(pool.nodeId).UnObserve(pool.ctx, ObsID, eventhub.EventName_BlockAdded)
 	pool.log.Info("TransactionPool stopped")
 }
-
-func (pool *transactionPool) demoteUnexecutables(category txbasic.TransactionCategory) {
-	// Iterate over all accounts and demote any non-executable transactions
-	f1 := func(address tpcrtypes.Address) uint64 {
-		var nonce, err = pool.txServant.GetNonce(address)
-		if err != nil {
-			pool.log.Errorf("demoteUnexecutables get nonce error:", err)
-		}
-		return nonce
-	}
-	f2 := func(category txbasic.TransactionCategory, txId txbasic.TxID) {
-		if ok, txRm := pool.allTxsForLook.removeTxHashFromAllTxsLookupByCategory(category, txId); ok {
-			atomic.AddInt64(&pool.poolSize, -int64(txRm.Size()))
-			atomic.AddInt64(&pool.poolCount, -1)
-			pool.log.Tracef("Removed old pending transaction", "txId", txId)
-		}
-	}
-	f3 := func(hash txbasic.TxID, tx *txbasic.Transaction) {
-		pool.log.Errorf("Demoting invalidated transaction", "hash", hash)
-		// Internal shuffle shouldn't touch the lookup set.
-		pool.queueAddTx(hash, tx, false, false)
-	}
-	pool.pendings.demoteUnexecutablesByCategory(category, f1, f2, f3)
+func (pool *transactionPool) SysShutDown() {
+	pool.chanSysShutdown <- struct{}{}
 
 }
 
-func (pool *transactionPool) PickTxs() (txs []*txbasic.Transaction) {
+func (pool *transactionPool) PickTxs() []*txbasic.Transaction {
+
 	defer func(t0 time.Time) {
 		pool.log.Infof("PickTxs cost time:", time.Since(t0))
 	}(time.Now())
 
-	txs = make([]*txbasic.Transaction, 0)
-	txType := pool.config.PickTxType
-	switch txType {
-	case txpooli.PickTxPending:
-		txs = pool.pendings.getAllCommitTxs()
+	for {
+		old := atomic.LoadInt32(&pool.isInRemove)
+		if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(1)) {
+			break
+		}
+	}
 
-		return txs
-	case txpooli.PickTxPriceAndNonce:
-		for _, category := range pool.allTxsForLook.getAllCategory() {
-			txs = append(txs, pool.commitTxsByPriceAndNonce(category)...)
+	for {
+		old := atomic.LoadInt32(&pool.isPicking)
+		if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(1)) {
+			break
+		}
+	}
+
+	txType := PickTxPending
+	switch txType {
+	case PickTxPending:
+		dropTxInfo := func(id txbasic.TxID) {
+			pool.packagedTxIDs.Add(id, struct{}{})
+			pool.allWrappedTxs.Del(id)
+			pool.txCache.Remove(id)
+			pool.chanDelTxsStorage <- []txbasic.TxID{id}
+
+		}
+		rmPackedTx := func(addr tpcrtypes.Address, txs []*txbasic.Transaction) {
+
+			rmCnt, rmSize := pool.pending.removeAddr(addr, txs, dropTxInfo)
+			atomic.AddInt64(&pool.pendingCount, -rmCnt)
+			atomic.AddInt64(&pool.poolCount, -rmCnt)
+			atomic.AddInt64(&pool.pendingSize, -rmSize)
+			atomic.AddInt64(&pool.poolSize, -rmSize)
+
+		}
+		pool.mu.Lock()
+		txs := pool.sortedTxs.sortAndPickTxs(rmPackedTx)
+		defer pool.mu.Unlock()
+
+		for {
+			old := atomic.LoadInt32(&pool.isInRemove)
+			if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(0)) {
+				break
+			}
+		}
+		for {
+			old := atomic.LoadInt32(&pool.isPicking)
+			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
+				break
+			}
 		}
 		return txs
-	case txpooli.PickTxPriceAndTime:
-		for _, category := range pool.allTxsForLook.getAllCategory() {
-			txs = append(txs, pool.commitTxsByPriceAndTime(category)...)
-		}
-		return txs
+
 	default:
+		for {
+			old := atomic.LoadInt32(&pool.isInRemove)
+			if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(0)) {
+				break
+			}
+		}
+		for {
+			old := atomic.LoadInt32(&pool.isPicking)
+			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
+				break
+			}
+		}
 		return nil
 	}
 }
-func (pool *transactionPool) PickTxsOfCategory(category txbasic.TransactionCategory, txType txpooli.PickTxType) []*txbasic.Transaction {
-	defer func(t0 time.Time) {
-		pool.log.Infof("PickTxs of category:", category, "cost time:", time.Since(t0))
-	}(time.Now())
-
-	switch txType {
-	case txpooli.PickTxPending:
-		return pool.commitTxsForPending(category)
-
-	case txpooli.PickTxPriceAndNonce:
-		return pool.commitTxsByPriceAndNonce(category)
-
-	case txpooli.PickTxPriceAndTime:
-		return pool.commitTxsByPriceAndTime(category)
-	default:
-		return nil
+func (pool *transactionPool) GetLocalTxs() []*txbasic.Transaction {
+	var txs []*txbasic.Transaction
+	fetchTx := func(k interface{}, v interface{}) {
+		txs = append(txs, v.(*wrappedTx).Tx)
 	}
+	pool.allWrappedTxs.localTxs.IterateCallback(fetchTx)
+	return txs
 }
-
-func (pool *transactionPool) SysShutDown() {
-	pool.chanSysShutdown <- errors.New("shut down")
-}
-
-// commitTxsForPending  : Block packaged transactions for pending
-func (pool *transactionPool) commitTxsForPending(category txbasic.TransactionCategory) []*txbasic.Transaction {
-
-	return pool.pendingTxsForCatgory(category)
-}
-
-// commitTxsByPriceAndNonce  : Block packaged transactions sorted by price and nonce
-func (pool *transactionPool) commitTxsByPriceAndNonce(category txbasic.TransactionCategory) []*txbasic.Transaction {
-	txs := pool.pendingTxsForCatgory(category)
-	sort.Sort(TxByPriceAndNonce(txs))
+func (pool *transactionPool) GetRemoteTxs() []*txbasic.Transaction {
+	var txs []*txbasic.Transaction
+	fetchTx := func(k interface{}, v interface{}) {
+		txs = append(txs, v.(*wrappedTx).Tx)
+	}
+	pool.allWrappedTxs.remoteTxs.IterateCallback(fetchTx)
 	return txs
 }
 
-// commitTxsByPriceAndTime  : Block packaged transactions sorted by price and time
-func (pool *transactionPool) commitTxsByPriceAndTime(category txbasic.TransactionCategory) []*txbasic.Transaction {
-	txs := pool.pendingTxsForCatgory(category)
-	sort.Sort(TxByPriceAndTime(txs))
-	return txs
+func (pool *transactionPool) PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error) {
+	return pool.pending.getTxsByAddr(addr)
 }
 
 func (pool *transactionPool) PeekTxState(txid txbasic.TxID) txpooli.TransactionState {
 	value, ok := pool.txCache.Peek(txid)
-
 	if ok {
 		return value.(txpooli.TransactionState)
 	} else {
 		return txpooli.StateTxNil
 	}
-}
-
-func ToAddress(tx *txbasic.Transaction) tpcrtypes.Address {
-	toAddress := explainTx(tx, explainToAddress)
-	if toAddress == nil {
-		return ""
-	}
-	return toAddress.(tpcrtypes.Address)
-}
-
-func GasPrice(tx *txbasic.Transaction) uint64 {
-	gasPrice := explainTx(tx, explainGasPrice)
-	if gasPrice == nil {
-		return 0
-	}
-	return gasPrice.(uint64)
-}
-
-func GasLimit(tx *txbasic.Transaction) uint64 {
-	gasLimit := explainTx(tx, explainGasLimit)
-	if gasLimit == nil {
-		return 0
-	}
-	return gasLimit.(uint64)
-}
-
-type explainType int
-
-const (
-	explainToAddress explainType = iota
-	explainGasPrice
-	explainGasLimit
-)
-
-func explainTx(tx *txbasic.Transaction, eType explainType) interface{} {
-
-	switch txbasic.TransactionCategory(tx.Head.Category) {
-	case txbasic.TransactionCategory_Topia_Universal:
-		var txUniversal txuni.TransactionUniversal
-		_ = json.Unmarshal(tx.Data.Specification, &txUniversal)
-		switch eType {
-		case explainToAddress:
-			if txUniversal.Head.Type == uint32(txuni.TransactionUniversalType_Transfer) {
-				var targetData txuni.TransactionUniversalTransfer
-				_ = json.Unmarshal(txUniversal.Data.Specification, &targetData)
-				return targetData.TargetAddr
-			} else {
-				return ""
-			}
-		case explainGasPrice:
-			return txUniversal.Head.GasPrice
-		case explainGasLimit:
-			return txUniversal.Head.GasLimit
-		}
-	}
-	return nil
 }

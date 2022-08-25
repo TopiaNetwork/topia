@@ -1,16 +1,39 @@
 package service
 
 import (
-	"github.com/TopiaNetwork/topia/transaction/basic"
+	"github.com/AsynkronIT/protoactor-go/actor"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	tpnet "github.com/TopiaNetwork/topia/network"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type TxPoolService interface {
-	PickTxs() []*basic.Transaction
+	AddTx(tx *txbasic.Transaction, local bool) error
+
+	RemoveTxByKey(key txbasic.TxID) error
+
+	RemoveTxHashes(hashes []txbasic.TxID) []error
+
+	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
+
+	PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error)
+
+	PickTxs() []*txbasic.Transaction
+
+	Count() int64
 
 	Size() int64
 
-	//UpdateTx(tx *basic.Transaction, txID basic.TxID) error
+	TruncateTxPool()
+
+	Start(sysActor *actor.ActorSystem, network tpnet.Network) error
+
+	SysShutDown()
+
+	SetTxPoolConfig(conf txpooli.TransactionPoolConfig)
+
+	PeekTxState(hash txbasic.TxID) txpooli.TransactionState
 }
 
 type txPoolService struct {

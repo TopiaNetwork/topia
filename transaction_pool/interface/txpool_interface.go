@@ -12,123 +12,101 @@ import (
 
 const MOD_NAME = "TransactionPool"
 
-type PickTxType uint32
-
-const (
-	PickTxPending PickTxType = iota
-	PickTxPriceAndNonce
-	PickTxPriceAndTime
-)
-
 type TransactionState string
 
 const (
-	StateTxAdded                   TransactionState = "Tx Added"
-	StateTxRemoved                                  = "tx removed"
-	StateTxDiscardForReplaceFailed                  = "Tx Discard For replace failed"
-	StateTxDiscardForTxPoolFull                     = "Tx Discard For TxPool is Full"
-	StateTxAddToQueue                               = "Tx Add To Queue"
-	StateTxNil                                      = "no transaction state for this tx "
-)
-
-type TxExpiredPolicy byte
-
-const (
-	TxExpiredTime TxExpiredPolicy = iota
-	TxExpiredHeight
-	TxExpiredTimeAndHeight
-	TxExpiredTimeOrHeight
+	StateTxAdded              TransactionState = "transaction Added"
+	StateTxRepublished                         = "transaction republished"
+	StateTxNil                                 = "no transaction state for this tx "
+	StateDroppedForTxPoolFull                  = "transaction dropped for txPool is full"
 )
 
 type TransactionPoolConfig struct {
-	PathTxsStorge   string
-	ReStoredDur     time.Duration
-	TxExpiredPolicy TxExpiredPolicy
-	PickTxType      PickTxType
+	PathTxsStorage string
+	PathConf       string
+	ReStoredDur    time.Duration
+	IsLoadTxs      bool
+	IsLoadCfg      bool
+	GasPriceLimit  uint64
 
-	TxCacheSize   int
-	GasPriceLimit uint64
-	TxMaxSize     uint64
-	TxPoolMaxSize uint64
+	MaxSizeOfEachTx     int64
+	TxPoolMaxSize       int64
+	TxPoolMaxCnt        int64
+	PendingMaxSize      int64
+	PendingMaxCnt       int64
+	MaxCntOfEachAccount int64 // Maximum size of transaction per account
 
-	MaxSizeOfEachPendingAccount uint64 // Maximum size of executable transaction per account
-	MaxSizeOfPending            uint64 // Maximum size of executable transaction
-	MaxSizeOfEachQueueAccount   uint64 // Maximum number of non-executable transaction slots permitted per account
-	MaxSizeOfQueue              uint64 // Maximum number of non-executable transaction slots for all accounts
-
-	LifetimeForTx         time.Duration
-	LifeHeight            uint64
-	TxTTLTimeOfRepublic   time.Duration
-	TxTTLHeightOfRepublic uint64
-	EvictionInterval      time.Duration //= 29989 * time.Millisecond // Time interval to check for evictable transactions
-	RepublicInterval      time.Duration //= 30011 * time.Millisecond       //time interval to check transaction lifetime for report
+	LifetimeForTx          time.Duration
+	LifeHeight             uint64
+	TxTTLTimeOfRepublish   time.Duration
+	TxTTLHeightOfRepublish uint64
 }
 
 var DefaultTransactionPoolConfig = TransactionPoolConfig{
-	PathTxsStorge:   "StorgeInfo/StorageTxsDataAndConfig.json",
-	ReStoredDur:     30 * time.Minute,
-	TxExpiredPolicy: TxExpiredTimeAndHeight,
-	PickTxType:      PickTxPending,
+	PathTxsStorage: "StorageInfo/StorageTxs",
+	PathConf:       "StorageInfo/StorageConfig.json",
+	ReStoredDur:    2000003 * time.Microsecond, //2 * time.Second,
 
 	GasPriceLimit: 1000, // 1000
-	TxCacheSize:   36000000,
 
-	TxMaxSize:     2 * 1024,
-	TxPoolMaxSize: 64 * 2 * 1024,
+	MaxSizeOfEachTx: 2 * 1024,
+	TxPoolMaxSize:   20 * 1024 * 1024,
+	TxPoolMaxCnt:    40 * 1024,
+	PendingMaxSize:  10 * 1024 * 1024,
+	PendingMaxCnt:   20 * 1024,
 
-	MaxSizeOfEachPendingAccount: 2 * 1024,
-	MaxSizeOfPending:            16 * 1024,
-	MaxSizeOfEachQueueAccount:   2 * 1024,
-	MaxSizeOfQueue:              32 * 1024,
+	MaxCntOfEachAccount: 32,
 
-	LifetimeForTx:         30 * time.Minute,
-	LifeHeight:            uint64(30 * 60),
-	TxTTLTimeOfRepublic:   30011 * time.Millisecond, //Prime Numbers 30second
-	TxTTLHeightOfRepublic: 30,
-	EvictionInterval:      30013 * time.Millisecond, // Time interval to check for evictable transactions
-	RepublicInterval:      30029 * time.Millisecond, //time interval to check transaction lifetime for report
-
+	LifetimeForTx:          15 * time.Second, // 15 * time.Second
+	LifeHeight:             uint64(30 * 60),
+	TxTTLTimeOfRepublish:   5 * time.Second, //5 * time.Second
+	TxTTLHeightOfRepublish: 5,
 }
 
 func (config *TransactionPoolConfig) Check() TransactionPoolConfig {
 	conf := *config
-	if conf.GasPriceLimit < 1 {
+	if conf.GasPriceLimit < DefaultTransactionPoolConfig.GasPriceLimit {
 		conf.GasPriceLimit = DefaultTransactionPoolConfig.GasPriceLimit
 	}
-	if conf.MaxSizeOfEachPendingAccount < 2*1024 {
-		conf.MaxSizeOfEachQueueAccount = DefaultTransactionPoolConfig.MaxSizeOfEachPendingAccount
+	if conf.MaxCntOfEachAccount < DefaultTransactionPoolConfig.MaxCntOfEachAccount {
+		conf.MaxCntOfEachAccount = DefaultTransactionPoolConfig.MaxCntOfEachAccount
 	}
-	if conf.MaxSizeOfPending < 32*1024 {
-		conf.MaxSizeOfPending = DefaultTransactionPoolConfig.MaxSizeOfPending
-	}
-	if conf.MaxSizeOfEachQueueAccount < 2*1024 {
-		conf.MaxSizeOfEachPendingAccount = DefaultTransactionPoolConfig.MaxSizeOfEachQueueAccount
-	}
-	if conf.MaxSizeOfQueue < 64*1024 {
-		conf.MaxSizeOfQueue = DefaultTransactionPoolConfig.MaxSizeOfQueue
-	}
-	if conf.TxPoolMaxSize < 128*1024 {
+
+	if conf.TxPoolMaxSize < DefaultTransactionPoolConfig.TxPoolMaxSize {
 		conf.TxPoolMaxSize = DefaultTransactionPoolConfig.TxPoolMaxSize
 	}
-	if conf.LifetimeForTx < 1 {
+	if conf.TxPoolMaxCnt < DefaultTransactionPoolConfig.TxPoolMaxCnt {
+		conf.TxPoolMaxCnt = DefaultTransactionPoolConfig.TxPoolMaxCnt
+	}
+	if conf.PendingMaxSize < DefaultTransactionPoolConfig.PendingMaxSize {
+		conf.PendingMaxSize = DefaultTransactionPoolConfig.PendingMaxSize
+	}
+	if conf.PendingMaxCnt < DefaultTransactionPoolConfig.PendingMaxCnt {
+		conf.PendingMaxCnt = DefaultTransactionPoolConfig.PendingMaxCnt
+	}
+
+	if conf.LifetimeForTx < DefaultTransactionPoolConfig.LifetimeForTx {
 		conf.LifetimeForTx = DefaultTransactionPoolConfig.LifetimeForTx
 	}
-	if conf.TxTTLTimeOfRepublic < 1 {
-		conf.TxTTLTimeOfRepublic = DefaultTransactionPoolConfig.TxTTLTimeOfRepublic
+	if conf.TxTTLTimeOfRepublish < DefaultTransactionPoolConfig.TxTTLTimeOfRepublish {
+		conf.TxTTLTimeOfRepublish = DefaultTransactionPoolConfig.TxTTLTimeOfRepublish
 	}
-	if conf.PathTxsStorge == "" {
-		conf.PathTxsStorge = DefaultTransactionPoolConfig.PathTxsStorge
+	if conf.TxTTLHeightOfRepublish < DefaultTransactionPoolConfig.TxTTLHeightOfRepublish {
+		conf.TxTTLHeightOfRepublish = DefaultTransactionPoolConfig.TxTTLHeightOfRepublish
+	}
+	if conf.PathTxsStorage == "" {
+		conf.PathTxsStorage = DefaultTransactionPoolConfig.PathTxsStorage
 	}
 
 	return conf
 }
 
 type TransactionPool interface {
-	AddTx(tx *txbasic.Transaction, local bool) error
+	AddTx(tx *txbasic.Transaction, isLocal bool) error
 
 	RemoveTxByKey(key txbasic.TxID) error
 
-	RemoveTxHashs(hashs []txbasic.TxID) []error
+	RemoveTxHashes(hashes []txbasic.TxID) []error
 
 	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
 

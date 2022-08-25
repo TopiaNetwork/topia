@@ -7,7 +7,7 @@ import (
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
 
-type TransactionPoolActor struct {
+type TxPoolActor struct {
 	log    tplog.Logger
 	pid    *actor.PID
 	txPool *transactionPool
@@ -15,7 +15,7 @@ type TransactionPoolActor struct {
 
 func CreateTransactionPoolActor(level tplogcmm.LogLevel, log tplog.Logger, sysActor *actor.ActorSystem, txPool *transactionPool) (*actor.PID, error) {
 	logTxPoolActor := tplog.CreateModuleLogger(level, "TransactionPoolActor", log)
-	tpActor := &TransactionPoolActor{
+	tpActor := &TxPoolActor{
 		log: logTxPoolActor,
 	}
 	props := actor.PropsFromProducer(func() actor.Actor {
@@ -28,7 +28,7 @@ func CreateTransactionPoolActor(level tplogcmm.LogLevel, log tplog.Logger, sysAc
 	return pid, err
 }
 
-func (ta *TransactionPoolActor) Receive(context actor.Context) {
+func (ta *TxPoolActor) Receive(context actor.Context) {
 	switch msg := context.Message().(type) {
 	case *actor.Started:
 		ta.log.Info("Starting, initialize actor here")

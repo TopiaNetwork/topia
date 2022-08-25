@@ -13,8 +13,6 @@ type TxPoolService interface {
 
 	RemoveTxByKey(key txbasic.TxID) error
 
-	RemoveTxHashes(hashes []txbasic.TxID) []error
-
 	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
 
 	PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error)

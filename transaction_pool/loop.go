@@ -258,7 +258,7 @@ func (pool *transactionPool) removeTxForExpired(expiredPolicy TxExpiredPolicy) {
 	pool.allWrappedTxs.localTxs.IterateCallback(dropLocalsForExpired)
 
 	if len(localDropTxIDs) > 0 {
-		pool.RemoveTxHashes(localDropTxIDs)
+		pool.RemoveTxBatch(localDropTxIDs)
 	}
 
 	var remoteDropTxIDs []txbasic.TxID
@@ -285,7 +285,7 @@ func (pool *transactionPool) removeTxForExpired(expiredPolicy TxExpiredPolicy) {
 	pool.allWrappedTxs.remoteTxs.IterateCallback(dropRemotesForExpired)
 
 	if len(remoteDropTxIDs) > 0 {
-		pool.RemoveTxHashes(remoteDropTxIDs)
+		pool.RemoveTxBatch(remoteDropTxIDs)
 	}
 }
 

@@ -25,7 +25,7 @@ func (pool *transactionPool) dropTxsForBlockAdded(newBlock *tpchaintypes.Block) 
 		txID, _ := tx.TxID()
 		txIDs = append(txIDs, txID)
 	}
-	pool.RemoveTxHashes(txIDs)
+	pool.RemoveTxBatch(txIDs)
 }
 
 func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block) {

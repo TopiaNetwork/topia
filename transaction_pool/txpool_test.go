@@ -555,7 +555,7 @@ func Test_transactionPool_RemoveTxHashes(t *testing.T) {
 	hashes = append(hashes, KeyR1)
 	hashes = append(hashes, KeyR2)
 
-	pool1.RemoveTxHashes(hashes)
+	pool1.RemoveTxBatch(hashes)
 	assert.Equal(t, 0, len(pool1.GetLocalTxs()))
 	assert.Equal(t, 0, len(pool1.GetRemoteTxs()))
 
@@ -573,16 +573,16 @@ func Test_transactionPool_RemoveTxHashes(t *testing.T) {
 	hashes2 = append(hashes2, KeyR2)
 
 	assert.Equal(t, 3, len(pool1.GetLocalTxs()))
-	err := pool1.RemoveTxHashes(hashes1)
+	err := pool1.RemoveTxBatch(hashes1)
 	fmt.Println(err)
 	assert.Equal(t, 0, len(pool1.GetLocalTxs()))
 
 	//Test unforced the removal of consecutive transactions
 	assert.Equal(t, 2, len(pool1.GetRemoteTxs()))
-	err = pool1.RemoveTxHashes(hashes2)
+	err = pool1.RemoveTxBatch(hashes2)
 	assert.Equal(t, 0, len(pool1.GetRemoteTxs()))
 	//Test forced the removal of discontinuous transactions
-	errs := pool1.RemoveTxHashes(hashes1)
+	errs := pool1.RemoveTxBatch(hashes1)
 	for _, err := range errs {
 		fmt.Println(err)
 	}

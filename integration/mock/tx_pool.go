@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"math/big"
 	"runtime"
 	"time"
@@ -59,7 +60,7 @@ func (txm *TransactionPoolMock) TruncateTxPool() {
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) SetTxPoolConfig(conf txpooli.TransactionPoolConfig) {
+func (txm *TransactionPoolMock) SetTxPoolConfig(conf *tpconfig.TransactionPoolConfig) {
 	//TODO implement me
 	panic("implement me")
 }

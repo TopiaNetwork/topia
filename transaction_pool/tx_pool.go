@@ -2,6 +2,8 @@ package transactionpool
 
 import (
 	"context"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
+	txuni "github.com/TopiaNetwork/topia/transaction/universal"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,7 +27,7 @@ import (
 
 type transactionPool struct {
 	nodeId string
-	config txpooli.TransactionPoolConfig
+	config *tpconfig.TransactionPoolConfig
 
 	poolSize     int64
 	poolCount    int64
@@ -64,32 +66,56 @@ type transactionPool struct {
 	mu        sync.RWMutex
 }
 
-func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig,
+func GasPriceLessWTX(wTxOrgin *wrappedTx, wTxTarget *wrappedTx) bool {
+	txCatOrgin := string(wTxOrgin.Tx.Head.Category)
+	txCatTarget := string(wTxTarget.Tx.Head.Category)
+	if txCatOrgin != string(txbasic.TransactionCategory_Topia_Universal) {
+		return false //for non topia tx category, its order is lower
+	}
+
+	if txCatTarget != string(txbasic.TransactionCategory_Topia_Universal) {
+		return true //for non topia tx category, its order is lower
+	}
+
+	var txUniOrgin txuni.TransactionUniversal
+	var txUniTarget txuni.TransactionUniversal
+	if err := txUniOrgin.Unmarshal(wTxOrgin.Tx.Data.Specification); err != nil {
+		panic("Invalid txUniOrgin")
+	}
+	if err := txUniTarget.Unmarshal(wTxOrgin.Tx.Data.Specification); err != nil {
+		panic("Invalid txUniTarget")
+	}
+
+	return txUniOrgin.Head.GasPrice > txUniTarget.Head.GasPrice
+
+}
+
+func NewTransactionPool(nodeID string, ctx context.Context, conf *tpconfig.TransactionPoolConfig,
 	level tplogcmm.LogLevel, log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
 	blockService service.BlockService, network tpnet.Network) txpooli.TransactionPool {
-	conf = (&conf).Check()
+	confNew := conf.Check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 	pool := &transactionPool{
 		nodeId: nodeID,
-		config: conf,
+		config: confNew,
 		log:    poolLog,
 		level:  level,
 		ctx:    ctx,
 
-		pending:       newAccTxs(),
-		pendingNonces: newAccountNonce(stateQueryService),
-		prepareTxs:    newAccTxs(),
+		//pending:       newAccTxs(),
+		//pendingNonces: newAccountNonce(stateQueryService),
+		//prepareTxs:    newAccTxs(),
 		allWrappedTxs: newAllLookupTxs(),
-		sortedTxs:     newSortedTxList(sortedByMaxGasPrice),
+		sortedTxs:     newSortedTxList(GasPriceLessWTX),
 
-		chanAddTxs:     make(chan *addTxsItem, ChanAddTxsSize),
-		chanSortedItem: make(chan *sortedItem, ChanAddTxsSize),
+		//chanAddTxs:     make(chan *addTxsItem, ChanAddTxsSize),
+		//chanSortedItem: make(chan *sortedItem, ChanAddTxsSize),
 
-		chanSysShutdown:    make(chan struct{}),
-		chanBlockAdded:     make(chan *tpchaintypes.Block, ChanBlockAddedSize),
-		chanBlocksRevert:   make(chan []*tpchaintypes.Block),
-		chanDelTxsStorage:  make(chan []txbasic.TxID, ChanDelTxsStorage),
-		chanSaveTxsStorage: make(chan []*wrappedTx, ChanSaveTxsStorage),
+		//chanSysShutdown:    make(chan struct{}),
+		//chanBlockAdded:     make(chan *tpchaintypes.Block, ChanBlockAddedSize),
+		//chanBlocksRevert:   make(chan []*tpchaintypes.Block),
+		//chanDelTxsStorage:  make(chan []txbasic.TxID, ChanDelTxsStorage),
+		//chanSaveTxsStorage: make(chan []*wrappedTx, ChanSaveTxsStorage),
 
 		marshaler: codec.CreateMarshaler(codecType),
 		hasher:    tpcmm.NewBlake2bHasher(0),
@@ -97,8 +123,8 @@ func NewTransactionPool(nodeID string, ctx context.Context, conf txpooli.Transac
 		mu:        sync.RWMutex{},
 	}
 
-	pool.packagedTxIDs, _ = lru.New(TxCacheSize)
-	pool.txCache, _ = lru.New(TxCacheSize)
+	//pool.packagedTxIDs, _ = lru.New(TxCacheSize)
+	//pool.txCache, _ = lru.New(TxCacheSize)
 
 	pool.txServant = newTransactionPoolServant(stateQueryService, blockService, network)
 	if pool.config.IsLoadCfg {
@@ -183,17 +209,18 @@ func (pool *transactionPool) addTx(tx *txbasic.Transaction, isLocal bool) error 
 	return err
 }
 func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, isLocal bool) error {
-
 	if len(txs) == 0 {
 		return ErrTxIsNil
 	}
-	if atomic.LoadInt32(&pool.isInRemove) == int32(1) || atomic.LoadInt32(&pool.isPicking) == int32(1) {
+	/*if atomic.LoadInt32(&pool.isInRemove) == int32(1) || atomic.LoadInt32(&pool.isPicking) == int32(1) {
 		pool.chanAddTxs <- &addTxsItem{
 			txs:     txs,
 			isLocal: isLocal,
 		}
-	}
+	}*/
 	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
 	if pool.Count()+int64(len(txs)) > pool.config.TxPoolMaxCnt {
 		for _, tx := range txs {
 			id, _ := tx.TxID()
@@ -206,7 +233,7 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, isLocal bool) er
 		return err
 	}
 
-	var newTxs []*txbasic.Transaction
+	//var newTxs []*txbasic.Transaction
 	for _, tx := range txs {
 		chainNonce, _ := pool.txServant.GetNonce(tpcrtypes.Address(tx.Head.FromAddr))
 		if tx.Head.Nonce <= chainNonce {
@@ -216,13 +243,33 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, isLocal bool) er
 
 		if _, ok := pool.allWrappedTxs.Get(txID); ok {
 			continue
+		} else {
+			txInfo := &wrappedTx{
+				TxID:          txID,
+				IsLocal:       isLocal,
+				Category:      txbasic.TransactionCategory(tx.Head.Category),
+				LastTime:      time.Now(),
+				LastHeight:    curHeight,
+				TxState:       txpooli.StateTxAdded,
+				IsRepublished: false,
+				FromAddr:      tpcrtypes.Address(tx.Head.FromAddr),
+				Nonce:         tx.Head.Nonce,
+				Tx:            tx,
+			}
+
+			pool.allWrappedTxs.Set(txID, txInfo)
+			pool.sortedTxs.addTx(txInfo)
+			//pool.txCache.Add(txID, txpooli.StateTxAdded)
+			//go func(wTx *wrappedTx) {
+			//	pool.chanSaveTxsStorage <- []*wrappedTx{wTx}
+			//}(txInfo)
 		}
-		newTxs = append(newTxs, tx)
+		//newTxs = append(newTxs, tx)
 	}
-	if len(newTxs) == 0 {
-		return ErrNoTxAdded
-	}
-	getPendingNonce := func(addr tpcrtypes.Address) (uint64, error) {
+	//if len(newTxs) == 0 {
+	//	return ErrNoTxAdded
+	//}
+	/*getPendingNonce := func(addr tpcrtypes.Address) (uint64, error) {
 		return pool.pendingNonces.get(addr)
 	}
 	setPendingNonce := func(addr tpcrtypes.Address, nonce uint64) {
@@ -236,26 +283,9 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, isLocal bool) er
 		pool.allWrappedTxs.Del(id)
 		pool.txCache.Remove(id)
 		pool.chanDelTxsStorage <- []txbasic.TxID{id}
-	}
-	addTxInfo := func(isLocal bool, tx *txbasic.Transaction) {
-		txID, _ := tx.TxID()
-		txInfo := &wrappedTx{
-			TxID:          txID,
-			IsLocal:       isLocal,
-			Category:      txbasic.TransactionCategory(tx.Head.Category),
-			LastTime:      time.Now(),
-			LastHeight:    curHeight,
-			TxState:       txpooli.StateTxAdded,
-			IsRepublished: false,
-			FromAddr:      tpcrtypes.Address(tx.Head.FromAddr),
-			Nonce:         tx.Head.Nonce,
-			Tx:            tx,
-		}
-		pool.allWrappedTxs.Set(txID, txInfo)
-		pool.txCache.Add(txID, txpooli.StateTxAdded)
-		pool.chanSaveTxsStorage <- []*wrappedTx{txInfo}
-	}
-	addSize := func(pendingCnt, pendingSize, poolCnt, poolSize int64) {
+	}*/
+
+	/*addSize := func(pendingCnt, pendingSize, poolCnt, poolSize int64) {
 		if pendingCnt != int64(0) {
 			atomic.AddInt64(&pool.pendingCount, pendingCnt)
 		}
@@ -274,22 +304,6 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, isLocal bool) er
 			atomic.AddInt64(&pool.poolSize, poolSize)
 		}
 	}
-	addIntoSorted := func(address tpcrtypes.Address, maxPrice uint64, isMaxPriceChanged bool, txs []*txbasic.Transaction) bool {
-
-		if atomic.LoadInt32(&pool.isPicking) == 1 {
-			sortItem := &sortedItem{
-				account:           address,
-				maxPrice:          maxPrice,
-				isMaxPriceChanged: isMaxPriceChanged,
-				txs:               txs,
-			}
-			pool.chanSortedItem <- sortItem
-			return false
-		}
-
-		pool.sortedTxs.addAccTx(address, maxPrice, isMaxPriceChanged, txs)
-		return true
-	}
 	fetchTxsPrepared := func(address tpcrtypes.Address, nonce uint64) []*txbasic.Transaction {
 		return pool.prepareTxs.fetchTxsToPending(address, nonce)
 	}
@@ -299,9 +313,7 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, isLocal bool) er
 	}
 
 	pool.pending.addTxsToPending(newTxs, isLocal, getPendingNonce, setPendingNonce, isPackaged, dropOldTx, addTxInfo,
-		addSize, addIntoSorted, fetchTxsPrepared, insertToPrepared)
-
-	defer pool.mu.Unlock()
+		addSize, addIntoSorted, fetchTxsPrepared, insertToPrepared)*/
 
 	return nil
 }
@@ -351,78 +363,21 @@ func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, txID txbasic.TxID
 }
 
 func (pool *transactionPool) RemoveTxByKey(txID txbasic.TxID) error {
-	txOldWrapped, ok := pool.allWrappedTxs.Get(txID)
-	if !ok {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	wTx, isExist := pool.allWrappedTxs.Get(txID)
+	if !isExist {
 		return ErrTxNotExist
 	}
-	pendingReInject := func(address tpcrtypes.Address, txs []*txbasic.Transaction, dropSize int64) {
-		if txs != nil {
-			pool.prepareTxs.reInjectTxsToPrepare(address, txs)
-			atomic.AddInt64(&pool.pendingCount, -int64(1+len(txs)))
-			atomic.AddInt64(&pool.pendingSize, -dropSize)
-			for {
-				old := atomic.LoadInt64(&pool.poolCount)
-				if atomic.CompareAndSwapInt64(&pool.poolCount, old, old-1) {
-					break
-				}
-			}
 
-			atomic.AddInt64(&pool.poolSize, -int64(txOldWrapped.Tx.Size()))
-
-		} else {
-			atomic.AddInt64(&pool.pendingCount, -int64(1))
-			atomic.AddInt64(&pool.pendingSize, -dropSize)
-			for {
-				old := atomic.LoadInt64(&pool.poolCount)
-				if atomic.CompareAndSwapInt64(&pool.poolCount, old, old-1) {
-					break
-				}
-			}
-			atomic.AddInt64(&pool.poolSize, -int64(txOldWrapped.Tx.Size()))
-
-		}
-	}
-	setNonce := func(address tpcrtypes.Address, nonce uint64) { pool.pendingNonces.set(address, nonce) }
-	delSorted := func(addr tpcrtypes.Address) {
-		for {
-			old := atomic.LoadInt32(&pool.isPicking)
-			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(1)) {
-				break
-			}
-		}
-		pool.sortedTxs.removeAddr(addr)
-		for {
-			old := atomic.LoadInt32(&pool.isPicking)
-			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
-				break
-			}
-		}
-
-	}
-	addSorted := func(addr tpcrtypes.Address, maxPrice uint64, isMaxPriceChanged bool, txs []*txbasic.Transaction) bool {
-		pool.sortedTxs.addAccTx(addr, maxPrice, isMaxPriceChanged, txs)
-		return true
-	}
-	err := pool.pending.pendingRemoveTx(txOldWrapped.FromAddr, txOldWrapped.Nonce, pendingReInject, setNonce, delSorted, addSorted)
-
-	if err != nil {
-		err = pool.prepareTxs.prepareTxsRemoveTx(txOldWrapped.FromAddr, txOldWrapped.Nonce)
-		if err != nil {
-			return err
-		} else {
-			for {
-				old := atomic.LoadInt64(&pool.poolCount)
-				if atomic.CompareAndSwapInt64(&pool.poolCount, old, old-1) {
-					break
-				}
-			}
-			atomic.AddInt64(&pool.poolSize, -int64(txOldWrapped.Tx.Size()))
-
-		}
-	}
-	pool.txCache.Remove(txID)
 	pool.allWrappedTxs.Del(txID)
-	pool.chanDelTxsStorage <- []txbasic.TxID{txID}
+	pool.sortedTxs.removeTx(wTx)
+	//pool.txCache.Remove(txID)
+
+	//go func(txIDT txbasic.TxID) {
+	//	pool.chanDelTxsStorage <- []txbasic.TxID{txIDT}
+	//}(txID)
 	////commit when unit testing
 	//*******************
 	//txRemoved := &eventhub.TxPoolEvent{
@@ -523,13 +478,14 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 	}
 	network.RegisterModule(txpooli.MOD_NAME, actorPID, pool.marshaler)
 
-	ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
-		Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)
-	if err != nil {
-		pool.log.Panicf("processBlockAddedEvent error:%s", err)
-	}
+	/*
+		ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
+			Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)
+		if err != nil {
+			pool.log.Panicf("processBlockAddedEvent error:%s", err)
+		}
 
-	pool.log.Infof("processBlockAddedEvent,obsID:%s", ObsID)
+		pool.log.Infof("processBlockAddedEvent,obsID:%s", ObsID)*/
 
 	return nil
 }
@@ -547,77 +503,15 @@ func (pool *transactionPool) SysShutDown() {
 }
 
 func (pool *transactionPool) PickTxs() []*txbasic.Transaction {
-
 	defer func(t0 time.Time) {
-		pool.log.Infof("PickTxs cost time:", time.Since(t0))
+		pool.log.Infof("PickTxs cost time: %d", time.Since(t0))
 	}(time.Now())
 
-	for {
-		old := atomic.LoadInt32(&pool.isInRemove)
-		if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(1)) {
-			break
-		}
-	}
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 
-	for {
-		old := atomic.LoadInt32(&pool.isPicking)
-		if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(1)) {
-			break
-		}
-	}
+	return pool.sortedTxs.PickTxs(pool.config.BlockMaxBytes, pool.config.BlockMaxGas)
 
-	txType := PickTxPending
-	switch txType {
-	case PickTxPending:
-		dropTxInfo := func(id txbasic.TxID) {
-			pool.packagedTxIDs.Add(id, struct{}{})
-			pool.allWrappedTxs.Del(id)
-			pool.txCache.Remove(id)
-			pool.chanDelTxsStorage <- []txbasic.TxID{id}
-
-		}
-		rmPackedTx := func(addr tpcrtypes.Address, txs []*txbasic.Transaction) {
-
-			rmCnt, rmSize := pool.pending.removeAddr(addr, txs, dropTxInfo)
-			atomic.AddInt64(&pool.pendingCount, -rmCnt)
-			atomic.AddInt64(&pool.poolCount, -rmCnt)
-			atomic.AddInt64(&pool.pendingSize, -rmSize)
-			atomic.AddInt64(&pool.poolSize, -rmSize)
-
-		}
-		pool.mu.Lock()
-		txs := pool.sortedTxs.sortAndPickTxs(rmPackedTx)
-		defer pool.mu.Unlock()
-
-		for {
-			old := atomic.LoadInt32(&pool.isInRemove)
-			if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(0)) {
-				break
-			}
-		}
-		for {
-			old := atomic.LoadInt32(&pool.isPicking)
-			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
-				break
-			}
-		}
-		return txs
-
-	default:
-		for {
-			old := atomic.LoadInt32(&pool.isInRemove)
-			if atomic.CompareAndSwapInt32(&pool.isInRemove, old, int32(0)) {
-				break
-			}
-		}
-		for {
-			old := atomic.LoadInt32(&pool.isPicking)
-			if atomic.CompareAndSwapInt32(&pool.isPicking, old, int32(0)) {
-				break
-			}
-		}
-		return nil
-	}
 }
 func (pool *transactionPool) GetLocalTxs() []*txbasic.Transaction {
 	var txs []*txbasic.Transaction

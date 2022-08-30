@@ -2,10 +2,10 @@ package transactionpool
 
 import (
 	"errors"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type TxExpiredPolicy byte
@@ -70,8 +70,8 @@ const (
 	TxRepublishTimeOrHeight
 )
 
-func (pool *transactionPool) SetTxPoolConfig(conf txpooli.TransactionPoolConfig) {
-	conf = (conf).Check()
-	pool.config = conf
+func (pool *transactionPool) SetTxPoolConfig(conf *tpconfig.TransactionPoolConfig) {
+	confNew := conf.Check()
+	pool.config = confNew
 	return
 }

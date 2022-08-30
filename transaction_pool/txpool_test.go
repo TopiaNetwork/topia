@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"github.com/pkg/profile"
 	"os"
 	"reflect"
@@ -35,7 +36,7 @@ import (
 )
 
 var (
-	TestTxPoolConfig, TestTxPoolConfig2                                                        txpooli.TransactionPoolConfig
+	TestTxPoolConfig, TestTxPoolConfig2                                                        *tpconfig.TransactionPoolConfig
 	TxlowGasPrice, TxHighGasLimit, txlocal, txremote, Tx1, Tx2, Tx3, Tx4, Tx5, Tx6, TxR1, TxR2 *txbasic.Transaction
 	keylocal, keyremote, Key1, Key2, Key3, Key4, Key5, Key6, KeyR1, KeyR2                      txbasic.TxID
 	From1, From2                                                                               tpcrtypes.Address
@@ -65,7 +66,7 @@ func init() {
 
 	Ctx = context.Background()
 	TpiaLog, _ = tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
-	TestTxPoolConfig = txpooli.DefaultTransactionPoolConfig
+	TestTxPoolConfig = tpconfig.DefaultTransactionPoolConfig()
 	starttime = uint64(time.Now().Unix() - 105)
 	keyLocals = make([]txbasic.TxID, 0)
 	keyRemotes = make([]txbasic.TxID, 0)
@@ -164,7 +165,7 @@ func init() {
 	pool1 = SetNewTransactionPool(TestNodeID1, Ctx, TestTxPoolConfig, 1, log, codec.CodecType(1), stateService, blockService, network)
 	TxPoolHandler1 = NewTransactionPoolHandler(log, pool1, TxMsgSub)
 
-	TestTxPoolConfig2 = txpooli.DefaultTransactionPoolConfig
+	TestTxPoolConfig2 = tpconfig.DefaultTransactionPoolConfig()
 	TestTxPoolConfig2.PathConf = "StorageInfo/StorageConfig2.json"
 	TestTxPoolConfig2.PathTxsStorage = "StorageInfo/StorageTxs2"
 	pool2 = SetNewTransactionPool(TestNodeID2, Ctx, TestTxPoolConfig2, 1, log, codec.CodecType(1), stateService, blockService, network)
@@ -320,11 +321,18 @@ func setTxUniversalTransferRemote(nonce, gasprice, gaslimit uint64) *txuni.Trans
 }
 
 func setBlockHead(height, epoch, round uint64, txcount uint32, timestamp uint64, hash, parrenthash []byte) *tpchaintypes.BlockHead {
+	bhChunk := &tpchaintypes.BlockHeadChunk{
+		TxCount: txcount,
+	}
+
+	bhChunkBytes, _ := bhChunk.Marshal()
+
 	blockhead := &tpchaintypes.BlockHead{ChainID: []byte{0x01}, Version: 1, Height: height, Epoch: epoch, Round: round,
-		ParentBlockHash: parrenthash, Launcher: nil, Proposer: nil, Proof: nil, VRFProof: nil,
-		MaxPri: nil, VoteAggSignature: nil, TxCount: txcount, TxRoot: nil,
-		TxResultRoot: nil, StateRoot: nil, GasFees: nil, TimeStamp: timestamp, ElapsedSpan: 0, Hash: hash,
+		ParentBlockHash: parrenthash, Proposer: nil, Proof: nil, VRFProof: nil,
+		MaxPri: nil, VoteAggSignature: nil, StateRoot: nil, GasFees: nil, TimeStamp: timestamp, ElapsedSpan: 0, Hash: hash,
 		Reserved: nil}
+	blockhead.HeadChunks = append(blockhead.HeadChunks, bhChunkBytes)
+
 	return blockhead
 }
 func SetBlock(head *tpchaintypes.BlockHead, data *tpchaintypes.BlockData) *tpchaintypes.Block {
@@ -335,7 +343,7 @@ func SetBlock(head *tpchaintypes.BlockHead, data *tpchaintypes.BlockData) *tpcha
 	return block
 }
 func SetBlockData(txs []*txbasic.Transaction) *tpchaintypes.BlockData {
-	blockdata := &tpchaintypes.BlockData{
+	bdChunk := &tpchaintypes.BlockDataChunk{
 		Version: 1,
 		Txs:     nil,
 	}
@@ -344,23 +352,30 @@ func SetBlockData(txs []*txbasic.Transaction) *tpchaintypes.BlockData {
 		txByte, _ := json.Marshal(tx)
 		txsByte = append(txsByte, txByte)
 	}
-	blockdata.Txs = txsByte
-	return blockdata
+	bdChunk.Txs = txsByte
+	bdChunkBytes, _ := bdChunk.Marshal()
+
+	bd := &tpchaintypes.BlockData{
+		Version: 1,
+	}
+	bd.DataChunks = append(bd.DataChunks, bdChunkBytes)
+
+	return bd
 }
 
-func SetNewTransactionPool(nodeID string, ctx context.Context, conf txpooli.TransactionPoolConfig, level tplogcmm.LogLevel,
+func SetNewTransactionPool(nodeID string, ctx context.Context, conf *tpconfig.TransactionPoolConfig, level tplogcmm.LogLevel,
 	log tplog.Logger, codecType codec.CodecType, stateQueryService service.StateQueryService,
 	blockService service.BlockService, network tpnet.Network) *transactionPool {
 
-	conf = (&conf).Check()
+	confNew1 := conf.Check()
 	conf.MaxCntOfEachAccount = 16
 	conf.TxPoolMaxSize = 1024
-	conf = (&conf).Check()
+	confNew2 := confNew1.Check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 
 	pool := &transactionPool{
 		nodeId: nodeID,
-		config: conf,
+		config: confNew2,
 		log:    poolLog,
 		level:  level,
 		ctx:    ctx,

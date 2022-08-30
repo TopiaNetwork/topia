@@ -2,7 +2,6 @@ package transactionpool
 
 import (
 	"container/heap"
-	"container/list"
 	"encoding/json"
 	"sort"
 	"sync"
@@ -646,142 +645,85 @@ const (
 )
 
 type sortedTxList struct {
-	sortedBy sortedByPolicy
-	txList   *list.List
+	sync   sync.RWMutex
+	txList []*wrappedTx
+	less   func(*wrappedTx, *wrappedTx) bool
 }
 
-func newSortedTxList(policy sortedByPolicy) *sortedTxList {
-	sorted := &sortedTxList{
-		sortedBy: policy,
-		txList:   list.New(),
-	}
-	return sorted
-}
-func (st *sortedTxList) addAccTx(addr tpcrtypes.Address, maxPrice uint64, isChangeMaxPrice bool, txs []*txbasic.Transaction) {
-	item := &sortedTxItem{
-		account:  addr,
-		maxPrice: maxPrice,
-		txs:      txs,
-	}
-	if st.txList.Len() == 0 {
-		st.txList.PushFront(item)
-		return
-	}
-	if len(txs) == 1 {
-		if !isChangeMaxPrice {
-			//first insert to sortedTxList
-			for e := st.txList.Front(); e != nil; e = e.Next() {
-				if maxPrice < e.Value.(*sortedTxItem).maxPrice {
-					if e.Next() == nil {
-						st.txList.PushBack(item)
-						return
-					}
-					if maxPrice >= e.Next().Value.(*sortedTxItem).maxPrice {
-						st.txList.InsertAfter(item, e)
-						return
-					}
-				} else if maxPrice == e.Value.(*sortedTxItem).maxPrice {
-					st.txList.InsertBefore(item, e)
-				} else if maxPrice > e.Value.(*sortedTxItem).maxPrice {
-					if e.Prev() == nil {
-						st.txList.PushFront(item)
-						return
-					}
-					if maxPrice <= e.Prev().Value.(*sortedTxItem).maxPrice {
-						st.txList.InsertBefore(item, e)
-						return
-					}
-				}
-			}
-		} else {
-			// update the only tx in pending
-			for e := st.txList.Front(); e != nil; e = e.Next() {
-				if e.Value.(*sortedTxItem).account == addr {
-					e.Value = item
-					for {
-						if e.Prev() == nil {
-							return
-						}
-
-						if e.Prev().Value.(*sortedTxItem).maxPrice >= maxPrice {
-							return
-						} else if e.Prev().Value.(*sortedTxItem).maxPrice < maxPrice {
-							st.txList.MoveBefore(e, e.Prev())
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if len(txs) > 1 {
-		for e := st.txList.Front(); e != nil; e = e.Next() {
-			if !isChangeMaxPrice {
-				// just update txs
-				for e := st.txList.Front(); e != nil; e = e.Next() {
-					if e.Value.(*sortedTxItem).account == addr {
-						e.Value = item
-						return
-					}
-				}
-			} else {
-				// update maxPrice change pos for account if needed
-				for e := st.txList.Front(); e != nil; e = e.Next() {
-					if e.Value.(*sortedTxItem).account == addr {
-						e.Value = item
-						for {
-							if e.Prev() == nil {
-								return
-							}
-							if e.Prev().Value.(*sortedTxItem).maxPrice >= maxPrice {
-								return
-							} else if e.Prev().Value.(*sortedTxItem).maxPrice < maxPrice {
-								st.txList.MoveBefore(e, e.Prev())
-							}
-						}
-					}
-				}
-			}
-		}
+func newSortedTxList(less func(*wrappedTx, *wrappedTx) bool) *sortedTxList {
+	return &sortedTxList{
+		less: less,
 	}
 }
 
-func (st *sortedTxList) removeAddr(addr tpcrtypes.Address) {
-	if st.txList.Len() == 0 {
-		return
+func (st *sortedTxList) addTx(wTx *wrappedTx) {
+	st.sync.Lock()
+	defer st.sync.Unlock()
+
+	index := sort.Search(len(st.txList), func(i int) bool {
+		return st.less(st.txList[i], wTx)
+	})
+
+	if index == len(st.txList) {
+		st.txList = append(st.txList, wTx)
 	}
 
-	for e := st.txList.Front(); e != nil; e = e.Next() {
+	st.txList = append(st.txList[:index+1], st.txList[index:]...)
+	st.txList[index] = wTx
+}
 
-		if e.Value.(*sortedTxItem).account == addr {
-			st.txList.Remove(e)
+func (st *sortedTxList) removeTx(wTx *wrappedTx) {
+	st.sync.Lock()
+	defer st.sync.Unlock()
+
+	index := sort.Search(len(st.txList), func(i int) bool {
+		return st.less(st.txList[i], wTx)
+	})
+
+	for index < len(st.txList) {
+		if st.txList[index] == wTx {
+			st.txList = append(st.txList[:index], st.txList[index+1:]...)
 			return
 		}
 
+		index++
 	}
 }
 
-func (st *sortedTxList) sortAndPickTxs(callBackRemoveAddr func(addr tpcrtypes.Address, txs []*txbasic.Transaction)) []*txbasic.Transaction {
+func (st *sortedTxList) reset() {
+	st.sync.Lock()
+	defer st.sync.Unlock()
 
-	var txs []*txbasic.Transaction
-	var item *sortedTxItem
-	switch st.sortedBy {
-	case sortedByMaxGasPrice:
-		if st.txList.Len() == 0 {
-			return nil
-		}
-		for {
-			e := st.txList.Front()
-			if e == nil {
-				break
-			}
-			item = e.Value.(*sortedTxItem)
-			txs = append(txs, item.txs...)
-			callBackRemoveAddr(item.account, item.txs)
-			st.txList.Remove(e)
+	st.txList = make([]*wrappedTx, 0)
+}
+
+func (st *sortedTxList) size() int {
+	st.sync.RLock()
+	defer st.sync.RUnlock()
+
+	return len(st.txList)
+}
+
+func (st *sortedTxList) PickTxs(blockMaxBytes int64, blockMaxGas int64) []*txbasic.Transaction {
+	st.sync.RLock()
+	defer st.sync.RUnlock()
+
+	if len(st.txList) == 0 {
+		return nil
+	}
+
+	var totalSize int
+	var rtnWTx []*txbasic.Transaction
+	for _, wTx := range st.txList {
+		totalSize += wTx.Tx.Size()
+		if totalSize > int(blockMaxBytes) {
+			break
+		} else {
+			rtnWTx = append(rtnWTx, wTx.Tx)
 		}
 	}
-	return txs
+
+	return rtnWTx
 }
 
 type accountNonce struct {
@@ -933,11 +875,10 @@ const (
 )
 
 func explainTx(tx *txbasic.Transaction, eType explainType) interface{} {
-
 	switch txbasic.TransactionCategory(tx.Head.Category) {
 	case txbasic.TransactionCategory_Topia_Universal:
 		var txUniversal txuni.TransactionUniversal
-		_ = json.Unmarshal(tx.Data.Specification, &txUniversal)
+		_ = txUniversal.Unmarshal(tx.Data.Specification)
 		switch eType {
 		case explainToAddress:
 			if txUniversal.Head.Type == uint32(txuni.TransactionUniversalType_Transfer) {

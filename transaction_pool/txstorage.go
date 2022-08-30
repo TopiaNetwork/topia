@@ -4,8 +4,8 @@ import (
 	"os"
 	"sync"
 
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 func (pool *transactionPool) savePoolConfig(path string) error {
@@ -13,7 +13,7 @@ func (pool *transactionPool) savePoolConfig(path string) error {
 }
 
 func (pool *transactionPool) loadAndSetPoolConfig(path string) error {
-	setConf := func(config txpooli.TransactionPoolConfig) {
+	setConf := func(config *tpconfig.TransactionPoolConfig) {
 		pool.config = config
 	}
 

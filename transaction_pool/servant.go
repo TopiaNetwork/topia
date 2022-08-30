@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"context"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -27,8 +28,8 @@ type TransactionPoolServant interface {
 	GetBlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error)
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
 
-	savePoolConfig(path string, conf txpooli.TransactionPoolConfig, marshaler codec.Marshaler) error
-	loadAndSetPoolConfig(path string, marshaler codec.Marshaler, setConf func(config txpooli.TransactionPoolConfig)) error
+	savePoolConfig(path string, conf *tpconfig.TransactionPoolConfig, marshaler codec.Marshaler) error
+	loadAndSetPoolConfig(path string, marshaler codec.Marshaler, setConf func(config *tpconfig.TransactionPoolConfig)) error
 
 	saveLocalTxs(path string, marshaler codec.Marshaler, wrappedTxs []*wrappedTx) error
 	saveAllLocalTxs(isLocalsNotNil func() bool, saveAllLocals func() error) error
@@ -109,7 +110,7 @@ func (servant *transactionPoolServant) UnSubscribe(topic string) error {
 	return servant.Network.UnSubscribe(topic)
 }
 
-func (servant *transactionPoolServant) savePoolConfig(path string, conf txpooli.TransactionPoolConfig, marshaler codec.Marshaler) error {
+func (servant *transactionPoolServant) savePoolConfig(path string, conf *tpconfig.TransactionPoolConfig, marshaler codec.Marshaler) error {
 
 	txsData, err := marshaler.Marshal(conf)
 	if err != nil {
@@ -123,17 +124,17 @@ func (servant *transactionPoolServant) savePoolConfig(path string, conf txpooli.
 	return nil
 }
 
-func (servant *transactionPoolServant) loadAndSetPoolConfig(path string, marshaler codec.Marshaler, setConf func(config txpooli.TransactionPoolConfig)) error {
+func (servant *transactionPoolServant) loadAndSetPoolConfig(path string, marshaler codec.Marshaler, setConf func(config *tpconfig.TransactionPoolConfig)) error {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	conf := &txpooli.TransactionPoolConfig{}
+	conf := &tpconfig.TransactionPoolConfig{}
 	err = marshaler.Unmarshal(data, &conf)
 	if err != nil {
 		return err
 	}
-	setConf(*conf)
+	setConf(conf)
 	return nil
 }
 
@@ -310,7 +311,7 @@ func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sen
 	if err != nil {
 		return message.ValidationReject
 	}
-	if int64(tx.Size()) > txpooli.DefaultTransactionPoolConfig.MaxSizeOfEachTx {
+	if int64(tx.Size()) > tpconfig.DefaultTransactionPoolConfig().MaxSizeOfEachTx {
 		msgSub.log.Errorf("transaction size is up to the TxMaxSize")
 		return message.ValidationReject
 	}
@@ -318,7 +319,7 @@ func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sen
 		msgSub.log.Errorf("transaction nonce is up to the MaxUint64")
 		return message.ValidationReject
 	}
-	if txpooli.DefaultTransactionPoolConfig.GasPriceLimit > GasLimit(tx) {
+	if tpconfig.DefaultTransactionPoolConfig().GasPriceLimit > GasLimit(tx) {
 		msgSub.log.Errorf("transaction gasLimit is lower to GasPriceLimit")
 		return message.ValidationReject
 	}

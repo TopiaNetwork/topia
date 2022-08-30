@@ -11,31 +11,30 @@ import (
 )
 
 func (pool *transactionPool) loopChanSelect() {
+	//pool.wg.Add(1)
+	//go pool.loopAddTxs()
 
-	pool.wg.Add(1)
-	go pool.loopAddTxs()
+	//pool.wg.Add(1)
+	//go pool.loopAddIntoSorted()
 
-	pool.wg.Add(1)
-	go pool.loopAddIntoSorted()
+	//pool.wg.Add(1)
+	//go pool.loopChanSaveTxsStorage()
+	//pool.wg.Add(1)
+	//go pool.loopChanDelTxsStorage()
 
-	pool.wg.Add(1)
-	go pool.loopChanSaveTxsStorage()
-	pool.wg.Add(1)
-	go pool.loopChanDelTxsStorage()
+	//pool.wg.Add(1)
+	//go pool.LoopAddTxsForBlocksRevert()
+	//pool.wg.Add(1)
+	//go pool.loopDropTxsIfBlockAdded()
 
-	pool.wg.Add(1)
-	go pool.LoopAddTxsForBlocksRevert()
-	pool.wg.Add(1)
-	go pool.loopDropTxsIfBlockAdded()
-
-	pool.wg.Add(1)
-	go pool.loopRemoveTxForUptoLifeTime()
-	pool.wg.Add(1)
-	go pool.loopRegularSaveLocalTxs()
-	pool.wg.Add(1)
-	go pool.loopRegularRepublish()
-	pool.wg.Add(1)
-	go pool.loopSaveAllIfShutDown()
+	//pool.wg.Add(1)
+	//go pool.loopRemoveTxForUptoLifeTime()
+	//pool.wg.Add(1)
+	//go pool.loopRegularSaveLocalTxs()
+	//pool.wg.Add(1)
+	//go pool.loopRegularRepublish()
+	//pool.wg.Add(1)
+	//go pool.loopSaveAllIfShutDown()
 
 }
 
@@ -63,8 +62,8 @@ func (pool *transactionPool) loopAddIntoSorted() {
 	for {
 		if atomic.LoadInt32(&pool.isPicking) == int32(0) && atomic.LoadInt32(&pool.isInRemove) == int32(0) {
 			select {
-			case sortItem := <-pool.chanSortedItem:
-				pool.sortedTxs.addAccTx(sortItem.account, sortItem.maxPrice, sortItem.isMaxPriceChanged, sortItem.txs)
+			//case sortItem := <-pool.chanSortedItem:
+			//pool.sortedTxs.addAccTx(sortItem.account, sortItem.maxPrice, sortItem.isMaxPriceChanged, sortItem.txs)
 			case <-pool.ctx.Done():
 				pool.log.Info("loopAddIntoSorted stopped")
 			}
@@ -439,7 +438,7 @@ func (pool *transactionPool) loopAddTxsFromChan(txsItem *addTxsItem) error {
 			return false
 		}
 
-		pool.sortedTxs.addAccTx(address, maxPrice, isMaxPriceChanged, txs)
+		//pool.sortedTxs.addAccTx(address, maxPrice, isMaxPriceChanged, txs)
 		return true
 	}
 	fetchTxsPrepared := func(address tpcrtypes.Address, nonce uint64) []*txbasic.Transaction {

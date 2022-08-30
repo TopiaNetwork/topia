@@ -22,6 +22,11 @@ type MockNetwork struct {
 	recorder *MockNetworkMockRecorder
 }
 
+func (m *MockNetwork) UpdateNetActiveNode(netActiveNode common.NetworkActiveNode) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // MockNetworkMockRecorder is the mock recorder for MockNetwork.
 type MockNetworkMockRecorder struct {
 	mock *MockNetwork

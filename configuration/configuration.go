@@ -9,13 +9,14 @@ var config *Configuration
 var once sync.Once
 
 type Configuration struct {
-	fsPath      string
-	ChainConfig *ChainConfiguration
-	NodeConfig  *NodeConfiguration
-	NetConfig   *NetworkConfiguration
-	CSConfig    *ConsensusConfiguration
-	GasConfig   *GasConfiguration
-	Genesis     *GenesisData
+	fsPath       string
+	ChainConfig  *ChainConfiguration
+	NodeConfig   *NodeConfiguration
+	NetConfig    *NetworkConfiguration
+	CSConfig     *ConsensusConfiguration
+	TxPoolConfig *TransactionPoolConfig
+	GasConfig    *GasConfiguration
+	Genesis      *GenesisData
 }
 
 func GetConfiguration() *Configuration {
@@ -27,12 +28,13 @@ func GetConfiguration() *Configuration {
 			panic("Load genesis data err: " + err.Error() + ";Current Dir: " + curDir)
 		}
 		config = &Configuration{
-			ChainConfig: DefChainConfiguration(),
-			NodeConfig:  DefNodeConfiguration(),
-			NetConfig:   DefNetworkConfiguration(),
-			CSConfig:    DefConsensusConfiguration(),
-			GasConfig:   DefGasConfiguration(),
-			Genesis:     genData,
+			ChainConfig:  DefChainConfiguration(),
+			NodeConfig:   DefNodeConfiguration(),
+			NetConfig:    DefNetworkConfiguration(),
+			CSConfig:     DefConsensusConfiguration(),
+			TxPoolConfig: DefaultTransactionPoolConfig(),
+			GasConfig:    DefGasConfiguration(),
+			Genesis:      genData,
 		}
 	})
 

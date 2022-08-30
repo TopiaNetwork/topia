@@ -2,6 +2,8 @@ package service
 
 import (
 	"github.com/AsynkronIT/protoactor-go/actor"
+
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
@@ -29,7 +31,7 @@ type TxPoolService interface {
 
 	SysShutDown()
 
-	SetTxPoolConfig(conf txpooli.TransactionPoolConfig)
+	SetTxPoolConfig(conf *tpconfig.TransactionPoolConfig)
 
 	PeekTxState(hash txbasic.TxID) txpooli.TransactionState
 }

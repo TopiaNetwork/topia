@@ -7,10 +7,10 @@ import (
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/network/message"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
-	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 func (pool *transactionPool) dropTxsForBlockAdded(newBlock *tpchaintypes.Block) {
@@ -30,7 +30,7 @@ func (pool *transactionPool) dropTxsForBlockAdded(newBlock *tpchaintypes.Block) 
 
 			var txIDs []txbasic.TxID
 			for _, txByte := range dataChunk.Txs {
-				var tx *txbasic.Transaction
+				var tx txbasic.Transaction
 				err := pool.marshaler.Unmarshal(txByte, &tx)
 				if err != nil {
 					pool.log.Errorf("Unmarshal tx error:", err)
@@ -69,16 +69,16 @@ func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block)
 					}
 
 					for _, txBytes := range dataChunk.Txs {
-						var tx *txbasic.Transaction
+						var tx txbasic.Transaction
 						if err := pool.marshaler.Unmarshal(txBytes, &tx); err != nil {
 							err := fmt.Errorf("Unmarshal tx of block %d err: %v", block.Head.Height, err)
 							pool.log.Errorf("%v", err)
 							return err
 						}
 
-						if pool.validateTxsForRevert(tx) == message.ValidationAccept {
+						if pool.validateTxsForRevert(&tx) == message.ValidationAccept {
 							addCnt += 1
-							txList = append(txList, tx)
+							txList = append(txList, &tx)
 						}
 					}
 
@@ -120,7 +120,7 @@ func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block)
 					break
 				}
 			}
-			pool.sortedTxs.removeAddr(addr)
+			//pool.sortedTxs.removeAddr(addr)
 
 			for {
 				old := atomic.LoadInt32(&pool.isPicking)
@@ -142,7 +142,7 @@ func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block)
 				return false
 			}
 
-			pool.sortedTxs.addAccTx(addr, maxPrice, isMaxChanged, txs)
+			//pool.sortedTxs.addAccTx(addr, maxPrice, isMaxChanged, txs)
 			return true
 		}
 		remoteTxs := func() []*txbasic.Transaction {
@@ -186,7 +186,7 @@ func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block)
 }
 func (pool *transactionPool) validateTxsForRevert(tx *txbasic.Transaction) message.ValidationResult {
 
-	if int64(tx.Size()) > txpooli.DefaultTransactionPoolConfig.MaxSizeOfEachTx {
+	if int64(tx.Size()) > tpconfig.DefaultTransactionPoolConfig().MaxSizeOfEachTx {
 		pool.log.Errorf("transaction size is up to the TxMaxSize")
 		return message.ValidationReject
 	}
@@ -194,7 +194,7 @@ func (pool *transactionPool) validateTxsForRevert(tx *txbasic.Transaction) messa
 		pool.log.Errorf("transaction nonce is up to the MaxUint64")
 		return message.ValidationReject
 	}
-	if GasLimit(tx) < txpooli.DefaultTransactionPoolConfig.GasPriceLimit {
+	if GasLimit(tx) < tpconfig.DefaultTransactionPoolConfig().GasPriceLimit {
 		pool.log.Errorf("transaction gasLimit is lower to GasPriceLimit")
 		return message.ValidationReject
 	}

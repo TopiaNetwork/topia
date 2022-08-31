@@ -1,10 +1,6 @@
 package key_store
 
 import (
-	"errors"
-	"github.com/TopiaNetwork/topia/crypt"
-	"github.com/TopiaNetwork/topia/crypt/ed25519"
-	"github.com/TopiaNetwork/topia/crypt/secp256"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"os"
 )
@@ -71,30 +67,4 @@ func SetDirPerm(path string, dirName string) error {
 		return err
 	}
 	return nil
-}
-
-func StreamEncrypt(cryptType tpcrtypes.CryptType, pubKey tpcrtypes.PublicKey, data []byte) (encryptedData []byte, err error) {
-	var c crypt.CryptService
-	switch cryptType {
-	case tpcrtypes.CryptType_Secp256:
-		c = new(secp256.CryptServiceSecp256)
-	case tpcrtypes.CryptType_Ed25519:
-		c = new(ed25519.CryptServiceEd25519)
-	default:
-		return nil, errors.New("unsupported CryptType")
-	}
-	return c.StreamEncrypt(pubKey, data)
-}
-
-func StreamDecrypt(cryptType tpcrtypes.CryptType, secKey tpcrtypes.PrivateKey, data []byte) (decryptedData []byte, err error) {
-	var c crypt.CryptService
-	switch cryptType {
-	case tpcrtypes.CryptType_Secp256:
-		c = new(secp256.CryptServiceSecp256)
-	case tpcrtypes.CryptType_Ed25519:
-		c = new(ed25519.CryptServiceEd25519)
-	default:
-		return nil, errors.New("unsupported CryptType")
-	}
-	return c.StreamDecrypt(secKey, data)
 }

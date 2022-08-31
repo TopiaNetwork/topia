@@ -666,27 +666,22 @@ func (st *sortedTxList) addTx(wTx *wrappedTx) {
 
 	if index == len(st.txList) {
 		st.txList = append(st.txList, wTx)
+		return
 	}
 
 	st.txList = append(st.txList[:index+1], st.txList[index:]...)
 	st.txList[index] = wTx
 }
 
-func (st *sortedTxList) removeTx(wTx *wrappedTx) {
+func (st *sortedTxList) removeTx(txID txbasic.TxID) {
 	st.sync.Lock()
 	defer st.sync.Unlock()
 
-	index := sort.Search(len(st.txList), func(i int) bool {
-		return st.less(st.txList[i], wTx)
-	})
-
-	for index < len(st.txList) {
-		if st.txList[index] == wTx {
-			st.txList = append(st.txList[:index], st.txList[index+1:]...)
-			return
+	for i, wTx := range st.txList {
+		if wTx.TxID == txID {
+			st.txList = append(st.txList[:i], st.txList[i+1:]...)
+			break
 		}
-
-		index++
 	}
 }
 
@@ -712,15 +707,15 @@ func (st *sortedTxList) PickTxs(blockMaxBytes int64, blockMaxGas int64) []*txbas
 		return nil
 	}
 
-	var totalSize int
+	//var totalSize int
 	var rtnWTx []*txbasic.Transaction
 	for _, wTx := range st.txList {
-		totalSize += wTx.Tx.Size()
-		if totalSize > int(blockMaxBytes) {
-			break
-		} else {
-			rtnWTx = append(rtnWTx, wTx.Tx)
-		}
+		//totalSize += wTx.Tx.Size()
+		//if totalSize > int(blockMaxBytes) {
+		//	break
+		//} else {
+		rtnWTx = append(rtnWTx, wTx.Tx)
+		//}
 	}
 
 	return rtnWTx

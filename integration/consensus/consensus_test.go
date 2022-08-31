@@ -473,6 +473,7 @@ func produceTxsTimer(ctx context.Context, txPool txpooli.TransactionPool, cryptS
 						tx := txuni.ConstructTransactionWithUniversalTransfer(log, cryptService, fromPriKey, fromPriKey, uint64(i+1), 200, 500, toAddr,
 							[]txuni.TargetItem{{currency.TokenSymbol_Native, big.NewInt(10)}})
 						//txID, _ := tx.TxID()
+						//fmt.Printf("txID=%s\n", txID)
 
 						txPool.AddTx(tx, true)
 					}

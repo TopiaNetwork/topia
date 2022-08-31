@@ -6,20 +6,19 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"github.com/TopiaNetwork/topia/crypt"
+	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	"github.com/TopiaNetwork/topia/crypt/ed25519"
 	"github.com/TopiaNetwork/topia/crypt/secp256"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/TopiaNetwork/topia/wallet/cache"
-	"github.com/TopiaNetwork/topia/wallet/file_key_store"
 	"github.com/TopiaNetwork/topia/wallet/key_store"
-	"github.com/TopiaNetwork/topia/wallet/keyring"
+	"github.com/TopiaNetwork/topia/wallet/key_store/file_key_store"
+	"github.com/TopiaNetwork/topia/wallet/key_store/keyring"
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/pbkdf2"
 	"io/ioutil"
-	"sync"
 )
 
 const (
@@ -80,17 +79,6 @@ var walletBackendConfig struct {
 }
 
 var (
-	fksHandler struct {
-		fks   file_key_store.FileKeyStore
-		mutex sync.Mutex
-	}
-	kriHandler struct {
-		kri   keyring.KeyringImp
-		mutex sync.Mutex
-	}
-)
-
-var (
 	walletNotEnableErr = errors.New("wallet is not enabled")
 	addrLockedErr      = errors.New("this addr has been locked")
 )
@@ -112,7 +100,7 @@ func init() { // load wallet config json
 func NewWallet(level tplogcmm.LogLevel, log tplog.Logger, encryptWay EncryptWayOfWallet) (Wallet, error) {
 	wLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 
-	ksImp, err := loadWalletConfig(encryptWay)
+	ksImp, err := loadWalletConfig(encryptWay, log)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +122,7 @@ func (w *wallet) Create(cryptType tpcrtypes.CryptType) (tpcrtypes.Address, error
 		return "", walletNotEnableErr
 	}
 
-	var c crypt.CryptService
+	var c tpcrt.CryptService
 	if cryptType == tpcrtypes.CryptType_Secp256 {
 		c = new(secp256.CryptServiceSecp256)
 	} else if cryptType == tpcrtypes.CryptType_Ed25519 {
@@ -187,7 +175,7 @@ func (w *wallet) CreateMnemonic(cryptType tpcrtypes.CryptType, passphrase string
 
 	seed := pbkdf2.Key([]byte(mnemonic), []byte("mnemonic"+passphrase), 4096, 32, sha256.New)
 
-	var c crypt.CryptService
+	var c tpcrt.CryptService
 	if cryptType == tpcrtypes.CryptType_Secp256 {
 		c = new(secp256.CryptServiceSecp256)
 	} else if cryptType == tpcrtypes.CryptType_Ed25519 {
@@ -226,7 +214,7 @@ func (w *wallet) Recovery(cryptType tpcrtypes.CryptType, mnemonic string, passph
 
 	seed := pbkdf2.Key([]byte(mnemonic), []byte("mnemonic"+passphrase), 4096, 32, sha256.New)
 
-	var c crypt.CryptService
+	var c tpcrt.CryptService
 	if cryptType == tpcrtypes.CryptType_Secp256 {
 		c = new(secp256.CryptServiceSecp256)
 	} else if cryptType == tpcrtypes.CryptType_Ed25519 {
@@ -268,7 +256,7 @@ func (w *wallet) Import(cryptType tpcrtypes.CryptType, privKey tpcrtypes.Private
 		return "", walletNotEnableErr
 	}
 
-	var c crypt.CryptService
+	var c tpcrt.CryptService
 
 	if cryptType == tpcrtypes.CryptType_Secp256 {
 		c = new(secp256.CryptServiceSecp256)
@@ -404,7 +392,7 @@ func (w *wallet) Sign(addr tpcrtypes.Address, msg []byte) (tpcrtypes.SignatureIn
 		return tpcrtypes.SignatureInfo{}, err
 	}
 
-	var c crypt.CryptService
+	var c tpcrt.CryptService
 	if item.CryptType == tpcrtypes.CryptType_Secp256 {
 		c = new(secp256.CryptServiceSecp256)
 	} else if item.CryptType == tpcrtypes.CryptType_Ed25519 {
@@ -496,22 +484,14 @@ func (w *wallet) IsEnable() (bool, error) {
 	return walletEnable, nil
 }
 
-func loadWalletConfig(encryptWay EncryptWayOfWallet) (ksImp key_store.KeyStore, err error) {
+func loadWalletConfig(encryptWay EncryptWayOfWallet, log tplog.Logger) (ksImp key_store.KeyStore, err error) {
 	if !key_store.IsValidFolderPath(walletBackendConfig.RootPath) {
 		return nil, errors.New("invalid rootPath, try to check wallet_config.json")
 	}
 
-	var c crypt.CryptService
-	switch encryptWay.CryptType {
-	case tpcrtypes.CryptType_Secp256:
-		c = new(secp256.CryptServiceSecp256)
-	case tpcrtypes.CryptType_Ed25519:
-		c = new(ed25519.CryptServiceEd25519)
-	default:
-		return nil, errors.New("unsupported CryptType")
-	}
+	var cs = tpcrt.CreateCryptService(log, encryptWay.CryptType)
 
-	pubConvert, err := c.ConvertToPublic(encryptWay.Seckey)
+	pubConvert, err := cs.ConvertToPublic(encryptWay.Seckey)
 	if err != nil {
 		return nil, err
 	}
@@ -520,10 +500,6 @@ func loadWalletConfig(encryptWay EncryptWayOfWallet) (ksImp key_store.KeyStore, 
 	}
 
 	if walletBackendConfig.WalletBackend == "topiaKeyStore" {
-
-		fksHandler.mutex.Lock()
-		defer fksHandler.mutex.Unlock()
-
 		initArgument := file_key_store.InitArg{
 			RootPath: walletBackendConfig.RootPath,
 			EncryptWay: file_key_store.EncryptWay{
@@ -531,8 +507,9 @@ func loadWalletConfig(encryptWay EncryptWayOfWallet) (ksImp key_store.KeyStore, 
 				Pubkey:    encryptWay.Pubkey,
 				Seckey:    encryptWay.Seckey,
 			},
+			Cs: cs,
 		}
-		err = fksHandler.fks.Init(initArgument)
+		store, err := file_key_store.InitStoreInstance(initArgument)
 		if err != nil {
 			return nil, err
 		}
@@ -541,12 +518,9 @@ func loadWalletConfig(encryptWay EncryptWayOfWallet) (ksImp key_store.KeyStore, 
 		if err != nil {
 			return nil, err
 		}
-		return &fksHandler.fks, nil
+		return store, nil
 
 	} else if walletBackendConfig.WalletBackend == "keyring" {
-		kriHandler.mutex.Lock()
-		defer kriHandler.mutex.Unlock()
-
 		initArgument := keyring.InitArg{
 			RootPath: walletBackendConfig.RootPath,
 			Backend:  walletBackendConfig.KeyringBackend,
@@ -555,8 +529,9 @@ func loadWalletConfig(encryptWay EncryptWayOfWallet) (ksImp key_store.KeyStore, 
 				Pubkey:    encryptWay.Pubkey,
 				Seckey:    encryptWay.Seckey,
 			},
+			Cs: cs,
 		}
-		err = kriHandler.kri.Init(initArgument)
+		store, err := keyring.InitStoreInstance(initArgument)
 		if err != nil {
 			return nil, err
 		}
@@ -565,7 +540,7 @@ func loadWalletConfig(encryptWay EncryptWayOfWallet) (ksImp key_store.KeyStore, 
 		if err != nil {
 			return nil, err
 		}
-		return &kriHandler.kri, nil
+		return store, nil
 
 	} else {
 		return nil, errors.New("unknown wallet backend, please check wallet config file")

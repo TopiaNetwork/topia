@@ -6,6 +6,8 @@ package keyring
 import (
 	"fmt"
 	"github.com/99designs/keyring"
+	"github.com/TopiaNetwork/topia/crypt"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
@@ -20,7 +22,13 @@ func TestKeyringWithBKD_KWallet(t *testing.T) {
 			match = true
 
 			var kri KeyringImp
-			err := initWithBackendX(&kri, keyring.KWalletBackend, dirPathForTest(), getTestEncrytWayInstance_secp256(t))
+			initArg := InitArg{
+				EncryptWay: getTestEncrytWayInstance_secp256(t),
+				RootPath:   dirPathForTest(),
+				Backend:    string(keyring.KWalletBackend),
+				Cs:         crypt.CreateCryptService(nil, tpcrtypes.CryptType_Secp256),
+			}
+			err := kri.Init(initArg)
 			assert.Equal(t, nil, err, "init with backend:", keyring.KWalletBackend, "err:", err)
 			testSetGetRemove(&kri, t)
 
@@ -42,7 +50,13 @@ func TestKeyringWithBKD_KeyCtl(t *testing.T) {
 			match = true
 
 			var kri KeyringImp
-			err := initWithBackendX(&kri, keyring.KeyCtlBackend, dirPathForTest(), getTestEncrytWayInstance_secp256(t))
+			initArg := InitArg{
+				EncryptWay: getTestEncrytWayInstance_secp256(t),
+				RootPath:   dirPathForTest(),
+				Backend:    string(keyring.KeyCtlBackend),
+				Cs:         crypt.CreateCryptService(nil, tpcrtypes.CryptType_Secp256),
+			}
+			err := kri.Init(initArg)
 			assert.Nil(t, err, "init with KeyCtlBackend err", err)
 			testSetGetRemove(&kri, t)
 

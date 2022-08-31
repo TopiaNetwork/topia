@@ -1,9 +1,9 @@
 package keyring
 
 import (
-	"errors"
 	"fmt"
 	"github.com/99designs/keyring"
+	"github.com/TopiaNetwork/topia/crypt"
 	"github.com/TopiaNetwork/topia/crypt/ed25519"
 	"github.com/TopiaNetwork/topia/crypt/secp256"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -18,7 +18,13 @@ import (
 
 func TestKeyring_File(t *testing.T) {
 	var kri KeyringImp
-	err := initWithBackendX(&kri, keyring.FileBackend, dirPathForTest(), getTestEncrytWayInstance_ed25519(t))
+	initArg := InitArg{
+		EncryptWay: getTestEncrytWayInstance_ed25519(t),
+		RootPath:   dirPathForTest(),
+		Backend:    string(keyring.FileBackend),
+		Cs:         crypt.CreateCryptService(nil, tpcrtypes.CryptType_Ed25519),
+	}
+	err := kri.Init(initArg)
 	assert.Equal(t, nil, err, "init with backend:", keyring.FileBackend, "err:", err)
 
 	testAddr := "whatever_Addr"
@@ -48,50 +54,6 @@ func TestKeyring_File(t *testing.T) {
 
 	err = os.RemoveAll(filepath.Join(dirPathForTest(), keysFolderName))
 	assert.Nil(t, err, "remove test key folder err")
-}
-
-func initWithBackendX(kri *KeyringImp, bkd keyring.BackendType, fileFolderPath string, encrypt EncryptWay) error {
-	if key_store.IsValidFolderPath(fileFolderPath) == false {
-		return errors.New("input fileFolderPath is not a valid folder path")
-	}
-	kri.EncryptWay = encrypt
-
-	config := keyring.Config{
-		AllowedBackends:                []keyring.BackendType{bkd},
-		ServiceName:                    "TopiaWalletStore",
-		KeychainName:                   filepath.Join(dirPathForTest(), keysFolderName, "TopiaWallet"),
-		KeychainTrustApplication:       true,
-		KeychainSynchronizable:         true,
-		KeychainAccessibleWhenUnlocked: true,
-		KeychainPasswordFunc:           keyring.FixedStringPrompt("password"),
-		FilePasswordFunc:               keyring.FixedStringPrompt("password"),
-		FileDir:                        filepath.Join(fileFolderPath, keysFolderName),
-		KeyCtlScope:                    "thread",
-		KeyCtlPerm:                     0x3f3f0000, // "alswrvalswrv------------",
-		KWalletAppID:                   "TopiaKWalletApp",
-		KWalletFolder:                  "TopiaKWallet",
-		WinCredPrefix:                  "", // default "keyring"
-	}
-
-	tempKeyring, err := keyring.Open(config)
-	if err != nil {
-		return errors.New("open keyring err: " + err.Error())
-	}
-	kri.k = tempKeyring
-
-	if _, err = kri.getEnableFromBackend(); err != nil { // if walletEnableKey hasn't been set, set it
-		err = kri.SetEnable(true)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = loadKeysToCache(kri)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func testSetGetRemove(kri *KeyringImp, t *testing.T) {

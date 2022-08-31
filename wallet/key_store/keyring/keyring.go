@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/99designs/keyring"
+	"github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/wallet/cache"
 	"github.com/TopiaNetwork/topia/wallet/key_store"
@@ -32,6 +33,7 @@ type KeyringImp struct {
 
 	k     keyring.Keyring
 	mutex sync.RWMutex // protect k
+	cs    crypt.CryptService
 }
 
 type InitArg struct {
@@ -39,20 +41,37 @@ type InitArg struct {
 
 	RootPath string
 	Backend  string
+	Cs       crypt.CryptService
 }
 
 const (
 	keysFolderName = "wallet"
+
+	serviceName          = "TopiaWalletStore"
+	keyCtlScope          = "thread"
+	keyCtlPerm    uint32 = 0x3f3f0000 // "alswrvalswrv------------"
+	kWalletAppID         = "TopiaKWalletApp"
+	kWalletFolder        = "TopiaKWallet"
+	winCredPrefix        = "" // default "keyring"
 )
 
 var _ key_store.KeyStore = (*KeyringImp)(nil)
+
+var kriInstance KeyringImp
+
+func InitStoreInstance(arg InitArg) (ks key_store.KeyStore, err error) {
+	err = kriInstance.Init(arg)
+	if err != nil {
+		return nil, err
+	}
+	return &kriInstance, nil
+}
 
 func (ki *KeyringImp) Init(arg InitArg) error {
 	fileFolderPath := arg.RootPath
 	if key_store.IsValidFolderPath(fileFolderPath) == false {
 		return errors.New("input fileFolderPath is not a valid folder path")
 	}
-	ki.EncryptWay = arg.EncryptWay
 
 	var bkd keyring.BackendType
 	switch arg.Backend {
@@ -67,30 +86,35 @@ func (ki *KeyringImp) Init(arg InitArg) error {
 	case "wincred":
 		bkd = keyring.WinCredBackend
 	default:
-		return errors.New("unsupported keyring backend")
+		panic("unsupported keyring backend")
 	}
 
 	config := keyring.Config{
 		AllowedBackends:                []keyring.BackendType{bkd},
-		ServiceName:                    "TopiaWalletStore",
+		ServiceName:                    serviceName,
 		KeychainName:                   filepath.Join(fileFolderPath, keysFolderName, "TopiaWallet"),
 		KeychainTrustApplication:       true,
 		KeychainSynchronizable:         true,
 		KeychainAccessibleWhenUnlocked: true,
 		FilePasswordFunc:               keyring.FixedStringPrompt(string(arg.Seckey)),
 		FileDir:                        filepath.Join(fileFolderPath, keysFolderName),
-		KeyCtlScope:                    "thread",
-		KeyCtlPerm:                     0x3f3f0000, // "alswrvalswrv------------",
-		KWalletAppID:                   "TopiaKWalletApp",
-		KWalletFolder:                  "TopiaKWallet",
-		WinCredPrefix:                  "", // default "keyring"
+		KeyCtlScope:                    keyCtlScope,
+		KeyCtlPerm:                     keyCtlPerm,
+		KWalletAppID:                   kWalletAppID,
+		KWalletFolder:                  kWalletFolder,
+		WinCredPrefix:                  winCredPrefix,
 	}
 
 	tempKeyring, err := keyring.Open(config)
 	if err != nil {
 		return errors.New("open keyring err: " + err.Error())
 	}
+
+	ki.mutex.Lock()
 	ki.k = tempKeyring
+	ki.EncryptWay = arg.EncryptWay
+	ki.cs = arg.Cs
+	ki.mutex.Unlock()
 
 	if _, err = ki.getEnableFromBackend(); err != nil { // if walletEnableKey hasn't been set, set it
 		err = ki.SetEnable(true)
@@ -132,7 +156,7 @@ func (ki *KeyringImp) SetAddr(addr string, item key_store.KeyItem) error {
 		return err
 	}
 
-	encryptedData, err := key_store.StreamEncrypt(ki.CryptType, ki.Pubkey, bs)
+	encryptedData, err := ki.cs.StreamEncrypt(ki.Pubkey, bs)
 	if err != nil {
 		return err
 	}
@@ -159,7 +183,7 @@ func (ki *KeyringImp) GetAddr(addr string) (key_store.KeyItem, error) {
 		}
 	}
 
-	decryptedMsg, err := key_store.StreamDecrypt(ki.CryptType, ki.Seckey, addrCacheItem.EncKeyItem)
+	decryptedMsg, err := ki.cs.StreamDecrypt(ki.Seckey, addrCacheItem.EncKeyItem)
 	if err != nil {
 		return key_store.KeyItem{}, err
 	}
@@ -242,7 +266,7 @@ func (ki *KeyringImp) getAddrItemFromBackend(addr string) (encKeyItem []byte, er
 		return nil, err
 	}
 
-	encryptedData, err := key_store.StreamEncrypt(ki.CryptType, ki.Pubkey, item.Data)
+	encryptedData, err := ki.cs.StreamEncrypt(ki.Pubkey, item.Data)
 	if err != nil {
 		return nil, err
 	}

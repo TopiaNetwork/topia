@@ -241,29 +241,29 @@ func (pool *transactionPool) addTxs(txs []*txbasic.Transaction, isLocal bool) er
 		}
 		txID, _ := tx.TxID()
 
-		if _, ok := pool.allWrappedTxs.Get(txID); ok {
-			continue
-		} else {
-			txInfo := &wrappedTx{
-				TxID:          txID,
-				IsLocal:       isLocal,
-				Category:      txbasic.TransactionCategory(tx.Head.Category),
-				LastTime:      time.Now(),
-				LastHeight:    curHeight,
-				TxState:       txpooli.StateTxAdded,
-				IsRepublished: false,
-				FromAddr:      tpcrtypes.Address(tx.Head.FromAddr),
-				Nonce:         tx.Head.Nonce,
-				Tx:            tx,
-			}
-
-			pool.allWrappedTxs.Set(txID, txInfo)
-			pool.sortedTxs.addTx(txInfo)
-			//pool.txCache.Add(txID, txpooli.StateTxAdded)
-			//go func(wTx *wrappedTx) {
-			//	pool.chanSaveTxsStorage <- []*wrappedTx{wTx}
-			//}(txInfo)
+		//if _, ok := pool.allWrappedTxs.Get(txID); ok {
+		//	continue
+		//} else {
+		txInfo := &wrappedTx{
+			TxID:          txID,
+			IsLocal:       isLocal,
+			Category:      txbasic.TransactionCategory(tx.Head.Category),
+			LastTime:      time.Now(),
+			LastHeight:    curHeight,
+			TxState:       txpooli.StateTxAdded,
+			IsRepublished: false,
+			FromAddr:      tpcrtypes.Address(tx.Head.FromAddr),
+			Nonce:         tx.Head.Nonce,
+			Tx:            tx,
 		}
+
+		//pool.allWrappedTxs.Set(txID, txInfo)
+		pool.sortedTxs.addTx(txInfo)
+		//pool.txCache.Add(txID, txpooli.StateTxAdded)
+		//go func(wTx *wrappedTx) {
+		//	pool.chanSaveTxsStorage <- []*wrappedTx{wTx}
+		//}(txInfo)
+		//}
 		//newTxs = append(newTxs, tx)
 	}
 	//if len(newTxs) == 0 {
@@ -366,13 +366,13 @@ func (pool *transactionPool) RemoveTxByKey(txID txbasic.TxID) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	wTx, isExist := pool.allWrappedTxs.Get(txID)
+	/*wTx, isExist := pool.allWrappedTxs.Get(txID)
 	if !isExist {
 		return ErrTxNotExist
-	}
+	}*/
 
-	pool.allWrappedTxs.Del(txID)
-	pool.sortedTxs.removeTx(wTx)
+	//pool.allWrappedTxs.Del(txID)
+	pool.sortedTxs.removeTx(txID)
 	//pool.txCache.Remove(txID)
 
 	//go func(txIDT txbasic.TxID) {
@@ -478,14 +478,13 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 	}
 	network.RegisterModule(txpooli.MOD_NAME, actorPID, pool.marshaler)
 
-	/*
-		ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
-			Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)
-		if err != nil {
-			pool.log.Panicf("processBlockAddedEvent error:%s", err)
-		}
+	ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
+		Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)
+	if err != nil {
+		pool.log.Panicf("processBlockAddedEvent error:%s", err)
+	}
 
-		pool.log.Infof("processBlockAddedEvent,obsID:%s", ObsID)*/
+	pool.log.Infof("processBlockAddedEvent,obsID:%s", ObsID)
 
 	return nil
 }

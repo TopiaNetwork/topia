@@ -3,82 +3,87 @@
 package file_key_store
 
 import (
-	"errors"
-	"os"
-	"path/filepath"
+	"golang.org/x/sys/windows"
 	"syscall"
 	"unsafe"
 )
 
-const (
-	LOCKFILE_EXCLUSIVE_LOCK = 0x00000002
-)
+type processStatus struct {
+	ID        int
+	IsRunning bool
+}
+type windowsProcess struct {
+	ProcessID int
+}
 
-var (
-	modkernel32      = syscall.NewLazyDLL("kernel32.dll")
-	procLockFileEx   = modkernel32.NewProc("LockFileEx")
-	procUnlockFileEx = modkernel32.NewProc("UnlockFileEx")
-)
+const th32CsSnapProcess = 0x00000002
 
-func (f *FileKeyStore) lockSH() error {
-	file, err := os.OpenFile(filepath.Join(f.fileFolderPath, lockFileName), os.O_RDONLY|os.O_CREATE, 0644)
+func isPIDAlive(pID int) (bool, error) {
+	status := processStatus{ID: pID}
+
+	procs, err := processes()
 	if err != nil {
-		return err
+		return false, err
 	}
-	defer file.Close()
 
-	r1, errNo := wlock(file, 0x0)
-	return isWError(r1, errNo)
+	process := findProcessByID(procs, pID)
+	if process != nil {
+		status.IsRunning = true
+	}
+
+	return status.IsRunning, nil
+
 }
 
-func (f *FileKeyStore) lockEX() error {
-	file, err := os.OpenFile(filepath.Join(f.fileFolderPath, lockFileName), os.O_RDONLY|os.O_CREATE, 0644)
+func processes() ([]windowsProcess, error) {
+	handle, err := windows.CreateToolhelp32Snapshot(th32CsSnapProcess, 0)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer file.Close()
+	defer windows.CloseHandle(handle)
 
-	r1, errNo := wlock(file, LOCKFILE_EXCLUSIVE_LOCK)
-	return isWError(r1, errNo)
-}
-
-func (f *FileKeyStore) unlock() error {
-	file, err := os.Open(filepath.Join(f.fileFolderPath, lockFileName))
+	var entry windows.ProcessEntry32
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	// get the first process
+	err = windows.Process32First(handle, &entry)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer file.Close()
 
-	r1, _, errNo := syscall.SyscallN(
-		procUnlockFileEx.Addr(),
-		file.Fd(),
-		uintptr(0),
-		uintptr(1),
-		uintptr(0),
-		uintptr(unsafe.Pointer(&syscall.Overlapped{})),
-	)
-	return isWError(r1, errNo)
+	results := make([]windowsProcess, 0, 50)
+	for {
+		results = append(results, newWindowsProcess(&entry))
+
+		err = windows.Process32Next(handle, &entry)
+		if err != nil {
+			// windows sends ERROR_NO_MORE_FILES on last process
+			if err == syscall.ERROR_NO_MORE_FILES {
+				return results, nil
+			}
+			return nil, err
+		}
+	}
 }
 
-func wlock(fp *os.File, flags uintptr) (uintptr, syscall.Errno) {
-	r1, _, errNo := syscall.SyscallN(
-		procLockFileEx.Addr(),
-		fp.Fd(),
-		flags,
-		uintptr(0),
-		uintptr(1),
-		uintptr(0),
-		uintptr(unsafe.Pointer(&syscall.Overlapped{})),
-	)
-	return r1, errNo
+func newWindowsProcess(e *windows.ProcessEntry32) windowsProcess {
+	// Find when the string ends for decoding
+	end := 0
+	for {
+		if e.ExeFile[end] == 0 {
+			break
+		}
+		end++
+	}
+
+	return windowsProcess{
+		ProcessID: int(e.ProcessID),
+	}
 }
 
-func isWError(r1 uintptr, errNo syscall.Errno) error {
-	if r1 != 1 {
-		if errNo != 0 {
-			return errors.New(errNo.Error())
-		} else {
-			return syscall.EINVAL
+func findProcessByID(processes []windowsProcess, pID int) *windowsProcess {
+	for _, p := range processes {
+		if pID == p.ProcessID {
+			return &p
 		}
 	}
 	return nil

@@ -2,6 +2,7 @@ package file_key_store
 
 import (
 	"fmt"
+	"github.com/TopiaNetwork/topia/crypt"
 	"github.com/TopiaNetwork/topia/crypt/ed25519"
 	"github.com/TopiaNetwork/topia/crypt/secp256"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -21,6 +22,7 @@ func TestFileKeyStoreFunction(t *testing.T) {
 	initArgument := InitArg{
 		RootPath:   dirPathForTest(),
 		EncryptWay: getTestEncrytWayInstance_secp256(t),
+		Cs:         crypt.CreateCryptService(nil, tpcrtypes.CryptType_Secp256),
 	}
 
 	err := fks.Init(initArgument)

@@ -2,21 +2,23 @@ package transactionpool
 
 import (
 	"context"
-	txpoolcore "github.com/TopiaNetwork/topia/transaction_pool/core"
 	"sync"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/ledger"
 	tplgms "github.com/TopiaNetwork/topia/ledger/meta"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/network/message"
 	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/service"
+	"github.com/TopiaNetwork/topia/state"
 	"github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txpoolcore "github.com/TopiaNetwork/topia/transaction_pool/core"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
@@ -35,6 +37,8 @@ type TransactionPoolServant interface {
 	GetBlockByHash(hash tpchaintypes.BlockHash) (*tpchaintypes.Block, error)
 
 	GetBlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error)
+
+	GetLedger() ledger.Ledger
 
 	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
 
@@ -59,12 +63,15 @@ func newTransactionPoolServant(
 	stateQueryService service.StateQueryService,
 	blockService service.BlockService,
 	network tpnet.Network,
-	metaStore tplgms.MetaStore) TransactionPoolServant {
+	ledger ledger.Ledger) TransactionPoolServant {
+
+	metaStore, _ := ledger.CreateMetaStore()
 
 	metaStore.AddNamedStateStore(MetaData_TxPool_Tx, 50)
 	metaStore.AddNamedStateStore(MetaData_TxPool_Config, 50)
 
 	txpoolservant := &transactionPoolServant{
+		ledger:       ledger,
 		state:        stateQueryService,
 		BlockService: blockService,
 		Network:      network,
@@ -74,7 +81,8 @@ func newTransactionPoolServant(
 }
 
 type transactionPoolServant struct {
-	state service.StateQueryService
+	ledger ledger.Ledger
+	state  service.StateQueryService
 	service.BlockService
 	tpnet.Network
 	tplgms.MetaStore
@@ -99,8 +107,12 @@ func (servant *transactionPoolServant) GetNonce(addr tpcrtypes.Address) (uint64,
 
 func (servant *transactionPoolServant) GetLatestBlock() (*tpchaintypes.Block, error) {
 	return servant.state.GetLatestBlock()
-
 }
+
+func (servant *transactionPoolServant) GetLedger() ledger.Ledger {
+	return servant.ledger
+}
+
 func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
 	if tx == nil {
 		return ErrTxIsNil
@@ -199,6 +211,13 @@ func (msgSub *txMsgSubProcessor) GetNodeID() string {
 	return msgSub.nodeID
 }
 
+func (msgSub *txMsgSubProcessor) getTxServantMem() txbasic.TransactionServant {
+	compStateRN := state.CreateCompositionStateReadonly(msgSub.log, msgSub.txPool.txServant.GetLedger())
+	compStateMem := state.CreateCompositionStateMem(msgSub.log, compStateRN)
+
+	return txbasic.NewTransactionServant(compStateMem, compStateMem, msgSub.txPool.marshaler, msgSub.txPool.Size)
+}
+
 func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sendData []byte) message.ValidationResult {
 	if msgSub.txPool.Size() > msgSub.txPool.config.TxPoolMaxSize {
 		return message.ValidationReject
@@ -225,7 +244,8 @@ func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sen
 	}
 	if !isLocal {
 		ac := transaction.CreatTransactionAction(&tx)
-		verifyResult := ac.Verify(ctx, msgSub.GetLogger(), msgSub.GetNodeID(), nil)
+
+		verifyResult := ac.Verify(ctx, msgSub.GetLogger(), msgSub.GetNodeID(), msgSub.getTxServantMem())
 		switch verifyResult {
 		case txbasic.VerifyResult_Accept:
 			return message.ValidationAccept

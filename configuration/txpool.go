@@ -20,10 +20,10 @@ type TransactionPoolConfig struct {
 	BlockMaxBytes int64
 	BlockMaxGas   int64
 
-	LifetimeForTx          time.Duration
-	LifeHeight             uint64
-	TxTTLTimeOfRepublish   time.Duration
-	TxTTLHeightOfRepublish uint64
+	TimeOfTxLifecycle      time.Duration
+	HeightOfTxLifecycle    uint64
+	TimeOfTxRepublishTTL   time.Duration
+	HeightOfTxRepublishTTL uint64
 }
 
 func DefaultTransactionPoolConfig() *TransactionPoolConfig {
@@ -45,10 +45,10 @@ func DefaultTransactionPoolConfig() *TransactionPoolConfig {
 		BlockMaxBytes: 22020096, //21MB
 		BlockMaxGas:   -1,
 
-		LifetimeForTx:          15 * time.Second, // 15 * time.Second
-		LifeHeight:             uint64(30 * 60),
-		TxTTLTimeOfRepublish:   5 * time.Second, //5 * time.Second
-		TxTTLHeightOfRepublish: 5,
+		TimeOfTxLifecycle:      15 * time.Second, // 15 * time.Second
+		HeightOfTxLifecycle:    uint64(30 * 60),
+		TimeOfTxRepublishTTL:   5 * time.Second, //5 * time.Second
+		HeightOfTxRepublishTTL: 5,
 	}
 }
 
@@ -74,14 +74,14 @@ func (config *TransactionPoolConfig) Check() *TransactionPoolConfig {
 		conf.PendingMaxCnt = DefaultTransactionPoolConfig().PendingMaxCnt
 	}
 
-	if conf.LifetimeForTx < DefaultTransactionPoolConfig().LifetimeForTx {
-		conf.LifetimeForTx = DefaultTransactionPoolConfig().LifetimeForTx
+	if conf.TimeOfTxLifecycle < DefaultTransactionPoolConfig().TimeOfTxLifecycle {
+		conf.TimeOfTxLifecycle = DefaultTransactionPoolConfig().TimeOfTxLifecycle
 	}
-	if conf.TxTTLTimeOfRepublish < DefaultTransactionPoolConfig().TxTTLTimeOfRepublish {
-		conf.TxTTLTimeOfRepublish = DefaultTransactionPoolConfig().TxTTLTimeOfRepublish
+	if conf.TimeOfTxRepublishTTL < DefaultTransactionPoolConfig().TimeOfTxRepublishTTL {
+		conf.TimeOfTxRepublishTTL = DefaultTransactionPoolConfig().TimeOfTxRepublishTTL
 	}
-	if conf.TxTTLHeightOfRepublish < DefaultTransactionPoolConfig().TxTTLHeightOfRepublish {
-		conf.TxTTLHeightOfRepublish = DefaultTransactionPoolConfig().TxTTLHeightOfRepublish
+	if conf.HeightOfTxRepublishTTL < DefaultTransactionPoolConfig().HeightOfTxRepublishTTL {
+		conf.HeightOfTxRepublishTTL = DefaultTransactionPoolConfig().HeightOfTxRepublishTTL
 	}
 	if conf.PathTxsStorage == "" {
 		conf.PathTxsStorage = DefaultTransactionPoolConfig().PathTxsStorage

@@ -472,7 +472,7 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	assert.Equal(t, int64(1), pool1.poolCount)
 	assert.Equal(t, 1, len(pool1.GetLocalTxs()))
 	assert.Equal(t, 0, len(pool1.GetRemoteTxs()))
-	assert.Equal(t, txpooli.StateTxAdded, pool1.PeekTxState(Key1))
+	assert.Equal(t, txpooli.TxState_Added, pool1.PeekTxState(Key1))
 
 	// add one remote tx
 	pool1.AddTx(TxR1, false)
@@ -481,7 +481,7 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	assert.Equal(t, int64(2), pool1.poolCount)
 	assert.Equal(t, 1, len(pool1.GetLocalTxs()))
 	assert.Equal(t, 1, len(pool1.GetRemoteTxs()))
-	assert.Equal(t, txpooli.StateTxAdded, pool1.PeekTxState(KeyR1))
+	assert.Equal(t, txpooli.TxState_Added, pool1.PeekTxState(KeyR1))
 	// add one local tx
 	pool1.AddTx(Tx2, true)
 	pending1, _ = pool1.PendingOfAddress(From1)
@@ -489,7 +489,7 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	assert.Equal(t, int64(3), pool1.poolCount)
 	assert.Equal(t, 2, len(pool1.GetLocalTxs()))
 	assert.Equal(t, 1, len(pool1.GetRemoteTxs()))
-	assert.Equal(t, txpooli.StateTxAdded, pool1.PeekTxState(Key2))
+	assert.Equal(t, txpooli.TxState_Added, pool1.PeekTxState(Key2))
 	// add one remote tx
 	pool1.AddTx(TxR2, false)
 	pending2, _ = pool1.PendingOfAddress(From2)
@@ -497,7 +497,7 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	assert.Equal(t, int64(4), pool1.poolCount)
 	assert.Equal(t, 2, len(pool1.GetLocalTxs()))
 	assert.Equal(t, 2, len(pool1.GetRemoteTxs()))
-	assert.Equal(t, txpooli.StateTxAdded, pool1.PeekTxState(KeyR2))
+	assert.Equal(t, txpooli.TxState_Added, pool1.PeekTxState(KeyR2))
 	// add a same tx
 	pool1.AddTx(Tx2, true)
 	pending1, _ = pool1.PendingOfAddress(From1)
@@ -505,7 +505,7 @@ func Test_transactionPool_AddTx(t *testing.T) {
 	assert.Equal(t, int64(4), pool1.poolCount)
 	assert.Equal(t, 2, len(pool1.GetLocalTxs()))
 	assert.Equal(t, 2, len(pool1.GetRemoteTxs()))
-	assert.Equal(t, txpooli.StateTxAdded, pool1.PeekTxState(Key2))
+	assert.Equal(t, txpooli.TxState_Added, pool1.PeekTxState(Key2))
 }
 
 func Test_transactionPool_RemoveTxByKey(t *testing.T) {
@@ -874,11 +874,11 @@ func Test_transactionPool_all(t *testing.T) {
 
 			go pool1.AddTx(localTx, true)
 
-			go pool2.processTX(msg1)
+			go pool2.processTx(msg1)
 
 			go pool2.AddTx(remoteTx, true)
 
-			go pool1.processTX(msg2)
+			go pool1.processTx(msg2)
 
 			time.Sleep(10 * time.Microsecond)
 		}

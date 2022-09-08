@@ -8,6 +8,7 @@ import (
 
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplgcmm "github.com/TopiaNetwork/topia/ledger/backend/common"
+	tplgstore "github.com/TopiaNetwork/topia/ledger/store"
 	tplog "github.com/TopiaNetwork/topia/log"
 )
 
@@ -24,17 +25,7 @@ type IterStateDataCBFunc func(key []byte, val []byte)
 type IterStateCBFunc func(key []byte, val []byte, proof []byte)
 
 type StateStore interface {
-	AddNamedStateStore(name string, cacheSize int) error
-
-	Root(name string) ([]byte, error)
-
-	Put(name string, key []byte, value []byte) error
-
-	Delete(name string, key []byte) error
-
-	Exists(name string, key []byte) (bool, error)
-
-	Update(name string, key []byte, value []byte) error
+	tplgstore.Store
 
 	GetStateData(name string, key []byte) ([]byte, error)
 
@@ -48,19 +39,9 @@ type StateStore interface {
 
 	IterateAllStateCB(name string, iterCBFunc IterStateCBFunc) error
 
-	Clone(other StateStore) error
-
 	StateLatestVersion() (uint64, error)
 
 	StateVersions() ([]uint64, error)
-
-	Commit() error
-
-	Rollback() error
-
-	Stop() error
-
-	Close() error
 }
 
 type stateStore struct {
@@ -266,7 +247,7 @@ func (m *stateStore) IterateAllStateCB(name string, iterCBFunc IterStateCBFunc) 
 	return fmt.Errorf("Can't find the responding state store: name=%s", name)
 }
 
-func (m *stateStore) Clone(other StateStore) error {
+func (m *stateStore) Clone(other tplgstore.Store) error {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 

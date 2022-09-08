@@ -369,7 +369,9 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 		network := tpnet.NewNetwork(context.Background(), testMainLog, config.NetConfig, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
 
 		tpService := service.NewService(network.ID(), testMainLog, codec.CodecType_PROTO, network, l, nil, nil, config)
-		txPool := transactionpool.NewTransactionPool(network.ID(), context.Background(), config.TxPoolConfig, tplogcmm.InfoLevel, testMainLog, codec.CodecType_PROTO, tpService.StateQueryService(), tpService.BlockService(), network) /*mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)*/
+
+		metaStore, _ := l.CreateMetaStore()
+		txPool := transactionpool.NewTransactionPool(network.ID(), context.Background(), config.TxPoolConfig, tplogcmm.InfoLevel, testMainLog, codec.CodecType_PROTO, tpService.StateQueryService(), tpService.BlockService(), network, metaStore) /*mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)*/
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 

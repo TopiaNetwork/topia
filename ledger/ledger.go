@@ -20,6 +20,8 @@ type LedgerID string
 type Ledger interface {
 	ID() string
 
+	CreateMetaStore() (tplgms.MetaStore, error)
+
 	CreateStateStore() (tplgss.StateStore, error)
 
 	CreateStateStoreReadonly() (tplgss.StateStore, error)

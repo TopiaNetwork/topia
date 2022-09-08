@@ -62,7 +62,7 @@ func (handler *transactionPoolHandler) processBlockAddedEvent(ctx context.Contex
 func (handler *transactionPoolHandler) processBlocksRevertEvent(ctx context.Context, data interface{}) error {
 	if blocks, ok := data.([]*tpchaintypes.Block); ok {
 
-		handler.txPool.chanBlocksRevert <- blocks
+		handler.txPool.blockRevertCh <- blocks
 	}
 	return nil
 }

@@ -11,13 +11,16 @@ import (
 
 const MOD_NAME = "TransactionPool"
 
-type TransactionState string
+type TxState byte
 
 const (
-	StateTxAdded              TransactionState = "transaction Added"
-	StateTxRepublished                         = "transaction republished"
-	StateTxNil                                 = "no transaction state for this tx "
-	StateDroppedForTxPoolFull                  = "transaction dropped for txPool is full"
+	TxState_Unknown TxState = iota
+	TxState_Added
+	TxState_Packed
+	TxState_Published
+	TxState_Republished
+	TxState_DroppedForTxPoolFull
+	TxState_Removed
 )
 
 type TransactionPool interface {
@@ -25,23 +28,27 @@ type TransactionPool interface {
 
 	RemoveTxByKey(key txbasic.TxID) error
 
-	UpdateTx(tx *txbasic.Transaction, txKey txbasic.TxID) error
+	UpdateTx(tx *txbasic.Transaction, oldTxID txbasic.TxID) error
 
 	PendingOfAddress(addr tpcrtypes.Address) ([]*txbasic.Transaction, error)
 
 	PickTxs() []*txbasic.Transaction
 
+	GetLocalTxs() []*txbasic.Transaction
+
+	GetRemoteTxs() []*txbasic.Transaction
+
+	Get(txID txbasic.TxID) *txbasic.Transaction
+
 	Count() int64
 
 	Size() int64
 
-	TruncateTxPool()
-
 	Start(sysActor *actor.ActorSystem, network tpnet.Network) error
 
-	SysShutDown()
+	Stop()
 
 	SetTxPoolConfig(conf *tpconfig.TransactionPoolConfig)
 
-	PeekTxState(hash txbasic.TxID) TransactionState
+	PeekTxState(hash txbasic.TxID) TxState
 }

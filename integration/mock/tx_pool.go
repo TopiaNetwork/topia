@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"math/big"
 	"runtime"
 	"time"
@@ -59,12 +60,12 @@ func (txm *TransactionPoolMock) TruncateTxPool() {
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) SetTxPoolConfig(conf txpooli.TransactionPoolConfig) {
+func (txm *TransactionPoolMock) SetTxPoolConfig(conf *tpconfig.TransactionPoolConfig) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (txm *TransactionPoolMock) PeekTxState(hash txbasic.TxID) txpooli.TransactionState {
+func (txm *TransactionPoolMock) PeekTxState(hash txbasic.TxID) txpooli.TxState {
 	//TODO implement me
 	panic("implement me")
 }
@@ -112,6 +113,21 @@ func (txm *TransactionPoolMock) PickTxs() []*txbasic.Transaction {
 	})
 
 	return newTxs
+}
+
+func (txm *TransactionPoolMock) GetLocalTxs() []*txbasic.Transaction {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) GetRemoteTxs() []*txbasic.Transaction {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (txm *TransactionPoolMock) Get(txID txbasic.TxID) *txbasic.Transaction {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (txm *TransactionPoolMock) processBlockAddedEvent(ctx context.Context, data interface{}) error {
@@ -177,7 +193,7 @@ func (txm *TransactionPoolMock) Start(sysActor *actor.ActorSystem, network tpnet
 	return nil
 }
 
-func (txm *TransactionPoolMock) SysShutDown() {
+func (txm *TransactionPoolMock) Stop() {
 	//TODO implement me
 	panic("implement me")
 }

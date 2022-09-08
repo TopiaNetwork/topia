@@ -9,6 +9,7 @@ import (
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplgblock "github.com/TopiaNetwork/topia/ledger/block"
 	"github.com/TopiaNetwork/topia/ledger/history"
+	tplgms "github.com/TopiaNetwork/topia/ledger/meta"
 	tplgss "github.com/TopiaNetwork/topia/ledger/state"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
@@ -37,6 +38,8 @@ type Ledger interface {
 type ledger struct {
 	id             LedgerID
 	log            tplog.Logger
+	chainDir       string
+	backendType    backend.BackendType
 	state          atomic.Value
 	backendStateDB backend.Backend
 	blockStore     tplgblock.BlockStore
@@ -52,6 +55,8 @@ func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backe
 	l := &ledger{
 		id:             id,
 		log:            log,
+		chainDir:       chainDir,
+		backendType:    backendType,
 		backendStateDB: backendStateDB,
 		blockStore:     tplgblock.NewBlockStore(log, rootPath, backendType),
 		historyStore:   history.NewHistoryStore(log, rootPath, backendType),
@@ -64,6 +69,15 @@ func NewLedger(chainDir string, id LedgerID, log tplog.Logger, backendType backe
 
 func (l *ledger) ID() string {
 	return string(l.id)
+}
+
+func (l *ledger) CreateMetaStore() (tplgms.MetaStore, error) {
+	rootPath := filepath.Join(l.chainDir, string(l.id))
+
+	bmLog := tplog.CreateModuleLogger(tplogcmm.InfoLevel, "MetaStore", l.log)
+	backendMetaDB := backend.NewBackend(l.backendType, bmLog, filepath.Join(rootPath, "metastore"), "metastore")
+
+	return tplgms.NewMetaStore(bmLog, backendMetaDB), nil
 }
 
 func (l *ledger) CreateStateStore() (tplgss.StateStore, error) {

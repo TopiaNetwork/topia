@@ -547,6 +547,9 @@ func (e *consensusExecutor) makePreparePackedMsg(domainID string, vrfProof []byt
 
 func (e *consensusExecutor) Prepare(ctx context.Context, domainID string, vrfProof []byte, stateVersion uint64) error {
 	pendTxs := e.txPool.PickTxs()
+	if len(pendTxs) == 0 {
+		return nil
+	}
 
 	compState := state.GetStateBuilder(state.CompStateBuilderType_Full).CreateCompositionState(e.log, e.nodeID, e.ledger, stateVersion, "executor_exepreparer")
 	if compState == nil {
@@ -574,7 +577,7 @@ func (e *consensusExecutor) Prepare(ctx context.Context, domainID string, vrfPro
 		return err
 	}
 
-	e.log.Infof("Executor starts making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, e.nodeID)
+	e.log.Infof("Executor starts making prepare packed message: state version %d, tx count %d, self node %s", stateVersion, len(pendTxs), e.nodeID)
 	packedMsgExe, packedMsgProp, err := e.makePreparePackedMsg(domainID, vrfProof, txRoot, txsRS.TxRSRoot, packedTxs.StateVersion, packedTxs.TxList, txsRS.TxsResult, compState)
 	if err != nil {
 		return err

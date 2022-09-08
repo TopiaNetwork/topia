@@ -100,7 +100,7 @@ func Test_transactionPool_removeTxForUptoLifeTime(t *testing.T) {
 	//**********for test
 	//*change default lifTime to 4 second,and change TxExpiredTime to 3 second **
 	//**********for test
-	pool1.config.LifetimeForTx = 4 * time.Second
+	pool1.config.TimeOfTxLifecycle = 4 * time.Second
 	assert.Equal(t, int64(4), pool1.Count())
 	time.Sleep(13 * time.Second)
 	locals := pool1.GetLocalTxs()

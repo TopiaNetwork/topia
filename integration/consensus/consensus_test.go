@@ -3,18 +3,25 @@ package consensus
 import (
 	"context"
 	"fmt"
+	tpcrt "github.com/TopiaNetwork/topia/crypt"
+	"github.com/TopiaNetwork/topia/currency"
+	"github.com/TopiaNetwork/topia/service"
+	txuni "github.com/TopiaNetwork/topia/transaction/universal"
+	transactionpool "github.com/TopiaNetwork/topia/transaction_pool"
+	"math/big"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/AsynkronIT/protoactor-go/actor"
+	actorlog "github.com/AsynkronIT/protoactor-go/log"
+
 	"github.com/TopiaNetwork/kyber/v3/pairing/bn256"
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
-	"github.com/AsynkronIT/protoactor-go/actor"
-	actorlog "github.com/AsynkronIT/protoactor-go/log"
 	tpacc "github.com/TopiaNetwork/topia/account"
 	"github.com/TopiaNetwork/topia/chain"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -25,7 +32,6 @@ import (
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/eventhub"
 	"github.com/TopiaNetwork/topia/execution"
-	"github.com/TopiaNetwork/topia/integration/mock"
 	"github.com/TopiaNetwork/topia/ledger"
 	"github.com/TopiaNetwork/topia/ledger/backend"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -362,7 +368,8 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		network := tpnet.NewNetwork(context.Background(), testMainLog, config.NetConfig, sysActor, fmt.Sprintf("/ip4/127.0.0.1/tcp/%s%d", portFrefix[nodeType], i), fmt.Sprintf("topia%s%d", portFrefix[nodeType], i+1), state.NewNodeNetWorkStateWapper(testMainLog, l))
 
-		txPool := mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)
+		tpService := service.NewService(network.ID(), testMainLog, codec.CodecType_PROTO, network, l, nil, nil, config)
+		txPool := transactionpool.NewTransactionPool(network.ID(), context.Background(), config.TxPoolConfig, tplogcmm.InfoLevel, testMainLog, codec.CodecType_PROTO, tpService.StateQueryService(), tpService.BlockService(), network) /*mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)*/
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
@@ -450,6 +457,40 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 	return nParams
 }
 
+func produceTxsTimer(ctx context.Context, txPool txpooli.TransactionPool, cryptService tpcrt.CryptService, log tplog.Logger) {
+	go func() {
+		timer := time.NewTicker(500 * time.Millisecond)
+		defer timer.Stop()
+		for {
+			select {
+			case <-timer.C:
+				err := func() error {
+					fromPriKey, _, _ := cryptService.GeneratePriPubKey()
+					for i := 0; i < 5; i++ {
+						_, toPubKey, _ := cryptService.GeneratePriPubKey()
+						toAddr, _ := cryptService.CreateAddress(toPubKey)
+
+						tx := txuni.ConstructTransactionWithUniversalTransfer(log, cryptService, fromPriKey, fromPriKey, uint64(i+1), 200, 500, toAddr,
+							[]txuni.TargetItem{{currency.TokenSymbol_Native, big.NewInt(10)}})
+						//txID, _ := tx.TxID()
+						//fmt.Printf("txID=%s\n", txID)
+
+						txPool.AddTx(tx, true)
+					}
+
+					return nil
+				}()
+				if err != nil {
+					continue
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+
+	}()
+}
+
 func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 	var css []consensus.Consensus
 	for i := 0; i < len(nParams); i++ {
@@ -463,6 +504,8 @@ func createConsensusAndStart(nParams []*nodeParams) []consensus.Consensus {
 		cType := state.CompStateBuilderType_Full
 		if nParams[i].nodeType != "executor" {
 			cType = state.CompStateBuilderType_Simple
+		} else {
+			produceTxsTimer(context.Background(), nParams[i].txPool, &consensus.CryptServiceMock{}, nParams[i].mainLog)
 		}
 		cs := consensus.NewConsensus(
 			nParams[i].chainID,

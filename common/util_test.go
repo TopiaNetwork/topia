@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -84,5 +85,31 @@ func TestErrGroup(t *testing.T) {
 		})
 	}
 	eg.Wait()
+
+}
+
+type TestStru struct {
+	id  string
+	val int
+}
+
+var TSVal = []*TestStru{
+	&TestStru{"test1", 10},
+	&TestStru{"test2", 9},
+	&TestStru{"test3", 8},
+	&TestStru{"test4", 7},
+	&TestStru{"test5", 6},
+}
+
+func StrComp(ts1 *TestStru, ts2 *TestStru) bool {
+	return ts1.id == ts2.id
+}
+
+func TestStringEqual(t *testing.T) {
+	index := sort.Search(len(TSVal), func(i int) bool {
+		return TSVal[i].val == 10
+	})
+
+	fmt.Println(index)
 
 }

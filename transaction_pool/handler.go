@@ -2,6 +2,9 @@ package transactionpool
 
 import (
 	"context"
+	"github.com/TopiaNetwork/topia/codec"
+	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	"runtime"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tplog "github.com/TopiaNetwork/topia/log"
@@ -31,16 +34,35 @@ func (handler *transactionPoolHandler) ProcessTx(ctx context.Context, msg *TxMes
 }
 
 func (handler *transactionPoolHandler) processBlockAddedEvent(ctx context.Context, data interface{}) error {
-	if block, ok := data.(*tpchaintypes.Block); ok {
+	/*if block, ok := data.(*tpchaintypes.Block); ok {
 		handler.txPool.chanBlockAdded <- block
+	}*/
+
+	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
+	if block, ok := data.(*tpchaintypes.Block); ok {
+		for _, dataChunkBytes := range block.Data.DataChunks {
+			var dataChunk tpchaintypes.BlockDataChunk
+			dataChunk.Unmarshal(dataChunkBytes)
+			for _, txBytes := range dataChunk.Txs {
+				var tx txbasic.Transaction
+				marshaler.Unmarshal(txBytes, &tx)
+				txID, _ := tx.TxID()
+				handler.txPool.RemoveTxByKey(txID)
+			}
+		}
+
+		runtime.GC()
+
+		return nil
 	}
-	return nil
+
+	panic("Unknown sub event data")
 }
 
 func (handler *transactionPoolHandler) processBlocksRevertEvent(ctx context.Context, data interface{}) error {
 	if blocks, ok := data.([]*tpchaintypes.Block); ok {
 
-		handler.txPool.chanBlocksRevert <- blocks
+		handler.txPool.blockRevertCh <- blocks
 	}
 	return nil
 }

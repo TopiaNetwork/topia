@@ -2,10 +2,10 @@ package transactionpool
 
 import (
 	"errors"
+	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	"time"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
 type TxExpiredPolicy byte
@@ -36,10 +36,9 @@ const (
 )
 
 var (
-	RemoveTxInterval         = 30011 * time.Millisecond // Time interval to check for remove transactions
-	SaveTxStorageInterval    = 101 * time.Millisecond
-	delTxFromStorageInterval = 151 * time.Millisecond
-	RepublishTxInterval      = 1499 * time.Millisecond //30000 * time.Millisecond  //time interval to check transaction lifetime for report
+	ExpiredTxsInterval  = 2000 * time.Millisecond
+	RepublishTxInterval = 1000 * time.Millisecond
+	RepublishTxLimit    = 50
 
 	ObsID string
 
@@ -70,8 +69,8 @@ const (
 	TxRepublishTimeOrHeight
 )
 
-func (pool *transactionPool) SetTxPoolConfig(conf txpooli.TransactionPoolConfig) {
-	conf = (conf).Check()
-	pool.config = conf
+func (pool *transactionPool) SetTxPoolConfig(conf *tpconfig.TransactionPoolConfig) {
+	confNew := conf.Check()
+	pool.config = confNew
 	return
 }

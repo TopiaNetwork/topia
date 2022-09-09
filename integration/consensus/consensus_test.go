@@ -56,6 +56,7 @@ var portFrefix = map[string]string{
 
 type nodeParams struct {
 	chainID         tpchaintypes.ChainID
+	exeDomainID     string
 	nodeID          string
 	nodeType        string
 	priKey          tpcrtypes.PrivateKey
@@ -89,6 +90,22 @@ func buildNodeConnections(networks []tpnet.Network) {
 	buildNodeConnections(networks[1:])
 }
 
+var exeDomainInfo1 = &tpcmm.NodeDomainInfo{
+	ID:               tpcmm.CreateDomainID("exedomain1"),
+	Type:             tpcmm.DomainType_Execute,
+	ValidHeightStart: 1,
+	ValidHeightEnd:   100000,
+	ExeDomainData:    new(tpcmm.NodeExecuteDomain),
+}
+
+var exeDomainInfo2 = &tpcmm.NodeDomainInfo{
+	ID:               tpcmm.CreateDomainID("exedomain2"),
+	Type:             tpcmm.DomainType_Execute,
+	ValidHeightStart: 1,
+	ValidHeightEnd:   100000,
+	ExeDomainData:    new(tpcmm.NodeExecuteDomain),
+}
+
 func createNetworkNodes(
 	executorNetParams []*nodeParams,
 	proposerNetParams []*nodeParams,
@@ -97,30 +114,6 @@ func createNetworkNodes(
 	t *testing.T) ([]tpnet.Network, []tpnet.Network, []tpnet.Network) {
 	var networkExes []tpnet.Network
 	suite := bn256.NewSuiteG2()
-
-	exeDomainInfo1 := &tpcmm.NodeDomainInfo{
-		ID:               tpcmm.CreateDomainID("exedomain1"),
-		Type:             tpcmm.DomainType_Execute,
-		ValidHeightStart: 1,
-		ValidHeightEnd:   100000,
-		ExeDomainData:    new(tpcmm.NodeExecuteDomain),
-	}
-
-	exeDomainInfo2 := &tpcmm.NodeDomainInfo{
-		ID:               tpcmm.CreateDomainID("exedomain2"),
-		Type:             tpcmm.DomainType_Execute,
-		ValidHeightStart: 1,
-		ValidHeightEnd:   100000,
-		ExeDomainData:    new(tpcmm.NodeExecuteDomain),
-	}
-
-	for i := 0; i < len(executorNetParams); i++ {
-		if i < len(executorNetParams)/2 {
-			exeDomainInfo1.ExeDomainData.Members = append(exeDomainInfo1.ExeDomainData.Members, executorNetParams[i].network.ID())
-		} else {
-			exeDomainInfo2.ExeDomainData.Members = append(exeDomainInfo2.ExeDomainData.Members, executorNetParams[i].network.ID())
-		}
-	}
 
 	for i := 0; i < len(executorNetParams); i++ {
 		network := executorNetParams[i].network
@@ -370,7 +363,18 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		tpService := service.NewService(network.ID(), testMainLog, codec.CodecType_PROTO, network, l, nil, nil, config)
 
-		txPool := transactionpool.NewTransactionPool(network.ID(), context.Background(), config.TxPoolConfig, tplogcmm.InfoLevel, testMainLog, codec.CodecType_PROTO, tpService.StateQueryService(), tpService.BlockService(), network, l) /*mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)*/
+		exeDomainID := ""
+		if nodeType == "executor" {
+			if i < n/2 {
+				exeDomainID = exeDomainInfo1.ID
+				exeDomainInfo1.ExeDomainData.Members = append(exeDomainInfo1.ExeDomainData.Members, network.ID())
+			} else {
+				exeDomainID = exeDomainInfo2.ID
+				exeDomainInfo2.ExeDomainData.Members = append(exeDomainInfo2.ExeDomainData.Members, network.ID())
+			}
+		}
+
+		txPool := transactionpool.NewTransactionPool(exeDomainID, network.ID(), context.Background(), config.TxPoolConfig, tplogcmm.InfoLevel, testMainLog, codec.CodecType_PROTO, tpService.StateQueryService(), tpService.BlockService(), network, l) /*mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)*/
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
@@ -437,6 +441,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 		tpcmm.DeepCopyByGob(newConfig, config)
 		nParams = append(nParams, &nodeParams{
 			chainID:         "consintetest",
+			exeDomainID:     exeDomainID,
 			nodeType:        nodeType,
 			priKey:          priKey,
 			mainLevel:       tplogcmm.InfoLevel,
@@ -471,7 +476,7 @@ func produceTxsTimer(ctx context.Context, txPool txpooli.TransactionPool, cryptS
 						_, toPubKey, _ := cryptService.GeneratePriPubKey()
 						toAddr, _ := cryptService.CreateAddress(toPubKey)
 
-						tx := txuni.ConstructTransactionWithUniversalTransfer(log, cryptService, fromPriKey, fromPriKey, uint64(1), 200, 500, toAddr,
+						tx := txuni.ConstructTransactionWithUniversalTransfer(log, cryptService, fromPriKey, fromPriKey, uint64(1), 1000000000, 50000, toAddr,
 							[]txuni.TargetItem{{currency.TokenSymbol_Native, big.NewInt(10)}})
 						//txID, _ := tx.TxID()
 						//fmt.Printf("txID=%s\n", txID)

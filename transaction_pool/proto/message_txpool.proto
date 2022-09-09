@@ -7,13 +7,17 @@ option (gogoproto.stable_marshaler_all) = true;
 
 import "gogo.proto";
 
+//protoc --proto_path=$GOPATH/pkg/mod/github.com/gogo/protobuf@v1.3.2/gogoproto --proto_path=.  --gofast_out=. ./message_txpool.proto
+
 message TxPoolMessage {
   enum TxPoolMessageType {
     Unknown = 0;
     Tx = 1;
   }
-  TxPoolMessageType MsgType = 1  [(gogoproto.jsontag) = "msgType"];
-  bytes Data = 2  [(gogoproto.jsontag) = "data"];
+  TxPoolMessageType MsgType    = 1  [(gogoproto.jsontag) = "msgType"];
+  bytes             FromDomain = 2  [(gogoproto.jsontag) = "fromDomain"];
+  bytes             FromNode   = 3  [(gogoproto.jsontag) = "fromNode"];
+  bytes             Data       = 4  [(gogoproto.jsontag) = "data"];
 }
 
 message TxMessage{

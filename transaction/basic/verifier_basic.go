@@ -3,6 +3,7 @@ package basic
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -51,7 +52,7 @@ func TransactionFromAddressVerifier() TransactionVerifier {
 			return VerifyResult_Accept
 		} else if !fEth {
 			if isValid := fromAddr.IsValid(tpcmm.CurrentNetworkType); !isValid {
-				log.Errorf("Invalid from address: %v", tx.Head.FromAddr)
+				log.Errorf("Invalid from address: %v", string(tx.Head.FromAddr))
 				return VerifyResult_Reject
 			}
 
@@ -76,8 +77,12 @@ func TransactionSignatureVerifier() TransactionVerifier {
 			return VerifyResult_Reject
 		}
 
+		var signInfo tpcrtypes.SignatureInfo
+		if err := json.Unmarshal(tx.Head.Signature, &signInfo); err != nil {
+			return VerifyResult_Reject
+		}
 		cryService, _ := txServant.GetCryptService(log, cryType)
-		if ok, err := cryService.Verify(tpcrtypes.Address(tx.Head.FromAddr), tx.Data.Specification, tx.Head.Signature); !ok {
+		if ok, err := cryService.Verify(tpcrtypes.NewFromBytes(tx.Head.FromAddr), tx.Data.Specification, signInfo.SignData); !ok {
 			log.Errorf("Can't verify tx signature: %v", err)
 			return VerifyResult_Reject
 		}

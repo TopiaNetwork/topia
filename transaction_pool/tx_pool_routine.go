@@ -4,6 +4,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	txpoolcore "github.com/TopiaNetwork/topia/transaction_pool/core"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
@@ -77,7 +78,7 @@ func (pool *transactionPool) republishRoutine() {
 			select {
 			case <-timer.C:
 				pool.txsCollect.RepublishTxs(RepublishTxLimit, func(wTx txpoolcore.TxWrapper) error {
-					err := pool.txServant.PublishTx(pool.ctx, wTx.OriginTx())
+					err := pool.txServant.PublishTx(pool.ctx, pool.marshaler, tpnetprotoc.AsyncSendProtocolID+"/"+pool.exeDomainID, pool.exeDomainID, pool.nodeID, wTx.OriginTx())
 					if err == nil {
 						wTx.UpdateState(txpooli.TxState_Republished)
 					}

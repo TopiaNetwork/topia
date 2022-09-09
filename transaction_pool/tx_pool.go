@@ -2,8 +2,6 @@ package transactionpool
 
 import (
 	"context"
-	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	"github.com/TopiaNetwork/topia/ledger"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,15 +9,17 @@ import (
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/hashicorp/golang-lru"
 
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/eventhub"
+	"github.com/TopiaNetwork/topia/ledger"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 	tpnet "github.com/TopiaNetwork/topia/network"
-	"github.com/TopiaNetwork/topia/network/protocol"
+	tpnetprotoc "github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/service"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txpoolcore "github.com/TopiaNetwork/topia/transaction_pool/core"
@@ -27,7 +27,8 @@ import (
 )
 
 type transactionPool struct {
-	nodeId        string
+	exeDomainID   string
+	nodeID        string
 	log           tplog.Logger
 	level         tplogcmm.LogLevel
 	ctx           context.Context
@@ -35,7 +36,8 @@ type transactionPool struct {
 	hasher        tpcmm.Hasher
 	config        *tpconfig.TransactionPoolConfig
 	txServant     TransactionPoolServant
-	handler       *transactionPoolHandler
+	txMsgSub      TxMsgSubProcessor
+	handler       TransactionPoolHandler
 	mu            sync.RWMutex
 	txSizeBytes   int64
 	txCount       int64
@@ -45,7 +47,8 @@ type transactionPool struct {
 	blockRevertCh chan []*tpchaintypes.Block
 }
 
-func NewTransactionPool(nodeID string,
+func NewTransactionPool(exeDomainID string,
+	nodeID string,
 	ctx context.Context,
 	conf *tpconfig.TransactionPoolConfig,
 	level tplogcmm.LogLevel,
@@ -59,7 +62,8 @@ func NewTransactionPool(nodeID string,
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 
 	pool := &transactionPool{
-		nodeId:        nodeID,
+		exeDomainID:   exeDomainID,
+		nodeID:        nodeID,
 		config:        confNew,
 		log:           poolLog,
 		level:         level,
@@ -81,8 +85,14 @@ func NewTransactionPool(nodeID string,
 		pool.txServant.loadAllTxs(pool.marshaler, pool.addTx)
 	}
 
-	poolHandler := NewTransactionPoolHandler(poolLog, pool, TxMsgSub)
+	txMsgSub := NewTxMsgSubProcessor(exeDomainID, nodeID, poolLog, pool)
+	pool.txMsgSub = txMsgSub
+
+	poolHandler := NewTransactionPoolHandler(poolLog, pool, txMsgSub)
 	pool.handler = poolHandler
+
+	pool.txServant.CreateTopic(tpnetprotoc.AsyncSendProtocolID + "/" + pool.exeDomainID)
+
 	return pool
 }
 
@@ -129,13 +139,13 @@ func (pool *transactionPool) AddTx(tx *txbasic.Transaction, isLocal bool) error 
 }
 
 func (pool *transactionPool) addLocal(tx *txbasic.Transaction) error {
-	fromAddr := tpcrtypes.Address(tx.Head.FromAddr)
+	fromAddr := tpcrtypes.NewFromBytes(tx.Head.FromAddr)
 	pool.localAddrs[fromAddr] = struct{}{}
 
 	wTx, err := pool.addTx(tx)
 	if err == nil {
 		pool.txServant.saveTxIntoStore(pool.marshaler, wTx.TxID(), tx)
-		err = pool.txServant.PublishTx(pool.ctx, wTx.OriginTx())
+		err = pool.txServant.PublishTx(pool.ctx, pool.marshaler, tpnetprotoc.AsyncSendProtocolID+"/"+pool.exeDomainID, pool.exeDomainID, pool.nodeID, wTx.OriginTx())
 		if err == nil {
 			wTx.UpdateState(txpooli.TxState_Published)
 		}
@@ -260,13 +270,11 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 	}
 	network.RegisterModule(txpooli.MOD_NAME, actorPID, pool.marshaler)
 
-	TxMsgSub = &txMsgSubProcessor{txPool: pool, log: pool.log, nodeID: pool.nodeId}
-	//subscribe
-	/*pool.txServant.Subscribe(pool.ctx, protocol.SyncProtocolID_Msg,
-	true,
-	TxMsgSub.Validate)*/
+	pool.txServant.Subscribe(pool.ctx, tpnetprotoc.AsyncSendProtocolID+"/"+pool.exeDomainID,
+		true,
+		pool.txMsgSub.Validate)
 
-	ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
+	ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeID).
 		Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)
 	if err != nil {
 		pool.log.Panicf("processBlockAddedEvent error:%s", err)
@@ -280,8 +288,8 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 }
 
 func (pool *transactionPool) Stop() {
-	pool.txServant.UnSubscribe(protocol.SyncProtocolID_Msg)
-	eventhub.GetEventHubManager().GetEventHub(pool.nodeId).UnObserve(pool.ctx, ObsID, eventhub.EventName_BlockAdded)
+	pool.txServant.UnSubscribe(tpnetprotoc.SyncProtocolID_Msg)
+	eventhub.GetEventHubManager().GetEventHub(pool.nodeID).UnObserve(pool.ctx, ObsID, eventhub.EventName_BlockAdded)
 	pool.txServant.savePoolConfig(pool.config, pool.marshaler)
 
 	pool.log.Info("TransactionPool stopped")

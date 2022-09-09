@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	tplog "github.com/TopiaNetwork/topia/log"
 	"github.com/TopiaNetwork/topia/wallet/cache"
 	"github.com/TopiaNetwork/topia/wallet/key_store"
 	"io/ioutil"
@@ -26,22 +26,26 @@ type FileKeyStore struct {
 	fileFolderPath string // path of the folder which contains keys
 	mutex          sync.RWMutex
 	cs             crypt.CryptService
+	log            tplog.Logger
+
 	EncryptWay
 }
 
 type InitArg struct {
 	RootPath string
 	Cs       crypt.CryptService
+	Log      tplog.Logger
 
 	EncryptWay // For stored-message encryption and decryption
 }
 
 const keysFolderName = "wallet"
-const lockFileName = "lock"
+const pidFileName = "pid"
 
 var (
-	enableKeyNotSetErr = errors.New("enable key hasn't been set")
-	addrNotExistErr    = errors.New("addr doesn't exist")
+	enableKeyNotSetErr   = errors.New("enable key hasn't been set")
+	defaultAddrNotSetErr = errors.New("default addr hasn't been set")
+	addrNotExistErr      = errors.New("addr doesn't exist")
 )
 
 var fksInstance FileKeyStore
@@ -71,10 +75,11 @@ func (f *FileKeyStore) Init(arg InitArg) error {
 	f.mutex.Lock()
 	f.fileFolderPath = keysFolderPath
 	f.cs = arg.Cs
+	f.log = arg.Log
 	f.EncryptWay = arg.EncryptWay
 	f.mutex.Unlock()
 
-	err = f.checkLockFile()
+	err = f.checkPidFile()
 	if err != nil {
 		return err
 	}
@@ -84,6 +89,17 @@ func (f *FileKeyStore) Init(arg InitArg) error {
 	}
 	if !exist { // if walletEnableKey hasn't been set, set it
 		err = f.SetEnable(true)
+		if err != nil {
+			return err
+		}
+	}
+
+	exist, err = key_store.IsPathExist(filepath.Join(f.fileFolderPath, key_store.DefaultAddrKey))
+	if err != nil {
+		return err
+	}
+	if !exist { // if DefaultAddr hasn't been set, set it
+		err = f.SetDefaultAddr("please_set_your_default_address")
 		if err != nil {
 			return err
 		}
@@ -220,7 +236,6 @@ func (f *FileKeyStore) SetEnable(set bool) error {
 	}
 
 	encryptedWE, err := f.cs.StreamEncrypt(f.Pubkey, temp)
-	//encryptedWE, err := key_store.StreamEncrypt(f.CryptType, f.Pubkey, temp)
 	if err != nil {
 		return err
 	}
@@ -235,6 +250,53 @@ func (f *FileKeyStore) SetEnable(set bool) error {
 
 func (f *FileKeyStore) GetEnable() (bool, error) {
 	return cache.GetEnableFromCache(), nil
+}
+
+func (f *FileKeyStore) SetDefaultAddr(defaultAddr string) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	err := key_store.SetDirPerm(filepath.Dir(f.fileFolderPath), filepath.Base(f.fileFolderPath))
+	if err != nil {
+		return err
+	}
+	defer key_store.SetDirReadOnly(filepath.Dir(f.fileFolderPath), filepath.Base(f.fileFolderPath))
+
+	daFilePath := filepath.Join(f.fileFolderPath, key_store.DefaultAddrKey)
+
+	exist, err := key_store.IsPathExist(daFilePath)
+	if err != nil {
+		return err
+	}
+	var daFile *os.File
+	if !exist { // don't find defaultAddrKey then create it
+		daFile, err = os.Create(daFilePath)
+		if err != nil {
+			return err
+		}
+	} else {
+		daFile, err = os.OpenFile(daFilePath, os.O_RDWR|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+	}
+	defer daFile.Close()
+
+	encryptedDA, err := f.cs.StreamEncrypt(f.Pubkey, []byte(defaultAddr))
+	if err != nil {
+		return err
+	}
+	_, err = daFile.Write(encryptedDA)
+	if err != nil {
+		return err
+	}
+
+	cache.SetDefaultAddrToCache(defaultAddr)
+	return nil
+}
+
+func (f *FileKeyStore) GetDefaultAddr() (defaultAddr string, err error) {
+	return cache.GetDefaultAddrFromCache(), nil
 }
 
 func (f *FileKeyStore) Keys() (addrs []string, err error) {
@@ -335,6 +397,32 @@ func (f *FileKeyStore) getEnableFromBackend() (bool, error) {
 	}
 }
 
+func (f *FileKeyStore) getDefaultAddrFromBackend() (defaultAddr string, err error) {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	daFilePath := filepath.Join(f.fileFolderPath, key_store.DefaultAddrKey)
+
+	exist, err := key_store.IsPathExist(daFilePath)
+	if err != nil {
+		return "", err
+	}
+	if !exist {
+		return "", defaultAddrNotSetErr
+	} else {
+		bs, err := ioutil.ReadFile(daFilePath)
+		if err != nil {
+			return "", err
+		}
+
+		decryptedDA, err := f.cs.StreamDecrypt(f.Seckey, bs)
+		if err != nil {
+			return "", err
+		}
+		return string(decryptedDA), nil
+	}
+}
+
 func (f *FileKeyStore) listAddrsFromBackend() (addrs []string, err error) {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
@@ -355,7 +443,7 @@ func (f *FileKeyStore) listAddrsFromBackend() (addrs []string, err error) {
 	return addrs, nil
 }
 
-func (f *FileKeyStore) checkLockFile() error {
+func (f *FileKeyStore) checkPidFile() error {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
@@ -365,16 +453,16 @@ func (f *FileKeyStore) checkLockFile() error {
 	}
 	defer key_store.SetDirReadOnly(filepath.Dir(f.fileFolderPath), filepath.Base(f.fileFolderPath))
 
-	lockFilePath := filepath.Join(f.fileFolderPath, lockFileName)
-	exist, err := key_store.IsPathExist(lockFilePath)
+	pidFilePath := filepath.Join(f.fileFolderPath, pidFileName)
+	exist, err := key_store.IsPathExist(pidFilePath)
 	if err != nil {
 		return err
 	}
 
 	pid := os.Getpid()
 	var file *os.File
-	if !exist { // if lockfile doesn't exist, set it
-		file, err = os.Create(lockFilePath)
+	if !exist { // if pidFile doesn't exist, set it
+		file, err = os.Create(pidFilePath)
 		if err != nil {
 			return err
 		}
@@ -390,8 +478,8 @@ func (f *FileKeyStore) checkLockFile() error {
 		}
 		return nil
 
-	} else { // no err and lockfile exists
-		pidBytes, err := ioutil.ReadFile(lockFilePath)
+	} else { // no err and pidFile exists
+		pidBytes, err := ioutil.ReadFile(pidFilePath)
 		if err != nil {
 			return err
 		}
@@ -404,13 +492,11 @@ func (f *FileKeyStore) checkLockFile() error {
 			return err
 		}
 		if pidAlive {
-			if pid != pidInLock {
-				panic(fmt.Sprintf("pid: %d is running.", pidInLock))
-			}
-			return nil
+			f.log.Errorf("pid: %d is running. Wallet exits.", pidInLock)
+			os.Exit(0)
 		}
 
-		file, err = os.OpenFile(lockFilePath, os.O_RDWR|os.O_TRUNC, 0644)
+		file, err = os.OpenFile(pidFilePath, os.O_RDWR|os.O_TRUNC, 0644)
 		if err != nil {
 			return err
 		}
@@ -451,23 +537,30 @@ func loadKeysToCache(store *FileKeyStore) error {
 		return err
 	}
 	cache.SetEnableToCache(enable)
+
+	defaultAddr, err := store.getDefaultAddrFromBackend()
+	if err != nil {
+		cache.SetDefaultAddrToCache("")
+		return err
+	}
+	cache.SetDefaultAddrToCache(defaultAddr)
 	return nil
 }
 
 func intToBytes(n int) ([]byte, error) {
 	data := int64(n)
-	bytebuf := bytes.NewBuffer([]byte{})
-	err := binary.Write(bytebuf, binary.LittleEndian, data)
+	byteBuf := bytes.NewBuffer([]byte{})
+	err := binary.Write(byteBuf, binary.LittleEndian, data)
 	if err != nil {
 		return nil, err
 	}
-	return bytebuf.Bytes(), nil
+	return byteBuf.Bytes(), nil
 }
 
 func bytesToInt(bys []byte) (int, error) {
-	bytebuf := bytes.NewBuffer(bys)
+	byteBuf := bytes.NewBuffer(bys)
 	var data int64
-	err := binary.Read(bytebuf, binary.LittleEndian, &data)
+	err := binary.Read(byteBuf, binary.LittleEndian, &data)
 	if err != nil {
 		return 0, err
 	}

@@ -17,8 +17,10 @@ const addrCacheSize = 512 // hold 512 item max
 var addrCache, _ = lru.New(addrCacheSize)
 
 var (
-	enableCacheMutex sync.RWMutex
-	enable_Cache     = true // default enabled
+	enableCacheMutex      sync.RWMutex
+	enable_Cache          = true // default enabled
+	defaultAddrCacheMutex sync.RWMutex
+	defaultAddr_Cache     = "" // default void-string
 )
 
 var (
@@ -86,6 +88,20 @@ func GetEnableFromCache() (ret bool) {
 	return ret
 }
 
+func SetDefaultAddrToCache(defaultAddr string) {
+	defaultAddrCacheMutex.Lock()
+	defaultAddr_Cache = defaultAddr
+	defaultAddrCacheMutex.Unlock()
+}
+
+func GetDefaultAddrFromCache() (defaultAddr string) {
+	defaultAddrCacheMutex.RLock()
+	defaultAddr = defaultAddr_Cache
+	defaultAddrCacheMutex.RUnlock()
+
+	return defaultAddr
+}
+
 func GetKeysFromCache() (addrs []string) {
 	keys := addrCache.Keys()
 	addrs = make([]string, len(keys))
@@ -101,6 +117,10 @@ func RemoveFromCache(key string) {
 		enableCacheMutex.Lock()
 		enable_Cache = false
 		enableCacheMutex.Unlock()
+	} else if key == key_store.DefaultAddrKey {
+		defaultAddrCacheMutex.Lock()
+		defaultAddr_Cache = ""
+		defaultAddrCacheMutex.Unlock()
 	} else {
 		addrCache.Remove(key)
 	}

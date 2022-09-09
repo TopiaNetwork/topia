@@ -1,6 +1,7 @@
 package file_key_store
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/TopiaNetwork/topia/crypt"
 	"github.com/TopiaNetwork/topia/crypt/ed25519"
@@ -35,14 +36,20 @@ func TestFileKeyStoreFunction(t *testing.T) {
 	err = fks.SetEnable(true)
 	assert.Nil(t, err, "fileKeyStore SetWalletEnable err", err)
 
+	err = fks.SetDefaultAddr(testAddr)
+	assert.Nil(t, err)
+	getDefaultAddr, err := fks.GetDefaultAddr()
+	assert.Nil(t, err)
+	assert.Equal(t, testAddr, getDefaultAddr)
+
 	err = fks.SetAddr(testAddr, item)
 	assert.Equal(t, nil, err, "fileKeyStore set addr err:", err)
 	getItem, err := fks.GetAddr(testAddr)
 	assert.Equal(t, nil, err, "fileKeyStore get addr err:", err)
 	assert.Equal(t, item.CryptType, getItem.CryptType)
-	for i := range item.Seckey {
-		assert.Equal(t, item.Seckey[i], getItem.Seckey[i])
-	}
+
+	equal := bytes.Equal(item.Seckey, getItem.Seckey)
+	assert.Equal(t, true, equal)
 
 	_, err = fks.GetEnable()
 	assert.Equal(t, nil, err, "fileKeyStore get wallet enable err:", err)
@@ -51,8 +58,13 @@ func TestFileKeyStoreFunction(t *testing.T) {
 	assert.Nil(t, err, "remove addr err:", err)
 	err = fks.Remove(key_store.EnableKey)
 	assert.Nil(t, err, "remove walletEnableKey err:", err)
+	err = fks.Remove(key_store.DefaultAddrKey)
+	assert.Nil(t, err)
 
-	err = os.RemoveAll(filepath.Join(dirPathForTest(), keysFolderName))
+	keyStorePath := filepath.Join(dirPathForTest(), keysFolderName)
+	err = key_store.SetDirPerm(filepath.Dir(keyStorePath), filepath.Base(keyStorePath))
+	assert.Nil(t, err)
+	err = os.RemoveAll(keyStorePath)
 	assert.Nil(t, err, "remove test key folder err")
 }
 

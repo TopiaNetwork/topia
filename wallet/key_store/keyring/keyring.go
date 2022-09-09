@@ -123,6 +123,13 @@ func (ki *KeyringImp) Init(arg InitArg) error {
 		}
 	}
 
+	if _, err = ki.getDefaultAddrFromBackend(); err != nil {
+		err = ki.SetDefaultAddr("please_set_your_default_address")
+		if err != nil {
+			return err
+		}
+	}
+
 	err = loadKeysToCache(ki)
 	if err != nil {
 		return err
@@ -132,7 +139,11 @@ func (ki *KeyringImp) Init(arg InitArg) error {
 }
 
 func (ki *KeyringImp) SetAddr(addr string, item key_store.KeyItem) error {
-	if len(addr) == 0 || item.CryptType == tpcrtypes.CryptType_Unknown || item.Seckey == nil {
+	if !key_store.IsValidTopiaAddr(tpcrtypes.Address(addr)) {
+		return errors.New("input invalid topia address")
+	}
+
+	if item.CryptType == tpcrtypes.CryptType_Unknown || item.Seckey == nil {
 		return errors.New("input invalid addrItem")
 	}
 
@@ -231,6 +242,28 @@ func (ki *KeyringImp) GetEnable() (bool, error) {
 	return cache.GetEnableFromCache(), nil
 }
 
+func (ki *KeyringImp) SetDefaultAddr(defaultAddr string) error {
+	ki.mutex.Lock()
+	defer ki.mutex.Unlock()
+
+	item := keyring.Item{
+		Key:  key_store.DefaultAddrKey,
+		Data: []byte(defaultAddr),
+	}
+	err := ki.k.Set(item)
+	if err != nil {
+		return err
+	}
+
+	cache.SetDefaultAddrToCache(defaultAddr)
+
+	return nil
+}
+
+func (ki *KeyringImp) GetDefaultAddr() (defaultAddr string, err error) {
+	return cache.GetDefaultAddrFromCache(), nil
+}
+
 func (ki *KeyringImp) Keys() (addrs []string, err error) {
 	return cache.GetKeysFromCache(), nil
 }
@@ -292,6 +325,17 @@ func (ki *KeyringImp) getEnableFromBackend() (bool, error) {
 	}
 }
 
+func (ki *KeyringImp) getDefaultAddrFromBackend() (defaultAddr string, err error) {
+	ki.mutex.RLock()
+	defer ki.mutex.RUnlock()
+
+	item, err := ki.k.Get(key_store.DefaultAddrKey)
+	if err != nil {
+		return "", err
+	}
+	return string(item.Data), nil
+}
+
 func (ki *KeyringImp) listAddrsFromBackend() (addrs []string, err error) {
 	ki.mutex.RLock()
 	defer ki.mutex.RUnlock()
@@ -333,5 +377,12 @@ func loadKeysToCache(store *KeyringImp) error {
 		return err
 	}
 	cache.SetEnableToCache(enable)
+
+	defaultAddr, err := store.getDefaultAddrFromBackend()
+	if err != nil {
+		cache.SetDefaultAddrToCache("")
+		return err
+	}
+	cache.SetDefaultAddrToCache(defaultAddr)
 	return nil
 }

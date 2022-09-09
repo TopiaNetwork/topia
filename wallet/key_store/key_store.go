@@ -21,6 +21,9 @@ type KeyStore interface {
 	SetEnable(set bool) error
 	GetEnable() (bool, error)
 
+	SetDefaultAddr(defaultAddr string) error
+	GetDefaultAddr() (defaultAddr string, err error)
+
 	Keys() (addrs []string, err error) // Show all addrs stored in wallet.
 
 	Remove(key string) error

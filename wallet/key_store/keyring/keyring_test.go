@@ -1,6 +1,7 @@
 package keyring
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/99designs/keyring"
 	"github.com/TopiaNetwork/topia/crypt"
@@ -27,7 +28,7 @@ func TestKeyring_File(t *testing.T) {
 	err := kri.Init(initArg)
 	assert.Equal(t, nil, err, "init with backend:", keyring.FileBackend, "err:", err)
 
-	testAddr := "whatever_Addr"
+	testAddr := getRandomEd25519Addr()
 	item := key_store.KeyItem{
 		Seckey:    []byte("whatever"),
 		CryptType: tpcrtypes.CryptType_Ed25519, // Any valid type is fine.
@@ -40,9 +41,14 @@ func TestKeyring_File(t *testing.T) {
 	getItem, err := kri.GetAddr(testAddr)
 	assert.Equal(t, nil, err, "get addr err:", err)
 	assert.Equal(t, item.CryptType, getItem.CryptType)
-	for i := range item.Seckey {
-		assert.Equal(t, item.Seckey[i], getItem.Seckey[i])
-	}
+	equal := bytes.Equal(item.Seckey, getItem.Seckey)
+	assert.Equal(t, true, equal)
+
+	err = kri.SetDefaultAddr(testAddr)
+	assert.Nil(t, err)
+	getDefaultAddr, err := kri.GetDefaultAddr()
+	assert.Nil(t, err)
+	assert.Equal(t, testAddr, getDefaultAddr)
 
 	_, err = kri.GetEnable()
 	assert.Equal(t, nil, err, "get wallet enable err:", err)
@@ -51,13 +57,15 @@ func TestKeyring_File(t *testing.T) {
 	assert.Nil(t, err, "remove addr err:", err)
 	err = kri.Remove(key_store.EnableKey)
 	assert.Nil(t, err, "remove walletEnableKey err:", err)
+	err = kri.Remove(key_store.DefaultAddrKey)
+	assert.Nil(t, err)
 
 	err = os.RemoveAll(filepath.Join(dirPathForTest(), keysFolderName))
 	assert.Nil(t, err, "remove test key folder err")
 }
 
 func testSetGetRemove(kri *KeyringImp, t *testing.T) {
-	testAddr := "whatever_Addr"
+	testAddr := getRandomEd25519Addr()
 	item := key_store.KeyItem{
 		Seckey:    []byte("whatever"),
 		CryptType: tpcrtypes.CryptType_Ed25519, // Any valid CryptType is fine.
@@ -65,6 +73,12 @@ func testSetGetRemove(kri *KeyringImp, t *testing.T) {
 
 	err := kri.SetEnable(true)
 	assert.Nil(t, err, "SetWalletEnable err:", err)
+	err = kri.SetDefaultAddr(testAddr)
+	assert.Nil(t, err)
+	getDefaultAddr, err := kri.GetDefaultAddr()
+	assert.Nil(t, err)
+	assert.Equal(t, testAddr, getDefaultAddr)
+
 	err = kri.SetAddr(testAddr, item)
 	assert.Equal(t, nil, err, "set addr err:", err)
 	getItem, err := kri.GetAddr(testAddr)
@@ -81,7 +95,8 @@ func testSetGetRemove(kri *KeyringImp, t *testing.T) {
 	assert.Nil(t, err, "remove addr err:", err)
 	err = kri.Remove(key_store.EnableKey)
 	assert.Nil(t, err, "remove walletEnableKey err:", err)
-
+	err = kri.Remove(key_store.DefaultAddrKey)
+	assert.Nil(t, err)
 }
 
 func getTestEncrytWayInstance_ed25519(t *testing.T) EncryptWay {
@@ -104,6 +119,20 @@ func getTestEncrytWayInstance_secp256(t *testing.T) EncryptWay {
 		Pubkey:    pub,
 		Seckey:    sec,
 	}
+}
+
+func getRandomSecp256Addr() string {
+	var c secp256.CryptServiceSecp256
+	_, pub, _ := c.GeneratePriPubKey()
+	address, _ := c.CreateAddress(pub)
+	return string(address)
+}
+
+func getRandomEd25519Addr() string {
+	var c ed25519.CryptServiceEd25519
+	_, pub, _ := c.GeneratePriPubKey()
+	address, _ := c.CreateAddress(pub)
+	return string(address)
 }
 
 // DirPathForTest return path string of the folder which this file is in.

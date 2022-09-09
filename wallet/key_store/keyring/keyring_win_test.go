@@ -8,8 +8,6 @@ import (
 	"github.com/TopiaNetwork/topia/crypt"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -26,6 +24,6 @@ func TestKeyringWithBKD_Wincred(t *testing.T) {
 	assert.Equal(t, nil, err, "init with backend:", keyring.WinCredBackend, "err:", err)
 	testSetGetRemove(&kri, t)
 
-	err = os.RemoveAll(filepath.Join(dirPathForTest(), keysFolderName))
-	assert.Nil(t, err, "remove wallet folder err", err)
+	//err = os.RemoveAll(filepath.Join(dirPathForTest(), keysFolderName))
+	//assert.Nil(t, err, "remove wallet folder err", err)
 }

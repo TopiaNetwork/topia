@@ -2,6 +2,7 @@ package universal
 
 import (
 	"context"
+	"encoding/json"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"github.com/TopiaNetwork/topia/currency"
@@ -27,12 +28,12 @@ func TransactionUniversalPayerAddressVerifier() TransactionUniversalVerifier {
 func TransactionUniversalGasVerifier() TransactionUniversalVerifier {
 	return func(ctx context.Context, log tplog.Logger, nodeID string, txUni *TransactionUniversalWithHead, txUniServant TransactionUniversalServant) txbasic.VerifyResult {
 		if txUni.Head.GasPrice < txUniServant.GetGasConfig().MinGasPrice {
-			log.Errorf("GasPrice %s less than the min gas price %d", txUni.Head.GasPrice, txUniServant.GetGasConfig().MinGasPrice)
+			log.Errorf("GasPrice %d less than the min gas price %d", txUni.Head.GasPrice, txUniServant.GetGasConfig().MinGasPrice)
 			return txbasic.VerifyResult_Reject
 		}
 
 		if txUni.Head.GasLimit < txUniServant.GetGasConfig().MinGasLimit {
-			log.Errorf("GasLimit %s less than the min gas limit %d", txUni.Head.GasPrice, txUniServant.GetGasConfig().MinGasLimit)
+			log.Errorf("GasLimit %d less than the min gas limit %d", txUni.Head.GasLimit, txUniServant.GetGasConfig().MinGasLimit)
 			return txbasic.VerifyResult_Reject
 		}
 
@@ -84,14 +85,12 @@ func TransactionUniversalPayerSignatureVerifier() TransactionUniversalVerifier {
 			return txbasic.VerifyResult_Reject
 		}
 
-		cryService, _ := txUniServant.GetCryptService(log, cryType)
-
-		if ok, err := cryService.Verify(tpcrtypes.Address(txUni.FromAddr), txUni.Data.Specification, txUni.Signature); !ok {
-			log.Errorf("Can't verify txUni signature: %v", err)
+		var signInfo tpcrtypes.SignatureInfo
+		if err := json.Unmarshal(txUni.Head.FeePayerSignature, &signInfo); err != nil {
 			return txbasic.VerifyResult_Reject
 		}
-
-		if ok, err := cryService.Verify(tpcrtypes.Address(txUni.Head.FeePayer), txUni.Data.Specification, txUni.Head.FeePayerSignature); !ok {
+		cryService, _ := txUniServant.GetCryptService(log, cryType)
+		if ok, err := cryService.Verify(tpcrtypes.NewFromBytes(txUni.Head.FeePayer), txUni.Data.Specification, signInfo.SignData); !ok {
 			log.Errorf("Can't verify payer signature: %v", err)
 			return txbasic.VerifyResult_Reject
 		}

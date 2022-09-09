@@ -30,6 +30,8 @@ type Network interface {
 
 	Publish(ctx context.Context, toModuleNames []string, topic string, data []byte) error
 
+	CreateTopic(topic string)
+
 	RegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler)
 
 	UnRegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler)
@@ -99,6 +101,10 @@ func (net *network) UnSubscribe(topic string) error {
 
 func (net *network) Publish(ctx context.Context, toModuleNames []string, topic string, data []byte) error {
 	return net.p2p.Publish(ctx, toModuleNames, topic, data)
+}
+
+func (net *network) CreateTopic(topic string) {
+	net.p2p.CreateTopic(topic)
 }
 
 func (net *network) RegisterModule(moduleName string, pid *actor.PID, marshaler codec.Marshaler) {

@@ -3,6 +3,7 @@ package basic
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
@@ -22,10 +23,13 @@ type TransactionVerifier func(ctx context.Context, log tplog.Logger, txI interfa
 
 func TransactionChainIDVerifier() TransactionVerifier {
 	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
-		tx := txI.(*TransactionHead)
+		tx, ok := txI.(*Transaction)
+		if !ok {
+			log.Panicf("Invalid txI, expected Transaction")
+		}
 		chainID := txServant.ChainID()
-		if bytes.Compare(tx.ChainID, []byte(chainID)) != 0 {
-			log.Errorf("Invalid chain ID: expected %s, actual %s", chainID, string(tx.ChainID))
+		if bytes.Compare(tx.Head.ChainID, []byte(chainID)) != 0 {
+			log.Errorf("Invalid chain ID: expected %s, actual %s", chainID, string(tx.Head.ChainID))
 			return VerifyResult_Reject
 		}
 
@@ -35,16 +39,20 @@ func TransactionChainIDVerifier() TransactionVerifier {
 
 func TransactionFromAddressVerifier() TransactionVerifier {
 	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
-		tx := txI.(*TransactionHead)
-		fromAddr := tpcrtypes.NewFromBytes(tx.FromAddr)
+		tx, ok := txI.(*Transaction)
+		if !ok {
+			log.Panicf("Invalid txI, expected Transaction")
+		}
+
+		fromAddr := tpcrtypes.NewFromBytes(tx.Head.FromAddr)
 
 		fEth := tpcrtypes.IsEth(string(fromAddr))
 
-		if fEth && string(tx.Category) == TransactionCategory_Eth {
+		if fEth && string(tx.Head.Category) == TransactionCategory_Eth {
 			return VerifyResult_Accept
 		} else if !fEth {
 			if isValid := fromAddr.IsValid(tpcmm.CurrentNetworkType); !isValid {
-				log.Errorf("Invalid from address: %v", tx.FromAddr)
+				log.Errorf("Invalid from address: %v", string(tx.Head.FromAddr))
 				return VerifyResult_Reject
 			}
 
@@ -58,7 +66,10 @@ func TransactionFromAddressVerifier() TransactionVerifier {
 
 func TransactionSignatureVerifier() TransactionVerifier {
 	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
-		tx := txI.(*Transaction)
+		tx, ok := txI.(*Transaction)
+		if !ok {
+			log.Panicf("Invalid txI, expected Transaction")
+		}
 
 		cryType, err := tx.CryptType()
 		if err != nil {
@@ -66,8 +77,12 @@ func TransactionSignatureVerifier() TransactionVerifier {
 			return VerifyResult_Reject
 		}
 
+		var signInfo tpcrtypes.SignatureInfo
+		if err := json.Unmarshal(tx.Head.Signature, &signInfo); err != nil {
+			return VerifyResult_Reject
+		}
 		cryService, _ := txServant.GetCryptService(log, cryType)
-		if ok, err := cryService.Verify(tpcrtypes.Address(tx.Head.FromAddr), tx.Data.Specification, tx.Head.Signature); !ok {
+		if ok, err := cryService.Verify(tpcrtypes.NewFromBytes(tx.Head.FromAddr), tx.Data.Specification, signInfo.SignData); !ok {
 			log.Errorf("Can't verify tx signature: %v", err)
 			return VerifyResult_Reject
 		}

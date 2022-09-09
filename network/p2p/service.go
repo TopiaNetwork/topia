@@ -950,6 +950,10 @@ func (p2p *P2PService) Publish(ctx context.Context, toModuleNames []string, topi
 	return p2p.pubsubService.Publish(ctx, toModuleNames, topic, data)
 }
 
+func (p2p *P2PService) CreateTopic(topic string) {
+	p2p.host.SetStreamHandler(protocol.ID(topic), p2p.streamService.handleIncomingStream)
+}
+
 func (p2p *P2PService) Start() {
 	go func() {
 		timer := time.NewTicker(5 * time.Second)

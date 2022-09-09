@@ -2,21 +2,22 @@ package transactionpool
 
 import (
 	"context"
-	txpoolcore "github.com/TopiaNetwork/topia/transaction_pool/core"
 	"sync"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	tpconfig "github.com/TopiaNetwork/topia/configuration"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/ledger"
 	tplgms "github.com/TopiaNetwork/topia/ledger/meta"
 	tplog "github.com/TopiaNetwork/topia/log"
 	tpnet "github.com/TopiaNetwork/topia/network"
 	"github.com/TopiaNetwork/topia/network/message"
-	"github.com/TopiaNetwork/topia/network/protocol"
 	"github.com/TopiaNetwork/topia/service"
+	"github.com/TopiaNetwork/topia/state"
 	"github.com/TopiaNetwork/topia/transaction"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
+	txpoolcore "github.com/TopiaNetwork/topia/transaction_pool/core"
 	txpooli "github.com/TopiaNetwork/topia/transaction_pool/interface"
 )
 
@@ -36,7 +37,9 @@ type TransactionPoolServant interface {
 
 	GetBlockByNumber(blockNum tpchaintypes.BlockNum) (*tpchaintypes.Block, error)
 
-	PublishTx(ctx context.Context, tx *txbasic.Transaction) error
+	GetLedger() ledger.Ledger
+
+	PublishTx(ctx context.Context, marshaler codec.Marshaler, topic string, domainID string, nodeID string, tx *txbasic.Transaction) error
 
 	savePoolConfig(conf *tpconfig.TransactionPoolConfig, marshaler codec.Marshaler) error
 
@@ -52,6 +55,8 @@ type TransactionPoolServant interface {
 
 	UnSubscribe(topic string) error
 
+	CreateTopic(topic string)
+
 	getStateQuery() service.StateQueryService
 }
 
@@ -59,12 +64,15 @@ func newTransactionPoolServant(
 	stateQueryService service.StateQueryService,
 	blockService service.BlockService,
 	network tpnet.Network,
-	metaStore tplgms.MetaStore) TransactionPoolServant {
+	ledger ledger.Ledger) TransactionPoolServant {
+
+	metaStore, _ := ledger.CreateMetaStore()
 
 	metaStore.AddNamedStateStore(MetaData_TxPool_Tx, 50)
 	metaStore.AddNamedStateStore(MetaData_TxPool_Config, 50)
 
 	txpoolservant := &transactionPoolServant{
+		ledger:       ledger,
 		state:        stateQueryService,
 		BlockService: blockService,
 		Network:      network,
@@ -74,7 +82,8 @@ func newTransactionPoolServant(
 }
 
 type transactionPoolServant struct {
-	state service.StateQueryService
+	ledger ledger.Ledger
+	state  service.StateQueryService
 	service.BlockService
 	tpnet.Network
 	tplgms.MetaStore
@@ -99,28 +108,42 @@ func (servant *transactionPoolServant) GetNonce(addr tpcrtypes.Address) (uint64,
 
 func (servant *transactionPoolServant) GetLatestBlock() (*tpchaintypes.Block, error) {
 	return servant.state.GetLatestBlock()
-
 }
-func (servant *transactionPoolServant) PublishTx(ctx context.Context, tx *txbasic.Transaction) error {
+
+func (servant *transactionPoolServant) GetLedger() ledger.Ledger {
+	return servant.ledger
+}
+
+func (servant *transactionPoolServant) PublishTx(ctx context.Context, marshaler codec.Marshaler, topic string, domainID string, nodeID string, tx *txbasic.Transaction) error {
 	if tx == nil {
 		return ErrTxIsNil
 	}
 
-	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
 	data, err := marshaler.Marshal(tx)
 	if err != nil {
 		return err
 	}
 
-	msg := &TxMessage{
+	msgTx := &TxMessage{
 		Data: data,
 	}
-	sendData, err := msg.Marshal()
+	msgTxBytes, err := msgTx.Marshal()
 	if err != nil {
 		return err
 	}
 
-	servant.Network.Publish(ctx, []string{txpooli.MOD_NAME}, protocol.SyncProtocolID_Msg, sendData)
+	msg := &TxPoolMessage{
+		MsgType:    TxPoolMessage_Tx,
+		FromDomain: []byte(domainID),
+		FromNode:   []byte(nodeID),
+		Data:       msgTxBytes,
+	}
+	msgBytes, err := msg.Marshal()
+	if err != nil {
+		return err
+	}
+
+	servant.Network.Publish(ctx, []string{txpooli.MOD_NAME}, topic, msgBytes)
 
 	return nil
 }
@@ -184,30 +207,53 @@ type TxMsgSubProcessor interface {
 	Process(ctx context.Context, subMsgTxMessage *TxMessage) error
 }
 
-var TxMsgSub TxMsgSubProcessor
-
 type txMsgSubProcessor struct {
-	txPool *transactionPool
-	log    tplog.Logger
-	nodeID string
+	exeDomainID string
+	nodeID      string
+	log         tplog.Logger
+	txPool      *transactionPool
 }
 
-func (msgSub *txMsgSubProcessor) GetLogger() tplog.Logger {
-	return msgSub.log
-}
-func (msgSub *txMsgSubProcessor) GetNodeID() string {
-	return msgSub.nodeID
+func NewTxMsgSubProcessor(exeDomainID string, nodeID string, log tplog.Logger, txPool *transactionPool) TxMsgSubProcessor {
+	return &txMsgSubProcessor{
+		exeDomainID: exeDomainID,
+		nodeID:      nodeID,
+		log:         log,
+		txPool:      txPool,
+	}
 }
 
-func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sendData []byte) message.ValidationResult {
+func (msgSub *txMsgSubProcessor) getTxServantMem() txbasic.TransactionServant {
+	compStateRN := state.CreateCompositionStateReadonly(msgSub.log, msgSub.txPool.txServant.GetLedger())
+	compStateMem := state.CreateCompositionStateMem(msgSub.log, compStateRN)
+
+	return txbasic.NewTransactionServant(compStateMem, compStateMem, msgSub.txPool.marshaler, msgSub.txPool.Size)
+}
+
+func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, data []byte) message.ValidationResult {
 	if msgSub.txPool.Size() > msgSub.txPool.config.TxPoolMaxSize {
 		return message.ValidationReject
 	}
-	msg := &TxMessage{}
-	msg.Unmarshal(sendData)
+	msg := &TxPoolMessage{}
+	if err := msg.Unmarshal(data); err != nil {
+		msgSub.log.Errorf("Tx pool received invalid msg: isLocal %v, self node %s", isLocal, msgSub.nodeID)
+		return message.ValidationReject
+	}
+
+	if string(msg.FromDomain) != msgSub.exeDomainID {
+		msgSub.log.Errorf("Tx pool received invalid domain msg: isLocal %v, %s expected %s, self node %s", isLocal, string(msg.FromDomain), msgSub.exeDomainID, msgSub.nodeID)
+		return message.ValidationReject
+	}
+
+	txMsg := &TxMessage{}
+	if err := txMsg.Unmarshal(msg.Data); err != nil {
+		msgSub.log.Errorf("Tx pool received invalid msg data: isLocal %v, self node %s", isLocal, msgSub.nodeID)
+		return message.ValidationReject
+	}
+
 	var tx txbasic.Transaction
 	marshaler := codec.CreateMarshaler(codec.CodecType_PROTO)
-	err := marshaler.Unmarshal(msg.Data, &tx)
+	err := marshaler.Unmarshal(txMsg.Data, &tx)
 	if err != nil {
 		return message.ValidationReject
 	}
@@ -220,12 +266,13 @@ func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sen
 		return message.ValidationReject
 	}
 
-	if msgSub.txPool.PendingAccountTxCnt(tpcrtypes.Address(tx.Head.FromAddr)) > msgSub.txPool.config.MaxCntOfEachAccount {
+	if msgSub.txPool.PendingAccountTxCnt(tpcrtypes.NewFromBytes(tx.Head.FromAddr)) > msgSub.txPool.config.MaxCntOfEachAccount {
 		return message.ValidationReject
 	}
 	if !isLocal {
 		ac := transaction.CreatTransactionAction(&tx)
-		verifyResult := ac.Verify(ctx, msgSub.GetLogger(), msgSub.GetNodeID(), nil)
+
+		verifyResult := ac.Verify(ctx, msgSub.log, msgSub.nodeID, msgSub.getTxServantMem())
 		switch verifyResult {
 		case txbasic.VerifyResult_Accept:
 			return message.ValidationAccept
@@ -238,16 +285,17 @@ func (msgSub *txMsgSubProcessor) Validate(ctx context.Context, isLocal bool, sen
 	return message.ValidationAccept
 }
 func (msgSub *txMsgSubProcessor) Process(ctx context.Context, subMsgTxMessage *TxMessage) error {
-
-	var tx *txbasic.Transaction
 	if subMsgTxMessage == nil {
 		return ErrTxIsNil
 	}
+
+	var tx txbasic.Transaction
 	err := msgSub.txPool.marshaler.Unmarshal(subMsgTxMessage.Data, &tx)
 	if err != nil {
 		msgSub.log.Error("txMessage data error")
 		return err
 	}
-	msgSub.txPool.AddTx(tx, false)
+	msgSub.txPool.AddTx(&tx, false)
+
 	return nil
 }

@@ -104,7 +104,7 @@ func init() {
 	Tx5 = setTxLocal(2, 10000, 123456) //try to replace Tx1 :false
 	Tx6 = setTxLocal(3, 15000, 123456) //try to replace Tx2 :true
 
-	From1 = tpcrtypes.Address(Tx1.Head.FromAddr)
+	From1 = tpcrtypes.NewFromBytes(Tx1.Head.FromAddr)
 	Key1, _ = Tx1.TxID()
 	Key2, _ = Tx2.TxID()
 	Key3, _ = Tx3.TxID()
@@ -114,7 +114,7 @@ func init() {
 
 	TxR1 = setTxRemote(2, 11000, 123456)
 	TxR2 = setTxRemote(3, 12000, 123456)
-	From2 = tpcrtypes.Address(TxR1.Head.FromAddr)
+	From2 = tpcrtypes.NewFromBytes(TxR1.Head.FromAddr)
 	KeyR1, _ = TxR1.TxID()
 	KeyR2, _ = TxR2.TxID()
 
@@ -374,7 +374,7 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf *tpconfig.Tr
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 
 	pool := &transactionPool{
-		nodeId: nodeID,
+		nodeID: nodeID,
 		config: confNew2,
 		log:    poolLog,
 		level:  level,
@@ -414,7 +414,7 @@ func SetNewTransactionPool(nodeID string, ctx context.Context, conf *tpconfig.Tr
 
 	pool.loopChanSelect()
 
-	TxMsgSub = &txMsgSubProcessor{txPool: pool, log: pool.log, nodeID: pool.nodeId}
+	TxMsgSub = &txMsgSubProcessor{txPool: pool, log: pool.log, nodeID: pool.nodeID}
 	//
 	////subscribe
 	//pool.txServant.Subscribe(ctx, protocol.SyncProtocolID_Msg,
@@ -894,11 +894,11 @@ func Test_transactionPool_all(t *testing.T) {
 
 			select {
 			case <-report.C:
-				fmt.Println(pool1.nodeId, time.Now(), "len pending account",
+				fmt.Println(pool1.nodeID, time.Now(), "len pending account",
 					len(pool1.pending.addrTxs.AllKeys()),
 					"len prepare account", len(pool1.prepareTxs.addrTxs.AllKeys()),
 					"pool1.count", pool1.Count())
-				fmt.Println(pool2.nodeId, time.Now(), "len pending account",
+				fmt.Println(pool2.nodeID, time.Now(), "len pending account",
 					len(pool2.pending.addrTxs.AllKeys()),
 					"len prepare account", len(pool2.prepareTxs.addrTxs.AllKeys()),
 					"pool2.count", pool2.Count())

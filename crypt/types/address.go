@@ -140,8 +140,7 @@ func NewFromString(addr string) Address {
 }
 
 func NewFromBytes(addr []byte) Address {
-	address, _ := NewAddress(CryptType(addr[0]), addr[1:])
-	return address
+	return Address(addr)
 }
 
 func (a Address) NetworkType() (tpcmm.NetworkType, error) {

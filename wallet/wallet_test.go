@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/crypt/ed25519"
 	"github.com/TopiaNetwork/topia/crypt/secp256"
-	"github.com/TopiaNetwork/topia/crypt/types"
 	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
+	"github.com/TopiaNetwork/topia/wallet/key_store"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path"
@@ -21,7 +21,7 @@ func TestWallet_Function(t *testing.T) {
 	w, err := NewWallet(tplogcmm.NoLevel, nil, getTestEncrytWayInstance_ed25519(t))
 	assert.Nil(t, err, "NewWallet err")
 
-	addr, err := w.Create(types.CryptType_Ed25519)
+	addr, err := w.Create(tpcrtypes.CryptType_Ed25519)
 	assert.Equal(t, nil, err, "create addr err:", err)
 
 	_, err = w.Sign(addr, []byte("msg to sign"))
@@ -65,10 +65,6 @@ func TestWallet_Function(t *testing.T) {
 
 	err = w.Enable(true)
 	assert.Equal(t, nil, err, "enable wallet err", err)
-
-	err = os.RemoveAll(filepath.Join(dirPathForTest(), "wallet"))
-	assert.Nil(t, err, err)
-
 }
 
 func TestMnemonic(t *testing.T) {
@@ -77,32 +73,35 @@ func TestMnemonic(t *testing.T) {
 	var ct = tpcrtypes.CryptType_Ed25519
 
 	walletBackendConfig.RootPath = dirPathForTest() // only for test
-	w, err := NewWallet(tplogcmm.NoLevel, nil, getTestEncrytWayInstance_ed25519(t))
+	newWallet, err := NewWallet(tplogcmm.NoLevel, nil, getTestEncrytWayInstance_ed25519(t))
 
 	assert.Nil(t, err, "NewWallet err", err)
 
-	mnemonic12, err := w.CreateMnemonic(ct, passphrase, 12)
+	mnemonic12, err := newWallet.CreateMnemonic(ct, passphrase, 12)
 	assert.Nil(t, err, "CreateMnemonic err", err)
 
-	addr12, err := w.Recovery(ct, mnemonic12, passphrase)
+	addr12, err := newWallet.Recovery(ct, mnemonic12, passphrase)
 	assert.Nil(t, err, "recover addr by mnemonic err", err)
 
-	err = w.Delete(addr12)
+	err = newWallet.Delete(addr12)
 	assert.Nil(t, err, "delete addr err", err)
 
 	ct = tpcrtypes.CryptType_Secp256
 
-	mnemonic24, err := w.CreateMnemonic(ct, passphrase, 24)
+	mnemonic24, err := newWallet.CreateMnemonic(ct, passphrase, 24)
 	assert.Nil(t, err, "CreateMnemonic err", err)
 
-	addr24, err := w.Recovery(ct, mnemonic24, passphrase)
+	addr24, err := newWallet.Recovery(ct, mnemonic24, passphrase)
 	assert.Nil(t, err, "recover addr by mnemonic err", err)
 
-	err = w.Delete(addr24)
+	err = newWallet.Delete(addr24)
 	assert.Nil(t, err, "delete addr err", err)
 
-	err = os.RemoveAll(filepath.Join(dirPathForTest(), "wallet"))
-	assert.Nil(t, err, err)
+	walletPath := filepath.Join(dirPathForTest(), "wallet")
+	err = key_store.SetDirPerm(filepath.Dir(walletPath), filepath.Base(walletPath))
+	assert.Nil(t, err)
+	err = os.RemoveAll(walletPath)
+	assert.Nil(t, err)
 }
 
 func getTestEncrytWayInstance_ed25519(t *testing.T) EncryptWayOfWallet {

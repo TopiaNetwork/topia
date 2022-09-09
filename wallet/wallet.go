@@ -83,6 +83,9 @@ var (
 	addrLockedErr      = errors.New("this addr has been locked")
 )
 
+var once onceWithErr
+var w wallet
+
 func init() { // load wallet config json
 	var log tplog.Logger
 	data, err := ioutil.ReadFile("./wallet_config.json")
@@ -98,18 +101,23 @@ func init() { // load wallet config json
 }
 
 func NewWallet(level tplogcmm.LogLevel, log tplog.Logger, encryptWay EncryptWayOfWallet) (Wallet, error) {
-	wLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
 
-	ksImp, err := loadWalletConfig(encryptWay, log)
+	err := once.Do(func() error {
+		wLog := tplog.CreateModuleLogger(level, MOD_NAME, log)
+		ksImp, err := loadWalletConfig(encryptWay, log)
+		if err != nil {
+			return err
+		}
+		w = wallet{
+			log:      wLog,
+			rootPath: walletBackendConfig.RootPath,
+			ks:       ksImp,
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	var w = wallet{
-		log:      wLog,
-		rootPath: walletBackendConfig.RootPath,
-		ks:       ksImp,
-	}
-
 	return &w, nil
 }
 
@@ -325,7 +333,7 @@ func (w *wallet) SetDefault(address tpcrtypes.Address) error {
 		return addrLockedErr
 	}
 
-	err = SetDefaultAddr(string(address))
+	err = w.ks.SetDefaultAddr(string(address))
 	if err != nil {
 		return err
 	}
@@ -342,7 +350,8 @@ func (w *wallet) Default() (tpcrtypes.Address, error) {
 		return "", walletNotEnableErr
 	}
 
-	return tpcrtypes.Address(GetDefaultAddr()), nil
+	addr, err := w.ks.GetDefaultAddr()
+	return tpcrtypes.Address(addr), err
 }
 
 func (w *wallet) Export(address tpcrtypes.Address) (tpcrtypes.PrivateKey, error) {
@@ -486,7 +495,7 @@ func (w *wallet) IsEnable() (bool, error) {
 
 func loadWalletConfig(encryptWay EncryptWayOfWallet, log tplog.Logger) (ksImp key_store.KeyStore, err error) {
 	if !key_store.IsValidFolderPath(walletBackendConfig.RootPath) {
-		return nil, errors.New("invalid rootPath, try to check wallet_config.json")
+		panic("invalid rootPath, try to check wallet_config.json")
 	}
 
 	var cs = tpcrt.CreateCryptService(log, encryptWay.CryptType)
@@ -507,17 +516,14 @@ func loadWalletConfig(encryptWay EncryptWayOfWallet, log tplog.Logger) (ksImp ke
 				Pubkey:    encryptWay.Pubkey,
 				Seckey:    encryptWay.Seckey,
 			},
-			Cs: cs,
+			Cs:  cs,
+			Log: log,
 		}
 		store, err := file_key_store.InitStoreInstance(initArgument)
 		if err != nil {
 			return nil, err
 		}
 
-		err = initDefaultAddr()
-		if err != nil {
-			return nil, err
-		}
 		return store, nil
 
 	} else if walletBackendConfig.WalletBackend == "keyring" {
@@ -536,10 +542,6 @@ func loadWalletConfig(encryptWay EncryptWayOfWallet, log tplog.Logger) (ksImp ke
 			return nil, err
 		}
 
-		err = initDefaultAddr()
-		if err != nil {
-			return nil, err
-		}
 		return store, nil
 
 	} else {

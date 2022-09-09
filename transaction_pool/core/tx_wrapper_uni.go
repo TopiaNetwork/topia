@@ -26,7 +26,7 @@ type TxWrapperUni struct {
 func GenerateTxWrapperUni(tx *txbasic.Transaction, height uint64) (*TxWrapperUni, error) {
 	txID, _ := tx.TxID()
 	category := txbasic.TransactionCategory(tx.Head.Category)
-	fromAddr := tpcrtypes.NewFromBytes(tx.Head.FromAddr)
+	fromAddr := tpcrtypes.Address(tx.Head.FromAddr)
 	nonce := tx.Head.Nonce
 
 	var txUni txuni.TransactionUniversal

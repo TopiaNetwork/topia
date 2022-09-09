@@ -128,11 +128,11 @@ func (a *accountTxManager) AddTx(wTx TxWrapper) error {
 
 	nonce := wTx.Nonce()
 
-	if _, ok := a.pendingTxs[nonce]; !ok {
+	if _, ok := a.pendingTxs[nonce]; ok {
 		return fmt.Errorf("Have existed pending tx: nonce %d,  txID %s", nonce, wTx.TxID())
 	}
 
-	if _, ok := a.gapTxs[nonce]; !ok {
+	if _, ok := a.gapTxs[nonce]; ok {
 		return fmt.Errorf("Have existed gap tx: nonce %d,  txID %s", nonce, wTx.TxID())
 	}
 

@@ -3,7 +3,7 @@ package transactionpool
 import (
 	"context"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
-	tplgms "github.com/TopiaNetwork/topia/ledger/meta"
+	"github.com/TopiaNetwork/topia/ledger"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -54,7 +54,7 @@ func NewTransactionPool(nodeID string,
 	stateQueryService service.StateQueryService,
 	blockService service.BlockService,
 	network tpnet.Network,
-	metaStore tplgms.MetaStore) txpooli.TransactionPool {
+	ledger ledger.Ledger) txpooli.TransactionPool {
 	confNew := conf.Check()
 	poolLog := tplog.CreateModuleLogger(level, "TransactionPool", log)
 
@@ -66,7 +66,7 @@ func NewTransactionPool(nodeID string,
 		ctx:           ctx,
 		marshaler:     codec.CreateMarshaler(codecType),
 		hasher:        tpcmm.NewBlake2bHasher(0),
-		txServant:     newTransactionPoolServant(stateQueryService, blockService, network, metaStore),
+		txServant:     newTransactionPoolServant(stateQueryService, blockService, network, ledger),
 		txsCollect:    txpoolcore.NewCollectTxs(),
 		localAddrs:    make(map[tpcrtypes.Address]struct{}),
 		blockRevertCh: make(chan []*tpchaintypes.Block),
@@ -129,7 +129,7 @@ func (pool *transactionPool) AddTx(tx *txbasic.Transaction, isLocal bool) error 
 }
 
 func (pool *transactionPool) addLocal(tx *txbasic.Transaction) error {
-	fromAddr := tpcrtypes.NewFromBytes(tx.Head.FromAddr)
+	fromAddr := tpcrtypes.Address(tx.Head.FromAddr)
 	pool.localAddrs[fromAddr] = struct{}{}
 
 	wTx, err := pool.addTx(tx)
@@ -262,9 +262,9 @@ func (pool *transactionPool) Start(sysActor *actor.ActorSystem, network tpnet.Ne
 
 	TxMsgSub = &txMsgSubProcessor{txPool: pool, log: pool.log, nodeID: pool.nodeId}
 	//subscribe
-	pool.txServant.Subscribe(pool.ctx, protocol.SyncProtocolID_Msg,
-		true,
-		TxMsgSub.Validate)
+	/*pool.txServant.Subscribe(pool.ctx, protocol.SyncProtocolID_Msg,
+	true,
+	TxMsgSub.Validate)*/
 
 	ObsID, err = eventhub.GetEventHubManager().GetEventHub(pool.nodeId).
 		Observe(pool.ctx, eventhub.EventName_BlockAdded, pool.handler.processBlockAddedEvent)

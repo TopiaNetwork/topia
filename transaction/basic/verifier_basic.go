@@ -22,10 +22,13 @@ type TransactionVerifier func(ctx context.Context, log tplog.Logger, txI interfa
 
 func TransactionChainIDVerifier() TransactionVerifier {
 	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
-		tx := txI.(*TransactionHead)
+		tx, ok := txI.(*Transaction)
+		if !ok {
+			log.Panicf("Invalid txI, expected Transaction")
+		}
 		chainID := txServant.ChainID()
-		if bytes.Compare(tx.ChainID, []byte(chainID)) != 0 {
-			log.Errorf("Invalid chain ID: expected %s, actual %s", chainID, string(tx.ChainID))
+		if bytes.Compare(tx.Head.ChainID, []byte(chainID)) != 0 {
+			log.Errorf("Invalid chain ID: expected %s, actual %s", chainID, string(tx.Head.ChainID))
 			return VerifyResult_Reject
 		}
 
@@ -35,16 +38,20 @@ func TransactionChainIDVerifier() TransactionVerifier {
 
 func TransactionFromAddressVerifier() TransactionVerifier {
 	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
-		tx := txI.(*TransactionHead)
-		fromAddr := tpcrtypes.NewFromBytes(tx.FromAddr)
+		tx, ok := txI.(*Transaction)
+		if !ok {
+			log.Panicf("Invalid txI, expected Transaction")
+		}
+
+		fromAddr := tpcrtypes.NewFromBytes(tx.Head.FromAddr)
 
 		fEth := tpcrtypes.IsEth(string(fromAddr))
 
-		if fEth && string(tx.Category) == TransactionCategory_Eth {
+		if fEth && string(tx.Head.Category) == TransactionCategory_Eth {
 			return VerifyResult_Accept
 		} else if !fEth {
 			if isValid := fromAddr.IsValid(tpcmm.CurrentNetworkType); !isValid {
-				log.Errorf("Invalid from address: %v", tx.FromAddr)
+				log.Errorf("Invalid from address: %v", tx.Head.FromAddr)
 				return VerifyResult_Reject
 			}
 
@@ -58,7 +65,10 @@ func TransactionFromAddressVerifier() TransactionVerifier {
 
 func TransactionSignatureVerifier() TransactionVerifier {
 	return func(ctx context.Context, log tplog.Logger, txI interface{}, txServant TransactionServant) VerifyResult {
-		tx := txI.(*Transaction)
+		tx, ok := txI.(*Transaction)
+		if !ok {
+			log.Panicf("Invalid txI, expected Transaction")
+		}
 
 		cryType, err := tx.CryptType()
 		if err != nil {

@@ -370,8 +370,7 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 
 		tpService := service.NewService(network.ID(), testMainLog, codec.CodecType_PROTO, network, l, nil, nil, config)
 
-		metaStore, _ := l.CreateMetaStore()
-		txPool := transactionpool.NewTransactionPool(network.ID(), context.Background(), config.TxPoolConfig, tplogcmm.InfoLevel, testMainLog, codec.CodecType_PROTO, tpService.StateQueryService(), tpService.BlockService(), network, metaStore) /*mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)*/
+		txPool := transactionpool.NewTransactionPool(network.ID(), context.Background(), config.TxPoolConfig, tplogcmm.InfoLevel, testMainLog, codec.CodecType_PROTO, tpService.StateQueryService(), tpService.BlockService(), network, l) /*mock.NewTransactionPoolMock(testMainLog, network.ID(), cryptService)*/
 
 		eventhub.GetEventHubManager().CreateEventHub(network.ID(), tplogcmm.InfoLevel, testMainLog)
 
@@ -472,7 +471,7 @@ func produceTxsTimer(ctx context.Context, txPool txpooli.TransactionPool, cryptS
 						_, toPubKey, _ := cryptService.GeneratePriPubKey()
 						toAddr, _ := cryptService.CreateAddress(toPubKey)
 
-						tx := txuni.ConstructTransactionWithUniversalTransfer(log, cryptService, fromPriKey, fromPriKey, uint64(i+1), 200, 500, toAddr,
+						tx := txuni.ConstructTransactionWithUniversalTransfer(log, cryptService, fromPriKey, fromPriKey, uint64(1), 200, 500, toAddr,
 							[]txuni.TargetItem{{currency.TokenSymbol_Native, big.NewInt(10)}})
 						//txID, _ := tx.TxID()
 						//fmt.Printf("txID=%s\n", txID)

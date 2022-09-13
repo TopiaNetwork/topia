@@ -1,7 +1,12 @@
 package configuration
 
 import (
+	"encoding/hex"
 	"fmt"
+	tpacc "github.com/TopiaNetwork/topia/account"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/currency"
+	"math/big"
 	"testing"
 	"time"
 
@@ -45,6 +50,21 @@ func TestGenerateGenesisData(t *testing.T) {
 				Status:    tpchaintypes.BlockResultHead_OK,
 			},
 		},
+		InitAccounts: make(map[tpcrtypes.Address]*tpacc.Account),
+	}
+
+	cryptService := &CryptServiceMock{}
+
+	i := 0
+	for i < 2 {
+		priKey, pubKey, _ := cryptService.GeneratePriPubKey()
+		addr, _ := cryptService.CreateAddress(pubKey)
+		accNew := tpacc.NewDefaultAccount(addr)
+		accNew.Balances[currency.TokenSymbol_Native] = big.NewInt(10000000000)
+
+		fmt.Printf("Account priKey %s\npubKey %s\naddr %s\n", hex.EncodeToString(priKey), hex.EncodeToString(pubKey), addr)
+		gData.InitAccounts[addr] = accNew
+		i++
 	}
 
 	suite := bn256.NewSuiteG2()

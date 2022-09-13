@@ -2,6 +2,8 @@ package configuration
 
 import (
 	"encoding/json"
+	tpacc "github.com/TopiaNetwork/topia/account"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -21,6 +23,7 @@ type GenesisData struct {
 	GenesisNode      map[string]*tpcmm.NodeInfo //seed->nodeInfo
 	GenesisExeDomain []*tpcmm.NodeDomainInfo
 	SeedPeersMap     map[string][]*SeedPeer
+	InitAccounts     map[tpcrtypes.Address]*tpacc.Account
 }
 
 func (genesis *GenesisData) Save(fileFullName string) error {

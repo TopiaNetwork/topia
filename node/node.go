@@ -207,6 +207,10 @@ func (n *Node) initData() {
 			}
 		}
 
+		for _, initAcc := range n.config.Genesis.InitAccounts {
+			compState.AddAccount(initAcc)
+		}
+
 		compState.AddAccount(tpacc.NativeContractAccount_Account)
 
 		n.ledger.UpdateState(tpcmm.LedgerState_Genesis)

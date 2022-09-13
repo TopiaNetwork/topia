@@ -419,6 +419,10 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			latestEpochInfo = config.Genesis.Epoch
 			latestBlock = config.Genesis.Block
 
+			for _, initAcc := range config.Genesis.InitAccounts {
+				compState.AddAccount(initAcc)
+			}
+
 			compState.AddAccount(tpacc.NativeContractAccount_Account)
 
 			l.UpdateState(tpcmm.LedgerState_Genesis)

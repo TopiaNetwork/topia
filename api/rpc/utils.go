@@ -60,7 +60,7 @@ func DistributedID() (string, error) {
 		return "", err
 	}
 
-	return strconv.Itoa(int(id)), nil
+	return strconv.FormatUint(id, 10), nil
 }
 
 func Encode(data interface{}) ([]byte, error) {

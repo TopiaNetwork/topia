@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -48,17 +49,20 @@ func (s *Server) Register(obj interface{}, name string, authority byte, cacheTim
 	}
 	switch objType.Kind() {
 	case reflect.Func:
-		s.registerMethod(obj, name, authority, cacheTime, timeout)
+		return s.registerMethod(obj, name, authority, cacheTime, timeout)
 	case reflect.Struct:
-		s.registerStruct(obj, name, authority, cacheTime, timeout)
+		return s.registerStruct(obj, name, authority, cacheTime, timeout)
 	default:
 		return ErrInput
 	}
-	return nil
 }
 
 func (s *Server) registerMethod(method interface{}, name string, authority byte, cacheTime int, timeout time.Duration) error {
 	mType := reflect.TypeOf(method)
+	if mType.Kind() != reflect.Func {
+		return errors.New("input method is not func")
+	}
+
 	if strings.Trim(name, " ") == "" && mType.Name() == "" {
 		return ErrMethodNameRegister
 	}
@@ -66,41 +70,73 @@ func (s *Server) registerMethod(method interface{}, name string, authority byte,
 		name = mType.Name()
 	}
 
+	var errPos int
+	if mType.NumOut() == 0 { // method have no return
+		errPos = -1
+	} else {
+		var lastRetIndex = mType.NumOut() - 1
+		if isErrorType(mType.Out(lastRetIndex)) { // judge if the last return value of func is error-type
+			errPos = lastRetIndex
+		} else {
+			errPos = -1
+		}
+	}
+
 	s.methodMap[name] = &methodType{
-		mValue:    reflect.ValueOf(method),
-		mType:     reflect.TypeOf(method),
-		authLevel: authority,
-		cacheTime: cacheTime,
-		timeout:   timeout,
+		isObjMethod: false,
+		mValue:      reflect.ValueOf(method),
+		mType:       mType,
+		errPos:      errPos,
+		authLevel:   authority,
+		cacheTime:   cacheTime,
+		timeout:     timeout,
 	}
 	return nil
 }
 
 func (s *Server) registerStruct(obj interface{}, name string, authority byte, cacheTime int, timeout time.Duration) error {
 	typ := reflect.TypeOf(obj)
-	len := 0
+	objValue := reflect.ValueOf(obj)
+	DoneRegister := 0
 	for idx := 0; idx < typ.NumMethod(); idx++ {
 		method := typ.Method(idx)
 		mName := method.Name
-		if !IsPublic(mName) {
+		if !method.IsExported() {
 			continue
 		}
 		if strings.Trim(name, " ") == "" {
 			name = typ.Elem().Name()
 		}
+
+		var errPos int
+		if method.Type.NumOut() == 0 { // method have no return
+			errPos = -1
+		} else {
+			var lastRetIndex = method.Type.NumOut() - 1
+			if isErrorType(method.Type.Out(lastRetIndex)) { // judge if the last return value of func is error-type
+				errPos = lastRetIndex
+			} else {
+				errPos = -1
+			}
+		}
+
 		mName = name + "_" + mName
 		s.methodMap[mName] = &methodType{
-			mValue:    method.Func,
-			mType:     method.Type,
-			authLevel: authority,
-			cacheTime: cacheTime,
-			timeout:   timeout,
+			isObjMethod: true,
+			receiver:    objValue,
+			mValue:      method.Func,
+			mType:       method.Type,
+			errPos:      errPos,
+			authLevel:   authority,
+			cacheTime:   cacheTime,
+			timeout:     timeout,
 		}
-		len++
+		DoneRegister++
 	}
-	if len == 0 {
+	if DoneRegister == 0 {
 		return ErrNoAvailable
 	}
+
 	return nil
 }
 
@@ -111,7 +147,7 @@ func (s *Server) Verify(reqToken string, methodName string) (bool, error) {
 		return false, err
 	}
 	requestLevel := s.auth.Level(reqToken)
-	return requestLevel&method.authLevel > 0, nil
+	return requestLevel >= method.authLevel, nil
 }
 
 // Run server
@@ -172,20 +208,18 @@ func (s *Server) Start() {
 			// decode message
 			message, err := IODecodeMessage(r.Body)
 			if err != nil {
-				s.logger.Error(err.Error())
-				w.Write([]byte(err.Error()))
+				s.logger.Error("Illegal request err: " + err.Error())
 				return
 			}
 			resp, err := s.handleMessage(message)
 			if err != nil {
-				s.logger.Error(err.Error())
+				s.logger.Error("handleMessage err: " + err.Error())
 				w.Write([]byte(err.Error()))
 				return
 			}
 			w.Write(resp)
 		})
 		if method.timeout > 0 {
-			s.logger.Info("set timeout")
 			handler = http.TimeoutHandler(handler, method.timeout, "")
 		}
 		mux.Handle("/"+k+"/", handler)
@@ -201,7 +235,7 @@ func (s *Server) Start() {
 		}
 	})
 
-	s.logger.Error(http.ListenAndServe(s.addr, mux).Error())
+	s.logger.Error("http.ListenAndServe err: " + http.ListenAndServe(s.addr, mux).Error())
 }
 
 func (s *Server) run() {
@@ -213,11 +247,11 @@ func (s *Server) run() {
 				go func() {
 					message, err := DecodeMessage(data)
 					if err != nil {
-						s.logger.Error(err.Error())
+						s.logger.Error("DecodeMessage err: " + err.Error())
 					}
 					resp, err := s.handleMessage(message)
 					if err != nil {
-						s.logger.Error(err.Error())
+						s.logger.Error("handleMessage err: " + err.Error())
 					}
 					s.logger.Info("response:" + message.RequestId)
 					ws.send <- resp
@@ -269,36 +303,58 @@ func (s *Server) handleMessage(message *Message) (resp []byte, err error) {
 	// verify
 	ok, err := s.Verify(message.AuthCode, message.MethodName)
 	if err != nil {
-		s.logger.Error(err.Error())
-		return
+		s.logger.Error("Verify err: " + err.Error())
+		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+			&ErrMsg{
+				Errtype:   ErrMethodNotFound,
+				ErrString: err.Error(),
+			},
+			nil)
 	}
 	if !ok {
 		err = ErrAuth
 		s.logger.Error(err.Error())
-		return
+		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+			&ErrMsg{
+				Errtype:   ErrAuthFailed,
+				ErrString: err.Error(),
+			},
+			nil)
 	}
 	// convert payload to []reflect.Value
-	in, err := s.getInArgs(message.MethodName, message.Payload)
+	in, err := s.getInArgs(message.Payload)
 	if err != nil {
-		s.logger.Error(err.Error())
-		return
+		s.logger.Error("getInArgs err: " + err.Error())
+		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+			&ErrMsg{
+				Errtype:   ErrIllegalArgument,
+				ErrString: err.Error(),
+			},
+			nil)
 	}
 	// check cache
 	key := message.MethodName + "_" + fmt.Sprintf("%v", in)
 	cache, ok := s.checkCache(key)
 	if ok {
-		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode, cache)
+		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode, &ErrMsg{}, cache)
 	}
+	var callErr = &ErrMsg{} // hold ErrMsg for method returned, default empty
 	// call method
 	method := s.methodMap[message.MethodName]
-	resp, err = method.Call(in)
+	resp, err = method.Call(in, callErr)
 	if err != nil {
-		s.logger.Error(err.Error())
-	} else {
-		s.cache(key, resp, message.MethodName)
+		s.logger.Error("Call method err: " + err.Error())
+		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+			&ErrMsg{
+				Errtype:   ErrIllegalArgument,
+				ErrString: err.Error(),
+			}, nil)
 	}
-	resp, err = EncodeMessage(message.RequestId, message.MethodName, message.AuthCode, resp)
-	return
+
+	if callErr.Errtype == NoErr {
+		s.setCache(key, resp, message.MethodName)
+	}
+	return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode, callErr, resp)
 }
 
 func setupCORS(w *http.ResponseWriter) {
@@ -307,19 +363,24 @@ func setupCORS(w *http.ResponseWriter) {
 	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 }
 
-func (s *Server) getInArgs(methodName string, payload []byte) ([]reflect.Value, error) {
+func (s *Server) getInArgs(payload []byte) ([]reflect.Value, error) {
 
 	var inArgs []interface{}
+
+	if len(payload) == 0 { // no input args
+		return nil, nil
+	}
+
 	err := json.Unmarshal(payload, &inArgs)
 	if err != nil {
-		s.logger.Error(err.Error())
+		s.logger.Error("Unmarshal err: " + err.Error())
 		return nil, err
 	}
 
 	s.logger.Infof("%v", inArgs)
 	if reflect.TypeOf(inArgs).Kind() != reflect.Slice && reflect.TypeOf(inArgs).Kind() != reflect.Array {
 		err = ErrInput
-		s.logger.Error(err.Error())
+		s.logger.Error("ErrInput :" + err.Error())
 		return nil, err
 	}
 	inArgsValue := reflect.ValueOf(inArgs)
@@ -331,20 +392,18 @@ func (s *Server) getInArgs(methodName string, payload []byte) ([]reflect.Value, 
 }
 
 func (s *Server) checkCache(key string) ([]byte, bool) {
-
 	val, err := s.cc.Get([]byte(key))
 	if err != nil {
-		s.logger.Error(err.Error())
+		s.logger.Info("try to get from cache err: " + err.Error())
 		return nil, false
 	}
 	return val, true
 }
 
-func (s *Server) cache(key string, val []byte, methodName string) bool {
-	s.logger.Info("cache")
+func (s *Server) setCache(key string, val []byte, methodName string) bool {
 	err := s.cc.Set([]byte(key), val, s.methodMap[methodName].cacheTime)
 	if err != nil {
-		s.logger.Error(err.Error())
+		s.logger.Error("set cache err: " + err.Error())
 		return false
 	}
 	return true

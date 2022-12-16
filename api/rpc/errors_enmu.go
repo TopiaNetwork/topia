@@ -1,10 +1,13 @@
 package rpc
 
-import "errors"
+import (
+	"errors"
+	"reflect"
+)
 
 var (
-	ErrNonPublic          = errors.New("Registered non-public service")
-	ErrNoAvailable        = errors.New("No service is available, or provide service is not open")
+	ErrNonPublic          = errors.New("registered non-public service")
+	ErrNoAvailable        = errors.New("no service is available, or provide service is not open")
 	ErrCrc32              = errors.New("checksumIEEE error")
 	ErrSerialization404   = errors.New("serialization 404")
 	ErrCompressor404      = errors.New("compressor 404")
@@ -16,3 +19,10 @@ var (
 	ErrAuthLevel          = errors.New("insufficient auth level")
 	ErrMethodName         = errors.New("method name error")
 )
+
+func isErrorType(t reflect.Type) bool {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t.Implements(reflect.TypeOf((*error)(nil)).Elem())
+}

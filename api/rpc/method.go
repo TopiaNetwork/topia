@@ -11,14 +11,19 @@ import (
 )
 
 type methodType struct {
-	mValue    reflect.Value
-	mType     reflect.Type
-	authLevel byte
-	cacheTime int //seconds
-	timeout   time.Duration
+	isObjMethod bool
+	receiver    reflect.Value
+	mValue      reflect.Value
+	mType       reflect.Type
+	errPos      int // err return idx, of -1 when method cannot return error, make sure error is the last return value of method
+	authLevel   byte
+	cacheTime   int //seconds
+	timeout     time.Duration
 }
 
-func (m *methodType) Call(in []reflect.Value) ([]byte, error) {
+// Call
+// errMsg: hold ErrMsg for method returned, caller should allocate space for it.
+func (m *methodType) Call(in []reflect.Value, errMsg *ErrMsg) ([]byte, error) {
 	mylog, err := tlog.CreateMainLogger(logcomm.DebugLevel, tlog.JSONFormat, tlog.StdErrOutput, "")
 	if err != nil {
 		panic(err)
@@ -35,22 +40,45 @@ func (m *methodType) Call(in []reflect.Value) ([]byte, error) {
 		}
 	}()
 
-	if m.mType.NumIn() != len(in) {
+	var fullArgs []reflect.Value
+	if m.isObjMethod {
+		fullArgs = append(fullArgs, m.receiver)
+		fullArgs = append(fullArgs, in...)
+	} else {
+		fullArgs = in
+	}
+
+	if m.mType.NumIn() != len(fullArgs) {
 		mylog.Error("number of parameters error")
+		mylog.Infof("hope: %v", m.mType.NumIn())
+		mylog.Infof("actual: %v", len(fullArgs))
 		return nil, ErrInput
 	}
-	for i := range in {
-		if in[i].Type().Kind() == m.mType.In(i).Kind() {
+	for i := range fullArgs {
+		if fullArgs[i].Type().Kind() == m.mType.In(i).Kind() {
 			continue
 		}
-		if in[i].Type().ConvertibleTo(m.mType.In(i)) {
-			in[i] = in[i].Convert(m.mType.In(i))
+		if fullArgs[i].Type().ConvertibleTo(m.mType.In(i)) {
+			fullArgs[i] = fullArgs[i].Convert(m.mType.In(i))
 		} else {
-			mylog.Error(ErrInput.Error() + " type of parameter error" + " input type:" + in[i].Type().Name() + " target type" + m.mType.In(i).Name())
+			mylog.Error(ErrInput.Error() + " type of parameter error" + " input type:" + fullArgs[i].Type().Name() + " target type" + m.mType.In(i).Name())
 			return nil, ErrInput
 		}
 	}
-	back := m.mValue.Call(in)
+	back := m.mValue.Call(fullArgs)
+	if len(back) == 0 { // if no return
+		return nil, nil
+	}
+
+	// If func has err return part and return non-nil error
+	if m.errPos >= 0 && !back[m.errPos].IsNil() {
+		err := back[m.errPos].Interface().(error)
+		*errMsg = ErrMsg{
+			Errtype:   ErrServiceReturnError,
+			ErrString: err.Error(),
+		}
+	}
+
 	outArgs := make([]interface{}, len(back))
 	for i := range back {
 		outArgs[i] = back[i].Interface()

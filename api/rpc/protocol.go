@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -16,12 +17,23 @@ const (
 )
 
 const StartCipher = 0x05 // 起始符
-const HeadSize = 17
+const HeadSize = 21
 
 /**
 	协议设计
-	start cipher : requestIdSize : serverMethodSize : payloadSize:  requestId :   serverMethod :  payload
-    0x05          :      4          :        4      :     4     :         xxx    :       xx     :  xxx
+	--------------------------------------------------------------------------------------------------------------------------------------------------
+	start cipher  |  requestIdSize  |  serverMethodSize  |  AuthCodeSize  |  ErrMsgSize  |  payloadSize    ||    requestId  |  serverMethod  |  AuthCode  |  ErrMsg  |  payload
+	    0x05      |        4        |         4          |       4        |       4      |       4         ||    x(8 bytes) |       x        |     x      |     x    |     x
+
+TODO payload 变成结构体，增加一个Err字段用于server向Client返回错误信息
+type ... struct {
+	Msg []byte
+	ErrMsg struct {
+		Errtype int
+		ErrCode int
+		ErrString string
+	}
+}
 */
 
 type Message struct {
@@ -29,6 +41,7 @@ type Message struct {
 	RequestId  string
 	MethodName string
 	AuthCode   string
+	ErrMsg     ErrMsg
 	Payload    []byte
 }
 
@@ -37,7 +50,24 @@ type Header struct {
 	RequestIdSize  uint32
 	MethodNameSize uint32
 	AuthCodeSize   uint32
+	ErrMsgSize     uint32
 	PayloadSize    uint32
+}
+
+type Errtype int
+
+const (
+	NoErr                 Errtype = 0
+	ErrMethodNotFound     Errtype = 1
+	ErrAuthFailed         Errtype = 2
+	ErrIllegalArgument    Errtype = 3
+	ErrServiceReturnError Errtype = 4 // Error return by called service
+)
+
+type ErrMsg struct {
+	Errtype   Errtype `json:"err_type"`
+	ErrCode   int     `json:"err_code"`
+	ErrString string  `json:"err_string"`
 }
 
 func IODecodeMessage(r io.Reader) (*Message, error) {
@@ -65,7 +95,7 @@ func IODecodeMessage(r io.Reader) (*Message, error) {
 		return nil, err
 	}
 
-	bodyLen := header.RequestIdSize + header.MethodNameSize + header.AuthCodeSize + header.PayloadSize
+	bodyLen := header.RequestIdSize + header.MethodNameSize + header.AuthCodeSize + header.ErrMsgSize + header.PayloadSize
 	bodyData := make([]byte, bodyLen)
 	_, err = io.ReadFull(r, bodyData)
 	if err != nil {
@@ -86,7 +116,9 @@ func DecodeHeader(data []byte) (*Header, error) {
 	header.RequestIdSize = binary.BigEndian.Uint32(data[1:5])
 	header.MethodNameSize = binary.BigEndian.Uint32(data[5:9])
 	header.AuthCodeSize = binary.BigEndian.Uint32(data[9:13])
-	header.PayloadSize = binary.BigEndian.Uint32(data[13:17])
+	header.ErrMsgSize = binary.BigEndian.Uint32(data[13:17])
+	header.PayloadSize = binary.BigEndian.Uint32(data[17:21])
+
 	return &header, nil
 }
 
@@ -124,26 +156,40 @@ func DecodeMessageV2(data []byte, header *Header, headSize uint32) (*Message, er
 	result.AuthCode = string(AuthCode)
 
 	st = endI
+	endI = st + header.ErrMsgSize
+	les = endI - st
+	err := json.Unmarshal(data[st:endI], &result.ErrMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	st = endI
 	endI = st + header.PayloadSize
 	les = endI - st
-	payloadSize := make([]byte, les)
-	copy(payloadSize, data[st:endI])
-	result.Payload = payloadSize
+	payload := make([]byte, les)
+	copy(payload, data[st:endI])
+	result.Payload = payload
 
 	return &result, nil
 }
 
 // EncodeMessage 基础编码
-func EncodeMessage(requestId string, methodName string, authCode string, payload []byte) (data []byte, err error) {
+func EncodeMessage(requestId string, methodName string, authCode string, errMsg *ErrMsg, payload []byte) (data []byte, err error) {
 
-	bufSize := HeadSize + len(requestId) + len(methodName) + len(authCode) + len(payload)
+	errMsgBytes, err := json.Marshal(errMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	bufSize := HeadSize + len(requestId) + len(methodName) + len(authCode) + len(errMsgBytes) + len(payload)
 	buf := make([]byte, bufSize)
 
 	buf[0] = StartCipher
 	binary.BigEndian.PutUint32(buf[1:5], uint32(len(requestId)))
 	binary.BigEndian.PutUint32(buf[5:9], uint32(len(methodName)))
 	binary.BigEndian.PutUint32(buf[9:13], uint32(len(authCode)))
-	binary.BigEndian.PutUint32(buf[13:17], uint32(len(payload)))
+	binary.BigEndian.PutUint32(buf[13:17], uint32(len(errMsgBytes)))
+	binary.BigEndian.PutUint32(buf[17:21], uint32(len(payload)))
 
 	st := HeadSize
 	endI := st + len(requestId)
@@ -156,6 +202,10 @@ func EncodeMessage(requestId string, methodName string, authCode string, payload
 	st = endI
 	endI = st + len(authCode)
 	copy(buf[st:endI], authCode)
+
+	st = endI
+	endI = st + len(errMsgBytes)
+	copy(buf[st:endI], errMsgBytes)
 
 	st = endI
 	endI = st + len(payload)

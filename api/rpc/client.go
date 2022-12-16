@@ -123,43 +123,57 @@ func (c *Client) sendPost(postUrl string, reqBody []byte) (*Message, error) {
 	requestDo, err := http.NewRequest("POST", postUrl, bytes.NewReader(reqBody))
 	requestDo.Header.Set("Content-Type", "text/xml; charset=UTF-8")
 	if err != nil {
-		c.logger.Infof("NewRequest error: %v", err)
-		return nil, errors.New("httpPost err:" + err.Error())
+		c.logger.Errorf("NewRequest error: %v", err)
+		return nil, errors.New("httpPost err: " + err.Error())
 	}
 	res, err := client.Do(requestDo)
 	if nil != err {
-		c.logger.Infof("httpPost error: %v, url: %v, params: %v\n", err, postUrl, reqBody)
-		return nil, errors.New("httpPost err:" + err.Error())
+		c.logger.Errorf("httpPost error: %v, url: %v, params: %v\n", err, postUrl, string(reqBody))
+		return nil, errors.New("httpPost err: " + err.Error())
 	}
 	defer res.Body.Close()
 
 	message, err := IODecodeMessage(res.Body)
 	if nil != err {
-		c.logger.Infof("IODecodeMessage err:", err)
-		return nil, errors.New("IODecodeMessage err:" + err.Error())
+		c.logger.Errorf("IODecodeMessage err: %v", err)
+		return nil, errors.New("IODecodeMessage err: " + err.Error())
 	}
 	return message, nil
 }
 
-func (c *Client) Call(methodName string, inArgs []interface{}) (res *Message, err error) {
+func (c *Client) Call(methodName string, inArgs ...interface{}) (res *Message, err error) {
+	var payload []byte
 	requestId, err := DistributedID()
 	if err != nil {
 		return nil, err
 	}
-	payload, _ := Encode(inArgs)
-	data, _ := EncodeMessage(requestId, methodName, c.options.AUTH, payload)
+
+	if len(inArgs) != 0 {
+		payload, err = Encode(inArgs)
+		if err != nil {
+			return nil, err
+		}
+	}
+	data, err := EncodeMessage(requestId, methodName, c.options.AUTH, &ErrMsg{}, payload)
+	if err != nil {
+		return nil, err
+	}
 	url := strings.Trim("http://"+c.addr+"/"+methodName+"/", " ")
 	return c.sendPostRetry(url, data)
 }
 
-func (c *Client) CallWithWS(methodName string, inArgs []interface{}) (requestId string, res chan []byte, err error) {
+func (c *Client) CallWithWS(methodName string, inArgs ...interface{}) (requestId string, res chan []byte, err error) {
+	var payload []byte
 	requestId, err = DistributedID()
 	log.Print(requestId)
 	if err != nil {
 		return "", nil, err
 	}
-	payload, _ := Encode(inArgs)
-	data, _ := EncodeMessage(requestId, methodName, c.options.AUTH, payload)
+
+	if len(inArgs) != 0 {
+		payload, _ = Encode(inArgs)
+	}
+	data, _ := EncodeMessage(requestId, methodName, c.options.AUTH, &ErrMsg{}, payload)
 	res = make(chan []byte)
 	c.options.ws.requestRes[requestId] = res
 	c.options.ws.send <- data

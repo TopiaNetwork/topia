@@ -19,21 +19,12 @@ const (
 const StartCipher = 0x05 // 起始符
 const HeadSize = 21
 
-/**
-	协议设计
-	--------------------------------------------------------------------------------------------------------------------------------------------------
-	start cipher  |  requestIdSize  |  serverMethodSize  |  AuthCodeSize  |  ErrMsgSize  |  payloadSize    ||    requestId  |  serverMethod  |  AuthCode  |  ErrMsg  |  payload
-	    0x05      |        4        |         4          |       4        |       4      |       4         ||    x(8 bytes) |       x        |     x      |     x    |     x
+/*
+协议设计
+--------------------------------------------------------------------------------------------------------------------------------------------------
+start cipher  |  requestIdSize  |  serverMethodSize  |  AuthCodeSize  |  ErrMsgSize  |  payloadSize    ||    requestId  |  serverMethod  |  AuthCode  |  ErrMsg  |  payload
+    0x05      |        4        |         4          |       4        |       4      |       4         ||    x(8 bytes) |       x        |     x      |     x    |     x
 
-TODO payload 变成结构体，增加一个Err字段用于server向Client返回错误信息
-type ... struct {
-	Msg []byte
-	ErrMsg struct {
-		Errtype int
-		ErrCode int
-		ErrString string
-	}
-}
 */
 
 type Message struct {

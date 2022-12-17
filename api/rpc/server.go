@@ -187,6 +187,8 @@ func (s *Server) Start() {
 					pingPeriod:     2 * time.Second,
 					maxMessageSize: 512,
 					isConnected:    true,
+					send:           make(chan []byte),
+					receive:        make(chan []byte),
 				}
 				s.websocketServers.Store(remoteAddr, ws)
 
@@ -201,8 +203,7 @@ func (s *Server) Start() {
 
 	}
 	// register http handler for every method
-	for k := range s.methodMap {
-		method := s.methodMap[k]
+	for mName, method := range s.methodMap {
 		var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			setupCORS(&w)
 			// decode message
@@ -214,7 +215,6 @@ func (s *Server) Start() {
 			resp, err := s.handleMessage(message)
 			if err != nil {
 				s.logger.Error("handleMessage err: " + err.Error())
-				w.Write([]byte(err.Error()))
 				return
 			}
 			w.Write(resp)
@@ -222,7 +222,7 @@ func (s *Server) Start() {
 		if method.timeout > 0 {
 			handler = http.TimeoutHandler(handler, method.timeout, "")
 		}
-		mux.Handle("/"+k+"/", handler)
+		mux.Handle("/"+mName+"/", handler)
 	}
 
 	// handle server not found
@@ -235,15 +235,21 @@ func (s *Server) Start() {
 		}
 	})
 
-	s.logger.Error("http.ListenAndServe err: " + http.ListenAndServe(s.addr, mux).Error())
+	err := http.ListenAndServe(s.addr, mux)
+	if err != nil {
+		s.logger.Error("http.ListenAndServe err: " + err.Error())
+	}
+
 }
 
 func (s *Server) run() {
 	for {
 		s.Options.websocketServers.Range(func(key, value interface{}) bool {
 			ws := value.(*WebsocketServer)
+
 			select {
 			case data := <-ws.receive:
+				fmt.Println(string(data)) // TODO 没收到消息，看看ws.receive是不是已经关闭了
 				go func() {
 					message, err := DecodeMessage(data)
 					if err != nil {

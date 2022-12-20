@@ -1,7 +1,12 @@
 package configuration
 
 import (
+	"encoding/hex"
 	"fmt"
+	tpacc "github.com/TopiaNetwork/topia/account"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/currency"
+	"math/big"
 	"testing"
 	"time"
 
@@ -14,6 +19,15 @@ import (
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
 )
+
+/*
+Account priKey 35a64a1b110f499e0847b2ce87480063f81ead7bc10c65202d7cadf87501c11ce91b83bc5b42918daa92e38691f4f976a30401f0f7d41a6d275d4370c80180ed
+pubKey e91b83bc5b42918daa92e38691f4f976a30401f0f7d41a6d275d4370c80180ed
+addr t34afywhp2rbry2bsm3giki4wzg1ljrthj56bos2kwcuoxomtojivxnuxwy3
+Account priKey a9f44ca2064c9d027db3e28459e7128431e074adeb8a190601dcd3ab3606184910c443c7853f72336e1d66feb10938dc66649628c167f323ebde75b9707cf005
+pubKey 10c443c7853f72336e1d66feb10938dc66649628c167f323ebde75b9707cf005
+addr t3pipawl3nw4zie2j4d26cppky2lqeknlrynq6er6c2z12m3i35tp4tztrca
+*/
 
 func TestGenerateGenesisData(t *testing.T) {
 	timeStamp := uint64(time.Now().UnixNano())
@@ -45,6 +59,21 @@ func TestGenerateGenesisData(t *testing.T) {
 				Status:    tpchaintypes.BlockResultHead_OK,
 			},
 		},
+		InitAccounts: make(map[tpcrtypes.Address]*tpacc.Account),
+	}
+
+	cryptService := &CryptServiceMock{}
+
+	i := 0
+	for i < 2 {
+		priKey, pubKey, _ := cryptService.GeneratePriPubKey()
+		addr, _ := cryptService.CreateAddress(pubKey)
+		accNew := tpacc.NewDefaultAccount(addr)
+		accNew.Balances[currency.TokenSymbol_Native] = big.NewInt(10000000000)
+
+		fmt.Printf("Account priKey %s\npubKey %s\naddr %s\n", hex.EncodeToString(priKey), hex.EncodeToString(pubKey), addr)
+		gData.InitAccounts[addr] = accNew
+		i++
 	}
 
 	suite := bn256.NewSuiteG2()

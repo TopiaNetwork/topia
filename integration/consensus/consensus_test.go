@@ -2,6 +2,8 @@ package consensus
 
 import (
 	"context"
+	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	tpcrt "github.com/TopiaNetwork/topia/crypt"
 	"github.com/TopiaNetwork/topia/currency"
@@ -419,6 +421,10 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 			latestEpochInfo = config.Genesis.Epoch
 			latestBlock = config.Genesis.Block
 
+			for _, initAcc := range config.Genesis.InitAccounts {
+				compState.AddAccount(initAcc)
+			}
+
 			compState.AddAccount(tpacc.NativeContractAccount_Account)
 
 			l.UpdateState(tpcmm.LedgerState_Genesis)
@@ -438,7 +444,10 @@ func createNodeParams(n int, nodeType string) []*nodeParams {
 		}*/
 
 		newConfig := &tpconfig.Configuration{}
-		tpcmm.DeepCopyByGob(newConfig, config)
+		err = tpcmm.DeepCopyByGob(newConfig, config)
+		if err != nil {
+			panic(err.Error())
+		}
 		nParams = append(nParams, &nodeParams{
 			chainID:         "consintetest",
 			exeDomainID:     exeDomainID,
@@ -471,7 +480,7 @@ func produceTxsTimer(ctx context.Context, txPool txpooli.TransactionPool, cryptS
 			select {
 			case <-timer.C:
 				err := func() error {
-					fromPriKey, _, _ := cryptService.GeneratePriPubKey()
+					fromPriKey, _ := hex.DecodeString("35a64a1b110f499e0847b2ce87480063f81ead7bc10c65202d7cadf87501c11ce91b83bc5b42918daa92e38691f4f976a30401f0f7d41a6d275d4370c80180ed")
 					for i := 0; i < 5; i++ {
 						_, toPubKey, _ := cryptService.GeneratePriPubKey()
 						toAddr, _ := cryptService.CreateAddress(toPubKey)
@@ -550,6 +559,8 @@ func TestMultiRoleNodes(t *testing.T) {
 	}()
 
 	waitChan := make(chan struct{})
+
+	gob.Register(&tpacc.PermissionRoot{})
 
 	executorParams := createNodeParams(ExecutorNode_Number, "executor")
 	archiverParams := createNodeParams(archiverNode_number, "archiver")

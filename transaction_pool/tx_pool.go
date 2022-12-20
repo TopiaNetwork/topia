@@ -145,10 +145,10 @@ func (pool *transactionPool) addLocal(tx *txbasic.Transaction) error {
 	wTx, err := pool.addTx(tx)
 	if err == nil {
 		pool.txServant.saveTxIntoStore(pool.marshaler, wTx.TxID(), tx)
-		err = pool.txServant.PublishTx(pool.ctx, pool.marshaler, tpnetprotoc.AsyncSendProtocolID+"/"+pool.exeDomainID, pool.exeDomainID, pool.nodeID, wTx.OriginTx())
+		/*err = pool.txServant.PublishTx(pool.ctx, pool.marshaler, tpnetprotoc.AsyncSendProtocolID+"/"+pool.exeDomainID, pool.exeDomainID, pool.nodeID, wTx.OriginTx())
 		if err == nil {
 			wTx.UpdateState(txpooli.TxState_Published)
-		}
+		}*/
 	}
 
 	return err

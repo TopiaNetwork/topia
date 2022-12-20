@@ -87,7 +87,7 @@ func (ps *P2PPubSubService) Subscribe(ctx context.Context, topic string, localIg
 
 			if pubMsg, ok := psMsg.ValidatorData.(*message.NetworkPubSubMessage); ok {
 				if isLocalIgnore && pubMsg.FromPeerID == ps.p2pService.ID().String() {
-					ps.log.Infof("Local sub message ignore peerID=%s", pubMsg.FromPeerID)
+					//ps.log.Infof("Local sub message ignore peerID=%s", pubMsg.FromPeerID)
 					continue
 				}
 

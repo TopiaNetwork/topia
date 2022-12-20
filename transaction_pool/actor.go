@@ -16,7 +16,8 @@ type TxPoolActor struct {
 func CreateTransactionPoolActor(level tplogcmm.LogLevel, log tplog.Logger, sysActor *actor.ActorSystem, txPool *transactionPool) (*actor.PID, error) {
 	logTxPoolActor := tplog.CreateModuleLogger(level, "TransactionPoolActor", log)
 	tpActor := &TxPoolActor{
-		log: logTxPoolActor,
+		log:    logTxPoolActor,
+		txPool: txPool,
 	}
 	props := actor.PropsFromProducer(func() actor.Actor {
 		return tpActor

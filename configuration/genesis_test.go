@@ -3,9 +3,6 @@ package configuration
 import (
 	"encoding/hex"
 	"fmt"
-	tpacc "github.com/TopiaNetwork/topia/account"
-	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
-	"github.com/TopiaNetwork/topia/currency"
 	"math/big"
 	"testing"
 	"time"
@@ -16,8 +13,11 @@ import (
 	"github.com/TopiaNetwork/kyber/v3/util/encoding"
 	"github.com/TopiaNetwork/kyber/v3/util/key"
 
+	tpacc "github.com/TopiaNetwork/topia/account"
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	tpcmm "github.com/TopiaNetwork/topia/common"
+	tpcrtypes "github.com/TopiaNetwork/topia/crypt/types"
+	"github.com/TopiaNetwork/topia/currency"
 )
 
 /*

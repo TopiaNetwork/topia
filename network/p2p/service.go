@@ -2,9 +2,9 @@ package p2p
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/libp2p/go-libp2p"
 	"net"
 	"sort"
 	"strings"
@@ -12,18 +12,16 @@ import (
 	"time"
 
 	"github.com/AsynkronIT/protoactor-go/actor"
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-connmgr"
-	p2pCrypto "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	swarm "github.com/libp2p/go-libp2p-swarm"
+	p2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	ma "github.com/multiformats/go-multiaddr"
 
 	"github.com/TopiaNetwork/topia/codec"
@@ -164,9 +162,9 @@ func (p2p *P2PService) createP2PPrivKey(seed string) (*p2pCrypto.Secp256k1Privat
 		return nil, err
 	}
 
-	prvKey, _ := ecdsa.GenerateKey(btcec.S256(), randReader)
+	prvKey, _, _ := p2pCrypto.GenerateSecp256k1Key(randReader)
 
-	return (*p2pCrypto.Secp256k1PrivateKey)(prvKey), nil
+	return prvKey.(*p2pCrypto.Secp256k1PrivateKey), nil
 }
 
 func (p2p *P2PService) connectionManagerOption() libp2p.Option {
@@ -176,7 +174,7 @@ func (p2p *P2PService) connectionManagerOption() libp2p.Option {
 	}
 
 	for _, protPeer := range p2p.config.Connection.ProtectedPeers {
-		peerID, err := peer.IDFromString(protPeer)
+		peerID, err := peer.IDFromBytes([]byte(protPeer))
 		if err != nil {
 			panic(fmt.Sprintf("failed to parse peer ID in protected peers array: %v", err))
 			return nil
@@ -732,7 +730,7 @@ func (p2p *P2PService) Send(ctx context.Context, protocolID string, moduleName s
 				return
 			}
 			_ = stream.SetWriteDeadline(time.Time{}) // clear deadline // FIXME: Needs
-			//  its own API (https://github.com/libp2p/go-libp2p-core/issues/162).
+			//  its own API (https://github.com/libp2p/go-libp2p/core/issues/162).
 		}(id)
 	}
 	wg.Wait()
@@ -847,7 +845,7 @@ func (p2p *P2PService) SendWithResponse(ctx context.Context, protocolID string, 
 				return
 			}
 			_ = stream.SetWriteDeadline(time.Time{}) // clear deadline // FIXME: Needs
-			//  its own API (https://github.com/libp2p/go-libp2p-core/issues/162).
+			//  its own API (https://github.com/libp2p/go-libp2p/core/issues/162).
 
 			resp, err := p2p.streamService.readMessage(stream)
 			if err == nil {
@@ -1035,7 +1033,7 @@ func (p2p *P2PService) ConnectedPeers() []*tpnetcmn.RemotePeer {
 }
 
 func (p2p *P2PService) Connectedness(nodeID string) (tpnetcmn.Connectedness, error) {
-	peerID, err := peer.IDFromString(nodeID)
+	peerID, err := peer.IDFromBytes([]byte(nodeID))
 	if err != nil {
 		return tpnetcmn.NotConnected, err
 	}
@@ -1084,7 +1082,7 @@ func (p2p *P2PService) NatState() (*tpnetcmn.NatInfo, error) {
 
 func (p2p *P2PService) PeerDetailInfo(nodeID string) (*tpnetcmn.PeerDetail, error) {
 	var peerDetail tpnetcmn.PeerDetail
-	peerID, err := peer.IDFromString(nodeID)
+	peerID, err := peer.IDFromBytes([]byte(nodeID))
 	if err != nil {
 		return nil, err
 	}
@@ -1122,7 +1120,7 @@ func (p2p *P2PService) PeerDetailInfo(nodeID string) (*tpnetcmn.PeerDetail, erro
 }
 
 func (p2p *P2PService) FindPeer(ctx context.Context, nodeID string) (string, error) {
-	peerID, err := peer.IDFromString(nodeID)
+	peerID, err := peer.IDFromBytes([]byte(nodeID))
 	if err != nil {
 		return "", err
 	}
@@ -1175,7 +1173,7 @@ func (p2p *P2PService) ConnectToNode(ctx context.Context, nodeNetAddr string) er
 }
 
 func (p2p *P2PService) DisConnectWithNode(nodeID string) error {
-	peerID, err := peer.IDFromString(nodeID)
+	peerID, err := peer.IDFromBytes([]byte(nodeID))
 	if err != nil {
 		return err
 	}

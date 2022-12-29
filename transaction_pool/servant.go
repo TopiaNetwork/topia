@@ -64,15 +64,15 @@ func newTransactionPoolServant(
 	stateQueryService service.StateQueryService,
 	blockService service.BlockService,
 	network tpnet.Network,
-	ledger ledger.Ledger) TransactionPoolServant {
+	l ledger.Ledger) TransactionPoolServant {
 
-	metaStore, _ := ledger.CreateMetaStore()
+	metaStore, _ := l.CreateMetaStore()
 
 	metaStore.AddNamedStateStore(MetaData_TxPool_Tx, 50)
 	metaStore.AddNamedStateStore(MetaData_TxPool_Config, 50)
 
 	txpoolservant := &transactionPoolServant{
-		ledger:       ledger,
+		ledger:       l,
 		state:        stateQueryService,
 		BlockService: blockService,
 		Network:      network,

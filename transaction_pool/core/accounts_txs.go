@@ -201,7 +201,7 @@ func (a *accountTxManager) getAllTxs() []*txbasic.Transaction {
 	wTx, ok := a.pendingTxs[nonce]
 	for ok {
 		rtnTxs = append(rtnTxs, wTx.OriginTx())
-		nonce++
+		nonce--
 		wTx, ok = a.pendingTxs[nonce]
 	}
 

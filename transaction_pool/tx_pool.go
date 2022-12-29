@@ -181,13 +181,14 @@ func (pool *transactionPool) addTx(tx *txbasic.Transaction) (txpoolcore.TxWrappe
 		return nil, err
 	}
 	err = pool.txsCollect.AddTx(wTx)
-	if err != nil {
+	if err == nil {
 		pool.txCache.Add(txId, txpooli.TxState_Added)
 		atomic.AddInt64(&pool.txCount, 1)
 		atomic.AddInt64(&pool.txSizeBytes, int64(wTx.Size()))
+		return wTx, nil
+	} else {
+		return nil, err
 	}
-
-	return wTx, nil
 }
 
 func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, oldTxID txbasic.TxID) error {

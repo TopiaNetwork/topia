@@ -3,9 +3,9 @@ package rpc
 import (
 	"bytes"
 	"errors"
-	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,9 +41,13 @@ func NewClient(addr string, options ...ClientOption) (*Client, error) {
 	}
 
 	if c.options.ws != nil {
-		addr := strings.Trim("ws://"+addr+"/websocket", " ")
+		addr := strings.Trim("wss://"+addr+"/websocket", " ")
 		c.options.ws.addr = addr
-		c.options.ws.Run()
+		c.options.ws.tlsConfig = c.options.tlsConfig
+		err = c.options.ws.Run()
+		if err != nil {
+			return nil, err
+		}
 		// c.options.recws.Dial(addr, nil)
 		// go func() {
 		// 	timeSleep := time.Duration(0)
@@ -84,21 +88,25 @@ func (c *Client) sendPostRetry(postUrl string, reqBody []byte) (*Message, error)
 	if c.options.attempts <= 0 {
 		return c.sendPost(postUrl, reqBody)
 	}
-	errString := ""
 	for index := 0; index < c.options.attempts; index++ {
 		res, err := c.sendPost(postUrl, reqBody)
-		if err == nil {
-			return res, nil
+		if err != nil {
+			// If got timeout err, backoff and try again.
+			if e, ok := err.(net.Error); ok && e.Timeout() {
+				// TODO backoff
+				time.Sleep(c.options.sleepTime * time.Duration(2*index+1))
+				continue
+			}
+
+			// If got non-timeout err, won't retry.
+			return nil, err
 		}
-		if index != 0 {
-			errString += "|" + err.Error()
-		} else {
-			errString += err.Error()
-		}
-		time.Sleep(c.options.sleepTime * time.Duration(2*index+1))
+
+		return res, nil
+
 	}
 
-	return nil, errors.New("SendRetry err:" + errString)
+	return nil, errors.New("retry send timeout for [" + strconv.Itoa(c.options.attempts) + "] times")
 }
 
 func (c *Client) sendPost(postUrl string, reqBody []byte) (*Message, error) {
@@ -120,6 +128,7 @@ func (c *Client) sendPost(postUrl string, reqBody []byte) (*Message, error) {
 			},
 		},
 	}
+
 	requestDo, err := http.NewRequest("POST", postUrl, bytes.NewReader(reqBody))
 	requestDo.Header.Set("Content-Type", "text/xml; charset=UTF-8")
 	if err != nil {
@@ -127,14 +136,14 @@ func (c *Client) sendPost(postUrl string, reqBody []byte) (*Message, error) {
 		return nil, errors.New("httpPost err: " + err.Error())
 	}
 	res, err := client.Do(requestDo)
-	if nil != err {
+	if err != nil {
 		c.logger.Errorf("httpPost error: %v, url: %v, params: %v\n", err, postUrl, string(reqBody))
-		return nil, errors.New("httpPost err: " + err.Error())
+		return nil, err
 	}
 	defer res.Body.Close()
 
 	message, err := IODecodeMessage(res.Body)
-	if nil != err {
+	if err != nil {
 		c.logger.Errorf("IODecodeMessage err: %v", err)
 		return nil, errors.New("IODecodeMessage err: " + err.Error())
 	}
@@ -158,28 +167,71 @@ func (c *Client) Call(methodName string, inArgs ...interface{}) (res *Message, e
 	if err != nil {
 		return nil, err
 	}
-	url := strings.Trim("http://"+c.addr+"/"+methodName+"/", " ")
+	url := strings.Trim("https://"+c.addr+"/"+methodName+"/", " ") // TODO
 	return c.sendPostRetry(url, data)
 }
 
-func (c *Client) CallWithWS(methodName string, inArgs ...interface{}) (requestId string, res chan []byte, err error) {
+func (c *Client) CallWithWS(methodName string, inArgs ...interface{}) (res *Message, err error) {
+	if c.options.ws == nil {
+		return nil, errors.New("it is not a websocket client")
+	}
+
 	var payload []byte
-	requestId, err = DistributedID()
-	log.Print(requestId)
+	requestId, err := DistributedID()
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	if len(inArgs) != 0 {
 		payload, _ = Encode(inArgs)
 	}
 	data, _ := EncodeMessage(requestId, methodName, c.options.AUTH, &ErrMsg{}, payload)
-	res = make(chan []byte)
-	c.options.ws.requestRes[requestId] = res
+
+	var respChan = make(chan *Message, 1)
+	c.options.ws.requestRes[requestId] = respChan
 	c.options.ws.send <- data
 	// c.options.recws.WriteMessage(websocket.TextMessage, data)
-	return
+
+	select {
+	case res = <-respChan:
+		delete(c.options.ws.requestRes, requestId)
+		return res, nil
+
+		// TODO case timeout
+	}
+
 }
+
+func (c *Client) CloseServer() error {
+	resp, err := c.Call("CloseServer")
+	if err != nil {
+		return err
+	}
+
+	if resp.ErrMsg.Errtype != NoErr {
+		return errors.New(resp.ErrMsg.ErrString)
+	}
+	return nil
+}
+
+//// TODO
+//func (c *Client) Subscribe(eventName string, inArgs ...interface{}) (respChan <-chan *Message, err error) {
+//
+//}
+//
+//// TODO
+//func (c *Client) UnSubscribe(eventName string) {
+//
+//}
+
+//func (c *Client) Close() error {
+//	if c.options.ws != nil {
+//		close(c.options.ws.send)
+//		return c.options.ws.conn.Close()
+//	}
+//	return nil
+//
+//}
 
 // func (c *Client) Test() {
 // 	c.options.recws.Conn.Close()

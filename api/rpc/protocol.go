@@ -59,6 +59,7 @@ type ErrMsg struct {
 	Errtype   Errtype `json:"err_type"`
 	ErrCode   int     `json:"err_code"`
 	ErrString string  `json:"err_string"`
+	Data      string  `json:"data"`
 }
 
 func IODecodeMessage(r io.Reader) (*Message, error) {
@@ -104,6 +105,9 @@ func IODecodeMessage(r io.Reader) (*Message, error) {
 func DecodeHeader(data []byte) (*Header, error) {
 	var header Header
 	header.Sc = data[0]
+	if header.Sc != StartCipher {
+		return nil, errors.New("wrong StartCipher")
+	}
 	header.RequestIdSize = binary.BigEndian.Uint32(data[1:5])
 	header.MethodNameSize = binary.BigEndian.Uint32(data[5:9])
 	header.AuthCodeSize = binary.BigEndian.Uint32(data[9:13])
@@ -119,6 +123,7 @@ func DecodeMessage(data []byte) (*Message, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return DecodeMessageV2(data, header, HeadSize)
 }
 

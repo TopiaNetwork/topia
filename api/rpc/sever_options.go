@@ -8,7 +8,7 @@ import (
 
 type Options struct {
 	auth             AuthObject
-	cc               *freecache.Cache
+	cache            *freecache.Cache
 	upgrader         *websocket.Upgrader
 	websocketServers sync.Map
 }
@@ -27,7 +27,7 @@ func SetAUTH(auth AuthObject) Option {
 
 func SetCache(cache *freecache.Cache) Option {
 	return func(options *Options) {
-		options.cc = cache
+		options.cache = cache
 	}
 }
 

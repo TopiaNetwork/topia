@@ -1,10 +1,12 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"golang.org/x/net/netutil"
 	"log"
+	"net"
 	"net/http"
 	"reflect"
 	"strings"
@@ -19,7 +21,9 @@ type Server struct {
 	addr      string
 	methodMap map[string]*methodType
 	*Options
-	logger tlog.Logger
+	logger      tlog.Logger
+	httpServer  *http.Server
+	shutDownSig chan struct{} // signal to shut down the server
 }
 
 // NewServer creates a new server
@@ -29,10 +33,11 @@ func NewServer(addr string, options ...Option) *Server {
 		panic(err)
 	}
 	server := &Server{
-		addr:      addr,
-		methodMap: map[string]*methodType{},
-		Options:   defaultOptions(),
-		logger:    mylog,
+		addr:        addr,
+		methodMap:   map[string]*methodType{},
+		Options:     defaultOptions(),
+		logger:      mylog,
+		shutDownSig: make(chan struct{}, 1),
 	}
 
 	for _, fn := range options {
@@ -42,26 +47,23 @@ func NewServer(addr string, options ...Option) *Server {
 	return server
 }
 
-func (s *Server) Register(obj interface{}, name string, authority byte, cacheTime int, timeout time.Duration) error {
+func (s *Server) Register(obj interface{}, name string, authority byte, cacheAble bool, cacheTime int, timeout time.Duration) error {
 	objType := reflect.TypeOf(obj)
 	for objType.Kind() == reflect.Ptr {
 		objType = objType.Elem()
 	}
 	switch objType.Kind() {
 	case reflect.Func:
-		return s.registerMethod(obj, name, authority, cacheTime, timeout)
+		return s.registerMethod(obj, name, authority, cacheAble, cacheTime, timeout)
 	case reflect.Struct:
-		return s.registerStruct(obj, name, authority, cacheTime, timeout)
+		return s.registerStruct(obj, name, authority, cacheAble, cacheTime, timeout)
 	default:
 		return ErrInput
 	}
 }
 
-func (s *Server) registerMethod(method interface{}, name string, authority byte, cacheTime int, timeout time.Duration) error {
+func (s *Server) registerMethod(method interface{}, name string, authority byte, cacheAble bool, cacheTime int, timeout time.Duration) error {
 	mType := reflect.TypeOf(method)
-	if mType.Kind() != reflect.Func {
-		return errors.New("input method is not func")
-	}
 
 	if strings.Trim(name, " ") == "" && mType.Name() == "" {
 		return ErrMethodNameRegister
@@ -88,13 +90,14 @@ func (s *Server) registerMethod(method interface{}, name string, authority byte,
 		mType:       mType,
 		errPos:      errPos,
 		authLevel:   authority,
+		cacheAble:   cacheAble,
 		cacheTime:   cacheTime,
 		timeout:     timeout,
 	}
 	return nil
 }
 
-func (s *Server) registerStruct(obj interface{}, name string, authority byte, cacheTime int, timeout time.Duration) error {
+func (s *Server) registerStruct(obj interface{}, name string, authority byte, cacheAble bool, cacheTime int, timeout time.Duration) error {
 	typ := reflect.TypeOf(obj)
 	objValue := reflect.ValueOf(obj)
 	DoneRegister := 0
@@ -128,6 +131,7 @@ func (s *Server) registerStruct(obj interface{}, name string, authority byte, ca
 			mType:       method.Type,
 			errPos:      errPos,
 			authLevel:   authority,
+			cacheAble:   cacheAble,
 			cacheTime:   cacheTime,
 			timeout:     timeout,
 		}
@@ -152,10 +156,21 @@ func (s *Server) Verify(reqToken string, methodName string) (bool, error) {
 
 // Run server
 func (s *Server) Start() {
+
+	listener, err := net.Listen("tcp", s.addr)
+	if err != nil {
+		s.logger.Errorf("listen on %v err: %v", s.addr, err)
+		return
+	}
+	listener = netutil.LimitListener(listener, MaxSimultaneousTcpConn)
+
 	mux := http.NewServeMux()
 	// if s's websocket is on, register websocket handler
 	if s.upgrader != nil {
+		go s.runWsServer()
+
 		mux.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
+
 			remoteAddr := r.RemoteAddr
 			conn, err := s.upgrader.Upgrade(w, r, nil)
 
@@ -163,7 +178,6 @@ func (s *Server) Start() {
 
 			if err != nil {
 				s.logger.Error(err.Error())
-				w.Write([]byte(err.Error()))
 				return
 			}
 			val, ok := s.websocketServers.Load(remoteAddr)
@@ -192,12 +206,12 @@ func (s *Server) Start() {
 				}
 				s.websocketServers.Store(remoteAddr, ws)
 
-				go s.run()
 				go ws.readPump()
 				go ws.writePump()
 				// go s.handleReceivedMessage(ws)
 				// go s.handleSendMessage(ws)
 				// go s.handleMessage()
+
 			}
 		})
 
@@ -206,6 +220,9 @@ func (s *Server) Start() {
 	for mName, method := range s.methodMap {
 		var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			setupCORS(&w)
+
+			r.Body = http.MaxBytesReader(w, r.Body, int64(MaxHttpBodyReaderBytes))
+
 			// decode message
 			message, err := IODecodeMessage(r.Body)
 			if err != nil {
@@ -223,41 +240,124 @@ func (s *Server) Start() {
 			handler = http.TimeoutHandler(handler, method.timeout, "")
 		}
 		mux.Handle("/"+mName+"/", handler)
+
 	}
 
+	// shutDownHandler
+	var shutDownHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		setupCORS(&w)
+
+		// decode message
+		message, err := IODecodeMessage(r.Body)
+		if err != nil {
+			s.logger.Error("Illegal request err: " + err.Error())
+			return
+		}
+
+		if message.AuthCode != s.auth.tokenArr[Manager] {
+			err = ErrAuth
+			s.logger.Error(err.Error())
+			resp, _ := EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+				&ErrMsg{
+					Errtype:   ErrAuthFailed,
+					ErrString: err.Error(),
+				},
+				nil)
+			w.Write(resp)
+			return
+		}
+
+		resp, _ := EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+			&ErrMsg{}, nil)
+		w.Write(resp)
+
+		s.shutDownSig <- struct{}{}
+
+	})
+	mux.Handle("/CloseServer/", shutDownHandler)
+
+	// wait for the shutdown signal
+	go func() {
+		<-s.shutDownSig
+		s.shutDown()
+		return
+	}()
+
 	// handle server not found
-	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// The "/" pattern matches everything, so we need to check
 		// that we're at the root here.
-		if req.URL.Path != "/" {
-			http.NotFound(w, req)
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
 			return
 		}
 	})
 
-	err := http.ListenAndServe(s.addr, mux)
+	s.httpServer = &http.Server{
+		Handler:           mux,
+		MaxHeaderBytes:    MaxHttpHeaderBytes,
+		WriteTimeout:      HttpWriteTimeout,
+		ReadHeaderTimeout: HttpReadHeaderTimeout,
+	}
+
+	//err = httpServer.Serve(listener) // TODO
+	//if err != nil {
+	//	s.logger.Error("httpServer serve err: " + err.Error())
+	//}
+
+	err = s.httpServer.ServeTLS(
+		listener,
+		CertFilePath,
+		KeyFilePath,
+	)
 	if err != nil {
-		s.logger.Error("http.ListenAndServe err: " + err.Error())
+		if err == http.ErrServerClosed {
+			s.logger.Info(err.Error())
+		} else {
+			s.logger.Error("httpServer serve err: " + err.Error())
+		}
 	}
 
 }
 
-func (s *Server) run() {
+func (s *Server) shutDown() error {
+	time.Sleep(1 * time.Second)
+	if s.upgrader != nil {
+		s.websocketServers.Range(func(remoteAddr, wsServer interface{}) bool {
+			server := wsServer.(*WebsocketServer)
+			err := server.conn.Close()
+			if err != nil {
+				s.logger.Error("websocket conn close err: " + err.Error())
+			}
+
+			return true
+		})
+	}
+	return s.httpServer.Shutdown(context.Background())
+}
+
+// runWsServer receive msg from corresponding receiveChan of all servers and process them
+func (s *Server) runWsServer() {
 	for {
 		s.Options.websocketServers.Range(func(key, value interface{}) bool {
 			ws := value.(*WebsocketServer)
 
 			select {
-			case data := <-ws.receive:
-				fmt.Println(string(data)) // TODO 没收到消息，看看ws.receive是不是已经关闭了
+			case data, ok := <-ws.receive:
+				if !ok {
+					// TODO 对应的ws receive chan已经关闭, 删掉对应的ws server
+					return true
+				}
 				go func() {
-					message, err := DecodeMessage(data)
+					message, err := DecodeMessage(data) // TODO 这里的message可能是call 也可能是订阅
 					if err != nil {
 						s.logger.Error("DecodeMessage err: " + err.Error())
+						return
 					}
 					resp, err := s.handleMessage(message)
 					if err != nil {
 						s.logger.Error("handleMessage err: " + err.Error())
+						return
 					}
 					s.logger.Info("response:" + message.RequestId)
 					ws.send <- resp
@@ -398,7 +498,7 @@ func (s *Server) getInArgs(payload []byte) ([]reflect.Value, error) {
 }
 
 func (s *Server) checkCache(key string) ([]byte, bool) {
-	val, err := s.cc.Get([]byte(key))
+	val, err := s.cache.Get([]byte(key))
 	if err != nil {
 		s.logger.Info("try to get from cache err: " + err.Error())
 		return nil, false
@@ -407,7 +507,11 @@ func (s *Server) checkCache(key string) ([]byte, bool) {
 }
 
 func (s *Server) setCache(key string, val []byte, methodName string) bool {
-	err := s.cc.Set([]byte(key), val, s.methodMap[methodName].cacheTime)
+	if !s.methodMap[methodName].cacheAble {
+		return false
+	}
+
+	err := s.cache.Set([]byte(key), val, s.methodMap[methodName].cacheTime)
 	if err != nil {
 		s.logger.Error("set cache err: " + err.Error())
 		return false

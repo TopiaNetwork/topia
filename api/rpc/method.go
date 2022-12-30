@@ -17,7 +17,8 @@ type methodType struct {
 	mType       reflect.Type
 	errPos      int // err return idx, of -1 when method cannot return error, make sure error is the last return value of method
 	authLevel   byte
-	cacheTime   int //seconds
+	cacheAble   bool // shows whether the method can be cached
+	cacheTime   int  //seconds
 	timeout     time.Duration
 }
 

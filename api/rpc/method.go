@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -11,20 +12,24 @@ import (
 )
 
 type methodType struct {
-	isObjMethod bool
-	receiver    reflect.Value
-	mValue      reflect.Value
-	mType       reflect.Type
-	errPos      int // err return idx, of -1 when method cannot return error, make sure error is the last return value of method
-	authLevel   byte
-	cacheAble   bool // shows whether the method can be cached
-	cacheTime   int  //seconds
-	timeout     time.Duration
+	isObjMethod        bool
+	receiver           reflect.Value
+	mValue             reflect.Value
+	mType              reflect.Type
+	errPos             int // err return idx, of -1 when method cannot return error, make sure error is the last return value of method
+	authLevel          AuthLevel
+	cacheAble          bool // determine whether the method can be cached
+	cacheExpireSeconds int  //
+	timeout            time.Duration
 }
 
 // Call
 // errMsg: hold ErrMsg for method returned, caller should allocate space for it.
 func (m *methodType) Call(in []reflect.Value, errMsg *ErrMsg) ([]byte, error) {
+	if errMsg == nil {
+		return nil, errors.New("nil errMsg Pointer")
+	}
+
 	mylog, err := tlog.CreateMainLogger(logcomm.DebugLevel, tlog.JSONFormat, tlog.StdErrOutput, "")
 	if err != nil {
 		panic(err)

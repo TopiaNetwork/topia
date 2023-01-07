@@ -2,11 +2,13 @@ package rpc
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	tlog "github.com/TopiaNetwork/topia/log"
@@ -20,9 +22,10 @@ var (
 )
 
 type Client struct {
-	addr    string
-	options *ClientOptions
-	logger  tlog.Logger
+	serverURL string
+	scheme    string // transport protocol: one of http/https/ws/wss
+	options   *ClientOptions
+	logger    tlog.Logger
 }
 
 // NewClient creates a new client
@@ -31,60 +34,56 @@ func NewClient(addr string, options ...ClientOption) (*Client, error) {
 	if err != nil {
 		panic(err)
 	}
+
+	parsedURL, err := url.Parse(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	if parsedURL.Scheme != "http" &&
+		parsedURL.Scheme != "https" &&
+		parsedURL.Scheme != "ws" &&
+		parsedURL.Scheme != "wss" {
+		return nil, errors.New("input unsupported client url scheme")
+	}
+
+	if len(parsedURL.Host) == 0 || len(parsedURL.Port()) == 0 {
+		return nil, errors.New("input illegal client url")
+	}
+
 	c := &Client{
-		addr:    addr,
-		options: defaultClientOptions(),
-		logger:  logger,
+		serverURL: fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host),
+		options:   defaultClientOptions(),
+		logger:    logger,
 	}
 	for _, fn := range options {
 		fn(c.options)
 	}
 
-	if c.options.ws != nil {
-		addr := strings.Trim("wss://"+addr+"/websocket", " ")
-		c.options.ws.addr = addr
+	c.scheme = parsedURL.Scheme
+
+	if parsedURL.Scheme == "https" || parsedURL.Scheme == "wss" {
+		if c.options.tlsConfig == nil {
+			return nil, errors.New("tls config isn't set")
+		}
+	}
+
+	if parsedURL.Scheme == "ws" || parsedURL.Scheme == "wss" {
+		if c.options.ws == nil {
+			return nil, errors.New("cannot use websocket without websocket-settings")
+		}
+		c.options.ws.addr = fmt.Sprintf("%s/websocket", c.serverURL)
 		c.options.ws.tlsConfig = c.options.tlsConfig
 		err = c.options.ws.Run()
 		if err != nil {
 			return nil, err
 		}
-		// c.options.recws.Dial(addr, nil)
-		// go func() {
-		// 	timeSleep := time.Duration(0)
-		// 	timeIncrease := 500 * time.Microsecond
-		// 	for {
-		// 		_, data, err := c.options.recws.ReadMessage()
-		// 		if err != nil {
-		// 			timeSleep := timeSleep + timeIncrease
-		// 			log.Print(err.Error())
-		// 			time.Sleep(timeSleep)
-		// 			continue
-		// 		}
-		// 		message, _ := DecodeMessage(data)
-		// 		receive, ok := c.requestRes[message.RequestId]
-		// 		if !ok {
-		// 			continue
-		// 		}
-		// 		timeSleep = time.Duration(0)
-		// 		receive <- message.Payload
-		// 	}
-		// }()
-
-		// go func() {
-		// 	for {
-		// 		data := <-c.send
-		// 		err := c.options.recws.WriteMessage(1, data)
-		// 		if err!=nil {
-
-		// 		}
-		// 	}
-		// }()
 	}
 
 	return c, nil
 }
 
-func (c *Client) sendPostRetry(postUrl string, reqBody []byte) (*Message, error) {
+func (c *Client) sendPostRetry(postUrl string, reqBody []byte, requestId string) (*Message, error) {
 	if c.options.attempts <= 0 {
 		return c.sendPost(postUrl, reqBody)
 	}
@@ -93,13 +92,16 @@ func (c *Client) sendPostRetry(postUrl string, reqBody []byte) (*Message, error)
 		if err != nil {
 			// If got timeout err, backoff and try again.
 			if e, ok := err.(net.Error); ok && e.Timeout() {
-				// TODO backoff
 				time.Sleep(c.options.sleepTime * time.Duration(2*index+1))
 				continue
 			}
 
 			// If got non-timeout err, won't retry.
 			return nil, err
+		}
+
+		if res.RequestId != requestId {
+			return nil, errors.New("response has incorrect requestID")
 		}
 
 		return res, nil
@@ -150,7 +152,36 @@ func (c *Client) sendPost(postUrl string, reqBody []byte) (*Message, error) {
 	return message, nil
 }
 
-func (c *Client) Call(methodName string, inArgs ...interface{}) (res *Message, err error) {
+func (c *Client) Call(methodName string, response interface{}, inArgs ...interface{}) (err error) {
+	var message *Message
+	if c.scheme == "http" || c.scheme == "https" {
+		message, err = c.callWithHttp(methodName, inArgs)
+		if err != nil {
+			return err
+		}
+	} else if c.scheme == "ws" || c.scheme == "wss" {
+		message, err = c.callWithWS(methodName, inArgs)
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("invalid scheme")
+	}
+	if message.ErrMsg.Errtype != NoErr {
+		return errors.New(message.ErrMsg.ErrString)
+	}
+
+	if message.Payload != nil {
+		err = json.Unmarshal(message.Payload, response)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Client) callWithHttp(methodName string, inArgs ...interface{}) (res *Message, err error) {
 	var payload []byte
 	requestId, err := DistributedID()
 	if err != nil {
@@ -167,11 +198,12 @@ func (c *Client) Call(methodName string, inArgs ...interface{}) (res *Message, e
 	if err != nil {
 		return nil, err
 	}
-	url := strings.Trim("https://"+c.addr+"/"+methodName+"/", " ") // TODO
-	return c.sendPostRetry(url, data)
+
+	postUrl := fmt.Sprintf("%s/%s/", c.serverURL, methodName)
+	return c.sendPostRetry(postUrl, data, requestId)
 }
 
-func (c *Client) CallWithWS(methodName string, inArgs ...interface{}) (res *Message, err error) {
+func (c *Client) callWithWS(methodName string, inArgs ...interface{}) (res *Message, err error) {
 	if c.options.ws == nil {
 		return nil, errors.New("it is not a websocket client")
 	}
@@ -203,7 +235,7 @@ func (c *Client) CallWithWS(methodName string, inArgs ...interface{}) (res *Mess
 }
 
 func (c *Client) CloseServer() error {
-	resp, err := c.Call("CloseServer")
+	resp, err := c.callWithHttp("CloseServer")
 	if err != nil {
 		return err
 	}

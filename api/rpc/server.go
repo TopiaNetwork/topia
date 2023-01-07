@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"golang.org/x/net/netutil"
 	"log"
@@ -47,22 +48,22 @@ func NewServer(addr string, options ...Option) *Server {
 	return server
 }
 
-func (s *Server) Register(obj interface{}, name string, authority byte, cacheAble bool, cacheTime int, timeout time.Duration) error {
+func (s *Server) Register(obj interface{}, name string, authority AuthLevel, cacheAble bool, cacheExpireSeconds int, timeout time.Duration) error {
 	objType := reflect.TypeOf(obj)
 	for objType.Kind() == reflect.Ptr {
 		objType = objType.Elem()
 	}
 	switch objType.Kind() {
 	case reflect.Func:
-		return s.registerMethod(obj, name, authority, cacheAble, cacheTime, timeout)
+		return s.registerMethod(obj, name, authority, cacheAble, cacheExpireSeconds, timeout)
 	case reflect.Struct:
-		return s.registerStruct(obj, name, authority, cacheAble, cacheTime, timeout)
+		return s.registerStruct(obj, name, cacheAble, cacheExpireSeconds, timeout)
 	default:
 		return ErrInput
 	}
 }
 
-func (s *Server) registerMethod(method interface{}, name string, authority byte, cacheAble bool, cacheTime int, timeout time.Duration) error {
+func (s *Server) registerMethod(method interface{}, name string, authority AuthLevel, cacheAble bool, cacheExpireSeconds int, timeout time.Duration) error {
 	mType := reflect.TypeOf(method)
 
 	if strings.Trim(name, " ") == "" && mType.Name() == "" {
@@ -85,21 +86,45 @@ func (s *Server) registerMethod(method interface{}, name string, authority byte,
 	}
 
 	s.methodMap[name] = &methodType{
-		isObjMethod: false,
-		mValue:      reflect.ValueOf(method),
-		mType:       mType,
-		errPos:      errPos,
-		authLevel:   authority,
-		cacheAble:   cacheAble,
-		cacheTime:   cacheTime,
-		timeout:     timeout,
+		isObjMethod:        false,
+		mValue:             reflect.ValueOf(method),
+		mType:              mType,
+		errPos:             errPos,
+		authLevel:          authority,
+		cacheAble:          cacheAble,
+		cacheExpireSeconds: cacheExpireSeconds,
+		timeout:            timeout,
 	}
 	return nil
 }
 
-func (s *Server) registerStruct(obj interface{}, name string, authority byte, cacheAble bool, cacheTime int, timeout time.Duration) error {
+// registerStruct register struct's method to the server
+// The struct to register must have a ProxyObj field to specify authority for every exported method. Here is an example:
+// type TestI interface {
+//	Test() error
+// }
+// type TestIStruct struct {
+//	ProxyObj struct {
+//		Test func() error `grant:"admin"`
+//	}
+// }
+// func (ti *TestIStruct) Test() {
+// }
+func (s *Server) registerStruct(obj interface{}, name string, cacheAble bool, cacheExpireSeconds int, timeout time.Duration) error {
+	var objValue reflect.Value
 	typ := reflect.TypeOf(obj)
-	objValue := reflect.ValueOf(obj)
+	if typ.Kind() == reflect.Ptr {
+		objValue = reflect.ValueOf(obj).Elem()
+	} else {
+		objValue = reflect.ValueOf(obj)
+	}
+
+	// make sure ProxyObj field exists
+	proxyObjVal := objValue.FieldByName("ProxyObj")
+	if !proxyObjVal.IsValid() {
+		return errors.New("struct to register is lack of ProxyObj field")
+	}
+
 	DoneRegister := 0
 	for idx := 0; idx < typ.NumMethod(); idx++ {
 		method := typ.Method(idx)
@@ -116,24 +141,44 @@ func (s *Server) registerStruct(obj interface{}, name string, authority byte, ca
 			errPos = -1
 		} else {
 			var lastRetIndex = method.Type.NumOut() - 1
-			if isErrorType(method.Type.Out(lastRetIndex)) { // judge if the last return value of func is error-type
+			if isErrorType(method.Type.Out(lastRetIndex)) { // if the last return value of func is error-type
 				errPos = lastRetIndex
 			} else {
 				errPos = -1
 			}
 		}
 
+		var authLevel = Read // Default Read auth
+		if proxyObjVal.FieldByName(mName).IsValid() {
+			structField, exists := proxyObjVal.Type().FieldByName(mName)
+			if exists {
+				authString := structField.Tag.Get("grant")
+				switch strings.ToLower(authString) {
+				case "manager":
+					authLevel = Manager
+				case "sign":
+					authLevel = Sign
+				case "write":
+					authLevel = Write
+				case "read":
+					authLevel = Read
+				default:
+					authLevel = Read
+				}
+			}
+		}
+
 		mName = name + "_" + mName
 		s.methodMap[mName] = &methodType{
-			isObjMethod: true,
-			receiver:    objValue,
-			mValue:      method.Func,
-			mType:       method.Type,
-			errPos:      errPos,
-			authLevel:   authority,
-			cacheAble:   cacheAble,
-			cacheTime:   cacheTime,
-			timeout:     timeout,
+			isObjMethod:        true,
+			receiver:           objValue,
+			mValue:             method.Func,
+			mType:              method.Type,
+			errPos:             errPos,
+			authLevel:          authLevel,
+			cacheAble:          cacheAble,
+			cacheExpireSeconds: cacheExpireSeconds,
+			timeout:            timeout,
 		}
 		DoneRegister++
 	}
@@ -208,9 +253,6 @@ func (s *Server) Start() {
 
 				go ws.readPump()
 				go ws.writePump()
-				// go s.handleReceivedMessage(ws)
-				// go s.handleSendMessage(ws)
-				// go s.handleMessage()
 
 			}
 		})
@@ -300,16 +342,15 @@ func (s *Server) Start() {
 		ReadHeaderTimeout: HttpReadHeaderTimeout,
 	}
 
-	//err = httpServer.Serve(listener) // TODO
-	//if err != nil {
-	//	s.logger.Error("httpServer serve err: " + err.Error())
-	//}
-
-	err = s.httpServer.ServeTLS(
-		listener,
-		CertFilePath,
-		KeyFilePath,
-	)
+	if s.enableTLS {
+		err = s.httpServer.ServeTLS(
+			listener,
+			CertFilePath,
+			KeyFilePath,
+		)
+	} else {
+		err = s.httpServer.Serve(listener)
+	}
 	if err != nil {
 		if err == http.ErrServerClosed {
 			s.logger.Info(err.Error())
@@ -359,7 +400,6 @@ func (s *Server) runWsServer() {
 						s.logger.Error("handleMessage err: " + err.Error())
 						return
 					}
-					s.logger.Info("response:" + message.RequestId)
 					ws.send <- resp
 				}()
 			default:
@@ -500,7 +540,7 @@ func (s *Server) getInArgs(payload []byte) ([]reflect.Value, error) {
 func (s *Server) checkCache(key string) ([]byte, bool) {
 	val, err := s.cache.Get([]byte(key))
 	if err != nil {
-		s.logger.Info("try to get from cache err: " + err.Error())
+		s.logger.Info("item not found in cache: " + err.Error())
 		return nil, false
 	}
 	return val, true
@@ -511,7 +551,7 @@ func (s *Server) setCache(key string, val []byte, methodName string) bool {
 		return false
 	}
 
-	err := s.cache.Set([]byte(key), val, s.methodMap[methodName].cacheTime)
+	err := s.cache.Set([]byte(key), val, s.methodMap[methodName].cacheExpireSeconds)
 	if err != nil {
 		s.logger.Error("set cache err: " + err.Error())
 		return false

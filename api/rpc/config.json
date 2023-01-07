@@ -1,0 +1,9 @@
+{
+  "maxSimultaneousTcpConn": 50,
+  "maxHttpHeaderBytes": 10240,
+  "maxHttpBodyReaderBytes": 10240,
+  "httpWriteTimeout": 10,
+  "httpReadHeaderTimeout": 5,
+  "certFilePath": "",
+  "keyFilePath": ""
+}

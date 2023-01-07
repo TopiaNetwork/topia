@@ -7,10 +7,11 @@ import (
 )
 
 type Options struct {
-	auth             AuthObject
+	auth             *AuthObject
 	cache            *freecache.Cache
 	upgrader         *websocket.Upgrader
 	websocketServers sync.Map
+	enableTLS        bool
 }
 
 type Option func(options *Options)
@@ -19,7 +20,7 @@ func defaultOptions() *Options {
 	return &Options{}
 }
 
-func SetAUTH(auth AuthObject) Option {
+func SetAUTH(auth *AuthObject) Option {
 	return func(options *Options) {
 		options.auth = auth
 	}
@@ -34,5 +35,11 @@ func SetCache(cache *freecache.Cache) Option {
 func SetWebsocket(upgrader *websocket.Upgrader) Option {
 	return func(options *Options) {
 		options.upgrader = upgrader
+	}
+}
+
+func SetEnableTLS(enable bool) Option {
+	return func(options *Options) {
+		options.enableTLS = enable
 	}
 }

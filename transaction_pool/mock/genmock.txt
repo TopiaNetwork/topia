@@ -1,0 +1,5 @@
+mockgen -source ./service/state.go -destination ./transaction_pool/mock/state_mock.go -package mock
+
+mockgen -source ./service/block.go -destination ./transaction_pool/mock/block_mock.go -package mock
+
+mockgen -source ./network/network.go -destination ./transaction_pool/mock/network_mock.go -package mock

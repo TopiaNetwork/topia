@@ -142,9 +142,9 @@ func (pool *transactionPool) addLocal(tx *txbasic.Transaction) error {
 	fromAddr := tpcrtypes.NewFromBytes(tx.Head.FromAddr)
 	pool.localAddrs[fromAddr] = struct{}{}
 
-	wTx, err := pool.addTx(tx)
+	wTx, err := pool.addTx(tx, 0)
 	if err == nil {
-		pool.txServant.saveTxIntoStore(pool.marshaler, wTx.TxID(), tx)
+		pool.txServant.saveTxIntoStore(pool.marshaler, wTx.TxID(), wTx.Height(), tx)
 		/*err = pool.txServant.PublishTx(pool.ctx, pool.marshaler, tpnetprotoc.AsyncSendProtocolID+"/"+pool.exeDomainID, pool.exeDomainID, pool.nodeID, wTx.OriginTx())
 		if err == nil {
 			wTx.UpdateState(txpooli.TxState_Published)
@@ -155,12 +155,15 @@ func (pool *transactionPool) addLocal(tx *txbasic.Transaction) error {
 }
 
 func (pool *transactionPool) addRemote(tx *txbasic.Transaction) error {
-	_, err := pool.addTx(tx)
+	_, err := pool.addTx(tx, 0)
 	return err
 }
 
-func (pool *transactionPool) addTx(tx *txbasic.Transaction) (txpoolcore.TxWrapper, error) {
-	txId, _ := tx.TxID()
+func (pool *transactionPool) addTx(tx *txbasic.Transaction, height uint64) (txpoolcore.TxWrapper, error) {
+	txId, err := tx.TxID()
+	if err != nil {
+		return nil, err
+	}
 
 	if pool.Count()+1 > pool.config.TxPoolMaxCnt {
 		pool.txCache.Add(txId, txpooli.TxState_DroppedForTxPoolFull)
@@ -172,22 +175,27 @@ func (pool *transactionPool) addTx(tx *txbasic.Transaction) (txpoolcore.TxWrappe
 		return nil, ErrTxPoolFull
 	}
 
-	curHeight, err := pool.txServant.CurrentHeight()
-	if err != nil {
-		return nil, err
+	curHeight := height
+	if curHeight == 0 {
+		curHeight, err = pool.txServant.CurrentHeight()
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	wTx, err := txpoolcore.GenerateTxWrapper(tx, curHeight)
 	if err != nil {
 		return nil, err
 	}
 	err = pool.txsCollect.AddTx(wTx)
-	if err != nil {
+	if err == nil {
 		pool.txCache.Add(txId, txpooli.TxState_Added)
 		atomic.AddInt64(&pool.txCount, 1)
 		atomic.AddInt64(&pool.txSizeBytes, int64(wTx.Size()))
+		return wTx, nil
+	} else {
+		return nil, err
 	}
-
-	return wTx, nil
 }
 
 func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, oldTxID txbasic.TxID) error {
@@ -207,13 +215,13 @@ func (pool *transactionPool) UpdateTx(tx *txbasic.Transaction, oldTxID txbasic.T
 	}
 
 	if wTxOld.CanReplace(wTx) {
-		_, err := pool.addTx(tx)
+		_, err := pool.addTx(tx, 0)
 		if err != nil {
 			return err
 		}
 
 		pool.txServant.removeTxFromStore(oldTxID)
-		pool.txServant.saveTxIntoStore(pool.marshaler, wTx.TxID(), tx)
+		pool.txServant.saveTxIntoStore(pool.marshaler, wTx.TxID(), wTx.Height(), tx)
 		wTx.UpdateState(txpooli.TxState_Added)
 
 		//commit when unit testing
@@ -291,6 +299,8 @@ func (pool *transactionPool) Stop() {
 	pool.txServant.UnSubscribe(tpnetprotoc.SyncProtocolID_Msg)
 	eventhub.GetEventHubManager().GetEventHub(pool.nodeID).UnObserve(pool.ctx, ObsID, eventhub.EventName_BlockAdded)
 	pool.txServant.savePoolConfig(pool.config, pool.marshaler)
+
+	pool.txServant.stop()
 
 	pool.log.Info("TransactionPool stopped")
 }

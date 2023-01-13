@@ -32,6 +32,8 @@ func DefaultTransactionPoolConfig() *TransactionPoolConfig {
 		PathConf:       "StorageInfo/StorageConfig.json",
 		ReStoredDur:    2000003 * time.Microsecond, //2 * time.Second,
 
+		IsLoadTxs: true,
+
 		GasPriceLimit: 1000, // 1000
 
 		MaxSizeOfEachTx: 2 * 1024,

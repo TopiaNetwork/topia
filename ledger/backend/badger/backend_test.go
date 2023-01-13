@@ -9,6 +9,33 @@ import (
 	tplogcmm "github.com/TopiaNetwork/topia/log/common"
 )
 
+func TestBaseSave(t *testing.T) {
+	log, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
+
+	backend := NewBadgerBackend(log, "test", "./test", 100)
+	assert.NotEqual(t, nil, backend)
+
+	rw0 := backend.Writer()
+	rw0.Set([]byte("test1"), []byte("value1"))
+	rw0.Set([]byte("test2"), []byte("value2"))
+
+	err := rw0.Commit()
+	backend.Close()
+	assert.Equal(t, nil, err)
+}
+
+func TestBaseLoad(t *testing.T) {
+	log, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
+
+	backend := NewBadgerBackend(log, "test", "./test", 100)
+	assert.NotEqual(t, nil, backend)
+
+	rw0 := backend.ReadWriter()
+	val, err := rw0.Get([]byte("test1"))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "value1", string(val))
+}
+
 func TestMultiTXs(t *testing.T) {
 	log, _ := tplog.CreateMainLogger(tplogcmm.InfoLevel, tplog.DefaultLogFormat, tplog.DefaultLogOutput, "")
 

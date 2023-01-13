@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	txpoolcore "github.com/TopiaNetwork/topia/transaction_pool/core"
 	"math/big"
 	"testing"
 	"time"
@@ -73,6 +74,8 @@ func build(gCtrl *gomock.Controller) {
 	stateServiceMock = txpoolmock.NewMockStateQueryService(gCtrl)
 	blockServiceMock = txpoolmock.NewMockBlockService(gCtrl)
 
+	stateServiceMock.EXPECT().GetLatestBlock().Return(&tpchaintypes.Block{Head: &tpchaintypes.BlockHead{Height: 100}}, nil).AnyTimes()
+
 	txPool = NewTransactionPool(
 		"testdomainid",
 		network.ID(),
@@ -96,8 +99,6 @@ func TestTransactionPool_AddTx(t *testing.T) {
 
 	assert.NotEqual(t, nil, txPool)
 
-	stateServiceMock.EXPECT().GetLatestBlock().Return(&tpchaintypes.Block{Head: &tpchaintypes.BlockHead{Height: 100}}, nil).AnyTimes()
-
 	for _, tx := range txList {
 		txPool.AddTx(tx, true)
 	}
@@ -112,5 +113,59 @@ func TestTransactionPool_AddTx(t *testing.T) {
 	assert.Equal(t, len(txList), len(txps))
 	assert.Equal(t, len(txList), len(localTxs))
 
+	txPool.Stop()
+
 	t.Logf("Current tx pool count: %d", txPool.Count())
+}
+
+func TestTransactionPool_RemoveTxByKey(t *testing.T) {
+	gCtrl := gomock.NewController(t)
+	build(gCtrl)
+
+	assert.NotEqual(t, nil, txPool)
+
+	for _, tx := range txList {
+		txPool.AddTx(tx, true)
+	}
+
+	time.Sleep(5 * time.Second) //waiting for all txs are added
+
+	assert.Equal(t, int64(len(txList)), txPool.Count())
+
+	txId, _ := txList[3].TxID()
+
+	txPool.RemoveTxByKey(txId)
+
+	assert.Equal(t, int64(len(txList)-1), txPool.Count())
+}
+
+func TestTransactionPool_Store_Save(t *testing.T) {
+	gCtrl := gomock.NewController(t)
+	build(gCtrl)
+
+	assert.NotEqual(t, nil, txPool)
+
+	txPoolS := txPool.(*transactionPool)
+
+	for _, tx := range txList {
+		txID, _ := tx.TxID()
+		txPoolS.txServant.saveTxIntoStore(txPoolS.marshaler, txID, 100, tx)
+	}
+
+	txPoolS.txServant.stop()
+}
+
+func TestTransactionPool_Store_Load(t *testing.T) {
+	gCtrl := gomock.NewController(t)
+	build(gCtrl)
+
+	assert.NotEqual(t, nil, txPool)
+
+	txPoolS := txPool.(*transactionPool)
+
+	txPoolS.txServant.loadAllTxs(txPoolS.marshaler, func(tx *txbasic.Transaction, height uint64) (txpoolcore.TxWrapper, error) {
+		txID, _ := tx.TxID()
+		t.Logf("Saved tx: id %s, height %d", txID, height)
+		return nil, nil
+	})
 }

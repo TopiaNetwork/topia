@@ -181,6 +181,7 @@ func readVersionsFile(path string) (*versionManager, error) {
 	return &versionManager{
 		VersionManager: vmgr,
 		vmap:           vmap,
+		tsCount:        lastTs,
 		lastTs:         lastTs,
 	}, nil
 }

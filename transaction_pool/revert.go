@@ -84,6 +84,6 @@ func (pool *transactionPool) addTxsForBlocksRevert(blocks []*tpchaintypes.Block)
 	}
 
 	for _, tx := range txList {
-		pool.addTx(tx)
+		pool.addTx(tx, 0)
 	}
 }

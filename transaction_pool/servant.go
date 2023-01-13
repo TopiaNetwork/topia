@@ -2,6 +2,7 @@ package transactionpool
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
@@ -47,9 +48,11 @@ type TransactionPoolServant interface {
 
 	removeTxFromStore(txId txbasic.TxID)
 
-	saveTxIntoStore(marshaler codec.Marshaler, txId txbasic.TxID, tx *txbasic.Transaction) error
+	saveTxIntoStore(marshaler codec.Marshaler, txId txbasic.TxID, height uint64, tx *txbasic.Transaction) error
 
-	loadAllTxs(marshaler codec.Marshaler, addTx func(tx *txbasic.Transaction) (txpoolcore.TxWrapper, error)) error
+	loadAllTxs(marshaler codec.Marshaler, addTx func(tx *txbasic.Transaction, height uint64) (txpoolcore.TxWrapper, error)) error
+
+	stop()
 
 	Subscribe(ctx context.Context, topic string, localIgnore bool, validators ...message.PubSubMessageValidator) error
 
@@ -184,22 +187,41 @@ func (servant *transactionPoolServant) removeTxFromStore(txId txbasic.TxID) {
 	servant.MetaStore.Delete(MetaData_TxPool_Tx, []byte(txId))
 }
 
-func (servant *transactionPoolServant) saveTxIntoStore(marshaler codec.Marshaler, txId txbasic.TxID, tx *txbasic.Transaction) error {
+func (servant *transactionPoolServant) saveTxIntoStore(marshaler codec.Marshaler, txId txbasic.TxID, height uint64, tx *txbasic.Transaction) error {
 	txBytes, _ := tx.Bytes()
-	servant.MetaStore.Put(MetaData_TxPool_Tx, []byte(txId), txBytes)
+	sTx := struct {
+		Height  uint64
+		TxBytes []byte
+	}{height, txBytes}
+	sBytes, _ := json.Marshal(&sTx)
+
+	servant.MetaStore.Put(MetaData_TxPool_Tx, []byte(txId), sBytes)
+
 	return nil
 }
 
-func (servant *transactionPoolServant) loadAllTxs(marshaler codec.Marshaler, addTx func(tx *txbasic.Transaction) (txpoolcore.TxWrapper, error)) error {
+func (servant *transactionPoolServant) loadAllTxs(marshaler codec.Marshaler, addTx func(tx *txbasic.Transaction, height uint64) (txpoolcore.TxWrapper, error)) error {
 	servant.MetaStore.IterateAllMetaDataCB(MetaData_TxPool_Tx, func(key []byte, val []byte) {
+		var sTx struct {
+			Height  uint64
+			TxBytes []byte
+		}
 		var tx txbasic.Transaction
-		err := marshaler.Unmarshal(val, &tx)
+
+		json.Unmarshal(val, &sTx)
+		err := marshaler.Unmarshal(sTx.TxBytes, &tx)
 		if err == nil {
-			addTx(&tx)
+			addTx(&tx, sTx.Height)
 		}
 	})
 
 	return nil
+}
+
+func (servant *transactionPoolServant) stop() {
+	servant.MetaStore.Commit()
+	//	servant.MetaStore.Stop()
+	servant.MetaStore.Close()
 }
 
 type TxMsgSubProcessor interface {

@@ -32,7 +32,7 @@ func TestGetBlockByHash(t *testing.T) {
 				Version:      tpchaintypes.BLOCK_VER,
 				DomainID:     []byte("topiaexe"),
 				Launcher:     []byte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
-				TxCount:      6,
+				TxCount:      4,
 				TxRoot:       []byte("0x4ea6e8ed3f28744b8cb239b64150f024e3eb8f0ff4491acb14dc2e821a04d463"),
 				TxResultRoot: []byte("0x4db6969931ba48e0e4073b7699fc32a7c1c6f738339b22f6a2f02279a814bb19"),
 			}
@@ -200,7 +200,7 @@ func TestGetBlockByNumber(t *testing.T) {
 	}
 
 	ethBlock := handlers.GetBlockResponseType{}
-	err := json.Unmarshal(j.Result, &ethBlock)
+	err = json.Unmarshal(j.Result, &ethBlock)
 	if err != nil {
 		return
 	}

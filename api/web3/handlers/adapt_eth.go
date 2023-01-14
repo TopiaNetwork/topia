@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/TopiaNetwork/topia/api/servant"
 	hexutil "github.com/TopiaNetwork/topia/api/web3/eth/types/hexutil"
+	tpchaintypes "github.com/TopiaNetwork/topia/chain/types"
 	"github.com/TopiaNetwork/topia/codec"
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 	txuni "github.com/TopiaNetwork/topia/transaction/universal"
@@ -113,10 +114,19 @@ func getBlockValues(blockNum uint64, limit int, ignoreUnder uint64, result chan 
 		}
 		return
 	}
-	txs := make([][]byte, block.GetHead().GetTxCount())
-	copy(txs, block.GetData().GetTxs())
+	hdChunkBytes := block.GetHead().GetHeadChunks()[0] // TODO: [0]
+	hdChunk := &tpchaintypes.BlockHeadChunk{}
+	err = json.Unmarshal(hdChunkBytes, hdChunk)
+	if err != nil {
+		return
+	}
+	txs := make([][]byte, hdChunk.GetTxCount())
+	dataChunkBytes := block.GetData().GetDataChunks()[0] // TODO: [0]
+	dataChunk := &tpchaintypes.BlockDataChunk{}
+	err = json.Unmarshal(dataChunkBytes, dataChunk)
+	copy(txs, dataChunk.GetTxs())
 	transactions := make([]*txbasic.Transaction, 0)
-	for i := 0; i < int(block.GetHead().GetTxCount()); i++ {
+	for i := 0; i < int(hdChunk.GetTxCount()); i++ {
 		tx, _ := apiServant.GetTransactionByHash(string(txs[i]))
 		transactions = append(transactions, tx)
 	}
@@ -185,7 +195,13 @@ func FeeHistory(requestType *FeeHistoryRequestType, servant servant.APIServant) 
 		GasUsedRatio = append(GasUsedRatio, gasUsedRatio)
 		sorter := make(sortGasAndReward, 0)
 
-		txHashs := block.GetData().GetTxs()
+		dataChunkBytes := block.GetData().GetDataChunks()[0] // TODO: [0]
+		dataChunk := &tpchaintypes.BlockDataChunk{}
+		err := json.Unmarshal(dataChunkBytes, dataChunk)
+		if err != nil {
+			return nil
+		}
+		txHashs := dataChunk.GetTxs()
 		for _, txHash := range txHashs {
 			transaction, _ := servant.GetTransactionByHash(string(txHash))
 			var transactionUniversal txuni.TransactionUniversal

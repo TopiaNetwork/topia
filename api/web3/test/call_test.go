@@ -172,7 +172,7 @@ func TestCall(t *testing.T) {
 	}
 
 	answer := new(hexutil.Bytes)
-	err := json.Unmarshal(j.Result, answer)
+	err = json.Unmarshal(j.Result, answer)
 	if err != nil {
 		return
 	}

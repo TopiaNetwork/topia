@@ -69,7 +69,7 @@ func TestEstimateGas(t *testing.T) {
 	}
 
 	estimateGas := new(hexutil.Big)
-	err := json.Unmarshal(j.Result, &estimateGas)
+	err = json.Unmarshal(j.Result, &estimateGas)
 	if err != nil {
 		t.Errorf(err.Error())
 	}

@@ -474,8 +474,8 @@ func initAccount() map[string]*types2.Account {
 	balance, _ := new(big.Int).SetString("1000000000000000000000", 10)
 
 	return map[string]*types2.Account{
-		strings.ToLower("0x3F1B3C065aeE8cA34c47fa84aAC3024E95a2E6D9"): &types2.Account{
-			Addr:    []byte("0x3F1B3C065aeE8cA34c47fa84aAC3024E95a2E6D9"),
+		strings.ToLower("0xd791512D47045880eC0a10701d2f086BbEF9b0F9"): &types2.Account{
+			Addr:    []byte("0xd791512D47045880eC0a10701d2f086BbEF9b0F9"),
 			Balance: new(big.Int).Set(balance),
 			Nonce:   0,
 			Code:    nil,

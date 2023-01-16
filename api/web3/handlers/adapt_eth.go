@@ -114,22 +114,27 @@ func getBlockValues(blockNum uint64, limit int, ignoreUnder uint64, result chan 
 		}
 		return
 	}
-	hdChunkBytes := block.GetHead().GetHeadChunks()[0] // TODO: [0]
-	hdChunk := &tpchaintypes.BlockHeadChunk{}
-	err = json.Unmarshal(hdChunkBytes, hdChunk)
-	if err != nil {
-		return
-	}
-	txs := make([][]byte, hdChunk.GetTxCount())
-	dataChunkBytes := block.GetData().GetDataChunks()[0] // TODO: [0]
-	dataChunk := &tpchaintypes.BlockDataChunk{}
-	err = json.Unmarshal(dataChunkBytes, dataChunk)
-	copy(txs, dataChunk.GetTxs())
 	transactions := make([]*txbasic.Transaction, 0)
-	for i := 0; i < int(hdChunk.GetTxCount()); i++ {
-		tx, _ := apiServant.GetTransactionByHash(string(txs[i]))
-		transactions = append(transactions, tx)
+
+	for _, hdChunkBytes := range block.GetHead().GetHeadChunks() {
+		hdChunk := &tpchaintypes.BlockHeadChunk{}
+		err = hdChunk.Unmarshal(hdChunkBytes)
+		if err != nil {
+			return
+		}
+		for _, dataChunkBytes := range block.GetData().GetDataChunks() {
+			dataChunk := &tpchaintypes.BlockDataChunk{}
+			err = dataChunk.Unmarshal(dataChunkBytes)
+			if err != nil {
+				return
+			}
+			for _, txHash := range dataChunk.GetTxs() {
+				tx, _ := apiServant.GetTransactionByHash(string(txHash))
+				transactions = append(transactions, tx)
+			}
+		}
 	}
+
 	var prices []*big.Int
 	for _, tx := range transactions {
 		var transaction txuni.TransactionUniversal

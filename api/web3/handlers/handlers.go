@@ -116,14 +116,19 @@ func (h *Handler) GetAccountsHandler(parmas interface{}) interface{} {
 	enc, err := json.Marshal(accounts)
 	if err != nil {
 		//TODO:
-		return nil //msg.ErrorResponse(err)
+		return types2.ErrorMessage(err)
 	}
 	return &types2.JsonrpcMessage{Result: enc}
 }
 func (h *Handler) GetBalanceHandler(parmas interface{}) interface{} {
 	args := parmas.(*GetBalanceRequestType)
 
-	balance, err := h.Servant.GetBalance(currency.TokenSymbol_Native, tpcrtypes.NewFromString(args.Address))
+	ad, err := tpcrtypes.TopiaAddressFromEth(args.Address)
+	if err != nil {
+		return types2.ErrorMessage(err)
+	}
+
+	balance, err := h.Servant.GetBalance(currency.TokenSymbol_Native, ad)
 	if err != nil {
 		return types2.ErrorMessage(err)
 	}
@@ -199,7 +204,12 @@ func (h *Handler) GetCodeHandler(parmas interface{}) interface{} {
 		height = uint64(value)
 	}
 
-	code, err := h.Servant.GetContractCode(tpcrtypes.NewFromString(args.Address), height)
+	tpaAddress, err := tpcrtypes.TopiaAddressFromEth(args.Address)
+	if err != nil {
+		return types2.ErrorMessage(err)
+	}
+
+	code, err := h.Servant.GetContractCode(tpaAddress, height)
 	if err != nil {
 		return types2.ErrorMessage(err)
 	}
@@ -276,7 +286,7 @@ func (h *Handler) NetVersionHandler(parmas interface{}) interface{} {
 func (h *Handler) SendRawTransactionHandler(parmas interface{}) interface{} {
 	args := parmas.(*SendRawTransactionRequestType)
 
-	tx, _ := ConstructTopiaTransaction(*args)
+	tx, _ := ConstructTopiaTransaction(*args) // TODO: account type is not uniform, location of the conversion type is not uniform, and it is a mess
 	ctx := context.Background()
 	result, err := h.Servant.ForwardTxSync(ctx, tx)
 	if err != nil {

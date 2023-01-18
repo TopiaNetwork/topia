@@ -65,6 +65,7 @@ func TestGetBalance(t *testing.T) {
 		t.Errorf("failed")
 	}
 }
+
 func TestGetCode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

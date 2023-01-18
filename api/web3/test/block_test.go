@@ -49,7 +49,8 @@ func TestGetBlockByHash(t *testing.T) {
 				},
 			}
 			dataChunkBytes, _ := dataChunk.Marshal()
-			return &tpchaintypes.Block{
+
+			block := tpchaintypes.Block{
 				Head: &tpchaintypes.BlockHead{
 					ChainID:         []byte(ChainId),
 					Version:         1,
@@ -63,13 +64,14 @@ func TestGetBlockByHash(t *testing.T) {
 					HeadChunks:      [][]byte{hdChunkBytes},
 					GasFees:         gasFees,
 					TimeStamp:       0x62656db0,
-					Hash:            GetHexByte("0x983cd9063e6760ab4c7b1db96f3cbaa78588b7005516d3b4fdaad23fdde99499"),
+					Hash:            GetHexByte(txHashHex),
 				},
 				Data: &tpchaintypes.BlockData{
 					Version:    1,
 					DataChunks: [][]byte{dataChunkBytes},
 				},
-			}, nil
+			}
+			return &block, nil
 		}).
 		Times(1)
 

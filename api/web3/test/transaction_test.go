@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/TopiaNetwork/topia/api/web3"
 	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
 	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
@@ -146,6 +147,7 @@ func TestGetTransactionByHash(t *testing.T) {
 		t.Errorf("failed")
 	}
 }
+
 func TestGetTransactionCount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -198,6 +200,7 @@ func TestGetTransactionCount(t *testing.T) {
 		t.Errorf("failed")
 	}
 }
+
 func TestGetTransactionReceipt(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -350,11 +353,12 @@ func TestGetTransactionReceipt(t *testing.T) {
 		t.Errorf("failed")
 	}
 }
+
 func TestSendRawTransaction(t *testing.T) {
 	body := `{
 		"jsonrpc":"2.0",
 		"method":"eth_sendRawTransaction",
-		"params":["0x02f873030b8459682f0085025c90ff50825208946fcd7b39e75619a68ab86a68b92d01134ef34ea388016345785d8a000080c001a00468068551701a4eb935052c207598a6c0d4810242a838cbf05848f15087be5ea03fdd0e86b4c8642d19bedb5aa12e036a6e38a286ab4bb9b250e045580784682f"],
+		"params":["0xf86c0a853ebd6978038344aa2094ca51b4a540c37ae6654b47853a40c4fb5506c5fa880de0b6b3a764000080359fca802a788b55196180ec2670e3b8fcec8272c86e49c34c74060048db3d5e85a066f4b4059f1e0dc035f71582f0ce8983167c648437d20024088ac5365446bbf7"],
 		"id":1
 	}`
 
@@ -406,8 +410,10 @@ func TestSendRawTransaction(t *testing.T) {
 				to = handlers.AddPrefix(strings.ToLower(to))
 				value := new(big.Int).Add(txTransfer.Targets[0].Value, new(big.Int).SetUint64(txUniversalHead.GetGasPrice()*txUniversalHead.GetGasLimit()))
 
-				fromAccount := Accounts[from]
-				toAccount := Accounts[to]
+				tpaFrom, _ := tpcrtypes.TopiaAddressFromEth(from)
+				tpaTo, _ := tpcrtypes.TopiaAddressFromEth(to)
+				fromAccount := Accounts[tpaFrom]
+				toAccount := Accounts[tpaTo]
 				if value.Cmp(fromAccount.GetBalance()) < 0 {
 					fromAccount.SubBalance(value)
 					fromAccount.AddNonce()
@@ -419,8 +425,8 @@ func TestSendRawTransaction(t *testing.T) {
 			case uint32(txuni.TransactionUniversalType_ContractInvoke):
 				from := handlers.AddPrefix(strings.ToLower(hex.EncodeToString(tran.GetHead().GetFromAddr())))
 				value := new(big.Int).SetUint64(txUniversalHead.GetGasPrice() * txUniversalHead.GetGasLimit())
-
-				fromAccount := Accounts[from]
+				tpaFrom, _ := tpcrtypes.TopiaAddressFromEth(from)
+				fromAccount := Accounts[tpaFrom]
 				if value.Cmp(fromAccount.GetBalance()) < 0 && fromAccount.GetCode() != nil {
 					fromAccount.SubBalance(value)
 					fromAccount.AddNonce()
@@ -432,8 +438,8 @@ func TestSendRawTransaction(t *testing.T) {
 				from := handlers.AddPrefix(strings.ToLower(hex.EncodeToString(tran.GetHead().GetFromAddr())))
 				code := tran.GetData().GetSpecification()
 				value := new(big.Int).SetUint64(txUniversalHead.GetGasPrice() * txUniversalHead.GetGasLimit())
-
-				fromAccount := Accounts[from]
+				tpaFrom, _ := tpcrtypes.TopiaAddressFromEth(from)
+				fromAccount := Accounts[tpaFrom]
 				if value.Cmp(fromAccount.GetBalance()) < 0 {
 					fromAccount.SubBalance(value)
 					fromAccount.SetCode(code)
@@ -469,7 +475,8 @@ func TestSendRawTransaction(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed")
 	}
-	if hash.String() != "0x297a532dda774fc86d3244a579c10ccc671a007297e0cb61abd25275c4b2021a" {
+	fmt.Println(hash.String())
+	if hash.String() != "0x2943db9f3fbbe07464ffa547abbcff93eb06f1a8ffeaaaa1d018b208511feedb" {
 		t.Errorf("failed")
 	}
 }

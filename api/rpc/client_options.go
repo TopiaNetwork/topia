@@ -78,7 +78,8 @@ func SetClientWS(maxMessageSize int, pingWait string, logger log.Logger) ClientO
 			// isClosed:       true,
 			requestRes: make(map[string]chan *Message),
 			// mutex:          new(sync.Mutex),
-			logger: logger,
+			logger:  logger,
+			subsMsg: make(map[clientSubscription]chan []byte),
 		}
 	}
 }

@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"fmt"
+	"github.com/TopiaNetwork/topia/eventhub"
 	tlog "github.com/TopiaNetwork/topia/log"
 	logcomm "github.com/TopiaNetwork/topia/log/common"
 	"github.com/gregjones/httpcache/diskcache"
@@ -62,6 +63,27 @@ func TestCloseServer(t *testing.T) {
 
 	err = client.CloseServer()
 	assert.Nil(t, err)
+}
+
+func TestSubUnsub(t *testing.T) {
+	server := newTestWebsocketServer()
+
+	go server.Start()
+
+	time.Sleep(3 * time.Second)
+
+	client, err := newTestWebsocketClient()
+	assert.Nil(t, err)
+
+	_, subID, err := client.Subscribe(eventhub.EventName_BlockAdded, "")
+	assert.Nil(t, err)
+
+	err = client.UnSubscribe(eventhub.EventName_BlockAdded, subID)
+	assert.Nil(t, err)
+
+	err = client.CloseServer()
+	assert.Nil(t, err)
+
 }
 
 func newTestHttpClient() (client *Client, err error) {

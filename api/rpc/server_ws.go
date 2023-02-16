@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -70,6 +71,7 @@ func (ws *WebsocketServer) readPump() {
 	defer func() {
 		log.Print("unregister")
 		close(ws.receive) // TODO 这里不确定 需要考虑关闭的流程,重复关闭会panic
+		close(ws.send)    // TODO not sure
 	}()
 	ws.conn.SetReadLimit(ws.maxMessageSize)
 	//ws.conn.SetReadDeadline(time.Now().Add(ws.pongWait)) // TODO
@@ -104,6 +106,7 @@ func (ws *WebsocketServer) writePump() {
 	defer func() {
 		//ticker.Stop() // todo
 		conn.Close()
+		fmt.Println("writePump done")
 	}()
 	for {
 		select {

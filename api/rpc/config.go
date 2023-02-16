@@ -13,4 +13,8 @@ var (
 
 	CertFilePath = "/mnt/c/Users/30640/Desktop/api_server/topia/api/rpc/example/test/server/server-cert.pem" // tmp test path
 	KeyFilePath  = "/mnt/c/Users/30640/Desktop/api_server/topia/api/rpc/example/test/server/server-key.pem"  // tmp test path
+
+	ClientMaxSubsToOneEvent = 5 // maximum times a client can subscribe to a single event simultaneously
+
+	MaxSubQueueLength = 10 // maximum msgs for a single subscription queue to contain
 )

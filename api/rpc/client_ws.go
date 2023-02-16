@@ -19,6 +19,14 @@ type WebsocketClient struct {
 	tlsConfig      *tls.Config
 	logger         tlog.Logger
 	requestRes     map[string]chan *Message
+
+	subsMsg map[clientSubscription]chan []byte // For receiving subscribed msg
+
+}
+
+type clientSubscription struct {
+	eventName string
+	subID     int
 }
 
 func (ws *WebsocketClient) readPump() {
@@ -87,13 +95,34 @@ func (ws *WebsocketClient) dealMessage(message []byte) {
 		return
 	}
 
-	reqId := decodedMessage.RequestId
-	resChan, ok := ws.requestRes[reqId]
-	if !ok {
-		ws.logger.Error(reqId + " res chan not found")
-		return
+	switch decodedMessage.MsgType {
+	case MsgCallResp:
+		resChan, ok := ws.requestRes[decodedMessage.RequestId]
+		if !ok {
+			ws.logger.Error(decodedMessage.RequestId + " res chan not found")
+			return
+		}
+		resChan <- decodedMessage
+	case MsgSubscribe:
+		subID, err := strconv.Atoi(decodedMessage.RequestId)
+		if err != nil {
+			ws.logger.Error("string to int err: " + err.Error())
+			return
+		}
+		clientSub := clientSubscription{
+			eventName: decodedMessage.MethodName,
+			subID:     subID,
+		}
+		subMsgChan, ok := ws.subsMsg[clientSub]
+		if !ok {
+			ws.logger.Infof("no such subscription: eventName:%v subID:%v", clientSub.eventName, clientSub.subID)
+			return
+		}
+		subMsgChan <- decodedMessage.Payload
+	default:
+
 	}
-	resChan <- decodedMessage
+
 }
 
 func (ws *WebsocketClient) Connect() error {

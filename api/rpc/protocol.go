@@ -22,15 +22,16 @@ const HeadSize = 21
 /*
 协议设计
 --------------------------------------------------------------------------------------------------------------------------------------------------
-start cipher  |  requestIdSize  |  serverMethodSize  |  AuthCodeSize  |  ErrMsgSize  |  payloadSize    ||    requestId  |  serverMethod  |  AuthCode  |  ErrMsg  |  payload
-    0x05      |        4        |         4          |       4        |       4      |       4         ||    x(8 bytes) |       x        |     x      |     x    |     x
+start cipher  |  requestIdSize  |  serverMethodSize  |  AuthCodeSize  |  ErrMsgSize  |  payloadSize    ||    msgType  |  requestId  |  serverMethod  |  AuthCode  |  ErrMsg  |  payload
+    0x05      |        4        |         4          |       4        |       4      |       4         ||   x(1 byte) |  x(8 bytes) |       x        |     x      |     x    |     x
 
 */
 
 type Message struct {
 	Header     *Header
-	RequestId  string
-	MethodName string
+	MsgType    MsgType
+	RequestId  string // also used as subID when MsgType == MsgSubscribe
+	MethodName string // also used as eventName when MsgType is related to subscribe
 	AuthCode   string
 	ErrMsg     ErrMsg
 	Payload    []byte
@@ -45,6 +46,18 @@ type Header struct {
 	PayloadSize    uint32
 }
 
+type MsgType byte
+
+const (
+	MsgCall              MsgType = 1
+	MsgCallResp          MsgType = 2
+	MsgSubscribeReq      MsgType = 3
+	MsgSubscribeReqAck   MsgType = 4
+	MsgUnsubscribeReq    MsgType = 5
+	MsgUnsubscribeReqAck MsgType = 6
+	MsgSubscribe         MsgType = 7 // subscribed msg
+)
+
 type Errtype int
 
 const (
@@ -53,6 +66,11 @@ const (
 	ErrAuthFailed         Errtype = 2
 	ErrIllegalArgument    Errtype = 3
 	ErrServiceReturnError Errtype = 4 // Error return by called service
+
+	ErrNoSuchEvent       Errtype = 5
+	ErrExceedMaxSubLimit Errtype = 6 // client is trying to sub one event for more than ClientMaxSubsToOneEvent
+	ErrInvalidSubID      Errtype = 7
+	ErrNoSuchSub         Errtype = 8
 )
 
 type ErrMsg struct {
@@ -87,7 +105,7 @@ func IODecodeMessage(r io.Reader) (*Message, error) {
 		return nil, err
 	}
 
-	bodyLen := header.RequestIdSize + header.MethodNameSize + header.AuthCodeSize + header.ErrMsgSize + header.PayloadSize
+	bodyLen := 1 + header.RequestIdSize + header.MethodNameSize + header.AuthCodeSize + header.ErrMsgSize + header.PayloadSize // 1 is for msgType
 	bodyData := make([]byte, bodyLen)
 	_, err = io.ReadFull(r, bodyData)
 	if err != nil {
@@ -131,29 +149,23 @@ func DecodeMessageV2(data []byte, header *Header, headSize uint32) (*Message, er
 	var result Message
 	result.Header = header
 	var st uint32 = headSize
-	endI := st + header.RequestIdSize
-	les := endI - st
-	RequestId := make([]byte, les)
-	copy(RequestId, data[st:endI])
-	result.RequestId = string(RequestId)
+	endI := st + 1
+	result.MsgType = MsgType(data[st])
+
+	st = endI
+	endI = st + header.RequestIdSize
+	result.RequestId = string(data[st:endI])
 
 	st = endI
 	endI = st + header.MethodNameSize
-	les = endI - st
-	MethodName := make([]byte, les)
-	copy(MethodName, data[st:endI])
-	result.MethodName = string(MethodName)
+	result.MethodName = string(data[st:endI])
 
 	st = endI
 	endI = st + header.AuthCodeSize
-	les = endI - st
-	AuthCode := make([]byte, les)
-	copy(AuthCode, data[st:endI])
-	result.AuthCode = string(AuthCode)
+	result.AuthCode = string(data[st:endI])
 
 	st = endI
 	endI = st + header.ErrMsgSize
-	les = endI - st
 	err := json.Unmarshal(data[st:endI], &result.ErrMsg)
 	if err != nil {
 		return nil, err
@@ -161,8 +173,7 @@ func DecodeMessageV2(data []byte, header *Header, headSize uint32) (*Message, er
 
 	st = endI
 	endI = st + header.PayloadSize
-	les = endI - st
-	payload := make([]byte, les)
+	payload := make([]byte, header.PayloadSize)
 	copy(payload, data[st:endI])
 	result.Payload = payload
 
@@ -170,14 +181,14 @@ func DecodeMessageV2(data []byte, header *Header, headSize uint32) (*Message, er
 }
 
 // EncodeMessage 基础编码
-func EncodeMessage(requestId string, methodName string, authCode string, errMsg *ErrMsg, payload []byte) (data []byte, err error) {
+func EncodeMessage(msgType MsgType, requestId string, methodName string, authCode string, errMsg *ErrMsg, payload []byte) (data []byte, err error) {
 
 	errMsgBytes, err := json.Marshal(errMsg)
 	if err != nil {
 		return nil, err
 	}
 
-	bufSize := HeadSize + len(requestId) + len(methodName) + len(authCode) + len(errMsgBytes) + len(payload)
+	bufSize := HeadSize + 1 + len(requestId) + len(methodName) + len(authCode) + len(errMsgBytes) + len(payload) // 1 is for msgType
 	buf := make([]byte, bufSize)
 
 	buf[0] = StartCipher
@@ -188,7 +199,11 @@ func EncodeMessage(requestId string, methodName string, authCode string, errMsg 
 	binary.BigEndian.PutUint32(buf[17:21], uint32(len(payload)))
 
 	st := HeadSize
-	endI := st + len(requestId)
+	endI := st + 1
+	copy(buf[st:endI], []byte{byte(msgType)})
+
+	st = endI
+	endI = st + len(requestId)
 	copy(buf[st:endI], requestId)
 
 	st = endI

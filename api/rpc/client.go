@@ -22,10 +22,11 @@ var (
 )
 
 type Client struct {
-	serverURL string
-	scheme    string // transport protocol: one of http/https/ws/wss
-	options   *ClientOptions
-	logger    tlog.Logger
+	serverURL  string
+	scheme     string // transport protocol: one of http/https/ws/wss
+	serverHost string
+	options    *ClientOptions
+	logger     tlog.Logger
 }
 
 // NewClient creates a new client
@@ -61,6 +62,7 @@ func NewClient(addr string, options ...ClientOption) (*Client, error) {
 	}
 
 	c.scheme = parsedURL.Scheme
+	c.serverHost = parsedURL.Host
 
 	if parsedURL.Scheme == "https" || parsedURL.Scheme == "wss" {
 		if c.options.tlsConfig == nil {
@@ -194,7 +196,7 @@ func (c *Client) callWithHttp(methodName string, inArgs ...interface{}) (res *Me
 			return nil, err
 		}
 	}
-	data, err := EncodeMessage(requestId, methodName, c.options.AUTH, &ErrMsg{}, payload)
+	data, err := EncodeMessage(MsgCall, requestId, methodName, c.options.AUTH, &ErrMsg{}, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +219,39 @@ func (c *Client) callWithWS(methodName string, inArgs ...interface{}) (res *Mess
 	if len(inArgs) != 0 {
 		payload, _ = Encode(inArgs)
 	}
-	data, _ := EncodeMessage(requestId, methodName, c.options.AUTH, &ErrMsg{}, payload)
+	data, _ := EncodeMessage(MsgCall, requestId, methodName, c.options.AUTH, &ErrMsg{}, payload)
+
+	var respChan = make(chan *Message, 1)
+	c.options.ws.requestRes[requestId] = respChan
+	defer delete(c.options.ws.requestRes, requestId)
+	c.options.ws.send <- data
+	// c.options.recws.WriteMessage(websocket.TextMessage, data)
+
+	select {
+	case res = <-respChan:
+		return res, nil
+
+		// TODO case timeout
+	}
+
+}
+
+// TODO 仅测试用
+func (c *Client) CallWithWS(methodName string, inArgs ...interface{}) (res *Message, err error) {
+	if c.options.ws == nil {
+		return nil, errors.New("it is not a websocket client")
+	}
+
+	var payload []byte
+	requestId, err := DistributedID()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(inArgs) != 0 {
+		payload, _ = Encode(inArgs)
+	}
+	data, _ := EncodeMessage(MsgCall, requestId, methodName, c.options.AUTH, &ErrMsg{}, payload)
 
 	var respChan = make(chan *Message, 1)
 	c.options.ws.requestRes[requestId] = respChan
@@ -234,27 +268,175 @@ func (c *Client) callWithWS(methodName string, inArgs ...interface{}) (res *Mess
 
 }
 
-func (c *Client) CloseServer() error {
-	resp, err := c.callWithHttp("CloseServer")
+func (c *Client) Subscribe(eventName string, filterString string) (subMsgChan <-chan []byte, subID int, err error) {
+	if c.options.ws == nil {
+		return nil, 0, errors.New("it is not a websocket client")
+	}
+
+	requestId, err := DistributedID()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	inArgs := []interface{}{c.options.ws.conn.LocalAddr().String(), eventName, filterString}
+	inArgsBytes, err := json.Marshal(inArgs)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	data, _ := EncodeMessage(MsgCall, requestId, "subscriptionCenter_Subscribe", c.options.AUTH, &ErrMsg{}, inArgsBytes)
+
+	var subStatChan = make(chan *Message, 1)
+	c.options.ws.requestRes[requestId] = subStatChan
+	defer delete(c.options.ws.requestRes, requestId)
+	c.options.ws.send <- data
+
+	select {
+	case subStat := <-subStatChan:
+		if subStat.ErrMsg.Errtype != NoErr { // fail to subscribe
+			return nil, 0, errors.New(subStat.ErrMsg.ErrString)
+		}
+
+		var outArgs []interface{}
+
+		json.Unmarshal(subStat.Payload, &outArgs)
+
+		subID = int(outArgs[0].(float64))
+
+		var newSubMsgChan = make(chan []byte, 1) // TODO chan缓存的大小需要确定
+		var newSub = clientSubscription{
+			eventName: eventName,
+			subID:     subID,
+		}
+		c.options.ws.subsMsg[newSub] = newSubMsgChan
+
+		return newSubMsgChan, subID, nil
+
+		// TODO case timeout
+	}
+}
+
+func (c *Client) UnSubscribe(eventName string, subID int) error {
+	if c.options.ws == nil {
+		return errors.New("it is not a websocket client")
+	}
+	if len(eventName) == 0 || subID <= 0 {
+		return errors.New("illegal UnSubscribe arguments")
+	}
+
+	requestId, err := DistributedID()
 	if err != nil {
 		return err
 	}
 
+	inArgs := []interface{}{c.options.ws.conn.LocalAddr().String(), eventName, subID}
+	inArgsBytes, err := json.Marshal(inArgs)
+	if err != nil {
+		return err
+	}
+
+	data, _ := EncodeMessage(MsgCall, requestId, "subscriptionCenter_UnSubscribe", c.options.AUTH, &ErrMsg{}, inArgsBytes)
+
+	var unSubStatChan = make(chan *Message, 1)
+	c.options.ws.requestRes[requestId] = unSubStatChan
+	defer delete(c.options.ws.requestRes, requestId)
+	c.options.ws.send <- data
+
+	select {
+	case unSubStat := <-unSubStatChan:
+
+		if unSubStat.ErrMsg.Errtype != NoErr { // fail to subscribe
+			return errors.New(unSubStat.ErrMsg.ErrString)
+		}
+
+		var subToDelete = clientSubscription{
+			eventName: eventName,
+			subID:     subID,
+		}
+		var subMsgChan = c.options.ws.subsMsg[subToDelete]
+
+		delete(c.options.ws.subsMsg, subToDelete)
+		close(subMsgChan)
+
+		return nil
+
+		// TODO case timeout
+	}
+}
+
+func (c *Client) UnSubscribeAll() error {
+	if c.options.ws == nil {
+		return errors.New("it is not a websocket client")
+	}
+
+	requestId, err := DistributedID()
+	if err != nil {
+		return err
+	}
+
+	inArgs := []interface{}{c.options.ws.conn.LocalAddr().String()}
+	inArgsBytes, err := json.Marshal(inArgs)
+	if err != nil {
+		return err
+	}
+
+	data, _ := EncodeMessage(MsgCall, requestId, "subscriptionCenter_UnSubscribeAll", c.options.AUTH, &ErrMsg{}, inArgsBytes)
+
+	var unSubStatChan = make(chan *Message, 1)
+	c.options.ws.requestRes[requestId] = unSubStatChan
+	defer delete(c.options.ws.requestRes, requestId)
+	c.options.ws.send <- data
+
+	select {
+	case unSubStat := <-unSubStatChan:
+		if unSubStat.ErrMsg.Errtype != NoErr { // fail to subscribe
+			return errors.New(unSubStat.ErrMsg.ErrString)
+		}
+
+		var chansToClose []chan []byte
+
+		for k, subChan := range c.options.ws.subsMsg {
+			chansToClose = append(chansToClose, subChan)
+			delete(c.options.ws.subsMsg, k)
+		}
+
+		for _, chanToClose := range chansToClose {
+			close(chanToClose)
+		}
+
+		return nil
+
+		// TODO case timeout
+	}
+}
+
+func (c *Client) CloseServer() error {
+	requestId, err := DistributedID()
+	if err != nil {
+		return err
+	}
+
+	data, err := EncodeMessage(MsgCall, requestId, "CloseServer", c.options.AUTH, &ErrMsg{}, nil)
+	if err != nil {
+		return err
+	}
+
+	var schema = "http"
+	if c.options.tlsConfig != nil {
+		schema = "https"
+	}
+
+	postUrl := fmt.Sprintf("%s://%s/%s/", schema, c.serverHost, "CloseServer")
+	resp, err := c.sendPostRetry(postUrl, data, requestId)
+	if err != nil {
+		return err
+	}
 	if resp.ErrMsg.Errtype != NoErr {
 		return errors.New(resp.ErrMsg.ErrString)
 	}
+
 	return nil
 }
-
-//// TODO
-//func (c *Client) Subscribe(eventName string, inArgs ...interface{}) (respChan <-chan *Message, err error) {
-//
-//}
-//
-//// TODO
-//func (c *Client) UnSubscribe(eventName string) {
-//
-//}
 
 //func (c *Client) Close() error {
 //	if c.options.ws != nil {

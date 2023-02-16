@@ -25,6 +25,7 @@ type Server struct {
 	logger      tlog.Logger
 	httpServer  *http.Server
 	shutDownSig chan struct{} // signal to shut down the server
+
 }
 
 // NewServer creates a new server
@@ -43,6 +44,13 @@ func NewServer(addr string, options ...Option) *Server {
 
 	for _, fn := range options {
 		fn(server.Options)
+	}
+
+	if server.Options.upgrader != nil {
+		err = server.registerStruct(newSubCenter(&server.websocketServers), "subscriptionCenter", false, 0, 10*time.Second)
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 
 	return server
@@ -111,16 +119,16 @@ func (s *Server) registerMethod(method interface{}, name string, authority AuthL
 // func (ti *TestIStruct) Test() {
 // }
 func (s *Server) registerStruct(obj interface{}, name string, cacheAble bool, cacheExpireSeconds int, timeout time.Duration) error {
-	var objValue reflect.Value
 	typ := reflect.TypeOf(obj)
+	var tmpObjValue = reflect.ValueOf(obj)
 	if typ.Kind() == reflect.Ptr {
-		objValue = reflect.ValueOf(obj).Elem()
+		tmpObjValue = reflect.ValueOf(obj).Elem()
 	} else {
-		objValue = reflect.ValueOf(obj)
+		tmpObjValue = reflect.ValueOf(obj)
 	}
 
-	// make sure ProxyObj field exists
-	proxyObjVal := objValue.FieldByName("ProxyObj")
+	//make sure ProxyObj field exists
+	proxyObjVal := tmpObjValue.FieldByName("ProxyObj")
 	if !proxyObjVal.IsValid() {
 		return errors.New("struct to register is lack of ProxyObj field")
 	}
@@ -171,7 +179,7 @@ func (s *Server) registerStruct(obj interface{}, name string, cacheAble bool, ca
 		mName = name + "_" + mName
 		s.methodMap[mName] = &methodType{
 			isObjMethod:        true,
-			receiver:           objValue,
+			receiver:           reflect.ValueOf(obj),
 			mValue:             method.Func,
 			mType:              method.Type,
 			errPos:             errPos,
@@ -299,7 +307,7 @@ func (s *Server) Start() {
 		if message.AuthCode != s.auth.tokenArr[Manager] {
 			err = ErrAuth
 			s.logger.Error(err.Error())
-			resp, _ := EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+			resp, _ := EncodeMessage(MsgCallResp, message.RequestId, message.MethodName, message.AuthCode,
 				&ErrMsg{
 					Errtype:   ErrAuthFailed,
 					ErrString: err.Error(),
@@ -309,7 +317,7 @@ func (s *Server) Start() {
 			return
 		}
 
-		resp, _ := EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+		resp, _ := EncodeMessage(MsgCallResp, message.RequestId, message.MethodName, message.AuthCode,
 			&ErrMsg{}, nil)
 		w.Write(resp)
 
@@ -390,17 +398,20 @@ func (s *Server) runWsServer() {
 					return true
 				}
 				go func() {
-					message, err := DecodeMessage(data) // TODO 这里的message可能是call 也可能是订阅
+					message, err := DecodeMessage(data)
 					if err != nil {
 						s.logger.Error("DecodeMessage err: " + err.Error())
 						return
 					}
+
 					resp, err := s.handleMessage(message)
 					if err != nil {
 						s.logger.Error("handleMessage err: " + err.Error())
 						return
 					}
+
 					ws.send <- resp
+
 				}()
 			default:
 			}
@@ -450,7 +461,7 @@ func (s *Server) handleMessage(message *Message) (resp []byte, err error) {
 	ok, err := s.Verify(message.AuthCode, message.MethodName)
 	if err != nil {
 		s.logger.Error("Verify err: " + err.Error())
-		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+		return EncodeMessage(MsgCallResp, message.RequestId, message.MethodName, message.AuthCode,
 			&ErrMsg{
 				Errtype:   ErrMethodNotFound,
 				ErrString: err.Error(),
@@ -460,7 +471,7 @@ func (s *Server) handleMessage(message *Message) (resp []byte, err error) {
 	if !ok {
 		err = ErrAuth
 		s.logger.Error(err.Error())
-		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+		return EncodeMessage(MsgCallResp, message.RequestId, message.MethodName, message.AuthCode,
 			&ErrMsg{
 				Errtype:   ErrAuthFailed,
 				ErrString: err.Error(),
@@ -471,7 +482,7 @@ func (s *Server) handleMessage(message *Message) (resp []byte, err error) {
 	in, err := s.getInArgs(message.Payload)
 	if err != nil {
 		s.logger.Error("getInArgs err: " + err.Error())
-		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+		return EncodeMessage(MsgCallResp, message.RequestId, message.MethodName, message.AuthCode,
 			&ErrMsg{
 				Errtype:   ErrIllegalArgument,
 				ErrString: err.Error(),
@@ -482,7 +493,7 @@ func (s *Server) handleMessage(message *Message) (resp []byte, err error) {
 	key := message.MethodName + "_" + fmt.Sprintf("%v", in)
 	cache, ok := s.checkCache(key)
 	if ok {
-		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode, &ErrMsg{}, cache)
+		return EncodeMessage(MsgCallResp, message.RequestId, message.MethodName, message.AuthCode, &ErrMsg{}, cache)
 	}
 	var callErr = &ErrMsg{} // hold ErrMsg for method returned, default empty
 	// call method
@@ -490,7 +501,7 @@ func (s *Server) handleMessage(message *Message) (resp []byte, err error) {
 	resp, err = method.Call(in, callErr)
 	if err != nil {
 		s.logger.Error("Call method err: " + err.Error())
-		return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode,
+		return EncodeMessage(MsgCallResp, message.RequestId, message.MethodName, message.AuthCode,
 			&ErrMsg{
 				Errtype:   ErrIllegalArgument,
 				ErrString: err.Error(),
@@ -500,7 +511,7 @@ func (s *Server) handleMessage(message *Message) (resp []byte, err error) {
 	if callErr.Errtype == NoErr {
 		s.setCache(key, resp, message.MethodName)
 	}
-	return EncodeMessage(message.RequestId, message.MethodName, message.AuthCode, callErr, resp)
+	return EncodeMessage(MsgCallResp, message.RequestId, message.MethodName, message.AuthCode, callErr, resp)
 }
 
 func setupCORS(w *http.ResponseWriter) {

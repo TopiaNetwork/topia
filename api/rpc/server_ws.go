@@ -1,7 +1,7 @@
 package rpc
 
 import (
-	"bytes"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -66,26 +66,28 @@ func (ws *WebsocketServer) reconnect(conn *websocket.Conn) {
 	ws.conn = conn
 }
 
+// readPump constantly read msg from connection to receiveChan
 func (ws *WebsocketServer) readPump() {
-	conn := ws.conn
 	defer func() {
 		log.Print("unregister")
+		close(ws.receive) // TODO 这里不确定 需要考虑关闭的流程,重复关闭会panic
+		close(ws.send)    // TODO not sure
 	}()
-	conn.SetReadLimit(ws.maxMessageSize)
-	conn.SetReadDeadline(time.Now().Add(ws.pongWait))
-	conn.SetPongHandler(func(string) error {
-		log.Print("receive pong")
-		conn.SetReadDeadline(time.Now().Add(ws.pongWait))
-		return nil
-	})
-	conn.SetPingHandler(func(string) error {
-		log.Print("receive ping")
-		// conn.SetReadDeadline(time.Now().Add(ws.pongWait))
-		return nil
-	})
+	ws.conn.SetReadLimit(ws.maxMessageSize)
+	//ws.conn.SetReadDeadline(time.Now().Add(ws.pongWait)) // TODO
+	//ws.conn.SetPongHandler(func(string) error {
+	//	log.Print("receive pong")
+	//	ws.conn.SetReadDeadline(time.Now().Add(ws.pongWait))
+	//	return nil
+	//})
+	//ws.conn.SetPingHandler(func(string) error {
+	//	log.Print("receive ping")
+	//	// conn.SetReadDeadline(time.Now().Add(ws.pongWait))
+	//	return nil
+	//})
 
 	for {
-		_, message, err := conn.ReadMessage()
+		_, message, err := ws.conn.ReadMessage()
 		if err != nil {
 			log.Printf("read error: %v", err)
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -93,17 +95,18 @@ func (ws *WebsocketServer) readPump() {
 			}
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
+
 		ws.receive <- message
 	}
 }
 
 func (ws *WebsocketServer) writePump() {
 	conn := ws.conn
-	ticker := time.NewTicker(ws.pingPeriod)
+	//ticker := time.NewTicker(ws.pingPeriod) // TODO
 	defer func() {
-		ticker.Stop()
+		//ticker.Stop() // todo
 		conn.Close()
+		fmt.Println("writePump done")
 	}()
 	for {
 		select {
@@ -133,12 +136,12 @@ func (ws *WebsocketServer) writePump() {
 				log.Printf("error: %v", err)
 				return
 			}
-		case <-ticker.C:
-			conn.SetWriteDeadline(time.Now().Add(ws.writeWait))
-			log.Print("ping")
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				return
-			}
+			//case <-ticker.C: // TODO
+			//	conn.SetWriteDeadline(time.Now().Add(ws.writeWait))
+			//	log.Print("ping")
+			//	if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			//		return
+			//	}
 		}
 	}
 }

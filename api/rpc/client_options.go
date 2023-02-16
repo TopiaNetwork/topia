@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"crypto/tls"
+	"github.com/TopiaNetwork/topia/log"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,10 +23,10 @@ type ClientOption func(options *ClientOptions)
 
 func defaultClientOptions() *ClientOptions {
 	return &ClientOptions{
-		timeout:   time.Second * 2,
+		timeout:   2 * time.Second,
 		AUTH:      "",
 		attempts:  3,
-		sleepTime: 3,
+		sleepTime: 3 * time.Second,
 	}
 }
 
@@ -66,17 +67,19 @@ func SetClientCache(cache httpcache.Cache) ClientOption {
 }
 
 // using websocket
-func SetClientWS(maxMessageSize int, pingWait string) ClientOption {
+func SetClientWS(maxMessageSize int, pingWait string, logger log.Logger) ClientOption {
 	return func(options *ClientOptions) {
 		options.ws = &WebsocketClient{
 			maxMessageSize: maxMessageSize,
 			pingWait:       pingWait,
 			conn:           new(websocket.Conn),
-			send:           make(chan []byte),
+			send:           make(chan []byte, 1),
 			receive:        make(chan []byte),
 			// isClosed:       true,
-			requestRes: map[string]chan []byte{},
+			requestRes: make(map[string]chan *Message),
 			// mutex:          new(sync.Mutex),
+			logger:  logger,
+			subsMsg: make(map[clientSubscription]chan []byte),
 		}
 	}
 }

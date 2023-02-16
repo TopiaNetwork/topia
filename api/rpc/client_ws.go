@@ -1,15 +1,12 @@
 package rpc
 
 import (
-	"bytes"
 	"crypto/tls"
+	tlog "github.com/TopiaNetwork/topia/log"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"strconv"
-	"time"
-
-	tlog "github.com/TopiaNetwork/topia/log"
-	"github.com/gorilla/websocket"
 )
 
 type WebsocketClient struct {
@@ -21,7 +18,15 @@ type WebsocketClient struct {
 	pingWait       string //time
 	tlsConfig      *tls.Config
 	logger         tlog.Logger
-	requestRes     map[string]chan []byte
+	requestRes     map[string]chan *Message
+
+	subsMsg map[clientSubscription]chan []byte // For receiving subscribed msg
+
+}
+
+type clientSubscription struct {
+	eventName string
+	subID     int
 }
 
 func (ws *WebsocketClient) readPump() {
@@ -30,26 +35,25 @@ func (ws *WebsocketClient) readPump() {
 		log.Print("readPump end")
 		// ws.Close()
 	}()
-	pingWait, err := time.ParseDuration(ws.pingWait)
-	if err != nil {
-		ws.logger.Error(err.Error())
-		return
-	}
+	//pingWait, err := time.ParseDuration(ws.pingWait) // TODO
+	//if err != nil {
+	//	ws.logger.Error(err.Error())
+	//	return
+	//}
 	conn.SetReadLimit(int64(ws.maxMessageSize))
-	conn.SetReadDeadline(time.Now().Add(pingWait))
-	conn.SetPingHandler(func(string) error {
-		log.Print("receive ping")
-		conn.SetReadDeadline(time.Now().Add(pingWait))
-		err := conn.WriteMessage(websocket.PongMessage, []byte{})
-		return err
-	})
+	//conn.SetReadDeadline(time.Now().Add(pingWait)) // TODO
+	//conn.SetPingHandler(func(string) error {
+	//	log.Print("receive ping")
+	//	conn.SetReadDeadline(time.Now().Add(pingWait))
+	//	err := conn.WriteMessage(websocket.PongMessage, []byte{})
+	//	return err
+	//})
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			ws.logger.Error(err.Error())
+			ws.logger.Error("ReadMessage from conn err: " + err.Error())
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 		// ws.receive <- message
 		go func() {
 			ws.dealMessage(message)
@@ -71,7 +75,7 @@ func (ws *WebsocketClient) writePump() {
 			conn.WriteMessage(websocket.CloseMessage, []byte{})
 			return
 		}
-		w, err := conn.NextWriter(websocket.TextMessage)
+		w, err := conn.NextWriter(websocket.BinaryMessage)
 		if err != nil {
 			ws.logger.Error(err.Error())
 			return
@@ -88,16 +92,40 @@ func (ws *WebsocketClient) dealMessage(message []byte) {
 	decodedMessage, err := DecodeMessage(message)
 	if err != nil {
 		ws.logger.Error(err.Error())
+		return
 	}
-	reqId := decodedMessage.RequestId
-	resChan, ok := ws.requestRes[reqId]
-	if !ok {
-		ws.logger.Error(reqId + " res chan not found")
+
+	switch decodedMessage.MsgType {
+	case MsgCallResp:
+		resChan, ok := ws.requestRes[decodedMessage.RequestId]
+		if !ok {
+			ws.logger.Error(decodedMessage.RequestId + " res chan not found")
+			return
+		}
+		resChan <- decodedMessage
+	case MsgSubscribe:
+		subID, err := strconv.Atoi(decodedMessage.RequestId)
+		if err != nil {
+			ws.logger.Error("string to int err: " + err.Error())
+			return
+		}
+		clientSub := clientSubscription{
+			eventName: decodedMessage.MethodName,
+			subID:     subID,
+		}
+		subMsgChan, ok := ws.subsMsg[clientSub]
+		if !ok {
+			ws.logger.Infof("no such subscription: eventName:%v subID:%v", clientSub.eventName, clientSub.subID)
+			return
+		}
+		subMsgChan <- decodedMessage.Payload
+	default:
+
 	}
-	resChan <- decodedMessage.Payload
+
 }
 
-func (ws *WebsocketClient) Connect() {
+func (ws *WebsocketClient) Connect() error {
 	requestId, _ := DistributedID()
 	dialer := &websocket.Dialer{
 		TLSClientConfig: ws.tlsConfig,
@@ -110,6 +138,7 @@ func (ws *WebsocketClient) Connect() {
 	conn, _, err := dialer.Dial(ws.addr, header)
 	if err != nil {
 		ws.logger.Error(err.Error())
+		return err
 	}
 	// // ws.mutex.Lock()
 	// // defer ws.mutex.Unlock()
@@ -118,13 +147,17 @@ func (ws *WebsocketClient) Connect() {
 	// }
 	// ws.isClosed = false
 	ws.conn = conn
-	ws.send = make(chan []byte)
+	return nil
 }
 
-func (ws *WebsocketClient) Run() {
-	ws.Connect()
+func (ws *WebsocketClient) Run() error {
+	err := ws.Connect()
+	if err != nil {
+		return err
+	}
 	go ws.writePump()
 	go ws.readPump()
+	return nil
 }
 
 // func (ws *WebsocketClient) Close() {

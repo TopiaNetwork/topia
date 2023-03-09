@@ -1,8 +1,9 @@
 package execution
 
 import (
-	"github.com/lazyledger/smt"
 	"sync"
+
+	"github.com/lazyledger/smt"
 
 	txbasic "github.com/TopiaNetwork/topia/transaction/basic"
 )

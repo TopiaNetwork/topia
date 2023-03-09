@@ -92,6 +92,27 @@ func TestCall(t *testing.T) {
 		EXPECT().
 		GetBlockByTxHash(gomock.Any()).
 		DoAndReturn(func(txHashHex string) (*tpchaintypes.Block, error) {
+			hdChunk := &tpchaintypes.BlockHeadChunk{
+				Version:      tpchaintypes.BLOCK_VER,
+				DomainID:     []byte("topiaexe"),
+				Launcher:     GetHexByte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
+				TxCount:      6,
+				TxRoot:       GetHexByte("0x4ea6e8ed3f28744b8cb239b64150f024e3eb8f0ff4491acb14dc2e821a04d463"),
+				TxResultRoot: GetHexByte("0x4db6969931ba48e0e4073b7699fc32a7c1c6f738339b22f6a2f02279a814bb19"),
+			}
+			hdChunkBytes, _ := hdChunk.Marshal()
+
+			dataChunk := &tpchaintypes.BlockDataChunk{
+				Version:  tpchaintypes.BLOCK_VER,
+				RefIndex: 0,
+				Txs: [][]byte{
+					GetHexByte("0x9a5b716d6ff3d51f9196c579a49f724f0176ee7fc8fa618fd9aee3e10c002e18"),
+					GetHexByte("0xe7435b7c408dd6a4589bf6fda96bf4808523443571ed9bc175ea72930a88808b"),
+					GetHexByte("0x2e58685b7be596138707fd45c42854be9603822476be50be39164e71b0a49e6e"),
+					GetHexByte("0xa99c75904cb96b7e557f3dde1c5e90f43f670d616b2fe57ef9e0a3b983f9a908"),
+				},
+			}
+			dataChunkBytes, _ := dataChunk.Marshal()
 			return &tpchaintypes.Block{
 				Head: &tpchaintypes.BlockHead{
 					ChainID:         []byte{9},
@@ -99,25 +120,18 @@ func TestCall(t *testing.T) {
 					Height:          10,
 					Epoch:           1,
 					Round:           1,
+					ChunkCount:      1,
+					HeadChunks:      [][]byte{hdChunkBytes},
 					ParentBlockHash: GetHexByte("0x6ab6aff3346d3dc27b1fa87ece4fdb83dff42207d692179128ebd56b31229acc"),
-					Launcher:        GetHexByte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
 					Proposer:        GetHexByte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
-					TxCount:         6,
-					TxRoot:          GetHexByte("0x4ea6e8ed3f28744b8cb239b64150f024e3eb8f0ff4491acb14dc2e821a04d463"),
-					TxResultRoot:    GetHexByte("0x4db6969931ba48e0e4073b7699fc32a7c1c6f738339b22f6a2f02279a814bb19"),
 					StateRoot:       GetHexByte("0xb512f0bd7b64481857e0bbd1d7d2c90578d6f7ad2d20e82f415980a99b0e38ee"),
 					GasFees:         []byte("0x68fc0"),
 					TimeStamp:       0x62656db0,
 					Hash:            GetHexByte("0x983cd9063e6760ab4c7b1db96f3cbaa78588b7005516d3b4fdaad23fdde99499"),
 				},
 				Data: &tpchaintypes.BlockData{
-					Version: 1,
-					Txs: [][]byte{
-						GetHexByte("0x9a5b716d6ff3d51f9196c579a49f724f0176ee7fc8fa618fd9aee3e10c002e18"),
-						GetHexByte("0xe7435b7c408dd6a4589bf6fda96bf4808523443571ed9bc175ea72930a88808b"),
-						GetHexByte("0x2e58685b7be596138707fd45c42854be9603822476be50be39164e71b0a49e6e"),
-						GetHexByte("0xa99c75904cb96b7e557f3dde1c5e90f43f670d616b2fe57ef9e0a3b983f9a908"),
-					},
+					Version:    1,
+					DataChunks: [][]byte{dataChunkBytes},
 				},
 			}, nil
 		}).
@@ -152,10 +166,16 @@ func TestCall(t *testing.T) {
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types2.JsonrpcMessage{}
-	json.Unmarshal(result, &j)
+	err := json.Unmarshal(result, &j)
+	if err != nil {
+		return
+	}
 
 	answer := new(hexutil.Bytes)
-	json.Unmarshal(j.Result, answer)
+	err = json.Unmarshal(j.Result, answer)
+	if err != nil {
+		return
+	}
 
 	if answer.String() != "0x" {
 		t.Errorf("failed!")

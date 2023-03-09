@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/TopiaNetwork/topia/api/web3"
 	types2 "github.com/TopiaNetwork/topia/api/web3/eth/types"
 	"github.com/TopiaNetwork/topia/api/web3/eth/types/eth_account"
@@ -63,6 +64,27 @@ func TestGetTransactionByHash(t *testing.T) {
 		EXPECT().
 		GetBlockByTxHash(gomock.Any()).
 		DoAndReturn(func(txHashHex string) (*tpchaintypes.Block, error) {
+			hdChunk := &tpchaintypes.BlockHeadChunk{
+				Version:      tpchaintypes.BLOCK_VER,
+				DomainID:     []byte("topiaexe"),
+				Launcher:     []byte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
+				TxCount:      6,
+				TxRoot:       []byte("0x4ea6e8ed3f28744b8cb239b64150f024e3eb8f0ff4491acb14dc2e821a04d463"),
+				TxResultRoot: []byte("0x4db6969931ba48e0e4073b7699fc32a7c1c6f738339b22f6a2f02279a814bb19"),
+			}
+			hdChunkBytes, _ := hdChunk.Marshal()
+
+			dataChunk := &tpchaintypes.BlockDataChunk{
+				Version:  tpchaintypes.BLOCK_VER,
+				RefIndex: 0,
+				Txs: [][]byte{
+					GetHexByte("0x9a5b716d6ff3d51f9196c579a49f724f0176ee7fc8fa618fd9aee3e10c002e18"),
+					GetHexByte("0xe7435b7c408dd6a4589bf6fda96bf4808523443571ed9bc175ea72930a88808b"),
+					GetHexByte("0x2e58685b7be596138707fd45c42854be9603822476be50be39164e71b0a49e6e"),
+					GetHexByte("0xa99c75904cb96b7e557f3dde1c5e90f43f670d616b2fe57ef9e0a3b983f9a908"),
+				},
+			}
+			dataChunkBytes, _ := dataChunk.Marshal()
 			return &tpchaintypes.Block{
 				Head: &tpchaintypes.BlockHead{
 					ChainID:         []byte(ChainId),
@@ -70,25 +92,18 @@ func TestGetTransactionByHash(t *testing.T) {
 					Height:          10,
 					Epoch:           1,
 					Round:           1,
+					ChunkCount:      1,
+					HeadChunks:      [][]byte{hdChunkBytes},
 					ParentBlockHash: []byte("0x6ab6aff3346d3dc27b1fa87ece4fdb83dff42207d692179128ebd56b31229acc"),
-					Launcher:        []byte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
 					Proposer:        []byte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
-					TxCount:         6,
-					TxRoot:          []byte("0x4ea6e8ed3f28744b8cb239b64150f024e3eb8f0ff4491acb14dc2e821a04d463"),
-					TxResultRoot:    []byte("0x4db6969931ba48e0e4073b7699fc32a7c1c6f738339b22f6a2f02279a814bb19"),
 					StateRoot:       []byte("0xb512f0bd7b64481857e0bbd1d7d2c90578d6f7ad2d20e82f415980a99b0e38ee"),
 					GasFees:         []byte("0x68fc0"),
 					TimeStamp:       0x62656db0,
 					Hash:            []byte("0x983cd9063e6760ab4c7b1db96f3cbaa78588b7005516d3b4fdaad23fdde99499"),
 				},
 				Data: &tpchaintypes.BlockData{
-					Version: 1,
-					Txs: [][]byte{
-						[]byte("0x9a5b716d6ff3d51f9196c579a49f724f0176ee7fc8fa618fd9aee3e10c002e18"),
-						[]byte("0xe7435b7c408dd6a4589bf6fda96bf4808523443571ed9bc175ea72930a88808b"),
-						[]byte("0x2e58685b7be596138707fd45c42854be9603822476be50be39164e71b0a49e6e"),
-						[]byte("0xa99c75904cb96b7e557f3dde1c5e90f43f670d616b2fe57ef9e0a3b983f9a908"),
-					},
+					Version:    1,
+					DataChunks: [][]byte{dataChunkBytes},
 				},
 			}, nil
 		}).
@@ -119,14 +134,20 @@ func TestGetTransactionByHash(t *testing.T) {
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types2.JsonrpcMessage{}
-	json.Unmarshal(result, &j)
+	err := json.Unmarshal(result, &j)
+	if err != nil {
+		return
+	}
 	ethTransaction := handlers.EthRpcTransaction{}
-	json.Unmarshal(j.Result, &ethTransaction)
-
+	err = json.Unmarshal(j.Result, &ethTransaction)
+	if err != nil {
+		return
+	}
 	if ethTransaction.Nonce != 0 {
 		t.Errorf("failed")
 	}
 }
+
 func TestGetTransactionCount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -166,14 +187,20 @@ func TestGetTransactionCount(t *testing.T) {
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types2.JsonrpcMessage{}
-	json.Unmarshal(result, &j)
-
+	err := json.Unmarshal(result, &j)
+	if err != nil {
+		return
+	}
 	count := new(hexutil.Uint64)
-	json.Unmarshal(j.Result, count)
+	err = json.Unmarshal(j.Result, count)
+	if err != nil {
+		return
+	}
 	if count.String() != "0xa" {
 		t.Errorf("failed")
 	}
 }
+
 func TestGetTransactionReceipt(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -242,6 +269,27 @@ func TestGetTransactionReceipt(t *testing.T) {
 		EXPECT().
 		GetBlockByTxHash(gomock.Any()).
 		DoAndReturn(func(txHashHex string) (*tpchaintypes.Block, error) {
+			hdChunk := &tpchaintypes.BlockHeadChunk{
+				Version:      tpchaintypes.BLOCK_VER,
+				DomainID:     []byte("topiaexe"),
+				Launcher:     []byte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
+				TxCount:      4,
+				TxRoot:       []byte("0x4ea6e8ed3f28744b8cb239b64150f024e3eb8f0ff4491acb14dc2e821a04d463"),
+				TxResultRoot: []byte("0x4db6969931ba48e0e4073b7699fc32a7c1c6f738339b22f6a2f02279a814bb19"),
+			}
+			hdChunkBytes, _ := hdChunk.Marshal()
+
+			dataChunk := &tpchaintypes.BlockDataChunk{
+				Version:  tpchaintypes.BLOCK_VER,
+				RefIndex: 0,
+				Txs: [][]byte{
+					GetHexByte("0x9a5b716d6ff3d51f9196c579a49f724f0176ee7fc8fa618fd9aee3e10c002e18"),
+					GetHexByte("0xe7435b7c408dd6a4589bf6fda96bf4808523443571ed9bc175ea72930a88808b"),
+					GetHexByte("0x2e58685b7be596138707fd45c42854be9603822476be50be39164e71b0a49e6e"),
+					GetHexByte("0xa99c75904cb96b7e557f3dde1c5e90f43f670d616b2fe57ef9e0a3b983f9a908"),
+				},
+			}
+			dataChunkBytes, _ := dataChunk.Marshal()
 			return &tpchaintypes.Block{
 				Head: &tpchaintypes.BlockHead{
 					ChainID:         []byte(ChainId),
@@ -249,25 +297,18 @@ func TestGetTransactionReceipt(t *testing.T) {
 					Height:          10,
 					Epoch:           1,
 					Round:           1,
+					ChunkCount:      1,
+					HeadChunks:      [][]byte{hdChunkBytes},
 					ParentBlockHash: []byte("0x6ab6aff3346d3dc27b1fa87ece4fdb83dff42207d692179128ebd56b31229acc"),
-					Launcher:        []byte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
 					Proposer:        []byte("0x9c71fbe2d28080b8afa88cea8a1e319de2c09d44"),
-					TxCount:         6,
-					TxRoot:          []byte("0x4ea6e8ed3f28744b8cb239b64150f024e3eb8f0ff4491acb14dc2e821a04d463"),
-					TxResultRoot:    []byte("0x4db6969931ba48e0e4073b7699fc32a7c1c6f738339b22f6a2f02279a814bb19"),
 					StateRoot:       []byte("0xb512f0bd7b64481857e0bbd1d7d2c90578d6f7ad2d20e82f415980a99b0e38ee"),
 					GasFees:         []byte("0x68fc0"),
 					TimeStamp:       0x62656db0,
 					Hash:            []byte("0x983cd9063e6760ab4c7b1db96f3cbaa78588b7005516d3b4fdaad23fdde99499"),
 				},
 				Data: &tpchaintypes.BlockData{
-					Version: 1,
-					Txs: [][]byte{
-						[]byte("0x9a5b716d6ff3d51f9196c579a49f724f0176ee7fc8fa618fd9aee3e10c002e18"),
-						[]byte("0xe7435b7c408dd6a4589bf6fda96bf4808523443571ed9bc175ea72930a88808b"),
-						[]byte("0x2e58685b7be596138707fd45c42854be9603822476be50be39164e71b0a49e6e"),
-						[]byte("0xa99c75904cb96b7e557f3dde1c5e90f43f670d616b2fe57ef9e0a3b983f9a908"),
-					},
+					Version:    1,
+					DataChunks: [][]byte{dataChunkBytes},
 				},
 			}, nil
 		}).
@@ -298,20 +339,26 @@ func TestGetTransactionReceipt(t *testing.T) {
 	result, _ := io.ReadAll(res.Result().Body)
 
 	j := types2.JsonrpcMessage{}
-	json.Unmarshal(result, &j)
-
+	err := json.Unmarshal(result, &j)
+	if err != nil {
+		return
+	}
 	ethReceipt := handlers.GetTransactionReceiptResponseType{}
-	json.Unmarshal(j.Result, &ethReceipt)
+	err = json.Unmarshal(j.Result, &ethReceipt)
+	if err != nil {
+		return
+	}
 
 	if ethReceipt.Status != "0x1" {
 		t.Errorf("failed")
 	}
 }
+
 func TestSendRawTransaction(t *testing.T) {
 	body := `{
 		"jsonrpc":"2.0",
 		"method":"eth_sendRawTransaction",
-		"params":["0x02f873030b8459682f0085025c90ff50825208946fcd7b39e75619a68ab86a68b92d01134ef34ea388016345785d8a000080c001a00468068551701a4eb935052c207598a6c0d4810242a838cbf05848f15087be5ea03fdd0e86b4c8642d19bedb5aa12e036a6e38a286ab4bb9b250e045580784682f"],
+		"params":["0xf86c0a853ebd6978038344aa2094ca51b4a540c37ae6654b47853a40c4fb5506c5fa880de0b6b3a764000080359fca802a788b55196180ec2670e3b8fcec8272c86e49c34c74060048db3d5e85a066f4b4059f1e0dc035f71582f0ce8983167c648437d20024088ac5365446bbf7"],
 		"id":1
 	}`
 
@@ -363,8 +410,10 @@ func TestSendRawTransaction(t *testing.T) {
 				to = handlers.AddPrefix(strings.ToLower(to))
 				value := new(big.Int).Add(txTransfer.Targets[0].Value, new(big.Int).SetUint64(txUniversalHead.GetGasPrice()*txUniversalHead.GetGasLimit()))
 
-				fromAccount := Accounts[from]
-				toAccount := Accounts[to]
+				tpaFrom, _ := tpcrtypes.TopiaAddressFromEth(from)
+				tpaTo, _ := tpcrtypes.TopiaAddressFromEth(to)
+				fromAccount := Accounts[tpaFrom]
+				toAccount := Accounts[tpaTo]
 				if value.Cmp(fromAccount.GetBalance()) < 0 {
 					fromAccount.SubBalance(value)
 					fromAccount.AddNonce()
@@ -376,8 +425,8 @@ func TestSendRawTransaction(t *testing.T) {
 			case uint32(txuni.TransactionUniversalType_ContractInvoke):
 				from := handlers.AddPrefix(strings.ToLower(hex.EncodeToString(tran.GetHead().GetFromAddr())))
 				value := new(big.Int).SetUint64(txUniversalHead.GetGasPrice() * txUniversalHead.GetGasLimit())
-
-				fromAccount := Accounts[from]
+				tpaFrom, _ := tpcrtypes.TopiaAddressFromEth(from)
+				fromAccount := Accounts[tpaFrom]
 				if value.Cmp(fromAccount.GetBalance()) < 0 && fromAccount.GetCode() != nil {
 					fromAccount.SubBalance(value)
 					fromAccount.AddNonce()
@@ -389,8 +438,8 @@ func TestSendRawTransaction(t *testing.T) {
 				from := handlers.AddPrefix(strings.ToLower(hex.EncodeToString(tran.GetHead().GetFromAddr())))
 				code := tran.GetData().GetSpecification()
 				value := new(big.Int).SetUint64(txUniversalHead.GetGasPrice() * txUniversalHead.GetGasLimit())
-
-				fromAccount := Accounts[from]
+				tpaFrom, _ := tpcrtypes.TopiaAddressFromEth(from)
+				fromAccount := Accounts[tpaFrom]
 				if value.Cmp(fromAccount.GetBalance()) < 0 {
 					fromAccount.SubBalance(value)
 					fromAccount.SetCode(code)
@@ -417,14 +466,17 @@ func TestSendRawTransaction(t *testing.T) {
 	w3s.ServeHttp(res, req)
 	result, _ := io.ReadAll(res.Result().Body)
 	j := types2.JsonrpcMessage{}
-	json.Unmarshal(result, &j)
-
+	err := json.Unmarshal(result, &j)
+	if err != nil {
+		return
+	}
 	hash := new(eth_account.Hash)
-	err := json.Unmarshal(j.Result, hash)
+	err = json.Unmarshal(j.Result, hash)
 	if err != nil {
 		t.Errorf("failed")
 	}
-	if hash.String() != "0x297a532dda774fc86d3244a579c10ccc671a007297e0cb61abd25275c4b2021a" {
+	fmt.Println(hash.String())
+	if hash.String() != "0x2943db9f3fbbe07464ffa547abbcff93eb06f1a8ffeaaaa1d018b208511feedb" {
 		t.Errorf("failed")
 	}
 }

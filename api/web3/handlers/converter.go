@@ -131,14 +131,26 @@ func createTransaction(head *txbasic.TransactionHead, specification []byte) *txb
 }
 
 func ConvertTopiaBlockToEthBlock(block *tpchaintypes.Block) *GetBlockResponseType {
-	transactionHashs := block.GetData().GetTxs()
 	transactionHashString := make([]interface{}, 0)
-	for _, v := range transactionHashs {
-		var hash eth_account.Hash
-		hash.SetBytes(v)
-		transactionHashString = append(transactionHashString, hash.Hex())
+	for _, dataChunkBytes := range block.GetData().GetDataChunks() {
+		dataChunk := &tpchaintypes.BlockDataChunk{}
+		err := dataChunk.Unmarshal(dataChunkBytes)
+		if err != nil {
+			return nil
+		}
+		transactionHashs := dataChunk.GetTxs()
+		for _, v := range transactionHashs {
+			var hash eth_account.Hash
+			hash.SetBytes(v)
+			transactionHashString = append(transactionHashString, hash.Hex())
+		}
 	}
-
+	hdChunkBytes := block.GetHead().GetHeadChunks()[0] // TODO: [0]
+	hdChunk := &tpchaintypes.BlockHeadChunk{}
+	err := hdChunk.Unmarshal(hdChunkBytes)
+	if err != nil {
+		return nil
+	}
 	gas := big.NewInt(10_000_000_000)
 	height := new(big.Int).SetUint64(block.GetHead().GetHeight())
 	baseFee := big.NewInt(0)
@@ -149,13 +161,13 @@ func ConvertTopiaBlockToEthBlock(block *tpchaintypes.Block) *GetBlockResponseTyp
 	var stateRoot eth_account.Hash
 	stateRoot.SetBytes(block.GetHead().GetStateRoot())
 	var miner eth_account.Address
-	miner.SetBytes(block.GetHead().GetLauncher())
+	miner.SetBytes(hdChunk.GetLauncher()) // TODO: eth block only have one miner, topia have several miners
 	var gasUsed hexutil.Uint64
 	json.Unmarshal(block.GetHead().GetGasFees(), &gasUsed)
 	var txToor eth_account.Hash
-	txToor.SetBytes(block.GetHead().GetTxRoot())
+	txToor.SetBytes(hdChunk.GetTxRoot())
 	var txReceiptRoot eth_account.Hash
-	txReceiptRoot.SetBytes(block.GetHead().GetTxResultRoot())
+	txReceiptRoot.SetBytes(hdChunk.GetTxResultRoot())
 	result := &GetBlockResponseType{
 		Number:           (*hexutil.Big)(height),
 		BaseFeePerGas:    (*hexutil.Big)(baseFee),
